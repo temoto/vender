@@ -70,16 +70,17 @@ bool bit_test(uint8_t const x, uint8_t const mask) {
   return (x & mask) == mask;
 }
 
-void Master_Notify_Init(){
-  DDRB |= _BV(PINB2);
-}
-
 void Master_Notify_Set(bool const on) {
   if (on) {
-    PORTB |= _BV(PINB2);
+    PORTB |= _BV(PINB1);
   } else {
-    PORTB &= ~_BV(PINB2);
+    PORTB &= ~_BV(PINB1);
   }
+}
+
+void Master_Notify_Init(){
+  DDRB |= _BV(PINB1);
+  Master_Notify_Set(false);
 }
 
 void TWI_Init_Slave(uint8_t address) {
