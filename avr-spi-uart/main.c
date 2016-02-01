@@ -64,18 +64,21 @@ static RingBuffer_t buf_uart_in;
 static RingBuffer_t buf_uart_out;
 static volatile bool event_spi = false;
 static volatile bool event_twi = false;
+static volatile uint8_t error_code = 0;
 
 bool bit_test(uint8_t const x, uint8_t const mask) {
   return (x & mask) == mask;
 }
 
-void Master_Notify(bool const on) {
+void Master_Notify_Init(){
+  DDRB |= _BV(PINB2);
+}
+
+void Master_Notify_Set(bool const on) {
   if (on) {
     PORTB |= _BV(PINB2);
-    PORTB |= _BV(PINB5);
   } else {
     PORTB &= ~_BV(PINB2);
-    PORTB &= ~_BV(PINB5);
   }
 }
 
@@ -207,18 +210,13 @@ bool SPI_Ready(void) { return event_spi || bit_test(SPSR, _BV(SPIF)); }
 
 void SPI_Send(uint8_t const b) {
   SPDR = b;
-  Master_Notify(true);
+  Master_Notify_Set(true);
 }
 
 ISR(SPI_STC_vect) { event_spi = true; }
 
-void LED_Toggle(void) { PORTB ^= _BV(PINB5); }
-
 int main(void) {
   cli();
-
-  // LED out
-  DDRB |= _BV(PINB5);
 
   uint8_t const crc_ok_0 = crc8_p93_2b(Header_OK, 0);
 
@@ -233,12 +231,11 @@ int main(void) {
   set_sleep_mode(SLEEP_MODE_IDLE);
   sleep_enable();
   bool should_sleep = true;
-  Master_Notify(false);
+  Master_Notify_Init();
   sei();
 
   Ring_PushTail3(&buf_spi_out, Header_OK, 0, crc_ok_0);
   for (;;) {
-    LED_Toggle();
     if (should_sleep) {
       sleep_mode();
     }
@@ -252,7 +249,7 @@ int main(void) {
       bool const again = Ring_PopHead(&buf_spi_out, &out);
 
       SPI_Send(out);
-      Master_Notify(again);
+      Master_Notify_Set(again);
       should_sleep = false;
     }
     while (buf_spi_in.length >= 3) {
@@ -294,7 +291,7 @@ int main(void) {
       if (!Ring_PushTail3(&buf_spi_out, header, data, crc)) {
         break;
       }
-      Master_Notify(true);
+      Master_Notify_Set(true);
     }
 
     while (UART_Send_Ready()) {
@@ -307,7 +304,7 @@ int main(void) {
     }
     while (UART_Recv_Ready() && (buf_uart_in.free >= 3)) {
       UART_Recv();
-      Master_Notify(true);
+      Master_Notify_Set(true);
       should_sleep = false;
     }
     while ((buf_uart_in.length >= 3) && (buf_spi_out.free >= 3)) {
@@ -321,7 +318,7 @@ int main(void) {
           break;
         }
       }
-      Master_Notify(true);
+      Master_Notify_Set(true);
       should_sleep = false;
     }
   }
