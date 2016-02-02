@@ -22,5 +22,5 @@ _testmain.go
 *.exe
 *.test
 *.prof
-display/display
+display/lcd-test/lcd-test
 head/head

@@ -78,7 +78,7 @@ void Master_Notify_Set(bool const on) {
   }
 }
 
-void Master_Notify_Init(){
+void Master_Notify_Init() {
   DDRB |= _BV(PINB1);
   Master_Notify_Set(false);
 }
@@ -204,17 +204,20 @@ bool UART_Recv_Ready() { return bit_test(UCSR0A, _BV(RXC0)); }
 void SPI_Init_Slave(void) {
   DDRB |= _BV(PINB4);
   SPCR = _BV(SPE) | _BV(SPIE);
-  SPDR = 0;
 }
 
 bool SPI_Ready(void) { return event_spi || bit_test(SPSR, _BV(SPIF)); }
 
-void SPI_Send(uint8_t const b) {
-  SPDR = b;
-  Master_Notify_Set(true);
-}
+ISR(SPI_STC_vect) {
+  uint8_t const in = SPDR;
+  Ring_PushTail(&buf_spi_in, in);
+  uint8_t out = 0;
+  bool const again = Ring_PopHead(&buf_spi_out, &out);
 
-ISR(SPI_STC_vect) { event_spi = true; }
+  SPDR = out;
+  Master_Notify_Set(again);
+  event_spi = true;
+}
 
 int main(void) {
   cli();
@@ -242,17 +245,6 @@ int main(void) {
     }
 
     should_sleep = true;
-    while (SPI_Ready()) {
-      event_spi = false;
-      uint8_t const in = SPDR;
-      Ring_PushTail(&buf_spi_in, in);
-      uint8_t out = 0;
-      bool const again = Ring_PopHead(&buf_spi_out, &out);
-
-      SPI_Send(out);
-      Master_Notify_Set(again);
-      should_sleep = false;
-    }
     while (buf_spi_in.length >= 3) {
       uint8_t header, data, crc_in;
       Ring_PopHead3(&buf_spi_in, &header, &data, &crc_in);
@@ -269,6 +261,7 @@ int main(void) {
       if (cmd == Header_Status) {
         // TODO: handle error
         Ring_PushTail3(&buf_spi_out, Header_OK, 0, crc_ok_0);
+        Master_Notify_Set(true);
       } else if (cmd == Header_UART_Data) {
         // TODO: handle error
         Ring_PushTail2(&buf_uart_out, header, data);
@@ -276,6 +269,7 @@ int main(void) {
         TWI_Init_Slave(data);
         // TODO: handle error
         Ring_PushTail3(&buf_spi_out, Header_OK, 0, crc_ok_0);
+        Master_Notify_Set(true);
       }
       should_sleep = false;
     }

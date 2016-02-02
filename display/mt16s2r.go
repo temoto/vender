@@ -1,11 +1,10 @@
-package main
+package lcd
 
 import (
 	"github.com/nathan-osman/go-rpigpio"
 	"github.com/paulrosania/go-charset/charset"
 	_ "github.com/paulrosania/go-charset/data"
 
-	"fmt"
 	"time"
 )
 
@@ -194,30 +193,4 @@ func (lcd *LCD) CommandFunction(bits8, page1 bool) {
 
 func (lcd *LCD) CommandAddress(a byte) {
 	lcd.Command(0x80 | a)
-}
-
-func main() {
-	fmt.Printf("Init GPIO\n")
-	lcd := new(LCD)
-	if err := lcd.Init(); err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("Init LCD\n")
-	lcd.Init4()
-
-	for {
-		lcd.WriteString("Добро спасёт мир", 70, 140)
-		lcd.CommandAddress(0x40)
-		time.Sleep(2000 * time.Millisecond)
-		lcd.WriteString("если повезёт ", 133, 300)
-		lcd.Data(0x1c)
-		lcd.Data(0xbc)
-
-		time.Sleep(5000 * time.Millisecond)
-		lcd.CommandClear()
-		lcd.CommandOff()
-		time.Sleep(5000 * time.Millisecond)
-		lcd.CommandOn(true, false, false)
-	}
 }
