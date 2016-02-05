@@ -1,11 +1,10 @@
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #include <avr/sleep.h>
-#include <compat/twi.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <string.h>
-#include <util/atomic.h>
+#include <util/twi.h>
 
 #include "crc.h"
 #include "ring.h"
@@ -22,7 +21,7 @@ This ATMega device speaks:
 The master does:
 - TWI write transaction to write to UART
 - watch for edge on special pin
-- TWI read transaction to read UART or TWI/I2C data
+- TWI read transaction to read UART or keyboard data
 
 Any TWI write or read transmits exactly 3 bytes:
 - header
@@ -39,22 +38,23 @@ Master sequences:
 - 80 00 74 - status poll
 - a0 .. .. - send data byte to UART, 9bit 0
 - b0 .. .. - send data byte to UART, 9bit 1
-- e0 .. .. - set TWI/I2C slave address from data byte
+- e0 .. .. - set TWI slave address from data byte
 
 Slave sequences:
+- 01 00 00 - nothing to say, repeat later
 - 00 .. .. - status error, details in data byte
 - 80 00 74 - status OK, no data is buffered for reading
 - a0 .. .. - received byte from UART, 9bit 0
 - b0 .. .. - received byte from UART, 9bit 1
-- c0 .. .. - received byte from TWI/I2C
+- c0 .. .. - received byte from TWI
 */
 
-static uint8_t const Header_OK = _BV(7);
-static uint8_t const Header_Status = 0 | 0;
-static uint8_t const Header_UART_Data = 0 | _BV(5);
-static uint8_t const Header_TWI_Data = _BV(6) | 0;
-static uint8_t const Header_TWI_Address = _BV(6) | _BV(5);
-static uint8_t const Header_9bit = _BV(4);
+static uint8_t const Header_OK = 0x80;           // bit 7 =1
+static uint8_t const Header_Status = 0;          // bit 7 =0
+static uint8_t const Header_TWI_Data = 0x40;     // bit 6
+static uint8_t const Header_UART_Data = 0x20;    // bit 5
+static uint8_t const Header_TWI_Address = 0x60;  // bit 5+6
+static uint8_t const Header_9bit = 0x10;         // bit 4
 
 static uint8_t const Error_CRC = 0x93;
 
@@ -67,17 +67,6 @@ static RingBuffer_t buf_uart_in;
 static RingBuffer_t buf_uart_out;
 static volatile uint8_t error_code = 0;
 
-static uint8_t twi_ses_in[6];
-static uint8_t twi_ses_out[6];
-#define TWI_In_Read twi_ses_in[1]
-#define TWI_In_Ack twi_ses_in[0]
-#define TWI_In_Size (sizeof(twi_ses_in) - 2)
-#define TWI_In_Next twi_ses_in[TWI_In_Read + 2]
-#define TWI_Out_Have twi_ses_out[0]
-#define TWI_Out_Sent twi_ses_out[1]
-#define TWI_Out_Size (sizeof(twi_ses_out) - 2)
-#define TWI_Out_Next twi_ses_out[TWI_Out_Sent + 2]
-
 bool bit_test(uint8_t const x, uint8_t const mask) {
   return (x & mask) == mask;
 }
@@ -88,18 +77,26 @@ bool ring_push3_with_crc(RingBuffer_t* const b, uint8_t const b1,
   return Ring_PushTail3(b, b1, b2, b3);
 }
 
+void LED_Set(bool const on) {
+  if (on) {
+    PORTB |= _BV(PINB5);
+  } else {
+    PORTB &= ~_BV(PINB5);
+  }
+}
+
+void LED_Init() {
+  DDRB |= _BV(PINB5);
+  LED_Set(false);
+}
+
 void Master_Notify_Set(bool const on) {
   if (on) {
     PORTB |= _BV(PINB1);
-
-    // led
-    PORTB |= _BV(PINB5);
   } else {
     PORTB &= ~_BV(PINB1);
-
-    // led
-    PORTB &= ~_BV(PINB5);
   }
+  LED_Set(on);
 }
 
 void Master_Notify_Init() {
@@ -107,13 +104,33 @@ void Master_Notify_Init() {
   Master_Notify_Set(false);
 }
 
-void TWI_Init_Slave(uint8_t address) {
+// Begin TWI driver
+static uint8_t const TWI_STATE_IDLE = 0;
+static uint8_t const TWI_STATE_ST = 2;
+static uint8_t const TWI_STATE_SR = 3;
+static volatile uint8_t twi_state;
+#define TWI_State_Idle (twi_state == TWI_STATE_IDLE)
+#define TWI_State_Reading (twi_state == TWI_STATE_SR)
+#define TWI_State_Writing (twi_state == TWI_STATE_ST)
+
+static uint8_t twi_ses_in[6];
+static uint8_t twi_ses_out[6];
+#define TWI_In_Read twi_ses_in[1]
+#define TWI_In_Done twi_ses_in[0]
+#define TWI_In_Size (sizeof(twi_ses_in) - 2)
+#define TWI_In_Next twi_ses_in[TWI_In_Read + 2]
+#define TWI_Out_Have twi_ses_out[0]
+#define TWI_Out_Sent twi_ses_out[1]
+#define TWI_Out_Size (sizeof(twi_ses_out) - 2)
+#define TWI_Out_Next twi_ses_out[TWI_Out_Sent + 2]
+
+void TWI_Init_Slave(uint8_t const address) {
+  TWCR = 0;
   TWBR = 0x0c;
-  TWCR =
-      // _BV(TWINT) |
-      _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
   TWAR = address << 1;
   TWSR = 0;
+  twi_state = TWI_STATE_IDLE;
+  TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
 }
 
 ISR(TWI_vect) {
@@ -123,6 +140,9 @@ ISR(TWI_vect) {
       return;
 
     case TW_BUS_ERROR:
+      TWI_In_Read = 0;
+      TWI_In_Done = 0;
+      TWI_Out_Sent = 0;
       TWCR = _BV(TWSTO) | _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
       return;
 
@@ -132,13 +152,16 @@ ISR(TWI_vect) {
     // Receive SLA+R LP
     case TW_SR_ARB_LOST_SLA_ACK:
     case TW_SR_ARB_LOST_GCALL_ACK:
-      memset(twi_ses_in, 0, sizeof(twi_ses_in));
+      twi_state = TWI_STATE_SR;
+      TWI_In_Read = 0;
+      TWI_In_Done = 0;
       ack = true;
       break;
 
     // data received, ACK returned
     case TW_SR_DATA_ACK:
     case TW_SR_GCALL_DATA_ACK:
+      twi_state = TWI_STATE_SR;
       TWI_In_Next = TWDR;
       if (TWI_In_Read < TWI_In_Size) {
         TWI_In_Read++;
@@ -149,34 +172,27 @@ ISR(TWI_vect) {
     // data received, NACK returned
     case TW_SR_DATA_NACK:
     case TW_SR_GCALL_DATA_NACK:
-      TWI_In_Next = TWDR;
-      if (TWI_In_Read < TWI_In_Size) {
-        TWI_In_Read++;
-      }
-      // memset(twi_ses_in, 0, sizeof(twi_ses_in));
-      // TWI_In_Read = 0;
-      ack = true;
+      twi_state = TWI_STATE_SR;
+      ack = false;
       break;
 
     // Receive Stop or ReStart
     case TW_SR_STOP:
-      TWI_In_Ack = 1;
-      if (TWI_In_Read == 1) {
-        // keyboard
-        if (ring_push3_with_crc(&buf_twi_out, Header_OK | Header_TWI_Data,
-                                twi_ses_in[2])) {
-          memset(twi_ses_in, 0, sizeof(twi_ses_in));
-        }
-      }
-      if (TWI_Out_Sent >= TWI_Out_Have) {
-        memset(twi_ses_out, 0, sizeof(twi_ses_out));
-      }
+      twi_state = TWI_STATE_IDLE;
+      TWI_In_Done = TWI_In_Read;
       ack = true;
       break;
 
     // Receive SLA+R
     case TW_ST_SLA_ACK:
+      twi_state = TWI_STATE_ST;
       TWI_Out_Sent = 0;
+      if (TWI_Out_Have == 0) {
+        TWI_Out_Have = 3;
+        twi_ses_out[2] = 1;
+        twi_ses_out[3] = 0;
+        twi_ses_out[4] = 0;
+      }
       ack = (TWI_Out_Sent < TWI_Out_Have);
       if (ack) {
         TWDR = TWI_Out_Next;
@@ -187,6 +203,7 @@ ISR(TWI_vect) {
 
     // Send Byte Receive ACK
     case TW_ST_DATA_ACK:
+      twi_state = TWI_STATE_ST;
       ack = (TWI_Out_Sent < TWI_Out_Have);
       if (ack) {
         TWI_Out_Sent++;
@@ -198,23 +215,19 @@ ISR(TWI_vect) {
 
     // Send Last Byte Receive ACK
     case TW_ST_LAST_DATA:
-      if (TWI_Out_Sent < TWI_Out_Have) {
-        TWI_Out_Sent++;
-      }
-      ack = true;
-      break;
-
     // Send Last Byte Receive NACK
     case TW_ST_DATA_NACK:
-      if (TWI_Out_Sent < TWI_Out_Have) {
-        TWI_Out_Sent++;
-      }
+      twi_state = TWI_STATE_IDLE;
+      TWI_Out_Have = 0;
+      TWI_Out_Sent = 0;
       ack = true;
       break;
   }
   TWCR = _BV(TWINT) | (ack ? _BV(TWEA) : 0) | _BV(TWEN) | _BV(TWIE);
 }
+// End TWI driver
 
+// Begin UART driver
 void UART_Init() {
   UBRR0H = (uint8_t const)(USART_PRESCALE >> 8);
   UBRR0L = (uint8_t const)(USART_PRESCALE);
@@ -261,35 +274,75 @@ void UART_Recv() {
 }
 
 bool UART_Recv_Ready() { return bit_test(UCSR0A, _BV(RXC0)); }
+// End UART driver
+
+void init() {
+  LED_Init();
+  Ring_Init(&buf_uart_in);
+  Ring_Init(&buf_uart_out);
+  Ring_Init(&buf_twi_in);
+  Ring_Init(&buf_twi_out);
+  TWI_Init_Slave(0x78);
+  UART_Init();
+  set_sleep_mode(SLEEP_MODE_IDLE);
+  Master_Notify_Init();
+  memset(twi_ses_in, 0, sizeof(twi_ses_in));
+  memset(twi_ses_out, 0, sizeof(twi_ses_out));
+  twi_state = TWI_STATE_IDLE;
+
+  // disable ADC
+  ADCSRA &= ~_BV(ADEN);
+  // power reduction
+  PRR |= _BV(PRTIM1) | _BV(PRTIM2) | _BV(PRSPI) | _BV(PRADC);
+}
 
 bool step() {
-  bool activity = false;
+  bool again = false;
+
+  // TWI read is finished
+  if (TWI_State_Idle && (TWI_In_Read > 0)) {
+    if (TWI_In_Read == 1) {
+      // keyboard
+      if (ring_push3_with_crc(&buf_twi_out, Header_OK | Header_TWI_Data,
+                              twi_ses_in[2])) {
+        memset(twi_ses_in, 0, sizeof(twi_ses_in));
+      }
+      again = true;
+    } else if (buf_twi_in.free >= TWI_In_Read) {
+      // master
+      for (uint8_t i = 0; i < TWI_In_Read; i++) {
+        uint8_t const b = twi_ses_in[i + 2];
+        Ring_PushTail(&buf_twi_in, b);
+      }
+      memset(twi_ses_in, 0, sizeof(twi_ses_in));
+      again = true;
+    }
+  }
 
   while (buf_twi_in.length >= 3) {
-    activity = true;
+    again = true;
     uint8_t header, data, crc_in;
     Ring_PopHead3(&buf_twi_in, &header, &data, &crc_in);
-    uint8_t const crc_check = crc8_p93_2b(header, data);
-    if (crc_in != crc_check) {
+    uint8_t const crc_local = crc8_p93_2b(header, data);
+    if (crc_in != crc_local) {
       ring_push3_with_crc(&buf_twi_out, Header_TWI_Data, Error_CRC);
       continue;
     }
-    // if (!bit_test(header, Header_OK)) {
-    //   // TODO: reset everything
-    //   break;
-    // }
+    if ((header == 0) && (data == 0) && (crc_in == 0)) {
+      init();
+      return false;
+    }
     uint8_t const cmd = header & (_BV(6) | _BV(5));
-    uint8_t const crc_ok_0 = crc8_p93_2b(Header_OK, 0);
     if (cmd == Header_Status) {
       // TODO: handle error
-      Ring_PushTail3(&buf_twi_out, Header_OK, data + 1, crc_ok_0);
+      ring_push3_with_crc(&buf_twi_out, Header_OK, data + 1);
     } else if (cmd == Header_UART_Data) {
       // TODO: handle error
       Ring_PushTail2(&buf_uart_out, header, data);
+      ring_push3_with_crc(&buf_twi_out, Header_OK, data);
     } else if (cmd == Header_TWI_Address) {
       TWI_Init_Slave(data);
-      // TODO: handle error
-      Ring_PushTail3(&buf_twi_out, Header_OK, 0, crc_ok_0);
+      ring_push3_with_crc(&buf_twi_out, Header_OK, data);
     }
   }
 
@@ -299,21 +352,20 @@ bool step() {
       break;
     }
     UART_Send_Byte(data, bit_test(header, Header_9bit));
-    activity = true;
+    again = true;
   }
   while (UART_Recv_Ready() && (buf_uart_in.free >= 3)) {
     UART_Recv();
-    activity = true;
+    again = true;
   }
   while ((buf_uart_in.length >= 3) && (buf_twi_out.free >= 3)) {
     uint8_t b1, b2, b3;
     Ring_PopHead3(&buf_uart_in, &b1, &b2, &b3);
     Ring_PushTail3(&buf_twi_out, b1, b2, b3);
-    activity = true;
+    again = true;
   }
 
-  if ((buf_twi_out.length >= 3) &&
-      ((TWI_Out_Have == 0) || (TWI_Out_Sent >= TWI_Out_Have))) {
+  if (TWI_State_Idle && (buf_twi_out.length >= 3)) {
     uint8_t b1, b2, b3;
     if (Ring_PopHead3(&buf_twi_out, &b1, &b2, &b3)) {
       memset(twi_ses_out, 0, sizeof(twi_ses_out));
@@ -322,48 +374,27 @@ bool step() {
       twi_ses_out[3] = b2;
       twi_ses_out[4] = b3;
     }
-    activity = true;
-  }
-  Master_Notify_Set((buf_twi_out.length >= 3) || (TWI_Out_Sent < TWI_Out_Have));
-
-  // If TWI session is finished and something was received, move data to
-  // buf_twi_in
-  if ((TWI_In_Read > 0) && (TWI_In_Ack == 1) &&
-      buf_twi_in.free >= TWI_In_Read) {
-    for (uint8_t i = 0; i < TWI_In_Read; i++) {
-      uint8_t const b = twi_ses_in[i + 2];
-      Ring_PushTail(&buf_twi_in, b);
-    }
-    memset(twi_ses_in, 0, sizeof(twi_ses_in));
-    activity = true;
+    again = true;
   }
 
-  return activity;
+  return again;
 }
 
 int main(void) {
   cli();
-  DDRB |= _BV(PORTB5);
-  Ring_Init(&buf_uart_in);
-  Ring_Init(&buf_uart_out);
-  Ring_Init(&buf_twi_in);
-  Ring_Init(&buf_twi_out);
-  // TWI_Init_Slave(0x69);
-  TWI_Init_Slave(0x78);
-  UART_Init();
-  set_sleep_mode(SLEEP_MODE_IDLE);
-  sleep_enable();
-  bool activity = false;
-  Master_Notify_Init();
-  memset(twi_ses_in, 0, sizeof(twi_ses_in));
-  memset(twi_ses_out, 0, sizeof(twi_ses_out));
-  sei();
+  init();
 
   for (;;) {
-    if (!activity) {
+    sei();
+    sleep_mode();
+    while (!TWI_State_Idle) {
       sleep_mode();
     }
-    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { activity = step(); }
+    cli();
+    while (step())
+      ;
+    Master_Notify_Set((buf_twi_out.length >= 3) ||
+                      (TWI_Out_Sent < TWI_Out_Have));
   }
   return 0;
 }
