@@ -6,7 +6,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <util/atomic.h>
-#include <util/delay.h>
 
 #include "crc.h"
 #include "ring.h"
