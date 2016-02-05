@@ -28,6 +28,7 @@
 *.x86_64
 *.hex
 crc_test
+ring_test
 
 # Debug files
 *.dSYM/

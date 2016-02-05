@@ -4,6 +4,7 @@
 #include <compat/twi.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#include <string.h>
 #include <util/atomic.h>
 #include <util/delay.h>
 
@@ -11,18 +12,20 @@
 #include "ring.h"
 
 /*
+TWI = two wire interface, exactly same as i2c.
+
 This ATMega device speaks:
-- SPI slave to the master (Raspberry Pi in our case)
+- TWI slave to the master (Raspberry Pi in our case)
 - sends simple edge trigger to master to indicate data is ready
-- TWI/I2C slave to keyboard hardware, stores data in buffer
+- TWI slave to keyboard hardware, stores data in buffer
 - UART (9600-N-9), stores data in buffer
 
 The master does:
-- SPI write transaction to write to UART
+- TWI write transaction to write to UART
 - watch for edge on special pin
-- SPI read transaction to read UART or TWI/I2C data
+- TWI read transaction to read UART or TWI/I2C data
 
-Any SPI write or read transmits exactly 3 bytes:
+Any TWI write or read transmits exactly 3 bytes:
 - header
 - data
 - CRC8 poly=0x93 init=0x00 xorout=0x00 refin=false refout=false
@@ -54,27 +57,49 @@ static uint8_t const Header_TWI_Data = _BV(6) | 0;
 static uint8_t const Header_TWI_Address = _BV(6) | _BV(5);
 static uint8_t const Header_9bit = _BV(4);
 
+static uint8_t const Error_CRC = 0x93;
+
 #define USART_BAUD 9600
 #define USART_PRESCALE (((F_CPU) / (USART_BAUD * 16UL)) - 1)
 
-static RingBuffer_t buf_spi_in;
-static RingBuffer_t buf_spi_out;
 static RingBuffer_t buf_twi_in;
+static RingBuffer_t buf_twi_out;
 static RingBuffer_t buf_uart_in;
 static RingBuffer_t buf_uart_out;
-static volatile bool event_spi = false;
-static volatile bool event_twi = false;
 static volatile uint8_t error_code = 0;
+
+static uint8_t twi_ses_in[6];
+static uint8_t twi_ses_out[6];
+#define TWI_In_Read twi_ses_in[1]
+#define TWI_In_Ack twi_ses_in[0]
+#define TWI_In_Size (sizeof(twi_ses_in) - 2)
+#define TWI_In_Next twi_ses_in[TWI_In_Read + 2]
+#define TWI_Out_Have twi_ses_out[0]
+#define TWI_Out_Sent twi_ses_out[1]
+#define TWI_Out_Size (sizeof(twi_ses_out) - 2)
+#define TWI_Out_Next twi_ses_out[TWI_Out_Sent + 2]
 
 bool bit_test(uint8_t const x, uint8_t const mask) {
   return (x & mask) == mask;
 }
 
+bool ring_push3_with_crc(RingBuffer_t* const b, uint8_t const b1,
+                         uint8_t const b2) {
+  uint8_t const b3 = crc8_p93_2b(b1, b2);
+  return Ring_PushTail3(b, b1, b2, b3);
+}
+
 void Master_Notify_Set(bool const on) {
   if (on) {
     PORTB |= _BV(PINB1);
+
+    // led
+    PORTB |= _BV(PINB5);
   } else {
     PORTB &= ~_BV(PINB1);
+
+    // led
+    PORTB &= ~_BV(PINB5);
   }
 }
 
@@ -84,69 +109,108 @@ void Master_Notify_Init() {
 }
 
 void TWI_Init_Slave(uint8_t address) {
-  DDRB |= _BV(PINB1);
   TWBR = 0x0c;
-  TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
-  TWAR = address;
+  TWCR =
+      // _BV(TWINT) |
+      _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
+  TWAR = address << 1;
   TWSR = 0;
-}
-
-void TWI_Run(bool const ack) {
-  if (ack) {
-    TWCR = 1 << TWINT | 1 << TWEA | 1 << TWEN | 1 << TWIE;
-  } else {
-    TWCR = 1 << TWINT | 1 << TWEN | 1 << TWIE;
-  }
 }
 
 ISR(TWI_vect) {
   bool ack = false;
   switch (TW_STATUS) {
+    case TW_NO_INFO:
+      return;
+
     case TW_BUS_ERROR:
       TWCR = _BV(TWSTO) | _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
-      break;
+      return;
 
     // Receive SLA+W
     case TW_SR_SLA_ACK:
-    // Receive SLA+W broadcast
     case TW_SR_GCALL_ACK:
-      ack = buf_spi_out.free >= 3;
+    // Receive SLA+R LP
+    case TW_SR_ARB_LOST_SLA_ACK:
+    case TW_SR_ARB_LOST_GCALL_ACK:
+      memset(twi_ses_in, 0, sizeof(twi_ses_in));
+      ack = true;
       break;
 
+    // data received, ACK returned
     case TW_SR_DATA_ACK:
     case TW_SR_GCALL_DATA_ACK:
+      TWI_In_Next = TWDR;
+      if (TWI_In_Read < TWI_In_Size) {
+        TWI_In_Read++;
+      }
+      ack = true;
+      break;
+
+    // data received, NACK returned
     case TW_SR_DATA_NACK:
     case TW_SR_GCALL_DATA_NACK:
-      ack = Ring_PushTail(&buf_twi_in, TWDR);
-      event_twi = true;
+      TWI_In_Next = TWDR;
+      if (TWI_In_Read < TWI_In_Size) {
+        TWI_In_Read++;
+      }
+      // memset(twi_ses_in, 0, sizeof(twi_ses_in));
+      // TWI_In_Read = 0;
+      ack = true;
       break;
 
     // Receive Stop or ReStart
     case TW_SR_STOP:
+      TWI_In_Ack = 1;
+      if (TWI_In_Read == 1) {
+        // keyboard
+        if (ring_push3_with_crc(&buf_twi_out, Header_OK | Header_TWI_Data,
+                                twi_ses_in[2])) {
+          memset(twi_ses_in, 0, sizeof(twi_ses_in));
+        }
+      }
+      if (TWI_Out_Sent >= TWI_Out_Have) {
+        memset(twi_ses_out, 0, sizeof(twi_ses_out));
+      }
       ack = true;
       break;
-    // Receive SLA+R LP
-    case TW_ST_ARB_LOST_SLA_ACK:
+
     // Receive SLA+R
     case TW_ST_SLA_ACK:
-      ack = buf_spi_out.free >= 3;
+      TWI_Out_Sent = 0;
+      ack = (TWI_Out_Sent < TWI_Out_Have);
+      if (ack) {
+        TWDR = TWI_Out_Next;
+      } else {
+        TWDR = 0;
+      }
       break;
 
     // Send Byte Receive ACK
     case TW_ST_DATA_ACK:
-      // have something to send?
-      if (0) {
+      ack = (TWI_Out_Sent < TWI_Out_Have);
+      if (ack) {
+        TWI_Out_Sent++;
+        TWDR = TWI_Out_Next;
       } else {
         TWDR = 0;
-        ack = false;
       }
+      break;
+
+    // Send Last Byte Receive ACK
+    case TW_ST_LAST_DATA:
+      if (TWI_Out_Sent < TWI_Out_Have) {
+        TWI_Out_Sent++;
+      }
+      ack = true;
       break;
 
     // Send Last Byte Receive NACK
     case TW_ST_DATA_NACK:
-      break;
-    // Send Last Byte Receive ACK
-    case TW_ST_LAST_DATA:
+      if (TWI_Out_Sent < TWI_Out_Have) {
+        TWI_Out_Sent++;
+      }
+      ack = true;
       break;
   }
   TWCR = _BV(TWINT) | (ack ? _BV(TWEA) : 0) | _BV(TWEN) | _BV(TWIE);
@@ -192,130 +256,115 @@ void UART_Recv() {
       status |= Header_9bit;
     }
   }
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-    uint8_t const crc = crc8_p93_2b(status, data);
-    // TODO: check buffer push errors
-    Ring_PushTail3(&buf_uart_in, status, data, crc);
-  }
+  uint8_t const crc = crc8_p93_2b(status, data);
+  // TODO: check buffer push errors
+  Ring_PushTail3(&buf_uart_in, status, data, crc);
 }
 
 bool UART_Recv_Ready() { return bit_test(UCSR0A, _BV(RXC0)); }
 
-void SPI_Init_Slave(void) {
-  DDRB |= _BV(PINB4);
-  SPCR = _BV(SPE) | _BV(SPIE);
-}
+bool step() {
+  bool activity = false;
 
-bool SPI_Ready(void) { return event_spi || bit_test(SPSR, _BV(SPIF)); }
+  while (buf_twi_in.length >= 3) {
+    activity = true;
+    uint8_t header, data, crc_in;
+    Ring_PopHead3(&buf_twi_in, &header, &data, &crc_in);
+    uint8_t const crc_check = crc8_p93_2b(header, data);
+    if (crc_in != crc_check) {
+      ring_push3_with_crc(&buf_twi_out, Header_TWI_Data, Error_CRC);
+      continue;
+    }
+    // if (!bit_test(header, Header_OK)) {
+    //   // TODO: reset everything
+    //   break;
+    // }
+    uint8_t const cmd = header & (_BV(6) | _BV(5));
+    uint8_t const crc_ok_0 = crc8_p93_2b(Header_OK, 0);
+    if (cmd == Header_Status) {
+      // TODO: handle error
+      Ring_PushTail3(&buf_twi_out, Header_OK, data + 1, crc_ok_0);
+    } else if (cmd == Header_UART_Data) {
+      // TODO: handle error
+      Ring_PushTail2(&buf_uart_out, header, data);
+    } else if (cmd == Header_TWI_Address) {
+      TWI_Init_Slave(data);
+      // TODO: handle error
+      Ring_PushTail3(&buf_twi_out, Header_OK, 0, crc_ok_0);
+    }
+  }
 
-ISR(SPI_STC_vect) {
-  uint8_t const in = SPDR;
-  Ring_PushTail(&buf_spi_in, in);
-  uint8_t out = 0;
-  bool const again = Ring_PopHead(&buf_spi_out, &out);
+  while (UART_Send_Ready()) {
+    uint8_t header, data;
+    if (!Ring_PopHead2(&buf_uart_out, &header, &data)) {
+      break;
+    }
+    UART_Send_Byte(data, bit_test(header, Header_9bit));
+    activity = true;
+  }
+  while (UART_Recv_Ready() && (buf_uart_in.free >= 3)) {
+    UART_Recv();
+    activity = true;
+  }
+  while ((buf_uart_in.length >= 3) && (buf_twi_out.free >= 3)) {
+    uint8_t b1, b2, b3;
+    Ring_PopHead3(&buf_uart_in, &b1, &b2, &b3);
+    Ring_PushTail3(&buf_twi_out, b1, b2, b3);
+    activity = true;
+  }
 
-  SPDR = out;
-  Master_Notify_Set(again);
-  event_spi = true;
+  if ((buf_twi_out.length >= 3) &&
+      ((TWI_Out_Have == 0) || (TWI_Out_Sent >= TWI_Out_Have))) {
+    uint8_t b1, b2, b3;
+    if (Ring_PopHead3(&buf_twi_out, &b1, &b2, &b3)) {
+      memset(twi_ses_out, 0, sizeof(twi_ses_out));
+      TWI_Out_Have = 3;
+      twi_ses_out[2] = b1;
+      twi_ses_out[3] = b2;
+      twi_ses_out[4] = b3;
+    }
+    activity = true;
+  }
+  Master_Notify_Set((buf_twi_out.length >= 3) || (TWI_Out_Sent < TWI_Out_Have));
+
+  // If TWI session is finished and something was received, move data to
+  // buf_twi_in
+  if ((TWI_In_Read > 0) && (TWI_In_Ack == 1) &&
+      buf_twi_in.free >= TWI_In_Read) {
+    for (uint8_t i = 0; i < TWI_In_Read; i++) {
+      uint8_t const b = twi_ses_in[i + 2];
+      Ring_PushTail(&buf_twi_in, b);
+    }
+    memset(twi_ses_in, 0, sizeof(twi_ses_in));
+    activity = true;
+  }
+
+  return activity;
 }
 
 int main(void) {
   cli();
-
-  uint8_t const crc_ok_0 = crc8_p93_2b(Header_OK, 0);
-
-  Ring_Init(&buf_spi_in);
-  Ring_Init(&buf_spi_out);
+  DDRB |= _BV(PORTB5);
   Ring_Init(&buf_uart_in);
   Ring_Init(&buf_uart_out);
   Ring_Init(&buf_twi_in);
-  SPI_Init_Slave();
-  TWI_Init_Slave(0x69);
+  Ring_Init(&buf_twi_out);
+  // TWI_Init_Slave(0x69);
+  TWI_Init_Slave(0x78);
   UART_Init();
   set_sleep_mode(SLEEP_MODE_IDLE);
   sleep_enable();
-  bool should_sleep = true;
+  bool activity = false;
   Master_Notify_Init();
+  memset(twi_ses_in, 0, sizeof(twi_ses_in));
+  memset(twi_ses_out, 0, sizeof(twi_ses_out));
   sei();
 
-  Ring_PushTail3(&buf_spi_out, Header_OK, 0, crc_ok_0);
   for (;;) {
-    if (should_sleep) {
+    if (!activity) {
       sleep_mode();
     }
-
-    should_sleep = true;
-    while (buf_spi_in.length >= 3) {
-      uint8_t header, data, crc_in;
-      Ring_PopHead3(&buf_spi_in, &header, &data, &crc_in);
-      uint8_t const crc_check = crc8_p93_2b(header, data);
-      if (crc_in != crc_check) {
-        // TODO: handle CRC error
-        continue;
-      }
-      if (!bit_test(header, Header_OK)) {
-        // TODO: reset everything
-        break;
-      }
-      uint8_t const cmd = header & (_BV(6) | _BV(5));
-      if (cmd == Header_Status) {
-        // TODO: handle error
-        Ring_PushTail3(&buf_spi_out, Header_OK, 0, crc_ok_0);
-        Master_Notify_Set(true);
-      } else if (cmd == Header_UART_Data) {
-        // TODO: handle error
-        Ring_PushTail2(&buf_uart_out, header, data);
-      } else if (cmd == Header_TWI_Address) {
-        TWI_Init_Slave(data);
-        // TODO: handle error
-        Ring_PushTail3(&buf_spi_out, Header_OK, 0, crc_ok_0);
-        Master_Notify_Set(true);
-      }
-      should_sleep = false;
-    }
-
-    while (buf_twi_in.length > 0) {
-      event_twi = false;
-      should_sleep = false;
-      uint8_t data;
-      if (!Ring_PopHead(&buf_twi_in, &data)) {
-        break;
-      }
-      uint8_t const header = Header_OK | Header_TWI_Data;
-      uint8_t const crc = crc8_p93_2b(header, data);
-      if (!Ring_PushTail3(&buf_spi_out, header, data, crc)) {
-        break;
-      }
-      Master_Notify_Set(true);
-    }
-
-    while (UART_Send_Ready()) {
-      uint8_t header, data;
-      if (!Ring_PopHead2(&buf_uart_out, &header, &data)) {
-        break;
-      }
-      UART_Send_Byte(data, bit_test(header, Header_9bit));
-      should_sleep = false;
-    }
-    while (UART_Recv_Ready() && (buf_uart_in.free >= 3)) {
-      UART_Recv();
-      Master_Notify_Set(true);
-      should_sleep = false;
-    }
-    while ((buf_uart_in.length >= 3) && (buf_spi_out.free >= 3)) {
-      uint8_t b;
-      for (uint8_t i = 0; i < 3; i++) {
-        // TODO: fatal error
-        if (!Ring_PopHead(&buf_uart_in, &b)) {
-          break;
-        }
-        if (!Ring_PushTail(&buf_spi_out, b)) {
-          break;
-        }
-      }
-      Master_Notify_Set(true);
-      should_sleep = false;
-    }
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { activity = step(); }
   }
   return 0;
 }
