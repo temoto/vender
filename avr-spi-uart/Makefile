@@ -11,7 +11,7 @@ avr_size = avr-size
 avrdude = avrdude
 
 cflags_common = -Wall -Werror -std=c11 -pipe
-CFLAGS = -mmcu=$(mmcu) -DF_CPU=$(F_CPU) -O2 $(cflags_common)
+CFLAGS = -mmcu=$(mmcu) -DF_CPU=$(F_CPU) -Og $(cflags_common)
 MAPFLAGS = -Wl,-Map,
 
 .PHONY : clean

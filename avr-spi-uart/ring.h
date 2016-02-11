@@ -15,7 +15,7 @@ typedef struct {
   uint8_t tail;
   uint8_t length;
   uint8_t free;
-} RingBuffer_t;
+} volatile RingBuffer_t;
 
 void Ring_Init(RingBuffer_t* const b);
 bool Ring_MoveTail(RingBuffer_t* const b, int8_t const delta);
@@ -24,14 +24,16 @@ bool Ring_PushTail2(RingBuffer_t* const b, uint8_t const v1, uint8_t const v2);
 bool Ring_PushTail3(RingBuffer_t* const b, uint8_t const v1, uint8_t const v2,
                     uint8_t const v3);
 bool Ring_PeekHead(RingBuffer_t* const b, uint8_t* const out);
-bool Ring_PeekHead2(RingBuffer_t* const b, uint8_t* const out1,uint8_t* const out2);
-bool Ring_PeekHead3(RingBuffer_t* const b, uint8_t* const out1,uint8_t* const out2,uint8_t* const out3);
+bool Ring_PeekHead2(RingBuffer_t* const b, uint8_t* const out1,
+                    uint8_t* const out2);
+bool Ring_PeekHead3(RingBuffer_t* const b, uint8_t* const out1,
+                    uint8_t* const out2, uint8_t* const out3);
 bool Ring_MoveHead(RingBuffer_t* const b, int8_t const delta);
 bool Ring_PopHead(RingBuffer_t* const b, uint8_t* const out);
 bool Ring_PopHead2(RingBuffer_t* const b, uint8_t* const out1,
                    uint8_t* const out2);
 bool Ring_PopHead3(RingBuffer_t* const b, uint8_t* const out1,
                    uint8_t* const out2, uint8_t* const out3);
-void Ring_Debug(RingBuffer_t const* const b);
+void Ring_Debug(RingBuffer_t* const b);
 
 #endif  // INCLUDE_RING_H
