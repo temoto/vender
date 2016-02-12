@@ -79,21 +79,21 @@ void soft_reset() {
     ;
 }
 
-inline static bool bit_test(uint8_t const x, uint8_t const mask) {
+static bool bit_test(uint8_t const x, uint8_t const mask) {
   return (x & mask) == mask;
 }
 
-inline static uint8_t min_uint8(uint8_t const a, uint8_t const b) {
+static uint8_t min_uint8(uint8_t const a, uint8_t const b) {
   return (a < b) ? a : b;
 }
 
-inline static bool ring_push3_with_crc(RingBuffer_t volatile* b,
-                                       uint8_t const b1, uint8_t const b2) {
+static bool ring_push3_with_crc(RingBuffer_t volatile* b, uint8_t const b1,
+                                uint8_t const b2) {
   uint8_t const b3 = crc8_p93_2b(b1, b2);
   return Ring_PushTail3(b, b1, b2, b3);
 }
 
-inline static void LED_Set(bool const on) {
+static void LED_Set(bool const on) {
   if (on) {
     PORTB |= _BV(PINB5);
   } else {
@@ -101,12 +101,12 @@ inline static void LED_Set(bool const on) {
   }
 }
 
-inline static void LED_Init() {
+static void LED_Init() {
   DDRB |= _BV(PINB5);
   LED_Set(false);
 }
 
-inline static void Master_Notify_Set(bool const on) {
+static void Master_Notify_Set(bool const on) {
   if (on) {
     PORTB |= _BV(PINB1);
   } else {
@@ -115,7 +115,7 @@ inline static void Master_Notify_Set(bool const on) {
   LED_Set(on);
 }
 
-inline static void Master_Notify_Init() {
+static void Master_Notify_Init() {
   DDRB |= _BV(PINB1);
   Master_Notify_Set(false);
 }
@@ -140,7 +140,7 @@ static volatile uint8_t twi_ses_out[93];
 #define TWI_Out_Size (sizeof(twi_ses_out) - 2)
 #define TWI_Out_Next twi_ses_out[TWI_Out_Sent + 2]
 
-inline static void TWI_Init_Slave(uint8_t const address) {
+static void TWI_Init_Slave(uint8_t const address) {
   TWCR = 0;
   TWBR = 0x0c;
   TWAR = address << 1;
@@ -248,7 +248,7 @@ ISR(TWI_vect) {
 // End TWI driver
 
 // Begin UART driver
-inline static void UART_Init() {
+static void UART_Init() {
 // DDRD |= _BV(PD1);
 // DDRD &= ~_BV(PD0);
 
@@ -268,7 +268,7 @@ inline static void UART_Init() {
 
   UCSR0B = 0
            // enable rx, tx and interrupts
-           | _BV(RXEN0) | _BV(TXEN0)  // | _BV(RXCIE0) | _BV(TXCIE0)
+           | _BV(RXEN0) | _BV(TXEN0) | _BV(RXCIE0) | _BV(TXCIE0)
            // enable 8 bit
            | _BV(RXB80) | _BV(TXB80)
            // 9 data bits
@@ -279,9 +279,9 @@ inline static void UART_Init() {
   UCSR0C |= _BV(UCSZ00) | _BV(UCSZ01);
 }
 
-inline static bool UART_Recv_Ready() { return bit_test(UCSR0A, _BV(RXC0)); }
+static bool UART_Recv_Ready() { return bit_test(UCSR0A, _BV(RXC0)); }
 
-inline static void UART_Recv() {
+static void UART_Recv() {
   uint8_t const srlow = UCSR0A;
   uint8_t const srhigh = UCSR0B;
   uint8_t const data = UDR0;
@@ -293,17 +293,27 @@ inline static void UART_Recv() {
     }
   }
   // TODO: check buffer push errors
-  // ring_push3_with_crc(&buf_uart_in, status, data);
   ring_push3_with_crc(&buf_twi_out, status, data);
 }
 
-ISR(USART_RX_vect) {
-  while (UART_Recv_Ready() && (buf_uart_in.free >= 3)) {
+static bool UART_Recv_Loop(int8_t const max_repeats) {
+  bool activity = false;
+  for (int8_t i = max_repeats; i >= 0; i--) {
+    if (buf_twi_out.free < 3) {
+      break;
+    }
+    if (!UART_Recv_Ready()) {
+      break;
+    }
     UART_Recv();
+    activity = true;
   }
+  return activity;
 }
 
-inline static void UART_Send_Byte(uint8_t const b, bool const bit9) {
+ISR(USART_RX_vect) { UART_Recv_Loop(5); }
+
+static void UART_Send_Byte(uint8_t const b, bool const bit9) {
   if (bit9) {
     UCSR0B |= _BV(TXB80);
   } else {
@@ -312,23 +322,34 @@ inline static void UART_Send_Byte(uint8_t const b, bool const bit9) {
   UDR0 = b;
 }
 
-inline static bool UART_Send_Ready() { return bit_test(UCSR0A, _BV(UDRE0)); }
-inline static bool UART_Send_Done() { return bit_test(UCSR0A, _BV(TXC0)); }
+static bool UART_Send_Ready() { return bit_test(UCSR0A, _BV(UDRE0)); }
+// static bool UART_Send_Done() { return bit_test(UCSR0A, _BV(TXC0)); }
 
-ISR(USART_UDRE_vect) {
-  while (UART_Send_Ready() && (buf_uart_out.length >= 2)) {
+static bool UART_Send_Loop(int8_t const max_repeats) {
+  bool activity = false;
+  for (int8_t i = max_repeats; i >= 0; i--) {
+    if (!UART_Send_Ready()) {
+      break;
+    }
+    if (buf_uart_out.length < 2) {
+      break;
+    }
     uint8_t header, data;
     if (!Ring_PopHead2(&buf_uart_out, &header, &data)) {
       break;
     }
     UART_Send_Byte(data, bit_test(header, Header_9bit));
+    activity = true;
   }
+  return activity;
 }
 
-ISR(USART_TX_vect) {}
+ISR(USART_UDRE_vect) { UART_Send_Loop(5); }
+
+ISR(USART_TX_vect) { UART_Send_Loop(5); }
 // End UART driver
 
-inline static void init() {
+static void init() {
   LED_Init();
   Ring_Init(&buf_uart_in);
   Ring_Init(&buf_uart_out);
@@ -351,7 +372,7 @@ inline static void init() {
   ring_push3_with_crc(&buf_twi_out, Header_OK | 0x01, 0x01);
 }
 
-inline static bool step() {
+static bool step() {
   bool again = false;
 
   // TWI read is finished
@@ -408,18 +429,8 @@ inline static bool step() {
     }
   }
 
-  while (UART_Send_Ready()) {
-    uint8_t header, data;
-    if (!Ring_PopHead2(&buf_uart_out, &header, &data)) {
-      break;
-    }
-    UART_Send_Byte(data, bit_test(header, Header_9bit));
-    again = true;
-  }
-  while (UART_Recv_Ready() && (buf_twi_out.free >= 3)) {
-    UART_Recv();
-    again = true;
-  }
+  again |= UART_Send_Loop(10);
+  again |= UART_Recv_Loop(10);
 
   if (TWI_State_Idle && (buf_twi_out.length >= 3)) {
     uint8_t i, b = 0;
@@ -436,80 +447,16 @@ inline static bool step() {
   return again;
 }
 
-#include <util/delay.h>
-void UART_Block_Send(uint8_t const b, bool const bit9) {
-  while (!UART_Send_Ready())
-    ;
-  UART_Send_Byte(b, bit9);
-  while (!UART_Send_Done())
-    ;
-}
-
-void UART_Block_Read() {
-  while (!UART_Recv_Ready())
-    ;
-  while (UART_Recv_Ready()) UART_Recv();
-}
-
 int main(void) {
   wdt_disable();
   cli();
   init();
 
-/*
-  // for (int8_t i = 0; i < 10; i++) {
-  //   _delay_ms(200);
-  // }
-
-  // UART_Block_Send(0x30, true);  // reset
-  // UART_Block_Send(0x30, false);
-  // _delay_us(100);
-  // _delay_ms(200);
-  // UART_Block_Read();
-  // _delay_ms(200);
-
-  // for (int8_t i = 0; i < 2; i++) {
-  //   UART_Block_Send(0x33, true);  // poll
-  //   UART_Block_Send(0x33, false);
-  //   _delay_us(100);
-  //   UART_Block_Read();
-  //   _delay_us(100);
-  //   // UART_Block_Send(0x00, false);
-  //   _delay_ms(7);
-  // }
-
-  // UART_Block_Send(0x31, true); // setup
-  // UART_Block_Send(0x31, false);
-  // _delay_us(100);
-  // UART_Block_Read();
-  // _delay_us(100);
-  // UART_Block_Send(0x00, false);
-  // _delay_ms(7);
-
-  UART_Block_Send(0x34, true);  // type
-  UART_Block_Send(0x00, false);
-  UART_Block_Send(0x07, false);
-  UART_Block_Send(0x00, false);
-  UART_Block_Send(0x00, false);
-  UART_Block_Send(0x3b, false);
-  _delay_us(100);
-  UART_Block_Read();
-  _delay_ms(157);
-
-  UART_Block_Send(0x33, true);  // poll
-  UART_Block_Send(0x33, false);
-  _delay_us(100);
-  UART_Block_Read();
-  _delay_us(100);
-  // UART_Block_Send(0x00, false);
-  _delay_ms(157);
-*/
-
   for (;;) {
     sei();
-    sleep_mode();
+    // sleep_mode();
     while (!TWI_State_Idle) {
-      sleep_mode();
+      // sleep_mode();
     }
     cli();
     while (step())
