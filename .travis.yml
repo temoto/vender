@@ -1,0 +1,24 @@
+language: go
+go:
+  - 1.4
+  - 1.5
+  - tip
+cache:
+  apt: true
+  go: true
+addons:
+  apt_packages:
+    - avr-libc
+    - binutils-avr
+    - gcc-avr
+env:
+  matrix:
+    - app=avr-spi-uart
+    - app=crc
+    - app=display
+    - app=display/lcd-test
+    - app=head
+    - app=i2c
+    - app=i2c/i2c-test
+script: ./all.bash $app
+sudo: false
