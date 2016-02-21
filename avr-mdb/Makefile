@@ -1,6 +1,8 @@
 #!/usr/bin/make
-F_CPU = 16000000
+# F_CPU = 16000000
+F_CPU = 7372800
 mmcu = atmega328p
+# mmcu = atmega128
 
 cfiles   := main.c crc.c ring.c
 hexfiles := $(patsubst %.c,%.hex,$(cfiles))
@@ -14,7 +16,7 @@ cflags_common = -Wall -Werror -std=c11 -pipe
 CFLAGS = -mmcu=$(mmcu) -DF_CPU=$(F_CPU) -Og $(cflags_common)
 MAPFLAGS = -Wl,-Map,
 
-.PHONY : clean
+.PHONY : clean crc_test ring_test
 .DEFAULT_GOAL := all
 
 all: crc_test ring_test main.hex
@@ -37,10 +39,10 @@ main.elf: $(cfiles)
 	$(avr_gcc) $(CFLAGS) -o $@ $^
 	$(avr_size) --common $@
 
-crc_test:
+crc_test: crc.c crc.h crc_test.c
 	$(CC) $(cflags_common) -DDEBUG -DTEST -g -O0 -o $@ crc_test.c crc.c
 	./crc_test
 
-ring_test:
+ring_test: ring.c ring.h
 	$(CC) $(cflags_common) -DDEBUG -DTEST -g -O0 -o $@ ring.c
 	./ring_test

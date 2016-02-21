@@ -58,25 +58,24 @@ bool Ring_PushTail(RingBuffer_t* const b, uint8_t const value) {
   return true;
 }
 
-bool Ring_PushTail2(RingBuffer_t* const b, uint8_t const v1,
-                           uint8_t const v2) {
+bool Ring_PushTailN(RingBuffer_t* const b, uint8_t const* const src,
+                    uint8_t const n) {
+  if (b->free < n) {
+    return false;
+  }
+  for (uint8_t i = 0; i < n; i++) {
+    b->data[(b->tail + i) % RING_BUFFER_SIZE] = src[i];
+  }
+  return Ring_MoveTail(b, n);
+}
+
+bool Ring_PushTail2(RingBuffer_t* const b, uint8_t const v1, uint8_t const v2) {
   if (b->free < 2) {
     return false;
   }
   b->data[(b->tail)] = v1;
   b->data[(b->tail + 1) % RING_BUFFER_SIZE] = v2;
   return Ring_MoveTail(b, 2);
-}
-
-bool Ring_PushTail3(RingBuffer_t* const b, uint8_t const v1,
-                           uint8_t const v2, uint8_t const v3) {
-  if (b->free < 3) {
-    return false;
-  }
-  b->data[(b->tail)] = v1;
-  b->data[(b->tail + 1) % RING_BUFFER_SIZE] = v2;
-  b->data[(b->tail + 2) % RING_BUFFER_SIZE] = v3;
-  return Ring_MoveTail(b, 3);
 }
 
 bool Ring_MoveHead(RingBuffer_t* const b, int8_t const delta) {
@@ -114,7 +113,7 @@ bool Ring_PeekHead(RingBuffer_t* const b, uint8_t* const out) {
 }
 
 bool Ring_PeekHead3(RingBuffer_t* const b, uint8_t* const out1,
-                           uint8_t* const out2, uint8_t* const out3) {
+                    uint8_t* const out2, uint8_t* const out3) {
   if (b->length < 3) {
     return false;
   }
@@ -142,7 +141,7 @@ bool Ring_PopHead(RingBuffer_t* const b, uint8_t* const out) {
 }
 
 bool Ring_PopHead2(RingBuffer_t* const b, uint8_t* const out1,
-                          uint8_t* const out2) {
+                   uint8_t* const out2) {
   if (b->length < 2) {
     return false;
   }
@@ -152,7 +151,7 @@ bool Ring_PopHead2(RingBuffer_t* const b, uint8_t* const out1,
 }
 
 bool Ring_PopHead3(RingBuffer_t* const b, uint8_t* const out1,
-                          uint8_t* const out2, uint8_t* const out3) {
+                   uint8_t* const out2, uint8_t* const out3) {
   if (b->length < 3) {
     return false;
   }
@@ -160,6 +159,16 @@ bool Ring_PopHead3(RingBuffer_t* const b, uint8_t* const out1,
   *out2 = b->data[(b->head + 1) % RING_BUFFER_SIZE];
   *out3 = b->data[(b->head + 2) % RING_BUFFER_SIZE];
   return Ring_MoveHead(b, 3);
+}
+
+bool Ring_PopHeadN(RingBuffer_t* const b, uint8_t* const dst, uint8_t const n) {
+  if (b->length < n) {
+    return false;
+  }
+  for (uint8_t i = 0; i < n; i++) {
+    dst[i] = b->data[(b->head + i) % RING_BUFFER_SIZE];
+  }
+  return Ring_MoveHead(b, n);
 }
 
 void Ring_Debug(RingBuffer_t* const b) {
@@ -255,11 +264,11 @@ int main() {
   Ring_Debug(&rb);
 
   Ring_Init(&rb);
-  assert(Ring_PushTail3(&rb, 'C', 'D', 'E'));
+  assert(Ring_PushTailN(&rb, (uint8_t const[]){'C', 'D', 'E'}, 3));
   assert(rb.head == 0);
   assert(rb.tail == 3);
   assert(rb.length == 3);
-  assert(!Ring_PushTail3(&rb, 'x', 'y', 'z'));
+  assert(!Ring_PushTailN(&rb, (uint8_t const[]){'x', 'y', 'z'}, 3));
   assert(rb.head == 0);
   assert(rb.tail == 3);
   assert(rb.length == 3);

@@ -40,7 +40,7 @@ ring_test
 *.swp
 *~
 .coverage
-.DS_Store?
+.DS_Store
 build_log.txt
 ehthumbs.db
 Thumbs.db
