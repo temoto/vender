@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
-#define RING_BUFFER_SIZE 128
+#define RING_BUFFER_SIZE 228
 #if RING_BUFFER_SIZE > 256
 #error "RING_BUFFER_SIZE must be <=256"
 #endif

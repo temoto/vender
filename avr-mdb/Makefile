@@ -27,7 +27,7 @@ upload-a: main.hex
 	$(avrdude) -p $(mmcu) -P /dev/cu.usbmodemfa141 -c arduino -U flash:w:$<
 
 fuse:
-	$(avrdude) -p $(mmcu) -P usb -c dragon_isp -U lfuse:w:0x62:m -U hfuse:w:0xd9:m -U efuse:w:0xff:m
+	$(avrdude) -p $(mmcu) -P usb -c dragon_isp -U lfuse:w:0xff:m -U hfuse:w:0xdb:m -U efuse:w:0x07:m
 
 clean:
 	rm -rf *.dSYM/ *.elf *.hex *.o crc_test ring_test

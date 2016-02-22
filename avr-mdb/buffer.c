@@ -1,6 +1,7 @@
 #ifndef INCLUDE_BUFFER_C
 #define INCLUDE_BUFFER_C
 #include <inttypes.h>
+#include <string.h>
 
 typedef struct {
   uint8_t size;
@@ -11,9 +12,9 @@ typedef struct {
 
 static void Buffer_Init(Buffer_t *const b, uint8_t *const storage,
                         uint8_t const size) {
+  memset((void*)b, 0, sizeof(Buffer_t));
+  memset(storage, 0, size);
   b->size = size;
-  b->length = 0;
-  b->used = 0;
   b->data = storage;
 }
 
