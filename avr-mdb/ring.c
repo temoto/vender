@@ -19,6 +19,26 @@ void Ring_Init(RingBuffer_t* const b) {
   debug_printf("ring init     b=%p free=%d\n", b, b->free);
 }
 
+void Ring_Debug(RingBuffer_t* const b) {
+  printf("ring debug    data=[");
+  for (uint8_t i = 0; i < RING_BUFFER_SIZE; i++) {
+    printf("%c", b->data[i] != 0 ? b->data[i] : '.');
+  }
+  printf("] head=%d tail=%d length=%d free=%d content=[", b->head, b->tail,
+         b->length, b->free);
+  uint8_t h = b->head, t = b->tail, n = t - h;
+  if ((b->free == 0) && (h == t)) {
+    n = RING_BUFFER_SIZE;
+  } else if (h > t) {
+    n = RING_BUFFER_SIZE - h + t;
+  }
+  for (uint8_t i = 0; i < n; i++) {
+    uint8_t j = (h + i) % RING_BUFFER_SIZE;
+    printf("%c", b->data[j]);
+  }
+  printf("]\n");
+}
+
 bool Ring_MoveTail(RingBuffer_t* const b, int8_t const delta) {
   uint8_t next = (b->tail + delta) % RING_BUFFER_SIZE;
   if (delta >= 0) {
@@ -64,18 +84,14 @@ bool Ring_PushTailN(RingBuffer_t* const b, uint8_t const* const src,
     return false;
   }
   for (uint8_t i = 0; i < n; i++) {
-    b->data[(b->tail + i) % RING_BUFFER_SIZE] = src[i];
+    Ring_Unsafe_Push(b, i, src[i]);
   }
   return Ring_MoveTail(b, n);
 }
 
-bool Ring_PushTail2(RingBuffer_t* const b, uint8_t const v1, uint8_t const v2) {
-  if (b->free < 2) {
-    return false;
-  }
-  b->data[(b->tail)] = v1;
-  b->data[(b->tail + 1) % RING_BUFFER_SIZE] = v2;
-  return Ring_MoveTail(b, 2);
+void Ring_Unsafe_Push(RingBuffer_t* const b, uint8_t const offset,
+                      uint8_t const value) {
+  b->data[(b->tail + offset) % RING_BUFFER_SIZE] = value;
 }
 
 bool Ring_MoveHead(RingBuffer_t* const b, int8_t const delta) {
@@ -171,26 +187,6 @@ bool Ring_PopHeadN(RingBuffer_t* const b, uint8_t* const dst, uint8_t const n) {
   return Ring_MoveHead(b, n);
 }
 
-void Ring_Debug(RingBuffer_t* const b) {
-  printf("ring debug    data=[");
-  for (uint8_t i = 0; i < RING_BUFFER_SIZE; i++) {
-    printf("%c", b->data[i] != 0 ? b->data[i] : '.');
-  }
-  printf("] head=%d tail=%d length=%d free=%d content=[", b->head, b->tail,
-         b->length, b->free);
-  uint8_t h = b->head, t = b->tail, n = t - h;
-  if ((b->free == 0) && (h == t)) {
-    n = RING_BUFFER_SIZE;
-  } else if (h > t) {
-    n = RING_BUFFER_SIZE - h + t;
-  }
-  for (uint8_t i = 0; i < n; i++) {
-    uint8_t j = (h + i) % RING_BUFFER_SIZE;
-    printf("%c", b->data[j]);
-  }
-  printf("]\n");
-}
-
 #ifdef TEST
 #include <assert.h>
 int main() {
@@ -272,7 +268,8 @@ int main() {
   assert(rb.head == 0);
   assert(rb.tail == 3);
   assert(rb.length == 3);
-  assert(Ring_PushTail2(&rb, '1', '2'));
+  assert(Ring_PushTail(&rb, '1'));
+  assert(Ring_PushTail(&rb, '2'));
   assert(rb.head == 0);
   assert(rb.tail == 0);
   assert(rb.length == 5);
@@ -312,7 +309,8 @@ int main() {
   assert(rb.tail == 0);
   assert(rb.length == 2);
   Ring_Debug(&rb);
-  assert(Ring_PushTail2(&rb, '3', '4'));
+  assert(Ring_PushTail(&rb, '3'));
+  assert(Ring_PushTail(&rb, '4'));
   assert(rb.head == 3);
   assert(rb.tail == 2);
   assert(rb.length == 4);

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
+# coding: utf-8
 from __future__ import print_function
-import functools,pigpio,struct,sys,time
+import functools,pigpio,readline,struct,sys,time
 
-twi_addr = 0x78
 pi = pigpio.pi()
-i2c = pi.i2c_open(0, twi_addr)
+i2c = pi.i2c_open(0, 0x78)
 
 def crc8_p93(crc, data):
   crc ^= data
@@ -24,8 +24,8 @@ def i2c_tx(send='', echo_out=True, echo_in=True):
   if len(bs) > 0:
     if echo_out:
       print('> ' + send)
-    pi.i2c_zip(i2c, [4, twi_addr, 7, len(bs)] + list(map(ord,bs)) + [0])
-  _, s = pi.i2c_zip(i2c, [4, twi_addr, 6, max(len(bs), 73), 0])
+    pi.i2c_zip(i2c, [4, 0x78, 7, len(bs)] + list(map(ord,bs)) + [0])
+  _, s = pi.i2c_zip(i2c, [4, 0x78, 6, max(len(bs), 73), 0])
   if echo_in:
     print('< ' + str(s).encode('hex'))
   return s
@@ -65,6 +65,7 @@ def slave_talk(send='', **kw):
 
   kw.setdefault('echo_in', False)
   result = i2c_tx(send, **kw)
+  queue = 0
   while result and result[0] not in (0,0xff):
     length = result[0]
     header = result[1]
@@ -72,13 +73,16 @@ def slave_talk(send='', **kw):
     header_str = HEADER_CODE_MAP.get(header, 'UNKNOWN')
     print('< ' + str(result[:length]).encode('hex'))
     if header == 0x01 and data:
-      info = 'queue: {0:d}'.format(ord(data[0]))
+      queue = ord(data[0])
+      info = 'queue: {0:d}'.format(queue)
     else:
       info = '({0})'.format(data)
     print('{0} {1} {2}'.format(header_str, data.encode('hex'), info))
     result = result[length:]
+  return queue
 
 def slave_shell():
+  print('Hello. You can use TAB and type "help".')
   while True:
     try:
       s = raw_input('? ')
@@ -86,7 +90,77 @@ def slave_shell():
       break
     if s == 'q':
       break
-    slave_talk(s)
+    if s == 'help':
+      print('''
+Each line can contain zero or more commands separated by space.
+
+Safe command is just hex. Examples: 01, 0fcb. AVR-UART packet is framed automatically.
+Raw commands start with !. Examples: !03013b, !040fcbff. Send to TWI as-is, no length or CRC8 is added.
+Sleep starts with 's' then time in milliseconds. Examples: s10, s200.
+
+Complex input example:
+input: 01 s100 04 s30 0fcb s30 01 0f30 s30 01 04
+what it does:
+- status poll
+- wait 100ms
+- read debug log
+- wait 30ms
+- MDB send '1cb cb', wait 30ms, status poll
+- MDB send '130 30', wait 30ms, status poll
+- read debug log
+
+Commands:
+- 01 status poll, no data
+- 02 update config, slave returns full config in response
+- 03 reset, no data, wait 100ms then expect 0600beebee(CRC) from slave
+- 04 read debug info
+- 07 MDB bus reset (hold TX high for 100ms)
+- 08-0f MDB transaction
+  bit0 add auto CHK
+  bit1 verify response CHK
+  bit2 repeat on timeout
+  useful values:
+  08 (debug) your CHK, ignore response CHK, no repeat
+  0f (release) auto add and verify CHK, repeat on timeout
+''')
+      continue
+    if s == '':
+      s = '01'
+    parts = s.split()
+    for part in parts:
+      if part.startswith('s'):
+        duration = float(part[1:])
+        print('S {}ms'.format(duration))
+        time.sleep(duration/1000)
+      else:
+        q = slave_talk(part)
+        if part not in ('', '01'):
+          q = slave_talk()
+        if q > 0:
+          slave_talk()
+
+def readline_complete(text, state):
+  root = [
+    '!',
+    '01', '02', '03', '04', '07', '08', '0f',
+    'help',
+    's',
+  ]
+  possible = [s for s in root if s.startswith(text)]
+  x = possible[state:state+1]
+  if x:
+    return x[0]
+  return None
 
 if __name__ == '__main__':
+  import os,readline
+  history_path = os.path.expanduser('~/.vender-shell-history')
+  try:
+    readline.read_history_file(history_path)
+  except IOError:
+    pass
+  readline.set_history_length(1000)
+  readline.parse_and_bind('tab: complete')
+  readline.set_completer(readline_complete)
   slave_shell()
+  readline.write_history_file(history_path)
