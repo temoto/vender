@@ -248,6 +248,8 @@ static uint8_t const MDB_STATE_TX_DATA = 0x09;
 static uint8_t const MDB_STATE_TX_ACK = 0x0a;
 static uint8_t const MDB_STATE_TX_NACK = 0x0b;
 static uint8_t const MDB_STATE_TX_RET = 0x0c;
+#define MDB_STATE_TX_LOW MDB_STATE_TX_BEGIN
+#define MDB_STATE_TX_HIGH MDB_STATE_TX_RET
 static uint8_t const MDB_STATE_RX = 0x10;
 static uint8_t const MDB_STATE_RX_END = 0x11;
 static uint8_t volatile mdb_state;
@@ -267,11 +269,7 @@ static uint8_t volatile mdb_out_data[39];
 #define USART_UDRE_vect USART0_UDRE_vect
 #endif
 
-static void MDB_Init() {
-  mdb_state = MDB_STATE_IDLE;
-  Buffer_Init(&mdb_in, (uint8_t * const)mdb_in_data, sizeof(mdb_in_data));
-  Buffer_Init(&mdb_out, (uint8_t * const)mdb_out_data, sizeof(mdb_out_data));
-
+static void UART_Init() {
   DDRD |= _BV(PD1);
   DDRD &= ~_BV(PD0);
 
@@ -297,12 +295,19 @@ static void MDB_Init() {
            // FIXME: doesn't work now
            //
            // | _BV(RXCIE0) | _BV(UDRIE0)
+           | _BV(RXCIE0)
            // enable 8 bit
            | _BV(RXB80) | _BV(TXB80)
            // 9 data bits
            | _BV(UCSZ02);
   // 9 data bits
   UCSR0C |= _BV(UCSZ00) | _BV(UCSZ01);
+}
+
+static void MDB_Reset_State() {
+  mdb_state = MDB_STATE_IDLE;
+  Buffer_Init(&mdb_in, (uint8_t * const)mdb_in_data, sizeof(mdb_in_data));
+  Buffer_Init(&mdb_out, (uint8_t * const)mdb_out_data, sizeof(mdb_out_data));
 }
 
 static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
@@ -318,7 +323,8 @@ static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
     mdb_out.data[total_length - 1] = memsum(src, length);
   }
   mdb_state = MDB_STATE_TX_BEGIN;
-  Master_Out_Printf(Response_Debug, "M:st=TXB");
+  Master_Out_Printf(Response_Debug, "MS:?-TB");
+  Timer0_Set();
   return Response_MDB_Started;
 }
 
@@ -333,8 +339,8 @@ static void MDB_Step() {
       } else {
         Master_Out_2(Response_MDB_Protocol_Error, data);
       }
-      mdb_state = MDB_STATE_IDLE;
-      Master_Out_Printf(Response_Debug, "M:Step:RXE/1-I");
+      MDB_Reset_State();
+      Master_Out_Printf(Response_Debug, "Mstep:RE/1-I");
     } else {
       if (/*config verify chk*/ true) {
         uint8_t const chk = memsum(mdb_in.data, mdb_in.length - 1);
@@ -345,19 +351,20 @@ static void MDB_Step() {
           // mdb_out.used = 0;
           // return;
 
-          mdb_state = MDB_STATE_IDLE;
-          Master_Out_Printf(Response_Debug, "M:Step:RXE/C!-I");
+          MDB_Reset_State();
+          Master_Out_Printf(Response_Debug, "Mstep:RE/C!-I");
           Master_Out_N(Response_MDB_Invalid_CHK, mdb_in.data, mdb_in.length);
           return;
         }
       }
       mdb_state = MDB_STATE_TX_ACK;
-      Master_Out_Printf(Response_Debug, "M:Step:RXE/Cv-TA");
+      Master_Out_Printf(Response_Debug, "Mstep:RE/Cv-TA");
       Master_Out_N(Response_MDB_Success, mdb_in.data, mdb_in.length - 1);
+      Timer0_Set();
     }
   } else if (mdb_state == MDB_STATE_TIMEOUT) {
-    mdb_state = MDB_STATE_IDLE;
-    Master_Out_Printf(Response_Debug, "M:Step:TO-I");
+    MDB_Reset_State();
+    Master_Out_Printf(Response_Debug, "Mstep:TO-I");
     Master_Out_1(Response_MDB_Timeout);
   }
 }
@@ -377,21 +384,23 @@ static void UART_Recv() {
                  sizeof(debug));
 
     mdb_state = MDB_STATE_TX_NACK;
-    Master_Out_Printf(Response_Debug, "UR:err-TXN");
+    Master_Out_Printf(Response_Debug, "UR:err-TN");
+    Timer0_Set();
     return;
   }
   if (mdb_state == MDB_STATE_RX) {
     if (!Buffer_Append(&mdb_in, data)) {
       Master_Out_N(Response_Buffer_Overflow, (uint8_t const *const)debug,
                    sizeof(debug));
-      mdb_state = MDB_STATE_IDLE;
-      Master_Out_Printf(Response_Debug, "UR:RX/ap!-I");
+      MDB_Reset_State();
+      Master_Out_Printf(Response_Debug, "UR:R/ap!-I");
       return;
     }
     if (bit9) {
       Timer0_Stop();
       mdb_state = MDB_STATE_RX_END;
-      Master_Out_Printf(Response_Debug, "UR:RX/9-RXE");
+      Master_Out_Printf(Response_Debug, "UR:R/9-RE,in=%s,ud=%02x", mdb_in.data,
+                        data);
     }
   } else {
     // uart_error = Response_UART_Chatterbox;
@@ -399,7 +408,8 @@ static void UART_Recv() {
     Master_Out_N(Response_UART_Chatterbox, (uint8_t const *const)debug,
                  sizeof(debug));
     mdb_state = MDB_STATE_TX_NACK;
-    Master_Out_Printf(Response_Debug, "UR:RX!?-TXN");
+    Master_Out_Printf(Response_Debug, "UR:R!?-TN");
+    Timer0_Set();
   }
 }
 
@@ -410,6 +420,8 @@ static bool UART_Recv_Check() {
   UART_Recv();
   return true;
 }
+
+ISR(USART_RX_vect) { UART_Recv_Check(); }
 
 static void UART_Send_Byte(uint8_t const b, bool const bit9) {
   if (bit9) {
@@ -431,7 +443,7 @@ static void UART_Send() {
     UART_Send_Byte(data, true);
     mdb_out.used++;
     mdb_state = MDB_STATE_TX_DATA;
-    Master_Out_Printf(Response_Debug, "US:TXB-TXD");
+    Master_Out_Printf(Response_Debug, "US:TB-TD");
     return;
   } else if (mdb_state == MDB_STATE_TX_DATA) {
     UART_Send_Byte(data, false);
@@ -439,28 +451,28 @@ static void UART_Send() {
     if (mdb_out.used >= mdb_out.length) {
       // I finished, what have you to say?
       mdb_state = MDB_STATE_RX;
-      Master_Out_Printf(Response_Debug, "US:TXD/used-RX");
+      Master_Out_Printf(Response_Debug, "US:TD/used-R");
       Timer0_Set();
     }
     return;
   } else if (mdb_state == MDB_STATE_TX_ACK) {
     Timer0_Stop();
     UART_Send_Byte(MDB_ACK, false);
-    mdb_state = MDB_STATE_IDLE;
-    Master_Out_Printf(Response_Debug, "US:TXA-I");
+    MDB_Reset_State();
+    Master_Out_Printf(Response_Debug, "US:TA-I");
     return;
   } else if (mdb_state == MDB_STATE_TX_RET) {
     UART_Send_Byte(MDB_RET, false);
     Timer0_Set();
     mdb_state = MDB_STATE_RX;
-    Master_Out_Printf(Response_Debug, "US:TXR-RX");
+    Master_Out_Printf(Response_Debug, "US:TR-R");
     mdb_in.length = mdb_in.used = 0;
     return;
   } else if (mdb_state == MDB_STATE_TX_NACK) {
     Timer0_Stop();
     UART_Send_Byte(MDB_NACK, false);
-    mdb_state = MDB_STATE_IDLE;
-    Master_Out_Printf(Response_Debug, "US:TXN-I");
+    MDB_Reset_State();
+    Master_Out_Printf(Response_Debug, "US:TN-I");
     return;
   }
 }
@@ -475,13 +487,10 @@ static bool UART_Send_Check() {
 // End MDB driver
 
 // Begin Timer0 driver
-#define timer0_ocra (F_CPU / 1024UL * 5000UL / 1000000UL)
-
 static void Timer0_Set() {
-  // TCCR0A = _BV(WGM01);
   TCCR0A = 0;
   TCNT0 = 0;
-  OCR0A = timer0_ocra;
+  OCR0A = (F_CPU / 1024UL * 5000UL / 1000000UL);
   TIMSK0 |= _BV(OCIE0A);
   // CTC, F_CPU/1024
   TCCR0B = _BV(WGM02) | _BV(CS02) | _BV(CS00);
@@ -495,13 +504,17 @@ static void Timer0_Stop() {
 
 ISR(TIMER0_COMPA_vect) {
   Timer0_Stop();
-  Master_Out_Printf(Response_Error, "/D:T0");
   if (mdb_state == MDB_STATE_RX) {
     mdb_state = MDB_STATE_TIMEOUT;
-    Master_Out_Printf(Response_Debug, "Tim:RX-TO");
+  } else if ((mdb_state >= MDB_STATE_TX_LOW) &&
+             (mdb_state <= MDB_STATE_TX_HIGH)) {
+    // transmit timeout
+    Master_Out_Printf(Response_Debug, "Tim:T(%d)-I", mdb_state);
+    MDB_Reset_State();
   } else if (mdb_state != MDB_STATE_IDLE) {
-    Master_Out_Printf(Response_Error, "/T:M=R");
     // debug, invalid state
+    Master_Out_Printf(Response_Debug, "Tim:Mst=%d-I", mdb_state);
+    MDB_Reset_State();
   }
 }
 // End Timer0 driver
@@ -637,7 +650,8 @@ ISR(TWI_vect) {
 static void Init() {
   // LED_Init();
   Ring_Init(&buf_master_out);
-  MDB_Init();
+  UART_Init();
+  MDB_Reset_State();
   TWI_Init_Slave(0x78);
   set_sleep_mode(SLEEP_MODE_IDLE);
   Master_Notify_Init();
@@ -646,7 +660,7 @@ static void Init() {
   // disable ADC
   ADCSRA &= ~_BV(ADEN);
   // power reduction
-  PRR |= _BV(PRTIM2) | _BV(PRSPI) | _BV(PRADC);
+  PRR |= _BV(PRTIM1) | _BV(PRTIM2) | _BV(PRSPI) | _BV(PRADC);
 
   // hello after reset
   Master_Out_N(Response_Debug, Response_BeeBee, sizeof(Response_BeeBee));
@@ -678,18 +692,17 @@ static uint8_t Master_Command(uint8_t const *bs, uint8_t const max_length) {
     } else {
       Master_Out_1(Response_Bad_Packet);
     }
+  } else if (header == Command_Config) {
     // TODO
-    //} else if (cmd == Command_Config) {
+    Master_Out_Printf(Response_Error, "not-implemented");
   } else if (header == Command_Reset) {
     Init();
     // soft_reset();  // noreturn
-    return length;
   } else if (header == Command_Debug) {
-    Master_Out_Printf(Response_Debug, "MDB:s=%c,in=%s,out=%s", mdb_state + '0',
-                      mdb_in.data, mdb_out.data);
-
-    // TODO:
-    // } else if (header == Command_MDB_Bus_Reset) {
+    Master_Out_Printf(Response_Debug, "Mst=%d", mdb_state);
+  } else if (header == Command_MDB_Bus_Reset) {
+    // TODO
+    Master_Out_Printf(Response_Error, "not-implemented");
   } else if ((header >= Command_MDB_Transaction_Low) &&
              (header <= Command_MDB_Transaction_High)) {
     if (mdb_state != MDB_STATE_IDLE) {
