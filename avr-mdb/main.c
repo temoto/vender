@@ -11,7 +11,6 @@
 
 #include "buffer.c"
 #include "crc.h"
-#include "ring.h"
 
 /*
 Glossary:
@@ -129,8 +128,15 @@ static uint8_t const Response_UART_Chatterbox = 0x90;
 static uint8_t const Response_UART_Read_Error = 0x91;
 
 // forward
+static void Master_Out_1(uint8_t const header);
+static void Master_Out_2(uint8_t const header, uint8_t const data);
+static void Master_Out_N(uint8_t const header, uint8_t const *const data,
+                         uint8_t const data_length);
+static void Master_Out_Printf(uint8_t const header, char const *s, ...);
+static void MDB_Reset_State();
+static void MDB_Send_Done();
 static void TWI_Out_Set_Short(uint8_t const);
-static void Timer0_Set();
+static void Timer0_Set(uint8_t const);
 static void Timer0_Stop();
 
 static uint8_t volatile mcu_status;
@@ -160,57 +166,6 @@ static uint8_t memsum(uint8_t const *const src, uint8_t const length) {
     sum += src[i];
   }
   return sum;
-}
-
-static RingBuffer_t volatile buf_master_out;
-
-static void Master_Out_1(uint8_t const header) {
-  uint8_t const packet_length = 3;
-  uint8_t const crc = crc8_p93_2b(packet_length, header);
-  uint8_t const packet[3] = {packet_length, header, crc};
-  if (!Ring_PushTailN(&buf_master_out, packet, sizeof(packet))) {
-    return TWI_Out_Set_Short(Response_Buffer_Overflow);
-  }
-}
-
-static void Master_Out_2(uint8_t const header, uint8_t const data) {
-  uint8_t const packet_length = 4;
-  if (buf_master_out.free < packet_length) {
-    return TWI_Out_Set_Short(Response_Buffer_Overflow);
-  }
-  uint8_t const crc = crc8_p93_next(crc8_p93_2b(packet_length, header), data);
-  uint8_t const packet[4] = {packet_length, header, data, crc};
-  Ring_PushTailN(&buf_master_out, packet, packet_length);
-}
-
-static void Master_Out_N(uint8_t const header, uint8_t const *const data,
-                         uint8_t const data_length) {
-  uint8_t const packet_length = 3 + data_length;
-  if (buf_master_out.free < packet_length) {
-    return TWI_Out_Set_Short(Response_Buffer_Overflow);
-  }
-  Ring_Unsafe_Push(&buf_master_out, 0, packet_length);
-  Ring_Unsafe_Push(&buf_master_out, 1, header);
-  Ring_MoveTail(&buf_master_out, 2);
-  uint8_t crc = crc8_p93_2b(packet_length, header);
-  for (uint8_t i = 0; i < data_length; i++) {
-    Ring_Unsafe_Push(&buf_master_out, i, data[i]);
-    crc = crc8_p93_next(crc, data[i]);
-  }
-  Ring_MoveTail(&buf_master_out, data_length);
-  Ring_PushTail(&buf_master_out, crc);
-}
-
-static void Master_Out_Printf(uint8_t const header, char const *s, ...) {
-  static char strbuf[101];
-  va_list ap;
-  va_start(ap, s);
-  int16_t const length = vsnprintf(strbuf, sizeof(strbuf), s, ap);
-  va_end(ap);
-  if ((length < 0) || (length >= sizeof(strbuf))) {
-    return TWI_Out_Set_Short(Response_Buffer_Overflow);
-  }
-  return Master_Out_N(header, (uint8_t const *)strbuf, length);
 }
 
 static void LED_Set(bool const on) {
@@ -287,15 +242,7 @@ static void UART_Init() {
   // UBRR0H = (uint8_t const)(USART_PRESCALE >> 8);
   // UBRR0L = (uint8_t const)(USART_PRESCALE);
 
-  UCSR0B = 0
-           // enable rx, tx
-           | _BV(RXEN0) | _BV(TXEN0)
-           // interrupts
-           //
-           // FIXME: doesn't work now
-           //
-           // | _BV(RXCIE0) | _BV(UDRIE0)
-           | _BV(RXCIE0)
+  UCSR0B = 0 | _BV(RXEN0) | _BV(TXEN0) | _BV(RXCIE0)
            // enable 8 bit
            | _BV(RXB80) | _BV(TXB80)
            // 9 data bits
@@ -303,6 +250,123 @@ static void UART_Init() {
   // 9 data bits
   UCSR0C |= _BV(UCSZ00) | _BV(UCSZ01);
 }
+
+static bool UART_Recv_Ready() { return bit_test(UCSR0A, _BV(RXC0)); }
+
+static void UART_Recv() {
+  uint8_t const sra = UCSR0A;
+  uint8_t const srb = UCSR0B;
+  uint8_t const data = UDR0;
+  bool const bit9 = bit_test(srb, _BV(RXB80));
+  uint8_t const debug[5] = {bit9 ? 0x80 : 0, data, sra, srb, mdb_state};
+  if ((sra & (_BV(FE0) | _BV(DOR0) | _BV(UPE0))) != 0) {
+    // uart_error = Response_UART_Read_Error;
+    // memcpy((void *)uart_debug, debug, sizeof(debug));
+    Master_Out_N(Response_UART_Read_Error, (uint8_t const *const)debug,
+                 sizeof(debug));
+
+    mdb_state = MDB_STATE_TX_NACK;
+    Master_Out_Printf(Response_Debug, "UR:err-TN");
+    Timer0_Set(5);
+    return;
+  }
+  if (mdb_state == MDB_STATE_RX) {
+    if (!Buffer_Append(&mdb_in, data)) {
+      Master_Out_N(Response_Buffer_Overflow, (uint8_t const *const)debug,
+                   sizeof(debug));
+      MDB_Reset_State();
+      Master_Out_Printf(Response_Debug, "UR:R/ap!-I");
+      return;
+    }
+    if (bit9) {
+      Timer0_Stop();
+      mdb_state = MDB_STATE_RX_END;
+      Master_Out_Printf(Response_Debug, "UR:R/9-RE,in=%s,ud=%02x", mdb_in.data,
+                        data);
+    }
+  } else {
+    // uart_error = Response_UART_Chatterbox;
+    // memcpy((void *)uart_debug, debug, sizeof(debug));
+    Master_Out_N(Response_UART_Chatterbox, (uint8_t const *const)debug,
+                 sizeof(debug));
+    Master_Out_Printf(Response_Debug, "UR:%d-TN", mdb_state);
+    mdb_state = MDB_STATE_TX_NACK;
+    Timer0_Set(5);
+  }
+}
+
+static bool UART_Recv_Check() {
+  if (!UART_Recv_Ready()) {
+    return false;
+  }
+  UART_Recv();
+  return true;
+}
+
+ISR(USART_RX_vect) { UART_Recv(); }
+
+static void UART_Send_Byte(uint8_t const b, bool const bit9) {
+  if (bit9) {
+    UCSR0B |= _BV(TXB80);
+  } else {
+    UCSR0B &= ~_BV(TXB80);
+  }
+  UDR0 = b;
+}
+
+static bool UART_Send_Ready() { return bit_test(UCSR0A, _BV(UDRE0)); }
+
+static void UART_Send() {
+  if (mdb_out.used >= mdb_out.length) {
+    return;
+  }
+  uint8_t const data = mdb_out.data[mdb_out.used];
+  if (mdb_state == MDB_STATE_TX_BEGIN) {
+    UART_Send_Byte(data, true);
+    mdb_out.used++;
+    mdb_state = MDB_STATE_TX_DATA;
+    Master_Out_Printf(Response_Debug, "US:TB-TD");
+    return;
+  } else if (mdb_state == MDB_STATE_TX_DATA) {
+    if (mdb_out.used < mdb_out.length) {
+      UART_Send_Byte(data, false);
+      mdb_out.used++;
+    } else {
+      Master_Out_Printf(Response_Debug, "US:TD/used-R");
+      MDB_Send_Done();
+    }
+    return;
+  } else if (mdb_state == MDB_STATE_TX_ACK) {
+    Timer0_Stop();
+    UART_Send_Byte(MDB_ACK, false);
+    MDB_Reset_State();
+    Master_Out_Printf(Response_Debug, "US:TA-I");
+    return;
+  } else if (mdb_state == MDB_STATE_TX_RET) {
+    UART_Send_Byte(MDB_RET, false);
+    Timer0_Set(10);
+    mdb_in.length = mdb_in.used = 0;
+    mdb_state = MDB_STATE_RX;
+    Master_Out_Printf(Response_Debug, "US:TR-R");
+    return;
+  } else if (mdb_state == MDB_STATE_TX_NACK) {
+    Timer0_Stop();
+    UART_Send_Byte(MDB_NACK, false);
+    MDB_Reset_State();
+    Master_Out_Printf(Response_Debug, "US:TN-I");
+    return;
+  }
+}
+
+static bool UART_Send_Check() {
+  if (!UART_Send_Ready()) {
+    return false;
+  }
+  UART_Send();
+  return true;
+}
+
+ISR(USART_UDRE_vect) { UART_Send_Check(); }
 
 static void MDB_Reset_State() {
   mdb_state = MDB_STATE_IDLE;
@@ -324,12 +388,25 @@ static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
   }
   mdb_state = MDB_STATE_TX_BEGIN;
   Master_Out_Printf(Response_Debug, "MS:?-TB");
-  Timer0_Set();
+  Timer0_Set(5);
+  UART_Send_Check();
+  UART_Send_Check();
+  UCSR0B |= _BV(UDRIE0);
   return Response_MDB_Started;
 }
 
+static void MDB_Send_Done() {
+  UCSR0B &= ~_BV(UDRIE0);
+  mdb_state = MDB_STATE_RX;
+  Timer0_Set(10);
+}
+
 static void MDB_Step() {
-  if (mdb_state == MDB_STATE_RX_END) {
+  if (mdb_state == MDB_STATE_TX_DATA) {
+    if (mdb_out.used >= mdb_out.length) {
+      MDB_Send_Done();
+    }
+  } else if (mdb_state == MDB_STATE_RX_END) {
     if (mdb_in.length == 1) {
       uint8_t const data = mdb_in.data[0];
       if (data == MDB_ACK) {
@@ -360,7 +437,7 @@ static void MDB_Step() {
       mdb_state = MDB_STATE_TX_ACK;
       Master_Out_Printf(Response_Debug, "Mstep:RE/Cv-TA");
       Master_Out_N(Response_MDB_Success, mdb_in.data, mdb_in.length - 1);
-      Timer0_Set();
+      Timer0_Set(5);
     }
   } else if (mdb_state == MDB_STATE_TIMEOUT) {
     MDB_Reset_State();
@@ -368,129 +445,13 @@ static void MDB_Step() {
     Master_Out_1(Response_MDB_Timeout);
   }
 }
-
-static bool UART_Recv_Ready() { return bit_test(UCSR0A, _BV(RXC0)); }
-
-static void UART_Recv() {
-  uint8_t const sra = UCSR0A;
-  uint8_t const srb = UCSR0B;
-  uint8_t const data = UDR0;
-  bool const bit9 = bit_test(srb, _BV(RXB80));
-  uint8_t const debug[5] = {bit9 ? 0x80 : 0, data, sra, srb, mdb_state};
-  if ((sra & (_BV(FE0) | _BV(DOR0) | _BV(UPE0))) != 0) {
-    // uart_error = Response_UART_Read_Error;
-    // memcpy((void *)uart_debug, debug, sizeof(debug));
-    Master_Out_N(Response_UART_Read_Error, (uint8_t const *const)debug,
-                 sizeof(debug));
-
-    mdb_state = MDB_STATE_TX_NACK;
-    Master_Out_Printf(Response_Debug, "UR:err-TN");
-    Timer0_Set();
-    return;
-  }
-  if (mdb_state == MDB_STATE_RX) {
-    if (!Buffer_Append(&mdb_in, data)) {
-      Master_Out_N(Response_Buffer_Overflow, (uint8_t const *const)debug,
-                   sizeof(debug));
-      MDB_Reset_State();
-      Master_Out_Printf(Response_Debug, "UR:R/ap!-I");
-      return;
-    }
-    if (bit9) {
-      Timer0_Stop();
-      mdb_state = MDB_STATE_RX_END;
-      Master_Out_Printf(Response_Debug, "UR:R/9-RE,in=%s,ud=%02x", mdb_in.data,
-                        data);
-    }
-  } else {
-    // uart_error = Response_UART_Chatterbox;
-    // memcpy((void *)uart_debug, debug, sizeof(debug));
-    Master_Out_N(Response_UART_Chatterbox, (uint8_t const *const)debug,
-                 sizeof(debug));
-    mdb_state = MDB_STATE_TX_NACK;
-    Master_Out_Printf(Response_Debug, "UR:R!?-TN");
-    Timer0_Set();
-  }
-}
-
-static bool UART_Recv_Check() {
-  if (!UART_Recv_Ready()) {
-    return false;
-  }
-  UART_Recv();
-  return true;
-}
-
-ISR(USART_RX_vect) { UART_Recv_Check(); }
-
-static void UART_Send_Byte(uint8_t const b, bool const bit9) {
-  if (bit9) {
-    UCSR0B |= _BV(TXB80);
-  } else {
-    UCSR0B &= ~_BV(TXB80);
-  }
-  UDR0 = b;
-}
-
-static bool UART_Send_Ready() { return bit_test(UCSR0A, _BV(UDRE0)); }
-
-static void UART_Send() {
-  if (mdb_out.used >= mdb_out.length) {
-    return;
-  }
-  uint8_t const data = mdb_out.data[mdb_out.used];
-  if (mdb_state == MDB_STATE_TX_BEGIN) {
-    UART_Send_Byte(data, true);
-    mdb_out.used++;
-    mdb_state = MDB_STATE_TX_DATA;
-    Master_Out_Printf(Response_Debug, "US:TB-TD");
-    return;
-  } else if (mdb_state == MDB_STATE_TX_DATA) {
-    UART_Send_Byte(data, false);
-    mdb_out.used++;
-    if (mdb_out.used >= mdb_out.length) {
-      // I finished, what have you to say?
-      mdb_state = MDB_STATE_RX;
-      Master_Out_Printf(Response_Debug, "US:TD/used-R");
-      Timer0_Set();
-    }
-    return;
-  } else if (mdb_state == MDB_STATE_TX_ACK) {
-    Timer0_Stop();
-    UART_Send_Byte(MDB_ACK, false);
-    MDB_Reset_State();
-    Master_Out_Printf(Response_Debug, "US:TA-I");
-    return;
-  } else if (mdb_state == MDB_STATE_TX_RET) {
-    UART_Send_Byte(MDB_RET, false);
-    Timer0_Set();
-    mdb_state = MDB_STATE_RX;
-    Master_Out_Printf(Response_Debug, "US:TR-R");
-    mdb_in.length = mdb_in.used = 0;
-    return;
-  } else if (mdb_state == MDB_STATE_TX_NACK) {
-    Timer0_Stop();
-    UART_Send_Byte(MDB_NACK, false);
-    MDB_Reset_State();
-    Master_Out_Printf(Response_Debug, "US:TN-I");
-    return;
-  }
-}
-
-static bool UART_Send_Check() {
-  if (!UART_Send_Ready()) {
-    return false;
-  }
-  UART_Send();
-  return true;
-}
 // End MDB driver
 
 // Begin Timer0 driver
-static void Timer0_Set() {
+static void Timer0_Set(uint8_t const ms) {
   TCCR0A = 0;
   TCNT0 = 0;
-  OCR0A = (F_CPU / 1024UL * 5000UL / 1000000UL);
+  OCR0A = F_CPU / 1024UL * ms / 1000UL;
   TIMSK0 |= _BV(OCIE0A);
   // CTC, F_CPU/1024
   TCCR0B = _BV(WGM02) | _BV(CS02) | _BV(CS00);
@@ -521,10 +482,14 @@ ISR(TIMER0_COMPA_vect) {
 
 // Begin TWI driver
 static bool volatile twi_idle = true;
-static uint8_t volatile twi_in_data[128];
-static uint8_t volatile twi_out_data[128];
+static uint8_t volatile twi_in_data[93];
 static Buffer_t volatile twi_in;
+
+// master_out/twi_out is double buffer
+static Buffer_t volatile master_out;
 static Buffer_t volatile twi_out;
+static uint8_t volatile out_data_1[217];
+static uint8_t volatile out_data_2[217];
 
 static void TWI_Init_Slave(uint8_t const address) {
   TWCR = 0;
@@ -533,7 +498,7 @@ static void TWI_Init_Slave(uint8_t const address) {
   TWSR = 0;
   twi_idle = true;
   Buffer_Init(&twi_in, (uint8_t * const)twi_in_data, sizeof(twi_in_data));
-  Buffer_Init(&twi_out, (uint8_t * const)twi_out_data, sizeof(twi_out_data));
+  Buffer_Init(&twi_out, (uint8_t * const)out_data_2, sizeof(out_data_2));
   TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
 }
 
@@ -556,6 +521,48 @@ static void TWI_Out_Set_Long1(uint8_t const header, uint8_t const data) {
   twi_out.data[2] = data;
   twi_out.data[3] = crc8_p93_next(crc8_p93_2b(length, header), data);
   twi_out.data[4] = 0;
+}
+
+static void Master_Out_1(uint8_t const header) {
+  uint8_t const packet_length = 3;
+  uint8_t const crc = crc8_p93_2b(packet_length, header);
+  uint8_t const packet[3] = {packet_length, header, crc};
+  if (!Buffer_AppendN(&master_out, packet, sizeof(packet))) {
+    return TWI_Out_Set_Short(Response_Buffer_Overflow);
+  }
+}
+
+static void Master_Out_2(uint8_t const header, uint8_t const data) {
+  uint8_t const packet_length = 4;
+  uint8_t const crc = crc8_p93_next(crc8_p93_2b(packet_length, header), data);
+  uint8_t const packet[4] = {packet_length, header, data, crc};
+  Buffer_AppendN(&master_out, packet, packet_length);
+}
+
+static void Master_Out_N(uint8_t const header, uint8_t const *const data,
+                         uint8_t const data_length) {
+  uint8_t const packet_length = 3 + data_length;
+  if (master_out.free < packet_length) {
+    return TWI_Out_Set_Short(Response_Buffer_Overflow);
+  }
+  Buffer_Append(&master_out, packet_length);
+  Buffer_Append(&master_out, header);
+  Buffer_AppendN(&master_out, data, data_length);
+  uint8_t crc = crc8_p93_2b(packet_length, header);
+  crc = crc8_p93_n(crc, data, data_length);
+  Buffer_Append(&master_out, crc);
+}
+
+static void Master_Out_Printf(uint8_t const header, char const *s, ...) {
+  static char strbuf[101];
+  va_list ap;
+  va_start(ap, s);
+  int16_t const length = vsnprintf(strbuf, sizeof(strbuf), s, ap);
+  va_end(ap);
+  if ((length < 0) || (length >= sizeof(strbuf))) {
+    return TWI_Out_Set_Short(Response_Buffer_Overflow);
+  }
+  return Master_Out_N(header, (uint8_t const *)strbuf, length);
 }
 
 ISR(TWI_vect) {
@@ -610,7 +617,7 @@ ISR(TWI_vect) {
     case TW_ST_SLA_ACK:
       twi_idle = false;
       if (twi_out.length == 0) {
-        TWI_Out_Set_Long1(Response_OK, buf_master_out.length);
+        TWI_Out_Set_Long1(Response_OK, master_out.length);
       } else {
         twi_out.used = 0;
       }
@@ -649,7 +656,7 @@ ISR(TWI_vect) {
 
 static void Init() {
   // LED_Init();
-  Ring_Init(&buf_master_out);
+  Buffer_Init(&master_out, (uint8_t *)out_data_1, sizeof(out_data_1));
   UART_Init();
   MDB_Reset_State();
   TWI_Init_Slave(0x78);
@@ -688,7 +695,7 @@ static uint8_t Master_Command(uint8_t const *bs, uint8_t const max_length) {
   uint8_t const *const data = bs + 2;
   if (header == Command_Poll) {
     if (length == 3) {
-      Master_Out_2(Response_OK, buf_master_out.length);
+      Master_Out_2(Response_OK, master_out.length);
     } else {
       Master_Out_1(Response_Bad_Packet);
     }
@@ -755,15 +762,10 @@ static bool Poll() {
     MDB_Step();
   }
 
-  if (twi_idle && (twi_out.used >= twi_out.length) &&
-      (buf_master_out.length >= 3)) {
+  if (twi_idle && (twi_out.used >= twi_out.length) && (master_out.length > 0)) {
+    Buffer_Swap(&twi_out, &master_out);
     twi_out.used = 0;
-    twi_out.length = buf_master_out.length;
-    twi_out.data[twi_out.length] = 0;
-    twi_out.data[twi_out.length + 1] = 0;
-    if (!Ring_PopHeadN(&buf_master_out, twi_out.data, buf_master_out.length)) {
-      TWI_Out_Set_Short(Response_Corruption);
-    }
+    Buffer_Clear(&master_out);
     again = true;
   }
 
@@ -804,7 +806,7 @@ int main(void) {
     Poll_Loop(2);
 
     Master_Notify_Set((!twi_idle) || (twi_out.used < twi_out.length) ||
-                      (buf_master_out.length >= 3));
+                      (master_out.length > 0));
   }
 }
 #endif

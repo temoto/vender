@@ -4,7 +4,7 @@ F_CPU = 7372800
 mmcu = atmega328p
 # mmcu = atmega128
 
-cfiles   := main.c crc.c ring.c
+cfiles   := main.c crc.c
 hexfiles := $(patsubst %.c,%.hex,$(cfiles))
 lstfiles := $(patsubst %.c,%.lst,$(cfiles))
 
@@ -17,10 +17,10 @@ cflags_common = -Wall -Werror -std=c11 -pipe
 CFLAGS = -mmcu=$(mmcu) -DF_CPU=$(F_CPU) -O2 $(cflags_common)
 MAPFLAGS = -Wl,-Map,
 
-.PHONY : clean crc_test ring_test
+.PHONY : clean crc_test
 .DEFAULT_GOAL := all
 
-all: crc_test ring_test main.hex
+all: crc_test main.hex
 
 upload: main.hex
 	$(avrdude) -p $(mmcu) -P usb -c dragon_isp -U flash:w:$<
@@ -31,7 +31,7 @@ fuse:
 	$(avrdude) -p $(mmcu) -P usb -c dragon_isp -U lfuse:w:0xff:m -U hfuse:w:0xdb:m -U efuse:w:0x07:m
 
 clean:
-	rm -rf *.dSYM/ *.elf *.hex *.lst *.o *.s crc_test ring_test
+	rm -rf *.dSYM/ *.elf *.hex *.lst *.o *.s crc_test
 
 main.hex: main.elf
 	$(avr_objcopy) -O ihex $< $@
@@ -48,7 +48,3 @@ asm: $(lstfiles)
 crc_test: crc.c crc.h crc_test.c
 	$(CC) $(cflags_common) -DDEBUG -DTEST -g -O0 -o $@ crc_test.c crc.c
 	./crc_test
-
-ring_test: ring.c ring.h
-	$(CC) $(cflags_common) -DDEBUG -DTEST -g -O0 -o $@ ring.c
-	./ring_test
