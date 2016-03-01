@@ -136,6 +136,7 @@ static void Master_Out_Printf(uint8_t const header, char const *s, ...);
 static void MDB_Reset_State();
 static void MDB_Send_Done();
 static void TWI_Out_Set_Short(uint8_t const);
+static void Timer0_Reset();
 static void Timer0_Set(uint8_t const);
 static void Timer0_Stop();
 
@@ -267,10 +268,12 @@ static void UART_Recv() {
 
     mdb_state = MDB_STATE_TX_NACK;
     Master_Out_Printf(Response_Debug, "UR:err-TN");
+    UCSR0B |= _BV(UDRIE0);
     Timer0_Set(5);
     return;
   }
   if (mdb_state == MDB_STATE_RX) {
+    Timer0_Reset();
     if (!Buffer_Append(&mdb_in, data)) {
       Master_Out_N(Response_Buffer_Overflow, (uint8_t const *const)debug,
                    sizeof(debug));
@@ -281,8 +284,6 @@ static void UART_Recv() {
     if (bit9) {
       Timer0_Stop();
       mdb_state = MDB_STATE_RX_END;
-      Master_Out_Printf(Response_Debug, "UR:R/9-RE,in=%s,ud=%02x", mdb_in.data,
-                        data);
     }
   } else {
     // uart_error = Response_UART_Chatterbox;
@@ -291,6 +292,7 @@ static void UART_Recv() {
                  sizeof(debug));
     Master_Out_Printf(Response_Debug, "UR:%d-TN", mdb_state);
     mdb_state = MDB_STATE_TX_NACK;
+    UCSR0B |= _BV(UDRIE0);
     Timer0_Set(5);
   }
 }
@@ -317,50 +319,47 @@ static void UART_Send_Byte(uint8_t const b, bool const bit9) {
 static bool UART_Send_Ready() { return bit_test(UCSR0A, _BV(UDRE0)); }
 
 static void UART_Send() {
+  // assert(UART_Send_Ready());
+  Timer0_Stop();
   if (mdb_state == MDB_STATE_TX_ACK) {
-    Timer0_Stop();
+    Master_Out_Printf(Response_Debug, "US:TA-I");
     UART_Send_Byte(MDB_ACK, false);
     MDB_Reset_State();
-    Master_Out_Printf(Response_Debug, "US:TA-I");
+    return;
+  } else if (mdb_state == MDB_STATE_TX_RET) {
+    Master_Out_Printf(Response_Debug, "US:TR-R");
+    UART_Send_Byte(MDB_RET, false);
+    mdb_in.length = mdb_in.used = 0;
+    MDB_Send_Done();
+    return;
+  } else if (mdb_state == MDB_STATE_TX_NACK) {
+    Master_Out_Printf(Response_Debug, "US:TN-I");
+    UART_Send_Byte(MDB_NACK, false);
+    MDB_Reset_State();
     return;
   }
-  if (mdb_out.used >= mdb_out.length) {
-    return;
-  }
-  uint8_t const data = mdb_out.data[mdb_out.used];
   if (mdb_state == MDB_STATE_TX_BEGIN) {
+    if (mdb_out.length == 0) {
+      return;
+    }
+    mdb_out.used = 0;
+    uint8_t const data = mdb_out.data[mdb_out.used];
     UART_Send_Byte(data, true);
     mdb_out.used++;
     mdb_state = MDB_STATE_TX_DATA;
     Master_Out_Printf(Response_Debug, "US:TB-TD");
+    Timer0_Reset();
     return;
   } else if (mdb_state == MDB_STATE_TX_DATA) {
     if (mdb_out.used < mdb_out.length) {
+      uint8_t const data = mdb_out.data[mdb_out.used];
       UART_Send_Byte(data, false);
       mdb_out.used++;
+      Timer0_Reset();
     } else {
       Master_Out_Printf(Response_Debug, "US:TD/used-R");
       MDB_Send_Done();
     }
-    return;
-  // } else if (mdb_state == MDB_STATE_TX_ACK) {
-    // Timer0_Stop();
-    // UART_Send_Byte(MDB_ACK, false);
-    // MDB_Reset_State();
-    // Master_Out_Printf(Response_Debug, "US:TA-I");
-    // return;
-  } else if (mdb_state == MDB_STATE_TX_RET) {
-    UART_Send_Byte(MDB_RET, false);
-    Timer0_Set(10);
-    mdb_in.length = mdb_in.used = 0;
-    mdb_state = MDB_STATE_RX;
-    Master_Out_Printf(Response_Debug, "US:TR-R");
-    return;
-  } else if (mdb_state == MDB_STATE_TX_NACK) {
-    Timer0_Stop();
-    UART_Send_Byte(MDB_NACK, false);
-    MDB_Reset_State();
-    Master_Out_Printf(Response_Debug, "US:TN-I");
     return;
   }
 }
@@ -376,6 +375,7 @@ static bool UART_Send_Check() {
 ISR(USART_UDRE_vect) { UART_Send_Check(); }
 
 static void MDB_Reset_State() {
+  UCSR0B &= ~_BV(UDRIE0);
   mdb_state = MDB_STATE_IDLE;
   Buffer_Init(&mdb_in, (uint8_t * const)mdb_in_data, sizeof(mdb_in_data));
   Buffer_Init(&mdb_out, (uint8_t * const)mdb_out_data, sizeof(mdb_out_data));
@@ -395,7 +395,6 @@ static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
   }
   mdb_state = MDB_STATE_TX_BEGIN;
   Master_Out_Printf(Response_Debug, "MS:?-TB");
-  Timer0_Set(5);
   UART_Send_Check();
   //UART_Send_Check();
   return Response_MDB_Started;
@@ -404,7 +403,7 @@ static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
 static void MDB_Send_Done() {
   UCSR0B &= ~_BV(UDRIE0);
   mdb_state = MDB_STATE_RX;
-  Timer0_Set(10);
+  Timer0_Set(5);
 }
 
 static void MDB_Step() {
@@ -443,6 +442,7 @@ static void MDB_Step() {
       mdb_state = MDB_STATE_TX_ACK;
       Master_Out_Printf(Response_Debug, "Mstep:RE/Cv-TA");
       Master_Out_N(Response_MDB_Success, mdb_in.data, mdb_in.length - 1);
+      UCSR0B |= _BV(UDRIE0);
       Timer0_Set(5);
 	  UCSR0B |= _BV(UDRIE0);
     }
@@ -457,12 +457,14 @@ static void MDB_Step() {
 // Begin Timer0 driver
 static void Timer0_Set(uint8_t const ms) {
   TCCR0A = 0;
-  TCNT0 = 0;
+  Timer0_Reset();
   OCR0A = F_CPU / 1024UL * ms / 1000UL;
   TIMSK0 |= _BV(OCIE0A);
   // CTC, F_CPU/1024
   TCCR0B = _BV(WGM02) | _BV(CS02) | _BV(CS00);
 }
+
+static void Timer0_Reset() { TCNT0 = 0; }
 
 static void Timer0_Stop() {
   TCCR0B = 0;
