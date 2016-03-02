@@ -16,8 +16,8 @@ build_go() {
 }
 
 main() {
-	if [[ -z "$app" ]] || [[ "$app" == "avr-spi-uart" ]]; then
-		cd "$base/avr-spi-uart"
+	if [[ -z "$app" ]] || [[ "$app" == "avr-mdb" ]]; then
+		cd "$base/avr-mdb"
 		echo -n "CC version: "
 		${CC-cc} --version
 		echo -n "avr-gcc version: "

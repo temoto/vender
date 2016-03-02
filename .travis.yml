@@ -7,13 +7,16 @@ cache:
   apt: true
   go: true
 addons:
-  apt_packages:
-    - avr-libc
-    - binutils-avr
-    - gcc-avr
+  apt:
+    sources:
+      - ppa:b-s-a/gcc-avr
+    packages:
+      - avr-libc
+      - binutils-avr
+      - gcc-avr
 env:
   matrix:
-    - app=avr-spi-uart
+    - app=avr-mdb
     - app=crc
     - app=display
     - app=display/lcd-test
