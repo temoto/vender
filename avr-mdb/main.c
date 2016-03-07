@@ -319,7 +319,7 @@ static void UART_Send_Byte(uint8_t const b, bool const bit9) {
 static bool UART_Send_Ready() { return bit_test(UCSR0A, _BV(UDRE0)); }
 
 static void UART_Send() {
-  if ((mod_state == MDB_STATE_RX) || (mod_state == MDB_STATE_RX_END)) {
+  if ((mdb_state == MDB_STATE_RX) || (mdb_state == MDB_STATE_RX_END)) {
     return;
   }
   // assert(UART_Send_Ready());
@@ -404,6 +404,7 @@ static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
 }
 
 static void MDB_Send_Done() {
+  Master_Out_Printf(Response_Debug, "Msd:?-R");
   UCSR0B &= ~_BV(UDRIE0);
   mdb_state = MDB_STATE_RX;
   Timer0_Set(5);
