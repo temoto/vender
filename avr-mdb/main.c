@@ -319,6 +319,9 @@ static void UART_Send_Byte(uint8_t const b, bool const bit9) {
 static bool UART_Send_Ready() { return bit_test(UCSR0A, _BV(UDRE0)); }
 
 static void UART_Send() {
+  if ((mod_state == MDB_STATE_RX) || (mod_state == MDB_STATE_RX_END)) {
+    return;
+  }
   // assert(UART_Send_Ready());
   Timer0_Stop();
   if (mdb_state == MDB_STATE_TX_ACK) {
@@ -396,7 +399,7 @@ static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
   mdb_state = MDB_STATE_TX_BEGIN;
   Master_Out_Printf(Response_Debug, "MS:?-TB");
   UART_Send_Check();
-  //UART_Send_Check();
+  // UART_Send_Check();
   return Response_MDB_Started;
 }
 
@@ -442,9 +445,8 @@ static void MDB_Step() {
       mdb_state = MDB_STATE_TX_ACK;
       Master_Out_Printf(Response_Debug, "Mstep:RE/Cv-TA");
       Master_Out_N(Response_MDB_Success, mdb_in.data, mdb_in.length - 1);
-      UCSR0B |= _BV(UDRIE0);
       Timer0_Set(5);
-	  UCSR0B |= _BV(UDRIE0);
+      UCSR0B |= _BV(UDRIE0);
     }
   } else if (mdb_state == MDB_STATE_TIMEOUT) {
     MDB_Reset_State();
