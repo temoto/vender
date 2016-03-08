@@ -284,6 +284,7 @@ static void UART_Recv() {
     if (bit9) {
       Timer0_Stop();
       mdb_state = MDB_STATE_RX_END;
+      TWCR = _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
     }
   } else {
     // uart_error = Response_UART_Chatterbox;
@@ -382,6 +383,7 @@ static void MDB_Reset_State() {
   mdb_state = MDB_STATE_IDLE;
   Buffer_Init(&mdb_in, (uint8_t * const)mdb_in_data, sizeof(mdb_in_data));
   Buffer_Init(&mdb_out, (uint8_t * const)mdb_out_data, sizeof(mdb_out_data));
+  TWCR = _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
 }
 
 static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
@@ -397,6 +399,7 @@ static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
     mdb_out.data[total_length - 1] = memsum(src, length);
   }
   mdb_state = MDB_STATE_TX_BEGIN;
+  TWCR &= ~_BV(TWIE);
   Master_Out_Printf(Response_Debug, "MS:?-TB");
   UART_Send_Check();
   // UART_Send_Check();
