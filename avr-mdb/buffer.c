@@ -15,7 +15,7 @@ static void Buffer_Clear(Buffer_t *const b) {
   b->length = 0;
   b->used = 0;
   b->free = b->size;
-  memset(b->data, 0, b->size);
+  //memset(b->data, 0, b->size);
 }
 
 static void Buffer_Init(Buffer_t *const b, uint8_t *const storage,

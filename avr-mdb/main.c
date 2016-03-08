@@ -399,7 +399,7 @@ static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
     mdb_out.data[total_length - 1] = memsum(src, length);
   }
   mdb_state = MDB_STATE_TX_BEGIN;
-  TWCR &= ~_BV(TWIE);
+//  TWCR &= ~_BV(TWIE);
   Master_Out_Printf(Response_Debug, "MS:?-TB");
   UART_Send_Check();
   // UART_Send_Check();
@@ -569,6 +569,7 @@ static void Master_Out_N(uint8_t const header, uint8_t const *const data,
 }
 
 static void Master_Out_Printf(uint8_t const header, char const *s, ...) {
+  return;
   static char strbuf[101];
   va_list ap;
   va_start(ap, s);
