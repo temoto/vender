@@ -701,6 +701,8 @@ static uint8_t Master_Command(uint8_t const *bs, uint8_t const max_length) {
   }
   uint8_t const crc_in = bs[length - 1];
   uint8_t const crc_local = crc8_p93_n(0, bs, length - 1);
+
+
   if (crc_in != crc_local) {
     Master_Out_2(Response_Invalid_CRC, crc_in);
     return length;
@@ -753,6 +755,7 @@ static bool Poll() {
       Master_Out_2(Response_TWI, src[0]);
       again = true;
     } else {
+	uint8_t volatile *p=twi_in.data;
       // master sends >= 3 bytes
       uint8_t i = 0;
       for (;;) {
