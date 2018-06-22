@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/sys/unix"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -14,6 +15,8 @@ import (
 )
 
 const (
+	MaxPacketLength = 37
+
 	cBOTHER  = 0x1000
 	cCMSPAR  = 0x40000000
 	cNCCS    = 19
@@ -37,12 +40,13 @@ type termios2 struct {
 type MDB struct {
 	Debug bool
 
-	bin    []byte
-	f      *os.File
-	lk     sync.Mutex
-	r      *bufio.Reader
-	skipIO bool // for tests and benchmark
-	t2     termios2
+	bin        []byte
+	f          *os.File
+	lk         sync.Mutex
+	r          *bufio.Reader
+	w          io.Writer
+	skip_ioctl bool // for tests and benchmark
+	t2         termios2
 }
 
 var (
@@ -67,8 +71,9 @@ func (self *MDB) Open(path string, baud int, vmin byte) (err error) {
 		c_ispeed: speed_t(unix.B9600),
 		c_ospeed: speed_t(unix.B9600),
 	}
-	self.bin = make([]byte, 37)
+	self.bin = make([]byte, 0, MaxPacketLength)
 	self.r = bufio.NewReader(self.f)
+	self.w = self.f
 	self.t2.c_cc[syscall.VMIN] = cc_t(vmin)
 	if err = self.tcsets2(); err != nil {
 		self.f.Close()
@@ -78,7 +83,7 @@ func (self *MDB) Open(path string, baud int, vmin byte) (err error) {
 }
 
 func (self *MDB) ioctl(op, arg uintptr) (err error) {
-	if self.skipIO {
+	if self.skip_ioctl {
 		return nil
 	}
 	r, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(self.f.Fd()), op, arg)
@@ -135,13 +140,13 @@ func (self *MDB) locked_send(b []byte) (err error) {
 	if err = self.set9(true); err != nil {
 		return
 	}
-	if _, err = self.f.Write(b[:1]); err != nil {
+	if _, err = self.w.Write(b[:1]); err != nil {
 		return
 	}
 	if err = self.set9(false); err != nil {
 		return
 	}
-	if _, err = self.f.Write(b[1:]); err != nil {
+	if _, err = self.w.Write(b[1:]); err != nil {
 		return
 	}
 	// end critical path
@@ -224,13 +229,12 @@ func (self *MDB) Tx(bsend, brecv []byte) error {
 	if b, err = self.locked_recv(); err != nil {
 		return err
 	}
-	// copy(brecv, b)
-	brecv = append(brecv, b...)
+	copy(brecv, b)
+	if len(b) > 0 {
+		err = self.locked_sendByte(0x00)
+	}
 	if self.Debug {
 		log.Printf("debug: MDB.Tx  brecv='%x' len=%d", brecv, len(brecv))
-	}
-	if len(brecv) > 0 {
-		err = self.locked_sendByte(0x00)
 	}
 	return err
 }
