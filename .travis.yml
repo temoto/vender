@@ -1,20 +1,8 @@
 language: go
-go:
-  - "1.10"
-  - tip
+go: "1.10"
 cache:
   apt: true
   go: true
-addons:
-  apt:
-env:
-  matrix:
-    - app=crc
-    - app=display
-    - app=display/lcd-test
-    - app=head
-    - app=i2c
-    - app=i2c/i2c-test
-    - app=mdb
-script: ./all.bash $app
 sudo: false
+script: ./all.bash
+after_success: bash <(curl -s https://codecov.io/bash)
