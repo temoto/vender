@@ -3,8 +3,6 @@ package mdb
 import (
 	"bufio"
 	"bytes"
-	"io/ioutil"
-	"log"
 	"testing"
 )
 
@@ -31,10 +29,11 @@ func open(t Fataler, r, w *bytes.Buffer) *MDB {
 }
 
 func TestTx1(t *testing.T) {
-	do := func(t *testing.T, send, written, read string) {
+	do := func(t *testing.T, send, written, read string, debug bool) {
 		r := bytes.NewBuffer([]byte(read))
 		w := bytes.NewBuffer(nil)
 		m := open(t, r, w)
+		m.Debug = debug
 		out := make([]byte, 0, MaxPacketLength)
 		err := m.Tx([]byte(send), out)
 		if err != nil {
@@ -49,13 +48,11 @@ func TestTx1(t *testing.T) {
 			t.Errorf("recv actual='%x' expected='%x'", ractual, rexpect)
 		}
 	}
-	t.Run("simple", func(t *testing.T) { do(t, "\x30", "\x30\x30", "\xff\x00\x00") })
-	t.Run("complex", func(t *testing.T) { do(t, "\xca\x03", "\xca\x03\xcd\x00\x00", "\xff\xff\x09\xff\x00\x08") })
+	t.Run("simple", func(t *testing.T) { do(t, "\x30", "\x30\x30", "\xff\x00\x00", false) })
+	t.Run("complex", func(t *testing.T) { do(t, "\xca\x03", "\xca\x03\xcd\x00\x00", "\xff\xff\x09\xff\x00\x08", true) })
 }
 
 func BenchmarkTx1(b *testing.B) {
-	log.SetFlags(0)
-	log.SetOutput(ioutil.Discard)
 	m := open(b, nil, nil)
 	bout := [2]byte{0, 0}
 	b.ResetTimer()
