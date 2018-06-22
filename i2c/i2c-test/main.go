@@ -57,9 +57,9 @@ func (m megaMsg) String() string {
 }
 
 func (self *tmega) SendUART(data byte, bit9 bool) error {
-	cmd := byte(0x20)
+	cmd := byte(0xa0)
 	if bit9 {
-		cmd = 0x30
+		cmd = 0xb0
 	}
 	msg := newMegaMsg(cmd, data)
 	log.Printf("SendUART msg %s", msg.String())

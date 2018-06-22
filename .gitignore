@@ -1,28 +1,21 @@
-# Compiled Object files, Static and Dynamic libs (Shared Objects)
-*.o
-*.a
-*.so
-
-# Folders
-_obj
-_test
-
-# Architecture specific extensions/prefixes
 *.[568vq]
-[568vq].out
-
+*.a
 *.cgo1.go
 *.cgo2.c
-_cgo_defun.c
-_cgo_gotypes.go
-_cgo_export.*
-
-_testmain.go
-
-.DS_Store
+*.dSYM/
 *.exe
-*.test
+*.o
 *.prof
+*.so
+*.test
+.DS_Store
+[568vq].out
+_cgo_defun.c
+_cgo_export.*
+_cgo_gotypes.go
+_obj
+_test
+_testmain.go
 display/lcd-test/lcd-test
 head/head
 i2c/i2c-test/i2c-test

@@ -1,36 +1,39 @@
 #!/bin/bash
 base="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-app="$1"
-set -e
+: ${app=""}
+cmd="$1"
+set -eu
 
-build_go() {
-	if [[ -z "$app" ]] || [[ "$app" == "$1" ]]; then
+dodir() {
+    echo "- $1" >&2
+    (
 		cd "$base/$1"
-		go get .
-		go build
-		if ls ./*_test.go >/dev/null 2>&1; then
-			go test
-			go test -bench=.
-		fi
-	fi
+		if ls ./*.go >/dev/null 2>&1; then
+			do_go
+		else
+            echo "skip unknown target: $1" >&2
+        fi
+    )
+}
+
+do_go() {
+    go get
+    go build
+    if ls ./*_test.go >/dev/null 2>&1; then
+        go test
+        go test -bench=.
+    fi
 }
 
 main() {
-	if [[ -z "$app" ]] || [[ "$app" == "avr-mdb" ]]; then
-		cd "$base/avr-mdb"
-		echo -n "CC version: "
-		${CC-cc} --version
-		echo -n "avr-gcc version: "
-		avr-gcc --version
-		make clean all
-	fi
-
 	cd $base
-	for d in $(find . -type d ! -path "./.*"); do
-		if ls $base/$d/*.go >/dev/null 2>&1; then
-			build_go $d
-		fi
-	done
+    if [[ -n "$app" ]] ; then
+        dodir "$app"
+    else
+        for d in $(find . -type d ! -path '.' ! -path './.*' ! -path './archive*') ; do
+            dodir "$d"
+        done
+    fi
 }
 
 main
