@@ -19,3 +19,4 @@ _testmain.go
 display/lcd-test/lcd-test
 head/head
 i2c/i2c-test/i2c-test
+mdb-cli/mdb-cli
