@@ -11,6 +11,7 @@
 
 #include "buffer.c"
 #include "crc.h"
+#include "util.c"
 
 /*
 Glossary:
@@ -35,6 +36,14 @@ The master does:
 TWI transaction may contain one or more packets. Packet always starts with
 length and ends with CRC. Minimal length is 3 bytes.
 CRC8 parameters: poly=0x93 init=0x00 xorout=0x00 refin=false refout=false.
+First byte in slave response is total length of all packets queued for transfer.
+So master has several options to read responses:
+1) send empty sequence, get xx0401xxZZ where xx is total length to read, send
+  0401xxZZ, read xx+4 bytes
+2) while sending useful command, read only first byte, slave will retain output
+  buffer because it is not transferred full
+3) just read a lot of bytes from slave, parse first byte and following packets,
+  downside is blocking slave with stupid work to transfer meaningless ff bytes
 
 Packet structure:
 - length, total including all fields
@@ -43,7 +52,7 @@ Packet structure:
 - CRC8
 
 Master header:
-- 01 status poll, no data
+- 01 status poll, data[0] = number of bytes to send
 - 02 update config, slave returns full config in response
 - 03 reset, no data, wait 100ms then expect 0600beebee(CRC) from slave
 - 04 read debug info
@@ -64,7 +73,7 @@ Config data consists of 2 byte pairs, key-value. Keys:
 - 05 enable debug log (be ready to accept a lot of packets from slave)
 
 Slave header, bit7=error:
-- 01 OK, data[0] = master queue length
+- 01 OK, data[0] = master_out buffer length
 - 02 config
 - 04 debug log
 - 05 TWI incoming data from another master
@@ -81,18 +90,18 @@ Slave header, bit7=error:
 - 91 UART read error - check UART wiring, retry or bug
 
 Example talk:
-M: 03 01 c8            03 length, 01 status poll, CRC
-S: 06 00 be eb ee 75   06 length, 00 nothing, bee-bee, CRC
+M: 03 01 c8  03 length, 01 status poll, CRC
+S: 06 06 00 be eb ee 75  06 total, 06 packet length, 00 nothing, bee-bee, CRC
 
 M: 04 0f 30 f7         0f MDB add and verify CHK repeat on timeout,
                        data = 30, CRC
-S: 03 00 5b            nothing useful, check later
+S: 03 03 00 5b         nothing useful, check later
 S: MDB send: 130 30 (first byte has 9 bit set), slave add MDB checksum
 S: MDB read: 100 (ACK, 9 bit set)
 S: notifies master
 
 M: 03 01 c8            status poll
-S: 03 08 3a            03 length, 08 MDB just ACK, CRC
+S: 03 03 08 3a         03 length, 08 MDB just ACK, CRC
 */
 
 // master command
@@ -119,6 +128,7 @@ static uint8_t const Response_Invalid_CRC = 0x82;
 static uint8_t const Response_Buffer_Overflow = 0x83;
 static uint8_t const Response_Unknown_Command = 0x84;
 static uint8_t const Response_Corruption = 0x85;
+static uint8_t const Response_Not_Implemented = 0x86;
 static uint8_t const Response_MDB_Busy = 0x88;
 static uint8_t const Response_MDB_Protocol_Error = 0x89;
 static uint8_t const Response_MDB_Invalid_CHK = 0x8a;
@@ -133,9 +143,10 @@ static void Master_Out_2(uint8_t const header, uint8_t const data);
 static void Master_Out_N(uint8_t const header, uint8_t const *const data,
                          uint8_t const data_length);
 static void Master_Out_Printf(uint8_t const header, char const *s, ...);
+static void Master_Out_Debugf(char const *s, ...);
 static void MDB_Reset_State();
 static void MDB_Send_Done();
-static void TWI_Out_Set_Short(uint8_t const);
+static void TWI_Out_Set_1(uint8_t const);
 static void Timer0_Reset();
 static void Timer0_Set(uint8_t const);
 static void Timer0_Stop();
@@ -155,18 +166,6 @@ static void soft_reset() {
   wdt_enable(WDTO_60MS);
   for (;;)
     ;
-}
-
-static bool bit_test(uint8_t const x, uint8_t const mask) {
-  return (x & mask) == mask;
-}
-
-static uint8_t memsum(uint8_t const *const src, uint8_t const length) {
-  uint8_t sum = 0;
-  for (uint8_t i = 0; i < length; i++) {
-    sum += src[i];
-  }
-  return sum;
 }
 
 static void LED_Set(bool const on) {
@@ -267,7 +266,7 @@ static void UART_Recv() {
                  sizeof(debug));
 
     mdb_state = MDB_STATE_TX_NACK;
-    Master_Out_Printf(Response_Debug, "UR:err-TN");
+    Master_Out_Debugf("UR:err-TN");
     UCSR0B |= _BV(UDRIE0);
     Timer0_Set(5);
     return;
@@ -278,20 +277,19 @@ static void UART_Recv() {
       Master_Out_N(Response_Buffer_Overflow, (uint8_t const *const)debug,
                    sizeof(debug));
       MDB_Reset_State();
-      Master_Out_Printf(Response_Debug, "UR:R/ap!-I");
+      Master_Out_Debugf("UR:R/ap!-I");
       return;
     }
     if (bit9) {
       Timer0_Stop();
       mdb_state = MDB_STATE_RX_END;
-      TWCR = _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
     }
   } else {
     // uart_error = Response_UART_Chatterbox;
     // memcpy((void *)uart_debug, debug, sizeof(debug));
     Master_Out_N(Response_UART_Chatterbox, (uint8_t const *const)debug,
                  sizeof(debug));
-    Master_Out_Printf(Response_Debug, "UR:%d-TN", mdb_state);
+    Master_Out_Debugf("UR:%d-TN", mdb_state);
     mdb_state = MDB_STATE_TX_NACK;
     UCSR0B |= _BV(UDRIE0);
     Timer0_Set(5);
@@ -326,18 +324,18 @@ static void UART_Send() {
   // assert(UART_Send_Ready());
   Timer0_Stop();
   if (mdb_state == MDB_STATE_TX_ACK) {
-    Master_Out_Printf(Response_Debug, "US:TA-I");
+    Master_Out_Debugf("US:TA-I");
     UART_Send_Byte(MDB_ACK, false);
     MDB_Reset_State();
     return;
   } else if (mdb_state == MDB_STATE_TX_RET) {
-    Master_Out_Printf(Response_Debug, "US:TR-R");
+    Master_Out_Debugf("US:TR-R");
     UART_Send_Byte(MDB_RET, false);
     mdb_in.length = mdb_in.used = 0;
     MDB_Send_Done();
     return;
   } else if (mdb_state == MDB_STATE_TX_NACK) {
-    Master_Out_Printf(Response_Debug, "US:TN-I");
+    Master_Out_Debugf("US:TN-I");
     UART_Send_Byte(MDB_NACK, false);
     MDB_Reset_State();
     return;
@@ -351,7 +349,7 @@ static void UART_Send() {
     UART_Send_Byte(data, true);
     mdb_out.used++;
     mdb_state = MDB_STATE_TX_DATA;
-    Master_Out_Printf(Response_Debug, "US:TB-TD");
+    Master_Out_Debugf("US:TB-TD");
     Timer0_Reset();
     return;
   } else if (mdb_state == MDB_STATE_TX_DATA) {
@@ -361,7 +359,7 @@ static void UART_Send() {
       mdb_out.used++;
       Timer0_Reset();
     } else {
-      Master_Out_Printf(Response_Debug, "US:TD/used-R");
+      Master_Out_Debugf("US:TD/used-R");
       MDB_Send_Done();
     }
     return;
@@ -383,7 +381,6 @@ static void MDB_Reset_State() {
   mdb_state = MDB_STATE_IDLE;
   Buffer_Init(&mdb_in, (uint8_t * const)mdb_in_data, sizeof(mdb_in_data));
   Buffer_Init(&mdb_out, (uint8_t * const)mdb_out_data, sizeof(mdb_out_data));
-  TWCR = _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
 }
 
 static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
@@ -399,15 +396,14 @@ static uint8_t MDB_Send(uint8_t const *const src, uint8_t const length,
     mdb_out.data[total_length - 1] = memsum(src, length);
   }
   mdb_state = MDB_STATE_TX_BEGIN;
-//  TWCR &= ~_BV(TWIE);
-  Master_Out_Printf(Response_Debug, "MS:?-TB");
+  Master_Out_Debugf("MS:?-TB");
   UART_Send_Check();
-  // UART_Send_Check();
+  UART_Send_Check();
   return Response_MDB_Started;
 }
 
 static void MDB_Send_Done() {
-  Master_Out_Printf(Response_Debug, "Msd:?-R");
+  Master_Out_Debugf("Msd:?-R");
   UCSR0B &= ~_BV(UDRIE0);
   mdb_state = MDB_STATE_RX;
   Timer0_Set(5);
@@ -429,7 +425,7 @@ static void MDB_Step() {
         Master_Out_2(Response_MDB_Protocol_Error, data);
       }
       MDB_Reset_State();
-      Master_Out_Printf(Response_Debug, "Mstep:RE/1-I");
+      Master_Out_Debugf("Mstep:RE/1-I");
     } else {
       if (/*config verify chk*/ true) {
         uint8_t const chk = memsum(mdb_in.data, mdb_in.length - 1);
@@ -441,20 +437,20 @@ static void MDB_Step() {
           // return;
 
           MDB_Reset_State();
-          Master_Out_Printf(Response_Debug, "Mstep:RE/C!-I");
+          Master_Out_Debugf("Mstep:RE/C!-I");
           Master_Out_N(Response_MDB_Invalid_CHK, mdb_in.data, mdb_in.length);
           return;
         }
       }
       mdb_state = MDB_STATE_TX_ACK;
-      Master_Out_Printf(Response_Debug, "Mstep:RE/Cv-TA");
+      Master_Out_Debugf("Mstep:RE/Cv-TA");
       Master_Out_N(Response_MDB_Success, mdb_in.data, mdb_in.length - 1);
       Timer0_Set(5);
       UCSR0B |= _BV(UDRIE0);
     }
   } else if (mdb_state == MDB_STATE_TIMEOUT) {
     MDB_Reset_State();
-    Master_Out_Printf(Response_Debug, "Mstep:TO-I");
+    Master_Out_Debugf("Mstep:TO-I");
     Master_Out_1(Response_MDB_Timeout);
   }
 }
@@ -485,17 +481,18 @@ ISR(TIMER0_COMPA_vect) {
   } else if ((mdb_state >= MDB_STATE_TX_LOW) &&
              (mdb_state <= MDB_STATE_TX_HIGH)) {
     // transmit timeout
-    Master_Out_Printf(Response_Debug, "Tim:T(%d)-I", mdb_state);
+    Master_Out_Debugf("Tim:T(%d)-I", mdb_state);
     MDB_Reset_State();
   } else if (mdb_state != MDB_STATE_IDLE) {
     // debug, invalid state
-    Master_Out_Printf(Response_Debug, "Tim:Mst=%d-I", mdb_state);
+    Master_Out_Debugf("Tim:Mst=%d-I", mdb_state);
     MDB_Reset_State();
   }
 }
 // End Timer0 driver
 
 // Begin TWI driver
+static uint8_t volatile twi_send_limit = 0;
 static bool volatile twi_idle = true;
 static uint8_t volatile twi_in_data[93];
 static Buffer_t volatile twi_in;
@@ -512,29 +509,30 @@ static void TWI_Init_Slave(uint8_t const address) {
   TWAR = address << 1;
   TWSR = 0;
   twi_idle = true;
+  twi_send_limit = 0;
   Buffer_Init(&twi_in, (uint8_t * const)twi_in_data, sizeof(twi_in_data));
   Buffer_Init(&twi_out, (uint8_t * const)out_data_2, sizeof(out_data_2));
   TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
 }
 
-static void TWI_Out_Set_Short(uint8_t const header) {
+static void TWI_Out_Set_1(uint8_t const header) {
   uint8_t const length = 3;
   twi_out.length = length;
   twi_out.used = 0;
   twi_out.data[0] = length;
   twi_out.data[1] = header;
-  twi_out.data[2] = crc8_p93_2b(length, header);
+  twi_out.data[2] = crc8_p93_n(0, twi_out.data, length - 1);
   twi_out.data[3] = 0;
 }
 
-static void TWI_Out_Set_Long1(uint8_t const header, uint8_t const data) {
+static void TWI_Out_Set_2(uint8_t const header, uint8_t const data) {
   uint8_t const length = 4;
   twi_out.length = length;
   twi_out.used = 0;
   twi_out.data[0] = length;
   twi_out.data[1] = header;
   twi_out.data[2] = data;
-  twi_out.data[3] = crc8_p93_next(crc8_p93_2b(length, header), data);
+  twi_out.data[3] = crc8_p93_n(0, twi_out.data, length - 1);
   twi_out.data[4] = 0;
 }
 
@@ -543,13 +541,13 @@ static void Master_Out_1(uint8_t const header) {
   uint8_t const crc = crc8_p93_2b(packet_length, header);
   uint8_t const packet[3] = {packet_length, header, crc};
   if (!Buffer_AppendN(&master_out, packet, sizeof(packet))) {
-    return TWI_Out_Set_Short(Response_Buffer_Overflow);
+    return TWI_Out_Set_1(Response_Buffer_Overflow);
   }
 }
 
 static void Master_Out_2(uint8_t const header, uint8_t const data) {
   uint8_t const packet_length = 4;
-  uint8_t const crc = crc8_p93_next(crc8_p93_2b(packet_length, header), data);
+  uint8_t const crc = crc8_p93_3b(packet_length, header, data);
   uint8_t const packet[4] = {packet_length, header, data, crc};
   Buffer_AppendN(&master_out, packet, packet_length);
 }
@@ -558,7 +556,7 @@ static void Master_Out_N(uint8_t const header, uint8_t const *const data,
                          uint8_t const data_length) {
   uint8_t const packet_length = 3 + data_length;
   if (master_out.free < packet_length) {
-    return TWI_Out_Set_Short(Response_Buffer_Overflow);
+    return TWI_Out_Set_1(Response_Buffer_Overflow);
   }
   Buffer_Append(&master_out, packet_length);
   Buffer_Append(&master_out, header);
@@ -568,17 +566,29 @@ static void Master_Out_N(uint8_t const header, uint8_t const *const data,
   Buffer_Append(&master_out, crc);
 }
 
-static void Master_Out_Printf(uint8_t const header, char const *s, ...) {
-  return;
+static void Master_Out_vprintf(uint8_t const header, char const *s,
+                               va_list ap) {
   static char strbuf[101];
-  va_list ap;
-  va_start(ap, s);
   int16_t const length = vsnprintf(strbuf, sizeof(strbuf), s, ap);
-  va_end(ap);
   if ((length < 0) || (length >= sizeof(strbuf))) {
-    return TWI_Out_Set_Short(Response_Buffer_Overflow);
+    return TWI_Out_Set_1(Response_Buffer_Overflow);
   }
   return Master_Out_N(header, (uint8_t const *)strbuf, length);
+}
+
+static void Master_Out_Printf(uint8_t const header, char const *s, ...) {
+  va_list ap;
+  va_start(ap, s);
+  Master_Out_vprintf(header, s, ap);
+  va_end(ap);
+}
+
+static void Master_Out_Debugf(char const *s, ...) {
+  return;
+  va_list ap;
+  va_start(ap, s);
+  Master_Out_vprintf(Response_Debug, s, ap);
+  va_end(ap);
 }
 
 ISR(TWI_vect) {
@@ -588,8 +598,8 @@ ISR(TWI_vect) {
       return;
 
     case TW_BUS_ERROR:
-      twi_in.length = twi_in.used = 0;
-      twi_out.length = twi_out.used = 0;
+      Buffer_Clear(&twi_in);
+      Buffer_Clear(&twi_out);
       TWCR = _BV(TWSTO) | _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
       return;
 
@@ -600,7 +610,8 @@ ISR(TWI_vect) {
     case TW_SR_ARB_LOST_SLA_ACK:
     case TW_SR_ARB_LOST_GCALL_ACK:
       twi_idle = false;
-      twi_in.length = twi_in.used = 0;
+      twi_send_limit = UINT8_MAX;
+      Buffer_Clear(&twi_in);
       ack = true;
       break;
 
@@ -608,10 +619,16 @@ ISR(TWI_vect) {
     case TW_SR_DATA_ACK:
     case TW_SR_GCALL_DATA_ACK:
       twi_idle = false;
-      twi_in.data[twi_in.length] = TWDR;
-      if (twi_in.length < twi_in.size) {
-        twi_in.length++;
+      Buffer_Append(&twi_in, TWDR);
+      // Receiving Command_Poll_Limit packet 0401xx
+      if ((twi_in.length == 3) && (twi_in.data[0] == 4) &&
+          (twi_in.data[1] == Command_Poll)) {
+        twi_send_limit = twi_in.data[2];
       }
+      // twi_in.data[twi_in.length] = TWDR;
+      // if (twi_in.length < twi_in.size) {
+      //   twi_in.length++;
+      // }
       ack = true;
       break;
 
@@ -633,25 +650,21 @@ ISR(TWI_vect) {
     case TW_ST_SLA_ACK:
       twi_idle = false;
       if (twi_out.length == 0) {
-        TWI_Out_Set_Long1(Response_OK, master_out.length);
+        TWI_Out_Set_2(Response_OK, master_out.length);
       } else {
         twi_out.used = 0;
       }
-      ack = (twi_out.used < twi_out.length);
-      if (ack) {
-        TWDR = twi_out.data[twi_out.used];
-      } else {
-        TWDR = 0;
-      }
+      TWDR = twi_out.length;
+      ack = (twi_out.used < uint8_min(twi_send_limit, twi_out.length));
       break;
 
     // Send Byte Receive ACK
     case TW_ST_DATA_ACK:
       twi_idle = false;
-      ack = (twi_out.used < twi_out.length);
+      ack = (twi_out.used < uint8_min(twi_send_limit, twi_out.length));
       if (ack) {
-        twi_out.used++;
         TWDR = twi_out.data[twi_out.used];
+        twi_out.used++;
       } else {
         TWDR = 0;
       }
@@ -662,7 +675,7 @@ ISR(TWI_vect) {
     // Send Last Byte Receive NACK
     case TW_ST_DATA_NACK:
       twi_idle = true;
-      twi_out.length = twi_out.used = 0;
+      Buffer_Clear(&twi_out);
       ack = true;
       break;
   }
@@ -719,15 +732,15 @@ static uint8_t Master_Command(uint8_t const *bs, uint8_t const max_length) {
     }
   } else if (header == Command_Config) {
     // TODO
-    Master_Out_Printf(Response_Error, "not-implemented");
+    Master_Out_1(Response_Not_Implemented);
   } else if (header == Command_Reset) {
     Init();
     // soft_reset();  // noreturn
   } else if (header == Command_Debug) {
-    Master_Out_Printf(Response_Debug, "Mst=%d", mdb_state);
+    Master_Out_Debugf("Mst=%d", mdb_state);
   } else if (header == Command_MDB_Bus_Reset) {
     // TODO
-    Master_Out_Printf(Response_Error, "not-implemented");
+    Master_Out_1(Response_Not_Implemented);
   } else if ((header >= Command_MDB_Transaction_Low) &&
              (header <= Command_MDB_Transaction_High)) {
     if (mdb_state != MDB_STATE_IDLE) {
@@ -802,11 +815,10 @@ static void Poll_Loop(int8_t const max_repeats) {
 #ifdef TEST
 #include "main_test.c"
 #else
-int main(void) __attribute__((naked));
 int main(void) {
   cli();
   Init();
-  Master_Out_Printf(Response_Debug, "RST:%d", mcu_status);
+  Master_Out_Printf(Response_Debug, "RST:%02x", mcu_status);
 
   for (;;) {
     sei();

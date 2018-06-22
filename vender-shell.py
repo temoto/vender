@@ -1,34 +1,46 @@
 #!/usr/bin/env python
 # coding: utf-8
 from __future__ import print_function
-import functools,pigpio,readline,struct,sys,time
+import functools, pigpio, readline, struct, sys, time
 
 pi = pigpio.pi()
-i2c = pi.i2c_open(0, 0x78)
+i2c_addr = 0x78
+i2c = pi.i2c_open(0, i2c_addr)
+
 
 def crc8_p93(crc, data):
   crc ^= data
-  for i in xrange(8):
-    if (crc&0x80)!=0:
-      crc = (crc<<1)&0xff
+  for _ in xrange(8):
+    if (crc & 0x80) != 0:
+      crc = (crc << 1) & 0xff
       crc ^= 0x93
     else:
-      crc = (crc<<1)&0xff
+      crc = (crc << 1) & 0xff
   return crc
+
 
 def crc8_p93_bytes(bs):
   return functools.reduce(crc8_p93, map(ord, bs), 0)
 
+
 def i2c_tx(send='', echo_out=True, echo_in=True):
   bs = send.decode('hex')
-  if len(bs) > 0:
+  cmd1 = [4, i2c_addr]
+  if bs:
     if echo_out:
       print('> ' + send)
-    pi.i2c_zip(i2c, [4, 0x78, 7, len(bs)] + list(map(ord,bs)) + [0])
-  _, s = pi.i2c_zip(i2c, [4, 0x78, 6, max(len(bs), 73), 0])
+    cmd1.extend([7, len(bs)])
+    cmd1.extend(map(ord, bs))
+  cmd1.extend([6, 3, 0])
+  _, s1 = pi.i2c_zip(i2c, cmd1)
   if echo_in:
-    print('< ' + str(s).encode('hex'))
-  return s
+    print('< ' + str(s1).encode('hex'))
+  read_length = 100
+  _, s2 = pi.i2c_zip(i2c, [4, i2c_addr, 6, read_length, 0])
+  if echo_in:
+    print('< ' + str(s2).encode('hex'))
+  return s2
+
 
 HEADER_CODE_MAP = {
   0x01: 'OK',
@@ -52,6 +64,7 @@ HEADER_CODE_MAP = {
   0x91: 'Err-UART-read',
 }
 
+
 def slave_talk(send='', **kw):
   if send.startswith('!'):
     send = send[1:]
@@ -66,7 +79,7 @@ def slave_talk(send='', **kw):
   kw.setdefault('echo_in', False)
   result = i2c_tx(send, **kw)
   queue = 0
-  while result and result[0] not in (0,0xff):
+  while result and result[0] not in (0, 0xff):
     length = result[0]
     header = result[1]
     data = str(result[2:length-1])
@@ -80,6 +93,7 @@ def slave_talk(send='', **kw):
     print('{0} {1} {2}'.format(header_str, data.encode('hex'), info))
     result = result[length:]
   return queue
+
 
 def slave_shell():
   print('Hello. You can use TAB and type "help".')
@@ -139,6 +153,7 @@ Commands:
         if q > 0:
           slave_talk()
 
+
 def readline_complete(text, state):
   root = [
     '!',
@@ -151,6 +166,7 @@ def readline_complete(text, state):
   if x:
     return x[0]
   return None
+
 
 if __name__ == '__main__':
   import os,readline

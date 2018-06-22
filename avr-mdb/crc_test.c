@@ -1,7 +1,7 @@
+#include "crc.h"
 #include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
-#include "crc.h"
 
 uint8_t test1(uint8_t const b) {
   uint8_t const crc = crc8_p93_next(0, b);

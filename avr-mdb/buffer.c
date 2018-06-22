@@ -1,6 +1,7 @@
 #ifndef INCLUDE_BUFFER_C
 #define INCLUDE_BUFFER_C
 #include <inttypes.h>
+#include <stdbool.h>
 #include <string.h>
 
 typedef struct {
@@ -12,10 +13,14 @@ typedef struct {
 } volatile Buffer_t;
 
 static void Buffer_Clear(Buffer_t *const b) {
+  uint8_t zero_length = b->length + 1;
+  if (zero_length > b->size) {
+    zero_length = b->size;
+  }
+  memset(b->data, 0, zero_length);
   b->length = 0;
   b->used = 0;
   b->free = b->size;
-  //memset(b->data, 0, b->size);
 }
 
 static void Buffer_Init(Buffer_t *const b, uint8_t *const storage,
@@ -47,7 +52,7 @@ static bool Buffer_AppendN(Buffer_t *const b, uint8_t const *const src,
 }
 
 static void Buffer_Swap(Buffer_t *const b1, Buffer_t *const b2) {
-  static Buffer_t tmp;
+  Buffer_t tmp;
   memcpy((void *)&tmp, (void const *)b1, sizeof(Buffer_t));
   memcpy((void *)b1, (void const *)b2, sizeof(Buffer_t));
   memcpy((void *)b2, (void const *)&tmp, sizeof(Buffer_t));

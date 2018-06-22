@@ -1,6 +1,6 @@
+#include "crc.h"
 #include <inttypes.h>
 #include <stdbool.h>
-#include "crc.h"
 
 static uint8_t const CRC_POLY_93 = 0x93;
 static uint8_t const lookup[256] = {
@@ -49,6 +49,15 @@ uint8_t crc8_p93_2b(uint8_t const data1, uint8_t const data2) {
   uint8_t crc = 0;
   crc = crc8_p93_next(crc, data1);
   crc = crc8_p93_next(crc, data2);
+  return crc;
+}
+
+uint8_t crc8_p93_3b(uint8_t const data1, uint8_t const data2,
+                    uint8_t const data3) {
+  uint8_t crc = 0;
+  crc = crc8_p93_next(crc, data1);
+  crc = crc8_p93_next(crc, data2);
+  crc = crc8_p93_next(crc, data3);
   return crc;
 }
 

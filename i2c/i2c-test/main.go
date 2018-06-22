@@ -44,7 +44,7 @@ type tmega struct {
 func newMegaMsg(cmd, data byte) (out megaMsg) {
 	out[0] = cmd
 	out[1] = data
-	out[2] = crc.CRC8_p93_2b(cmd, data)
+	out[2] = crc.CRC8_p93_2(cmd, data)
 	return out
 }
 

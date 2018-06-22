@@ -25,12 +25,12 @@ main() {
 		make clean all
 	fi
 
-	build_go crc
-	build_go display
-	build_go display/lcd-test
-	build_go head
-	build_go i2c
-	build_go i2c/i2c-test
+	cd $base
+	for d in $(find . -type d ! -path "./.*"); do
+		if ls $base/$d/*.go >/dev/null 2>&1; then
+			build_go $d
+		fi
+	done
 }
 
 main
