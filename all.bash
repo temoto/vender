@@ -9,7 +9,7 @@ main() {
     go build ./...
 
     # begin workaround cannot use test profile flag with multiple packages
-    for d in $(go list ./... |egrep -v '(vendor|archive)/') ; do
+    for d in $(go list ./... |egrep -v '(archive|script|vendor)/') ; do
         go test -race -coverprofile=$base/coverage-$(basename $d).txt -covermode=atomic $d
     done
     cat $base/coverage-*.txt >$base/coverage.txt
@@ -18,7 +18,7 @@ main() {
 
     go test -bench=. ./...
 
-    for d in $(find . -type d ! -path '.' ! -path './.*' ! -path './archive*') ; do
+    for d in $(find . -type d ! -path '.' ! -path './.*' ! -path './archive*' ! -path './script*' ! -path './vendor*') ; do
         if ! ls $base/$d/*.go >/dev/null 2>&1 ; then
             echo "no build defined for $d" >&2
             exit 1

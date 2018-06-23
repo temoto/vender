@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/hex"
 	"fmt"
 	"github.com/temoto/vender/mdb"
 	"log"
@@ -34,10 +33,14 @@ func main() {
 	wordLoop:
 		for _, word := range words {
 			log.Printf("(%d)%s", iteration, word)
-			switch word[0] {
-			case 'b':
+			switch {
+			case word == "break":
 				m.BreakCustom(200, 500)
-			case 'l':
+			case word == "debug=yes":
+				m.Debug = true
+			case word == "debug=no":
+				m.Debug = false
+			case word[0] == 'l':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
 					log.Fatal(err)
 				} else {
@@ -46,18 +49,25 @@ func main() {
 						goto wordLoop
 					}
 				}
-			case 's':
+			case word[0] == 's':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
 					log.Fatal(err)
 				} else {
 					time.Sleep(time.Duration(i) * time.Millisecond)
 				}
-			case 't':
-				if bout, err := hex.DecodeString(word[1:]); err != nil {
-					log.Fatal(err)
-				} else {
-					m.Tx(bout, nil)
+			case word[0] == 't':
+				request := mdb.PacketFromHex(word[1:])
+				response := new(mdb.Packet)
+				if request != nil {
+					err = m.Tx(request, response)
+					response.Logf("< %s")
 				}
+				if err != nil {
+					log.Fatal(err)
+				}
+			default:
+				log.Printf("error: invalid command: '%s'", word)
+				break wordLoop
 			}
 		}
 	}
