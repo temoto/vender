@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io"
 	"log"
 	"os"
@@ -14,34 +13,10 @@ import (
 	"unsafe"
 )
 
-const (
-	cBOTHER   = 0x1000
-	cCMSPAR   = 0x40000000
-	cFIONREAD = 0x541b
-	cNCCS     = 19
-	cTCSBRKP  = 0x5425
-	cTCSETS2  = 0x402c542b
-	cTCSETSF2 = 0x402c542d
-)
-
-type cc_t byte
-type speed_t uint32
-type tcflag_t uint32
-type termios2 struct {
-	c_iflag  tcflag_t    // input mode flags
-	c_oflag  tcflag_t    // output mode flags
-	c_cflag  tcflag_t    // control mode flags
-	c_lflag  tcflag_t    // local mode flags
-	c_line   cc_t        // line discipline
-	c_cc     [cNCCS]cc_t // control characters
-	c_ispeed speed_t     // input speed
-	c_ospeed speed_t     // output speed
-}
-
 type MDB struct {
 	Debug bool
 
-	bin         []byte
+	recvBuf     []byte
 	f           *os.File
 	lk          sync.Mutex
 	r           *bufio.Reader
@@ -70,70 +45,6 @@ func (self *MDB) Open(path string, baud int, vmin byte) (err error) {
 		return err
 	}
 	return self.resetTermios(baud, vmin)
-}
-
-func (self *MDB) resetTermios(baud int, vmin byte) (err error) {
-	if baud != 9600 {
-		return errors.New("Not implemented support for baud rate other than 9600")
-	}
-	self.t2 = termios2{
-		c_iflag:  unix.IGNBRK | unix.INPCK | unix.PARMRK,
-		c_cflag:  cCMSPAR | syscall.CLOCAL | syscall.CREAD | unix.CSTART | syscall.CS8 | unix.PARENB | unix.PARMRK | unix.IGNPAR,
-		c_ispeed: speed_t(unix.B9600),
-		c_ospeed: speed_t(unix.B9600),
-	}
-	self.bin = make([]byte, 0, PacketMaxLength)
-	self.r = bufio.NewReader(self.f)
-	self.w = self.f
-	self.t2.c_cc[syscall.VMIN] = cc_t(vmin)
-	self.last_parodd = false
-	if err = self.tcsetsf2(); err != nil {
-		self.f.Close()
-		self.f = nil
-		self.r = nil
-		self.w = nil
-		return err
-	}
-	return nil
-}
-
-func (self *MDB) ioctl(op, arg uintptr) (err error) {
-	if self.skip_ioctl {
-		return nil
-	}
-	r, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(self.f.Fd()), op, arg)
-	if errno != 0 {
-		err = os.NewSyscallError("SYS_IOCTL", errno)
-	} else if r != 0 {
-		err = errors.New("unknown error from SYS_IOCTL")
-	}
-	if err != nil && self.Debug {
-		log.Printf("debug: MDB.ioctl op=%x arg=%x err=%s", op, arg, err)
-	}
-	return err
-}
-
-func (self *MDB) tcsets2() error {
-	self.last_parodd = (self.t2.c_cflag & syscall.PARODD) == syscall.PARODD
-	return self.ioctl(uintptr(cTCSETS2), uintptr(unsafe.Pointer(&self.t2)))
-}
-
-// flush input and output
-func (self *MDB) tcsetsf2() error {
-	self.last_parodd = (self.t2.c_cflag & syscall.PARODD) == syscall.PARODD
-	return self.ioctl(uintptr(cTCSETSF2), uintptr(unsafe.Pointer(&self.t2)))
-}
-
-func (self *MDB) set9(b bool) error {
-	if b == self.last_parodd {
-		return nil
-	}
-	if b {
-		self.t2.c_cflag |= syscall.PARODD
-	} else {
-		self.t2.c_cflag &= ^tcflag_t(syscall.PARODD)
-	}
-	return self.tcsets2()
 }
 
 func (self *MDB) BreakCustom(keep, sleep int) (err error) {
@@ -180,13 +91,11 @@ func (self *MDB) locked_send(b []byte) (err error) {
 }
 
 func (self *MDB) locked_sendAck() (err error) {
-	nullBytes1 := [1]byte{0}
 	// begin critical path
 	if err = self.set9(false); err != nil {
 		return
 	}
-	// TODO: check const / stack allocation
-	if _, err = self.w.Write(nullBytes1[:]); err != nil {
+	if _, err = self.w.Write(PacketNul1.b[:1]); err != nil {
 		return
 	}
 	// end critical path
@@ -216,62 +125,62 @@ func (self *MDB) locked_recvWait(min int, wait time.Duration) (err error) {
 	return nil
 }
 
-func (self *MDB) locked_recv() ([]byte, error) {
+func (self *MDB) locked_recv(dst *Packet) error {
 	var err error
 	var b, chkin, chkout byte
 	var part []byte
-	nmax := cap(self.bin)
-	self.bin = self.bin[:0]
+	self.recvBuf = self.recvBuf[:0]
 
 	// begin critical path
 	if err = self.set9(false); err != nil {
-		return nil, err
+		return err
 	}
 recvLoop:
 	for {
 		// self.locked_recvWait(1, time.Millisecond)
 		if part, err = self.r.ReadSlice(0xff); err != nil {
-			return nil, err
+			return err
 		}
 		n := len(part)
 		if n > 1 {
-			self.bin = append(self.bin, part[:n-1]...)
+			self.recvBuf = append(self.recvBuf, part[:n-1]...)
 		}
 		if b, err = self.r.ReadByte(); err != nil {
-			return nil, err
+			return err
 		}
 		switch b {
 		case 0x00:
 			if chkin, err = self.r.ReadByte(); err != nil {
-				return nil, err
+				return err
 			}
 			break recvLoop
 		case 0xff:
-			self.bin = append(self.bin, b)
+			self.recvBuf = append(self.recvBuf, b)
 		default:
 			err = fmt.Errorf("recv unknown sequence ff %x", b)
-			return nil, err
+			return err
 		}
-		if len(self.bin) > nmax {
-			err = errors.New("recv self.bin overflow")
-			return nil, err
+		if len(self.recvBuf) > PacketMaxLength {
+			err = errors.New("recv self.recvBuf overflow")
+			return err
 		}
 	}
 	// end critical path
 
-	for _, b = range self.bin {
+	for _, b = range self.recvBuf {
 		chkout += b
 	}
 	// if self.Debug {
-	// 	PacketFromBytes(self.bin).Logf("debug: MDB.recv %s")
+	// 	PacketFromBytes(self.recvBuf).Logf("debug: MDB.recv %s")
 	// }
 	if chkin != chkout {
 		if self.Debug {
 			log.Printf("debug: MDB.recv InvalidChecksum frompacket=%x actual=%x", chkin, chkout)
 		}
-		return nil, InvalidChecksum{Received: chkin, Actual: chkout}
+		return InvalidChecksum{Received: chkin, Actual: chkout}
 	}
-	return self.bin, nil
+	dst.write(self.recvBuf)
+	return nil
 }
 
 func (self *MDB) Tx(request, response *Packet) error {
@@ -282,7 +191,6 @@ func (self *MDB) Tx(request, response *Packet) error {
 		return nil
 	}
 	var err error
-	var b []byte
 
 	self.lk.Lock()
 	defer self.lk.Unlock()
@@ -293,15 +201,23 @@ func (self *MDB) Tx(request, response *Packet) error {
 	if err = self.locked_send(request.Bytes()); err != nil {
 		return err
 	}
-	if b, err = self.locked_recv(); err != nil {
+	// ack must arrive <5ms after recv
+	// begin critical path
+	if err = self.locked_recv(response); err != nil {
 		return err
 	}
-	response.write(b)
-	if len(b) > 0 {
+	if response.l > 0 {
 		err = self.locked_sendAck()
 	}
+	// end critical path
+
 	if self.Debug {
-		log.Printf("debug: MDB.Tx (%02d) b='%x'", len(b), b)
+		acks := ""
+		if response.l > 0 {
+			acks = "\n> (01) 00 (ACK)"
+		}
+		log.Printf("debug: MDB.Tx (multi-line)\n> (%02d) %s\n< (%02d) %s%s\nerr=%v",
+			request.l, request.Format(), response.l, response.Format(), acks, err)
 	}
 	return err
 }
