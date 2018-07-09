@@ -3,22 +3,21 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/temoto/vender/mdb"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/temoto/vender/mdb"
 )
 
 func main() {
-	m := new(mdb.MDB)
-	err := m.Open("/dev/ttyAMA0", 9600, 1)
-	if err != nil {
-		panic(err)
-	}
+	mfile, _ := mdb.NewMDB(mdb.NewFileUart(), "/dev/ttyAMA0", 9600)
+	mfast, _ := mdb.NewMDB(mdb.NewFastUart(), "/dev/ttyAMA0", 9600)
+	_, _ = mfile, mfast
+	m := mfile
 	m.Debug = true
-
 	stdin := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Fprintf(os.Stdout, "> ")

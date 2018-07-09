@@ -1,8 +1,8 @@
 package mdb
 
 import (
-	"bufio"
 	"bytes"
+	"io"
 	"testing"
 )
 
@@ -10,27 +10,17 @@ type Fataler interface {
 	Fatal(...interface{})
 }
 
-func open(t Fataler, r, w *bytes.Buffer) *MDB {
-	m := new(MDB)
-	m.skip_ioctl = true
-	err := m.Open("/dev/null", 9600, 1)
+func open(t Fataler, r io.Reader, w io.Writer) *mdb {
+	m, err := NewMDB(NewNullUart(r, w), "", 9600)
 	if err != nil {
-		t.Fatal()
+		t.Fatal(err)
 	}
-	if r == nil {
-		r = bytes.NewBuffer(nil)
-	}
-	if w == nil {
-		w = bytes.NewBuffer(nil)
-	}
-	m.r = bufio.NewReader(r)
-	m.w = w
 	return m
 }
 
 func TestTx1(t *testing.T) {
 	do := func(t *testing.T, send, wexpects, recv, rexpects string, debug bool) {
-		r := bytes.NewBuffer([]byte(recv))
+		r := bytes.NewReader([]byte(recv))
 		w := bytes.NewBuffer(nil)
 		m := open(t, r, w)
 		m.Debug = debug
@@ -65,7 +55,7 @@ func TestPacketFormat(t *testing.T) {
 }
 
 func BenchmarkTx1(b *testing.B) {
-	m := open(b, nil, nil)
+	m := open(b, bytes.NewBufferString(""), bytes.NewBuffer(nil))
 	response := new(Packet)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
