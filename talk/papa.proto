@@ -1,0 +1,12 @@
+syntax = "proto3";
+package talk;
+import "google/protobuf/empty.proto";
+
+service Papa {
+  rpc Pull(stream PapaTask) returns (stream PapaTask);
+}
+
+message PapaTask {
+  fixed64 id=1;
+  string name=2;
+}
