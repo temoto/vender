@@ -52,7 +52,7 @@ func (self *NominalGroup) Add(n Nominal, count uint) error {
 }
 
 func (self *NominalGroup) Contains(a Amount) bool {
-	return self.Withdraw(a, &ExpendLeastCount{}, false) == nil
+	return self.Withdraw(a, NewExpendLeastCount(), false) == nil
 }
 
 func (self *NominalGroup) Total() Amount {
@@ -105,7 +105,9 @@ func expendOneOrdered(from *NominalGroup, order []Nominal, max Amount) (Nominal,
 	return 0, ErrNominalCount
 }
 
-func (self *NominalGroup) order(sortElemFunc func(Nominal, uint) Nominal) []Nominal {
+type ngOrderSortElemFunc func(Nominal, uint) Nominal
+
+func (self *NominalGroup) order(sortElemFunc ngOrderSortElemFunc) []Nominal {
 	order := make([]Nominal, 0, len(self.values))
 	for n := range self.values {
 		order = append(order, n)
@@ -125,28 +127,23 @@ type ExpendStrategy interface {
 	ExpendOne(from *NominalGroup, max Amount) (Nominal, error)
 }
 
-type ExpendLeastCount struct {
-	order []Nominal
+type ExpendGenericOrder struct {
+	order        []Nominal
+	SortElemFunc ngOrderSortElemFunc
 }
 
-func (self *ExpendLeastCount) Reset(from *NominalGroup) {
-	self.order = from.order(ngOrderSortElemNominal)
+func (self *ExpendGenericOrder) Reset(from *NominalGroup) {
+	self.order = from.order(self.SortElemFunc)
 }
-
-func (self *ExpendLeastCount) ExpendOne(from *NominalGroup, max Amount) (Nominal, error) {
+func (self *ExpendGenericOrder) ExpendOne(from *NominalGroup, max Amount) (Nominal, error) {
 	return expendOneOrdered(from, self.order, max)
 }
 
-type ExpendMostAvailable struct {
-	order []Nominal
+func NewExpendLeastCount() ExpendStrategy {
+	return &ExpendGenericOrder{SortElemFunc: ngOrderSortElemNominal}
 }
-
-func (self *ExpendMostAvailable) Reset(from *NominalGroup) {
-	self.order = from.order(ngOrderSortElemCount)
-}
-
-func (self *ExpendMostAvailable) ExpendOne(from *NominalGroup, max Amount) (Nominal, error) {
-	return expendOneOrdered(from, self.order, max)
+func NewExpendMostAvailable() ExpendStrategy {
+	return &ExpendGenericOrder{SortElemFunc: ngOrderSortElemCount}
 }
 
 type ExpendStatistical struct {
@@ -157,7 +154,6 @@ type ExpendStatistical struct {
 func (self *ExpendStatistical) Reset(from *NominalGroup) {
 	self.order = self.Stat.order(ngOrderSortElemCount)
 }
-
 func (self *ExpendStatistical) ExpendOne(from *NominalGroup, max Amount) (Nominal, error) {
 	return expendOneOrdered(from, self.order, max)
 }
@@ -174,7 +170,6 @@ func (self *ExpendCombine) Reset(from *NominalGroup) {
 	self.S1.Reset(from)
 	self.S2.Reset(from)
 }
-
 func (self *ExpendCombine) ExpendOne(from *NominalGroup, max Amount) (Nominal, error) {
 	if self.rnd.Float32() < self.Ratio {
 		return self.S1.ExpendOne(from, max)

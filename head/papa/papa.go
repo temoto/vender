@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/temoto/vender/head/state"
@@ -29,7 +30,11 @@ func init() {
 		client = talk.NewPapaClient(conn)
 
 		go func() {
-			pull, _ := client.Pull(context.Background())
+			pull, err := client.Pull(context.Background())
+			if err != nil {
+				log.Print(err)
+				return
+			}
 			for {
 				task, err := pull.Recv()
 				if err != nil {

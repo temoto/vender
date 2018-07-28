@@ -61,11 +61,11 @@ func testCheckContains(t *testing.T, a Amount, expected bool) {
 }
 
 func TestNominalGroup(t *testing.T) {
-	t.Run("ExpendLeastCount", func(t *testing.T) { testCheckNominalGroup(t, &ExpendLeastCount{}) })
-	t.Run("ExpendMostAvailable", func(t *testing.T) { testCheckNominalGroup(t, &ExpendMostAvailable{}) })
+	t.Run("ExpendLeastCount", func(t *testing.T) { testCheckNominalGroup(t, NewExpendLeastCount()) })
+	t.Run("ExpendMostAvailable", func(t *testing.T) { testCheckNominalGroup(t, NewExpendMostAvailable()) })
 	t.Run("ExpendStatistical", func(t *testing.T) { testCheckNominalGroup(t, &ExpendStatistical{}) })
 	t.Run("ExpendCombine", func(t *testing.T) {
-		testCheckNominalGroup(t, &ExpendCombine{S1: &ExpendLeastCount{}, S2: &ExpendMostAvailable{}, Ratio: 0.5})
+		testCheckNominalGroup(t, &ExpendCombine{S1: NewExpendLeastCount(), S2: NewExpendMostAvailable(), Ratio: 0.5})
 	})
 	t.Run("Contains/0", func(t *testing.T) { testCheckContains(t, 0, true) })
 	t.Run("Contains/17", func(t *testing.T) { testCheckContains(t, 17, true) })
