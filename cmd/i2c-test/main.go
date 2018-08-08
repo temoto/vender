@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/temoto/vender/crc"
-	"github.com/temoto/vender/i2c"
 	"log"
 	"time"
+
+	"github.com/temoto/vender/crc"
+	"github.com/temoto/vender/hardware/i2c"
 )
 
 func main1() {

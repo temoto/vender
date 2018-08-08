@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/temoto/vender/display"
 	"time"
+
+	"github.com/temoto/vender/hardware/display"
 )
 
 func main() {

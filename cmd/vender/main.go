@@ -32,12 +32,14 @@ import (
 // time.Sleep(100 * time.Millisecond)
 
 func main() {
-	logflags := log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile | log.Lshortfile
+	const logFlagsService = log.Lshortfile
+	const logFlagsInteractive = log.Lshortfile | log.Ltime | log.Lmicroseconds
 	if sdnotify("start") {
 		// we're under systemd, assume systemd journal logging, remove timestamp
-		logflags ^= log.Ldate | log.Ltime
+		log.SetFlags(logFlagsService)
+	} else {
+		log.SetFlags(logFlagsInteractive)
 	}
-	log.SetFlags(logflags)
 	log.Println("hello")
 
 	a := alive.NewAlive()
@@ -51,10 +53,7 @@ func main() {
 		return nil
 	})
 
-	config, err := state.ReadConfigFile("f")
-	if err != nil {
-		log.Fatal(err)
-	}
+	config := state.MustReadConfigFile(log.Fatal, "vender.hcl")
 	ctx = context.WithValue(ctx, "config", config)
 	state.DoValidate(ctx)
 	state.DoStart(ctx)

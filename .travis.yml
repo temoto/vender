@@ -3,6 +3,14 @@ go: "1.10"
 cache:
   apt: true
   go: true
+  directories:
+  - $HOME/bin
+env:
+  global:
+  - "PATH=$PATH:$HOME/bin"
+  - PROTOC_VERSION=3.1.0
 sudo: false
+
+before_install: ./script/install-protoc $PROTOC_VERSION
 script: ./all.bash
 after_success: bash <(curl -s https://codecov.io/bash)

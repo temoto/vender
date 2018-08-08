@@ -16,9 +16,9 @@ _cgo_gotypes.go
 _obj
 _test
 _testmain.go
+cmd/display/display-mt16-test
+cmd/head/head
+cmd/i2c-test/i2c-test
+cmd/mdb-cli/mdb-cli
 cover.out
 coverage*.txt
-display/lcd-test/lcd-test
-head/head
-i2c/i2c-test/i2c-test
-mdb-cli/mdb-cli

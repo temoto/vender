@@ -1,0 +1,20 @@
+#!/bin/bash
+# based on https://github.com/grpc-ecosystem/grpc-gateway/blob/master/.travis/install-protoc.sh
+set -eux
+protoc_version=$1
+if [[ -z "${protoc_version}" ]] ; then
+	echo "Usage: $0 protoc-version" >&2
+	exit 1
+fi
+base=$HOME/bin
+
+if [[ "`$base/protoc --version 2>/dev/null |cut -d' ' -f 2`" != "${protoc_version}" ]] ; then
+	rm -f $base/protoc*
+	mkdir -p $base
+	cd /tmp
+	wget https://github.com/google/protobuf/releases/download/v${protoc_version}/protoc-${protoc_version}-linux-x86_64.zip
+	unzip protoc-${protoc_version}-linux-x86_64.zip
+	rsync -a bin/ $base/
+fi
+
+$base/protoc --version

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/temoto/vender/mdb"
+	"github.com/temoto/vender/hardware/mdb"
 )
 
 func main() {

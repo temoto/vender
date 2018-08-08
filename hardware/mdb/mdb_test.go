@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"io"
 	"testing"
+
+	"github.com/temoto/vender/helpers"
 )
 
-type Fataler interface {
-	Fatal(...interface{})
-}
-
-func open(t Fataler, r io.Reader, w io.Writer) *mdb {
+func open(t helpers.Fataler, r io.Reader, w io.Writer) *mdb {
 	m, err := NewMDB(NewNullUart(r, w), "", 9600)
 	if err != nil {
 		t.Fatal(err)

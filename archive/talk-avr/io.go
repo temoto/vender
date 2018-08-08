@@ -2,8 +2,9 @@ package talkavr
 
 import (
 	"errors"
-	"github.com/temoto/vender/i2c"
 	"sync"
+
+	"github.com/temoto/vender/hardware/i2c"
 )
 
 type Slave struct {
