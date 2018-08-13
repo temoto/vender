@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/daemon"
-	"github.com/temoto/senderbender/alive"
+	"github.com/temoto/alive"
 	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/msync"
 

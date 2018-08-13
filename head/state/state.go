@@ -1,4 +1,4 @@
-// Let subsystems register lifecycle callbacks.
+// Package state let subsystems register lifecycle callbacks.
 package state
 
 import (
@@ -6,7 +6,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/temoto/senderbender/alive"
+	"github.com/temoto/alive"
 )
 
 type Callback func(context.Context) error

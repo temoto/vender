@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/temoto/senderbender/alive"
+	"github.com/temoto/alive"
 )
 
 type BillState struct {
