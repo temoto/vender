@@ -88,7 +88,8 @@ func dial(ctx context.Context) (talk.PapaClient, error) {
 
 func onStart(ctx context.Context) error {
 	// TODO alive
-	go netLoop(ctx)
+	// FIXME temp disabled
+	// go netLoop(ctx)
 	return nil
 }
 

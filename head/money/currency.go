@@ -1,13 +1,18 @@
 package money
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"sort"
 )
 
 // Amount is integer counting lowest currency unit, e.g. $1.20 = 120
 type Amount uint16
+
+func (self Amount) Format100I() string                   { return fmt.Sprint(float32(self) / 100) }
+func (self Amount) FormatCtx(ctx context.Context) string { return "TODO" }
 
 // Nominal is value of one coin or bill
 type Nominal Amount

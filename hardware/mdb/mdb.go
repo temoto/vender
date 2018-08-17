@@ -8,9 +8,14 @@ import (
 	"time"
 )
 
-type mdb struct {
-	Debug bool
+type Mdber interface {
+	BreakCustom(keep, sleep int) error
+	Tx(request, response *Packet) error
+	SetDebug(bool)
+}
 
+type mdb struct {
+	debug   bool
 	recvBuf []byte
 	io      Uarter
 	lk      sync.Mutex
@@ -34,8 +39,12 @@ func NewMDB(u Uarter, path string, baud int) (*mdb, error) {
 	return self, err
 }
 
+func (self *mdb) SetDebug(d bool) {
+	self.debug = d
+}
+
 func (self *mdb) BreakCustom(keep, sleep int) (err error) {
-	if self.Debug {
+	if self.debug {
 		log.Printf("debug: mdb.BreakCustom keep=%d sleep=%d", keep, sleep)
 	}
 	err = self.io.Break(time.Duration(keep) * time.Millisecond)
@@ -55,7 +64,7 @@ func (self *mdb) locked_send(b []byte) (err error) {
 		chk += x
 	}
 	b = append(b, chk)
-	if self.Debug {
+	if self.debug {
 		log.Printf("debug: mdb.send  out='%x'", b)
 	}
 
@@ -114,7 +123,7 @@ recvLoop:
 	// 	PacketFromBytes(self.recvBuf).Logf("debug: mdb.recv %s")
 	// }
 	if chkin != chkout {
-		if self.Debug {
+		if self.debug {
 			log.Printf("debug: mdb.recv InvalidChecksum frompacket=%x actual=%x", chkin, chkout)
 		}
 		return InvalidChecksum{Received: chkin, Actual: chkout}
@@ -151,7 +160,7 @@ func (self *mdb) Tx(request, response *Packet) error {
 	}
 	// end critical path
 
-	if self.Debug {
+	if self.debug {
 		acks := ""
 		if response.l > 0 {
 			acks = "\n> (01) 00 (ACK)"

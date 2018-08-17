@@ -21,7 +21,7 @@ func TestTx1(t *testing.T) {
 		r := bytes.NewReader([]byte(recv))
 		w := bytes.NewBuffer(nil)
 		m := open(t, r, w)
-		m.Debug = debug
+		m.SetDebug(debug)
 		out := new(Packet)
 		err := m.Tx(PacketFromString(send), out)
 		if err != nil {

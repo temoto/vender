@@ -1,9 +1,0 @@
-#!/bin/bash
-set -eu
-base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
-set -x
-cd $base/mdb
-go test
-cd $base/mdb-cli
-GOARCH=arm GOOS=linux GOARM=6 go build
-rsync -a ./mdb-cli pi@pipi:/tmp/

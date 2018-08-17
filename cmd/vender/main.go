@@ -2,20 +2,21 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"time"
 
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/temoto/alive"
+	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/msync"
 
 	// invoke package init to register lifecycles
 	_ "github.com/temoto/vender/head/kitchen"
-	_ "github.com/temoto/vender/head/money"
 	_ "github.com/temoto/vender/head/papa"
 	_ "github.com/temoto/vender/head/telemetry"
-	_ "github.com/temoto/vender/head/ui"
 )
 
 // TODO decide
@@ -32,6 +33,9 @@ import (
 // time.Sleep(100 * time.Millisecond)
 
 func main() {
+	flagConfig := flag.String("config", "vender.hcl", "")
+	flag.Parse()
+
 	const logFlagsService = log.Lshortfile
 	const logFlagsInteractive = log.Lshortfile | log.Ltime | log.Lmicroseconds
 	if sdnotify("start") {
@@ -53,11 +57,19 @@ func main() {
 		return nil
 	})
 
-	config := state.MustReadConfigFile(log.Fatal, "vender.hcl")
+	config := state.MustReadConfigFile(log.Fatal, *flagConfig)
 	ctx = context.WithValue(ctx, "config", config)
 	state.DoValidate(ctx)
 	state.DoStart(ctx)
 	sdnotify(daemon.SdNotifyReady)
+
+	for a.IsRunning() {
+		select {
+		case <-a.StopChan():
+		case em := <-money.Events():
+			ui.Logf("money: %f", em.Amount().Format100I())
+		}
+	}
 
 	a.Wait()
 }

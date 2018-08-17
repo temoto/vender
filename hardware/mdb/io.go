@@ -229,7 +229,7 @@ func (fd fdReader) Read(p []byte) (int, error) {
 	return syscall.Read(int(fd), p)
 }
 
-func NewFastUart() *fastUart { return &fastUart{} }
+func NewFastUart() *fastUart { return &fastUart{fd: -1} }
 
 func (self *fastUart) set9(b bool) error { return io_set9(uintptr(self.fd), &self.t2, b) }
 
@@ -251,7 +251,7 @@ func (self *fastUart) Close() error {
 }
 
 func (self *fastUart) Open(path string, baud int) (err error) {
-	if self.fd <= 0 {
+	if self.fd < 0 {
 		if err = self.Close(); err != nil {
 			return err
 		}
