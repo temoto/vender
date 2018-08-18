@@ -8,6 +8,7 @@ import (
 
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/temoto/alive"
+	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/head/ui"
@@ -60,6 +61,20 @@ func main() {
 	config := state.MustReadConfigFile(log.Fatal, *flagConfig)
 	ctx = context.WithValue(ctx, "config", config)
 	state.DoValidate(ctx)
+
+	// TODO read config uarter file/fast
+	// TODO read config uart device path
+	// TODO read config uart baud rate
+	uarter := mdb.NewFileUart()
+	m, err := mdb.NewMDB(uarter, "/dev/ttyAMA0", 9600)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// TODO read config mdb debug
+	m.SetDebug(true)
+	m.BreakCustom(200, 500)
+	ctx = context.WithValue(ctx, "run/mdber", m)
+
 	state.DoStart(ctx)
 	sdnotify(daemon.SdNotifyReady)
 
@@ -67,7 +82,8 @@ func main() {
 		select {
 		case <-a.StopChan():
 		case em := <-money.Events():
-			ui.Logf("money: %f", em.Amount().Format100I())
+			log.Printf("money event: %s", em.String())
+			ui.Logf("money: %s", em.Amount().Format100I())
 		}
 	}
 

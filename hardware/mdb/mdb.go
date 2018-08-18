@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -11,6 +12,7 @@ import (
 type Mdber interface {
 	BreakCustom(keep, sleep int) error
 	Tx(request, response *Packet) error
+	TxDebug(request *Packet, debug bool) (response *Packet)
 	SetDebug(bool)
 }
 
@@ -143,6 +145,10 @@ func (self *mdb) Tx(request, response *Packet) error {
 
 	self.lk.Lock()
 	defer self.lk.Unlock()
+	saveGCPercent := debug.SetGCPercent(-1)
+	defer debug.SetGCPercent(saveGCPercent)
+	// FIXME crutch to avoid slow set9 with drain
+	time.Sleep(10 * time.Millisecond)
 	// TODO
 	// self.f.SetDeadline(time.Now().Add(time.Second))
 	// defer self.f.SetDeadline(time.Time{})
@@ -169,4 +175,17 @@ func (self *mdb) Tx(request, response *Packet) error {
 			request.l, request.Format(), response.l, response.Format(), acks, err)
 	}
 	return err
+}
+
+func (self *mdb) TxDebug(request *Packet, debug bool) *Packet {
+	response := new(Packet)
+	saveDebug := self.debug
+	self.SetDebug(debug)
+	err := self.Tx(request, response)
+	self.SetDebug(saveDebug)
+	if err != nil {
+		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		return nil
+	}
+	return response
 }

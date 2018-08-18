@@ -5,7 +5,7 @@ set -eu
 main() {
 	cd $base
 
-	paths=$(find . -type d ! -path '.' ! -path './.*' ! -path './script*' ! -path './vendor*')
+	paths=$(find . -type d ! -path '.' ! -path '*/.*' ! -path './script*' ! -path './vendor*')
 
 	go get -v github.com/golang/protobuf/protoc-gen-go
 	for d in $paths ; do
@@ -15,6 +15,8 @@ main() {
 	done
 
 	go get -t -v ./...
+	# FIXME stringer doesn't compile on 1.10
+	# go get -v golang.org/x/tools/cmd/stringer
 	go generate ./...
 	go build ./...
 
@@ -30,9 +32,9 @@ main() {
 
 	for d in $paths ; do
 		# skip directories without files
-		if ! ls -FAl "$base/$d/" |egrep -vq '^total|^d.+/$' && continue; then continue ; fi
+		if [[ -z "$(find $base/$d -depth 1 ! -type d ! -path '*/.*')" ]] ; then continue ; fi
 		# skip directories with .go files, already built them
-		if ls "$base/$d"/*.go >/dev/null 2>&1 ; then return ; fi
+		if ls "$base/$d"/*.go >/dev/null 2>&1 ; then continue ; fi
 		echo "no build defined for $d" >&2
 		exit 1
 	done

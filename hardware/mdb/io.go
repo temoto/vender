@@ -21,6 +21,7 @@ const (
 	cNCCS     = 19
 	cTCSBRKP  = 0x5425
 	cTCSETS2  = 0x402c542b
+	cTCSETSW2 = 0x402c542c
 	cTCSETSF2 = 0x402c542d
 )
 
@@ -113,12 +114,19 @@ func io_set9(fd uintptr, t2 *termios2, b bool) error {
 	} else {
 		t2.c_cflag &= ^tcflag_t(syscall.PARODD)
 	}
+	// must use ioctl with drain - cTCSETSW2?
+	// but it makes 9bit switch very slow
 	err := io_tcsets2(fd, t2)
 	return err
 }
 
 func io_tcsets2(fd uintptr, t2 *termios2) error {
 	return ioctl(fd, uintptr(cTCSETS2), uintptr(unsafe.Pointer(t2)))
+}
+
+// flush output
+func io_tcsetsw2(fd uintptr, t2 *termios2) error {
+	return ioctl(fd, uintptr(cTCSETSW2), uintptr(unsafe.Pointer(t2)))
 }
 
 // flush input and output

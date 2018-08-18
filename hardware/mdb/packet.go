@@ -99,3 +99,22 @@ func (self *Packet) Format() string {
 	line := strings.Join(ss, " ")
 	return line
 }
+
+func (self *Packet) Wire(ffDance bool) []byte {
+	chk := byte(0)
+	for _, b := range self.b[:self.l] {
+		chk += b
+	}
+	l := self.l + 1
+	if ffDance {
+		l += 2
+	}
+	w := make([]byte, l)
+	copy(w, self.b[:self.l])
+	if ffDance {
+		w[l-3] = 0xff
+		w[l-2] = 0x00
+	}
+	w[l-1] = chk
+	return w
+}

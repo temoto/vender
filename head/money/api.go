@@ -7,19 +7,21 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/temoto/vender/currency"
 )
 
 type Event struct {
 	created time.Time
 	name    string
-	amount  Amount
+	amount  currency.Amount
 	err     error
 }
 
-func (e *Event) Time() time.Time { return e.created }
-func (e *Event) Name() string    { return e.name }
-func (e *Event) Amount() Amount  { return e.amount }
-func (e *Event) Err() error      { return e.err }
+func (e *Event) Time() time.Time         { return e.created }
+func (e *Event) Name() string            { return e.name }
+func (e *Event) Amount() currency.Amount { return e.amount }
+func (e *Event) Err() error              { return e.err }
 func (e *Event) Error() string {
 	if e.err == nil {
 		return ""
@@ -38,8 +40,11 @@ const (
 
 var (
 	apiLock      sync.Mutex
-	globalCredit Amount
+	globalCredit currency.Amount
 	events       chan Event = make(chan Event, 2)
+
+	globalBs BillState
+	globalCs ChangerState
 )
 
 var (
@@ -50,17 +55,17 @@ func Events() <-chan Event {
 	return events
 }
 
-func Credit(ctx context.Context) Amount {
+func Credit(ctx context.Context) currency.Amount {
 	apiLock.Lock()
 	defer apiLock.Unlock()
 	result := globalCredit
 	return result
 }
 
-func WithdrawPrepare(ctx context.Context, amount Amount) error {
+func WithdrawPrepare(ctx context.Context, amount currency.Amount) error {
 	apiLock.Lock()
 	defer apiLock.Unlock()
-	available := Amount(0)
+	available := currency.Amount(0)
 	// available += accumulated
 	// available += bill escrow ! configurable
 	if available < amount {
@@ -71,7 +76,7 @@ func WithdrawPrepare(ctx context.Context, amount Amount) error {
 }
 
 // Store spending to durable memory, no user initiated return after this point.
-func WithdrawCommit(ctx context.Context, amount Amount) error {
+func WithdrawCommit(ctx context.Context, amount currency.Amount) error {
 	apiLock.Lock()
 	defer apiLock.Unlock()
 	// TODO tx(ctx).log("money-commit", amount)

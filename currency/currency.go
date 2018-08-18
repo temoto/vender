@@ -1,4 +1,4 @@
-package money
+package currency
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 )
 
 // Amount is integer counting lowest currency unit, e.g. $1.20 = 120
-type Amount uint16
+type Amount uint32
 
 func (self Amount) Format100I() string                   { return fmt.Sprint(float32(self) / 100) }
 func (self Amount) FormatCtx(ctx context.Context) string { return "TODO" }

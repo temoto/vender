@@ -9,4 +9,4 @@ set -x
 go test -v $gopkg ./head/...
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
 rsync -a $base/$target $base/vender.hcl $remote:
-ssh -t $remote ./vender -config ./vender.hcl
+ssh -t $remote time sudo -n nice -n-5 env GODEBUG=gctrace=1 ./vender -config ./vender.hcl
