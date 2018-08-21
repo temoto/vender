@@ -15,8 +15,7 @@ main() {
 	done
 
 	go get -t -v ./...
-	# FIXME stringer doesn't compile on 1.10
-	# go get -v golang.org/x/tools/cmd/stringer
+	go get -v golang.org/x/tools/cmd/stringer
 	go generate ./...
 	go build ./...
 

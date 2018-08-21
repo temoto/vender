@@ -15,7 +15,7 @@ type PollResult struct {
 	Ready bool
 }
 
-// FIXME //go:generate stringer -type=PollItemStatus -type=PollItem
+//go:generate stringer -type=PollItemStatus
 type PollItemStatus byte
 
 const (
@@ -38,6 +38,6 @@ type PollItem struct {
 }
 
 func (self *PollItem) String() string {
-	return fmt.Sprintf("<%#v n=%s atmps=%d err=%s",
-		self.Status, currency.Amount(self.Nominal).Format100I(), self.Attempts, self.Error)
+	return fmt.Sprintf("%s n=%s atmps=%d err=%s",
+		self.Status.String(), currency.Amount(self.Nominal).Format100I(), self.Attempts, self.Error)
 }
