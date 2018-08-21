@@ -3,13 +3,15 @@ package money
 import (
 	"context"
 
+	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/state"
 )
 
 func init() {
 	state.RegisterStart(func(ctx context.Context) error {
-		globalBs.Init(ctx)
-		globalCs.Init(ctx)
+		m := mdb.ContextValueMdber(ctx, "run/mdber")
+		globalBs.Init(ctx, m)
+		globalCs.Init(ctx, m)
 		return nil
 	})
 

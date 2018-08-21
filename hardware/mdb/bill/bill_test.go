@@ -58,7 +58,7 @@ func checkPoll(t *testing.T, input string, expected PollResult) {
 		t.Fatal(err)
 	}
 	bv := &BillValidator{mdb: m}
-	bv.Init(context.WithValue(context.Background(), "run/mdber", m))
+	bv.Init(context.Background(), m)
 	bv.billTypeCredit[0] = currency.Nominal(5)
 	bv.billTypeCredit[1] = currency.Nominal(10)
 	bv.billTypeCredit[2] = currency.Nominal(20)

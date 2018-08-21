@@ -17,12 +17,12 @@ type ChangerState struct {
 	hw    coin.CoinAcceptor
 }
 
-func (self *ChangerState) Init(ctx context.Context) error {
+func (self *ChangerState) Init(ctx context.Context, m mdb.Mdber) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
 
 	log.Printf("cs init")
-	if err := self.hw.Init(ctx); err != nil {
+	if err := self.hw.Init(ctx, m); err != nil {
 		return err
 	}
 

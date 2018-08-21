@@ -24,11 +24,11 @@ var (
 	packetDispense   = mdb.PacketFromHex("0d")
 )
 
-func (self *CoinAcceptor) Init(ctx context.Context) error {
+func (self *CoinAcceptor) Init(ctx context.Context, m mdb.Mdber) error {
 	// TODO read config
 	self.byteOrder = binary.BigEndian
 	// self.billTypeCredit = make([]currency.Nominal, billTypeCount)
-	self.mdb = mdb.ContextValueMdber(ctx, "run/mdber")
+	self.mdb = m
 	return nil
 }
 

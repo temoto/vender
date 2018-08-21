@@ -46,11 +46,11 @@ var (
 	packetEscrowReject = mdb.PacketFromHex("3500")
 )
 
-func (self *BillValidator) Init(ctx context.Context) error {
+func (self *BillValidator) Init(ctx context.Context, m mdb.Mdber) error {
 	// TODO read config
 	self.byteOrder = binary.BigEndian
 	self.billTypeCredit = make([]currency.Nominal, billTypeCount)
-	self.mdb = mdb.ContextValueMdber(ctx, "run/mdber")
+	self.mdb = m
 	return nil
 }
 
