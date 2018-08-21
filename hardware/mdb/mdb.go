@@ -1,6 +1,7 @@
 package mdb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -14,6 +15,18 @@ type Mdber interface {
 	Tx(request, response *Packet) error
 	TxDebug(request *Packet, debug bool) (response *Packet)
 	SetDebug(bool)
+}
+
+// Context[key] -> Mdber or panic
+func ContextValueMdber(ctx context.Context, key interface{}) Mdber {
+	v := ctx.Value(key)
+	if v == nil {
+		panic(fmt.Errorf("context['%v'] is nil", key))
+	}
+	if cfg, ok := v.(Mdber); ok {
+		return cfg
+	}
+	panic(fmt.Errorf("context['%v'] expected type Mdber", key))
 }
 
 type mdb struct {

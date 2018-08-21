@@ -28,7 +28,7 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	// TODO read config
 	self.byteOrder = binary.BigEndian
 	// self.billTypeCredit = make([]currency.Nominal, billTypeCount)
-	self.mdb = ctx.Value("run/mdber").(mdb.Mdber)
+	self.mdb = mdb.ContextValueMdber(ctx, "run/mdber")
 	return nil
 }
 

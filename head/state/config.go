@@ -19,6 +19,7 @@ type Config struct {
 	}
 }
 
+// Context["config"] -> *Config or panic
 func GetConfig(ctx context.Context) *Config {
 	v := ctx.Value("config")
 	if v == nil {
