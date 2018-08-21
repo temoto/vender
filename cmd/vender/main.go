@@ -62,16 +62,11 @@ func main() {
 	ctx = context.WithValue(ctx, "config", config)
 	state.DoValidate(ctx)
 
-	// TODO read config uarter file/fast
-	// TODO read config uart device path
-	// TODO read config uart baud rate
-	uarter := mdb.NewFileUart()
-	m, err := mdb.NewMDB(uarter, "/dev/ttyAMA0", 9600)
+	m, err := mdb.NewMDB(config.Mdb.Uarter, config.Mdb.UartDevice, config.Mdb.UartBaudrate)
 	if err != nil {
 		log.Fatal(err)
 	}
-	// TODO read config mdb debug
-	m.SetDebug(true)
+	m.SetDebug(config.Mdb.Debug)
 	m.BreakCustom(200, 500)
 	ctx = context.WithValue(ctx, "run/mdber", m)
 
