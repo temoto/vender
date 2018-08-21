@@ -7,12 +7,23 @@ import (
 	"time"
 
 	"github.com/temoto/alive"
+	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
+)
+
+const (
+	coinTypeCount = 16
 )
 
 type CoinAcceptor struct {
 	mdb       mdb.Mdber
 	byteOrder binary.ByteOrder
+
+	// Indicates the value of the bill types 0 to 15.
+	// These are final values including all scaling factors.
+	coinTypeCredit []currency.Nominal
+
+	internalScalingFactor int
 }
 
 var (
@@ -27,7 +38,7 @@ var (
 func (self *CoinAcceptor) Init(ctx context.Context, m mdb.Mdber) error {
 	// TODO read config
 	self.byteOrder = binary.BigEndian
-	// self.billTypeCredit = make([]currency.Nominal, billTypeCount)
+	self.coinTypeCredit = make([]currency.Nominal, coinTypeCount)
 	self.mdb = m
 	return nil
 }

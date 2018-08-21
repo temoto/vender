@@ -55,12 +55,11 @@ func (self *BillValidator) Init(ctx context.Context, m mdb.Mdber) error {
 }
 
 func (self *BillValidator) Loop(ctx context.Context, a *alive.Alive, ch chan<- PollResult) {
-	self.mdb.TxDebug(packetReset, false)
 	self.InitSequence()
 
 	stopch := a.StopChan()
 	for a.IsRunning() {
-		pr := self.Poll()
+		pr := self.CommandPoll()
 		ch <- pr
 		select {
 		case <-stopch:
@@ -70,22 +69,13 @@ func (self *BillValidator) Loop(ctx context.Context, a *alive.Alive, ch chan<- P
 	}
 }
 
-func (self *BillValidator) billTypeNominal(b byte) currency.Nominal {
-	if b >= billTypeCount {
-		log.Printf("invalid bill type: %d", b)
-		return 0
-	}
-	return self.billTypeCredit[b]
-}
-
 func (self *BillValidator) InitSequence() {
-	self.Poll()
-	self.Setup()
-	self.mdb.TxDebug(mdb.PacketFromHex("3700"), true)       // 3700 EXPANSION IDENTIFICATION
-	self.mdb.TxDebug(mdb.PacketFromHex("36"), true)         // 36 STACKER
-	self.mdb.TxDebug(mdb.PacketFromHex("34ffffffff"), true) // 34 BILL TYPE
+	self.CommandSetup()
+	self.mdb.TxDebug(mdb.PacketFromHex("3700"), true) // 3700 EXPANSION IDENTIFICATION
+	self.mdb.TxDebug(mdb.PacketFromHex("36"), true)   // 36 STACKER
+	self.CommandBillType()
 	for {
-		pr := self.Poll()
+		pr := self.CommandPoll()
 		if pr.Ready {
 			return
 		}
@@ -93,7 +83,19 @@ func (self *BillValidator) InitSequence() {
 	}
 }
 
-func (self *BillValidator) Setup() error {
+func (self *BillValidator) CommandReset() {
+	self.mdb.TxDebug(packetReset, false)
+}
+
+func (self *BillValidator) CommandBillType() bool {
+	// TODO configure types
+	request := mdb.PacketFromBytes([]byte{0x34, 0xff, 0xff, 0xff, 0xff})
+	err := self.mdb.Tx(request, nil)
+	log.Printf("CommandBillType request=%s err=%s", request.Format(), err)
+	return err == nil
+}
+
+func (self *BillValidator) CommandSetup() error {
 	response := self.mdb.TxDebug(packetSetup, false)
 	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
 	bs := response.Bytes()
@@ -116,6 +118,36 @@ func (self *BillValidator) Setup() error {
 	log.Printf("Escrow/No Escrow: %t", self.escrowCap)
 	log.Printf("Bill Type Credit: %x %#v", bs[11:27], self.billTypeCredit)
 	return nil
+}
+
+func (self *BillValidator) CommandPoll() PollResult {
+	now := time.Now()
+	response := new(mdb.Packet)
+	err := self.mdb.Tx(packetPoll, response)
+	result := PollResult{Time: now, Delay: delayNext}
+	if err != nil {
+		result.Error = err
+		result.Delay = delayErr
+		return result
+	}
+	if response.Len() == 0 {
+		result.Ready = true
+		return result
+	}
+	result.Items = make([]PollItem, response.Len())
+	// log.Printf("poll response=%s", response.Format())
+	for i, b := range response.Bytes() {
+		result.Items[i] = self.parsePollItem(b)
+	}
+	return result
+}
+
+func (self *BillValidator) billTypeNominal(b byte) currency.Nominal {
+	if b >= billTypeCount {
+		log.Printf("invalid bill type: %d", b)
+		return 0
+	}
+	return self.billTypeCredit[b]
 }
 
 func (self *BillValidator) parsePollItem(b byte) PollItem {
@@ -164,25 +196,4 @@ func (self *BillValidator) parsePollItem(b byte) PollItem {
 	err := fmt.Errorf("parsePollItem unknown=%x", b)
 	log.Print(err)
 	return PollItem{Status: StatusFatal, Error: err}
-}
-
-func (self *BillValidator) Poll() PollResult {
-	now := time.Now()
-	response := self.mdb.TxDebug(packetPoll, false)
-	result := PollResult{Time: now, Delay: delayNext}
-	if response == nil {
-		result.Error = fmt.Errorf("TODO use Tx(), if err !=nil result.Error = err")
-		result.Delay = delayErr
-		return result
-	}
-	if response.Len() == 0 {
-		result.Ready = true
-		return result
-	}
-	result.Items = make([]PollItem, response.Len())
-	// log.Printf("poll response=%s", response.Format())
-	for i, b := range response.Bytes() {
-		result.Items[i] = self.parsePollItem(b)
-	}
-	return result
 }

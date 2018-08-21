@@ -62,7 +62,7 @@ func checkPoll(t *testing.T, input string, expected PollResult) {
 	bv.billTypeCredit[0] = currency.Nominal(5)
 	bv.billTypeCredit[1] = currency.Nominal(10)
 	bv.billTypeCredit[2] = currency.Nominal(20)
-	actual := bv.Poll()
+	actual := bv.CommandPoll()
 	writeExpect := mdb.PacketFromHex("33").Wire(false)
 	if len(input) > 0 {
 		writeExpect = append(writeExpect, 0)

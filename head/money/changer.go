@@ -7,14 +7,15 @@ import (
 
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
+	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/mdb/coin"
 )
 
 type ChangerState struct {
 	lk    sync.Mutex
 	alive *alive.Alive
-	bank  currency.NominalGroup
-	hw    coin.CoinAcceptor
+	// TODO bank  currency.NominalGroup
+	hw coin.CoinAcceptor
 }
 
 func (self *ChangerState) Init(ctx context.Context, m mdb.Mdber) error {
