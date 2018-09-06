@@ -22,9 +22,7 @@ const (
 )
 
 type BillValidator struct {
-	bank   currency.NominalGroup
-	escrow currency.NominalGroup
-	mdb    mdb.Mdber
+	mdb mdb.Mdber
 
 	byteOrder binary.ByteOrder
 
@@ -51,12 +49,12 @@ func (self *BillValidator) Init(ctx context.Context, m mdb.Mdber) error {
 	self.byteOrder = binary.BigEndian
 	self.billTypeCredit = make([]currency.Nominal, billTypeCount)
 	self.mdb = m
+	// TODO maybe execute CommandReset?
+	self.InitSequence()
 	return nil
 }
 
-func (self *BillValidator) Loop(ctx context.Context, a *alive.Alive, ch chan<- PollResult) {
-	self.InitSequence()
-
+func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- PollResult) {
 	stopch := a.StopChan()
 	for a.IsRunning() {
 		pr := self.CommandPoll()
@@ -74,13 +72,6 @@ func (self *BillValidator) InitSequence() {
 	self.mdb.TxDebug(mdb.PacketFromHex("3700"), true) // 3700 EXPANSION IDENTIFICATION
 	self.mdb.TxDebug(mdb.PacketFromHex("36"), true)   // 36 STACKER
 	self.CommandBillType()
-	for {
-		pr := self.CommandPoll()
-		if pr.Ready {
-			return
-		}
-		time.Sleep(pr.Delay)
-	}
 }
 
 func (self *BillValidator) CommandReset() {
@@ -90,13 +81,18 @@ func (self *BillValidator) CommandReset() {
 func (self *BillValidator) CommandBillType() bool {
 	// TODO configure types
 	request := mdb.PacketFromBytes([]byte{0x34, 0xff, 0xff, 0xff, 0xff})
-	err := self.mdb.Tx(request, nil)
+	err := self.mdb.Tx(request, new(mdb.Packet))
 	log.Printf("CommandBillType request=%s err=%s", request.Format(), err)
 	return err == nil
 }
 
 func (self *BillValidator) CommandSetup() error {
-	response := self.mdb.TxDebug(packetSetup, false)
+	response := new(mdb.Packet)
+	err := self.mdb.Tx(packetSetup, response)
+	if err != nil {
+		log.Printf("mdb request=%s err: %s", packetSetup.Format(), err)
+		return err
+	}
 	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
 	bs := response.Bytes()
 	if len(bs) < 27 {
@@ -131,7 +127,6 @@ func (self *BillValidator) CommandPoll() PollResult {
 		return result
 	}
 	if response.Len() == 0 {
-		result.Ready = true
 		return result
 	}
 	result.Items = make([]PollItem, response.Len())

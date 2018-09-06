@@ -148,6 +148,9 @@ recvLoop:
 }
 
 func (self *mdb) Tx(request, response *Packet) error {
+	if request == nil || response == nil {
+		panic("mdb.Tx() both request and response must be not nil")
+	}
 	if response.readonly {
 		return ErrPacketReadonly
 	}

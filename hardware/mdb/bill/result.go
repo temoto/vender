@@ -12,7 +12,10 @@ type PollResult struct {
 	Error error
 	Delay time.Duration
 	Items []PollItem
-	Ready bool
+}
+
+func (self *PollResult) Ready() bool {
+	return self.Error == nil && len(self.Items) == 0
 }
 
 //go:generate stringer -type=PollItemStatus
@@ -38,6 +41,6 @@ type PollItem struct {
 }
 
 func (self *PollItem) String() string {
-	return fmt.Sprintf("%s n=%s atmps=%d err=%s",
+	return fmt.Sprintf("%s n=%s atmps=%d err=%v",
 		self.Status.String(), currency.Amount(self.Nominal).Format100I(), self.Attempts, self.Error)
 }

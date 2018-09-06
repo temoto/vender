@@ -1,7 +1,7 @@
 mdb {
-  debug            = true
-  uart_driver      = "file"
-  uart_device_path = "/dev/ttyAMA0"
+  debug       = true
+  uart_driver = "file"
+  uart_device = "/dev/ttyAMA0"
 }
 
 papa {

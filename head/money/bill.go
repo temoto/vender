@@ -28,19 +28,23 @@ func (self *BillState) Init(ctx context.Context, m mdb.Mdber) error {
 	defer self.lk.Unlock()
 
 	log.Printf("bs init")
-	if err := self.hw.Init(ctx, m); err != nil {
-		return err
-	}
-
 	self.alive = alive.NewAlive()
 	self.alive.Add(1)
 	pch := make(chan bill.PollResult, 2)
-	go self.hw.Loop(ctx, self.alive, pch)
-	go self.PollLoop(pch)
+	if err := self.hw.Init(ctx, m); err != nil {
+		return err
+	}
+	go self.hw.Run(ctx, self.alive, pch)
+	go self.pollResultLoop(pch)
 	return nil
 }
 
-func (self *BillState) PollLoop(pch <-chan bill.PollResult) {
+func (self *BillState) Stop(ctx context.Context) {
+	self.alive.Stop()
+	self.alive.Wait()
+}
+
+func (self *BillState) pollResultLoop(pch <-chan bill.PollResult) {
 	for pr := range pch {
 		for _, pi := range pr.Items {
 			switch pi.Status {
@@ -67,9 +71,4 @@ func (self *BillState) PollLoop(pch <-chan bill.PollResult) {
 			}
 		}
 	}
-}
-
-func (self *BillState) Stop(ctx context.Context) {
-	self.alive.Stop()
-	self.alive.Wait()
 }

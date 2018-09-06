@@ -12,14 +12,11 @@ import (
 
 // TODO generate this code
 func (a *PollResult) testEqual(t *testing.T, b *PollResult) {
-	if a.Ready != b.Ready {
-		t.Errorf("PoolResult.Ready a=%t b=%t", a.Ready, b.Ready)
-	}
 	if a.Delay != b.Delay {
 		t.Errorf("PoolResult.Delay a=%v b=%v", a.Delay, b.Delay)
 	}
 	if a.Error != b.Error {
-		t.Errorf("PoolResult.Error a=%s b=%s", a.Error, b.Error)
+		t.Errorf("PoolResult.Error a=%v b=%v", a.Error, b.Error)
 	}
 	if !a.Time.IsZero() && !b.Time.IsZero() && !a.Time.Equal(b.Time) {
 		t.Errorf("PoolResult.Time a=%v b=%v", a.Time, b.Time)
@@ -37,28 +34,32 @@ func (a *PollResult) testEqual(t *testing.T, b *PollResult) {
 		ias, ibs := "-", "-"
 		if i < len(a.Items) {
 			ia = &a.Items[i]
-			ias = fmt.Sprintf("%#v", ia)
+			ias = fmt.Sprintf("%s", ia)
 		}
 		if i < len(b.Items) {
 			ib = &b.Items[i]
-			ibs = fmt.Sprintf("%#v", ib)
+			ibs = fmt.Sprintf("%s", ib)
 		}
-		if *ia != *ib {
+		switch {
+		case ia == nil && ib == nil: // OK
+		case ia != nil && ib != nil && *ia == *ib: // OK
+		case ia != ib: // one side nil
+			fallthrough
+		case ia != nil && ib != nil && *ia != *ib: // both not nil, different values
 			t.Errorf("PoolResult.Items[%d] a=%s b=%s", i, ias, ibs)
+		default:
+			t.Fatalf("Code error, invalid condition check: PoolResult.Items[%d] a=%s b=%s", i, ias, ibs)
 		}
 	}
 }
 
 func checkPoll(t *testing.T, input string, expected PollResult) {
 	inp := mdb.PacketFromHex(input)
-	r := bytes.NewReader(inp.Wire(true))
-	w := bytes.NewBuffer(nil)
-	m, err := mdb.NewMDB(mdb.NewNullUart(r, w), "", 9600)
-	if err != nil {
-		t.Fatal(err)
-	}
+	m, mockRead, w := mdb.NewTestMDB(t)
 	bv := &BillValidator{mdb: m}
 	bv.Init(context.Background(), m)
+	w.Reset()
+	mockRead(inp.Wire(true))
 	bv.billTypeCredit[0] = currency.Nominal(5)
 	bv.billTypeCredit[1] = currency.Nominal(10)
 	bv.billTypeCredit[2] = currency.Nominal(20)
@@ -68,7 +69,7 @@ func checkPoll(t *testing.T, input string, expected PollResult) {
 		writeExpect = append(writeExpect, 0)
 	}
 	if !bytes.Equal(w.Bytes(), writeExpect) {
-		t.Fatalf("Poll() must write packet, found=%x expected=%x", w.Bytes(), writeExpect)
+		t.Fatalf("CommandPoll() must send packet, found=%x expected=%x", w.Bytes(), writeExpect)
 	}
 	actual.testEqual(t, &expected)
 }
@@ -81,9 +82,7 @@ func TestBillPoll(t *testing.T) {
 		expect PollResult
 	}
 	cases := []Case{
-		Case{"empty", "", PollResult{
-			Ready: true, Delay: delayNext},
-		},
+		Case{"empty", "", PollResult{Delay: delayNext}},
 		Case{"disabled", "09", PollResult{
 			Delay: delayNext,
 			Items: []PollItem{PollItem{Status: StatusDisabled}},
