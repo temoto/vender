@@ -25,21 +25,23 @@ const (
 	StatusInfo PollItemStatus = iota
 	StatusError
 	StatusFatal
+	StatusBusy
 	StatusDispensed
 	StatusDeposited
 	StatusEscrowRequest
 	StatusWasReset
 	StatusRejected
+	StatusSlugs
 )
 
 type PollItem struct {
-	Status   PollItemStatus
-	Error    error
-	Nominal  currency.Nominal
-	Attempts uint8
+	Status  PollItemStatus
+	Error   error
+	Nominal currency.Nominal
+	Count   uint8
 }
 
 func (self *PollItem) String() string {
-	return fmt.Sprintf("%s n=%s atmps=%d err=%v",
-		self.Status.String(), currency.Amount(self.Nominal).Format100I(), self.Attempts, self.Error)
+	return fmt.Sprintf("%s n=%s count=%d err=%v",
+		self.Status.String(), currency.Amount(self.Nominal).Format100I(), self.Count, self.Error)
 }

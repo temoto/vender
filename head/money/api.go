@@ -11,6 +11,10 @@ import (
 	"github.com/temoto/vender/currency"
 )
 
+const (
+	EventCredit = "credit"
+)
+
 type Event struct {
 	created time.Time
 	name    string

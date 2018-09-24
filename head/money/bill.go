@@ -27,7 +27,7 @@ func (self *BillState) Init(ctx context.Context, m mdb.Mdber) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
 
-	log.Printf("bs init")
+	log.Printf("head/money/bill init")
 	self.alive = alive.NewAlive()
 	self.alive.Add(1)
 	pch := make(chan bill.PollResult, 2)
@@ -46,6 +46,9 @@ func (self *BillState) Stop(ctx context.Context) {
 
 func (self *BillState) pollResultLoop(pch <-chan bill.PollResult) {
 	for pr := range pch {
+		// translate PollResult Status items into actions
+		doRestartTransaction := false
+		doRestartSubsystem := false
 		for _, pi := range pr.Items {
 			switch pi.Status {
 			case bill.StatusInfo:
@@ -54,21 +57,27 @@ func (self *BillState) pollResultLoop(pch <-chan bill.PollResult) {
 			case bill.StatusError:
 				log.Printf("bill error: %s", pi.Error)
 				// TODO telemetry
-				// TODO restart transaction
+				doRestartTransaction = true
 			case bill.StatusFatal:
 				log.Printf("bill error: %s", pi.Error)
 				// TODO telemetry
-				// TODO restart transaction
-				// TODO restart money subsystem
+				doRestartTransaction = true
+				doRestartSubsystem = true
 			case bill.StatusRejected, bill.StatusBusy, bill.StatusDisabled:
 				// TODO telemetry
 			case bill.StatusEscrow:
 				// TODO self.hw.EscrowAccept / Reject
 			case bill.StatusCredit:
-				events <- Event{created: pr.Time, name: "credit", amount: currency.Amount(pi.Nominal)}
+				events <- Event{created: pr.Time, name: EventCredit, amount: currency.Amount(pi.Nominal)}
 			case bill.StatusWasReset:
 				self.hw.InitSequence()
 			}
+		}
+		if doRestartTransaction {
+			// TODO
+		}
+		if doRestartSubsystem {
+			self.hw.CommandReset()
 		}
 	}
 }

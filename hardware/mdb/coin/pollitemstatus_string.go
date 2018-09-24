@@ -4,9 +4,9 @@ package coin
 
 import "strconv"
 
-const _PollItemStatus_name = "StatusInfoStatusErrorStatusFatalStatusDispensedStatusDepositedStatusEscrowRequestStatusWasResetStatusRejected"
+const _PollItemStatus_name = "StatusInfoStatusErrorStatusFatalStatusBusyStatusDispensedStatusDepositedStatusEscrowRequestStatusWasResetStatusRejectedStatusSlugs"
 
-var _PollItemStatus_index = [...]uint8{0, 10, 21, 32, 47, 62, 81, 95, 109}
+var _PollItemStatus_index = [...]uint8{0, 10, 21, 32, 42, 57, 72, 91, 105, 119, 130}
 
 func (i PollItemStatus) String() string {
 	if i >= PollItemStatus(len(_PollItemStatus_index)-1) {
