@@ -10,15 +10,15 @@ import (
 func init() {
 	state.RegisterStart(func(ctx context.Context) error {
 		m := mdb.ContextValueMdber(ctx, "run/mdber")
-		globalBs.Init(ctx, m)
-		globalCs.Init(ctx, m)
+		//globalMoney.bs.Init(ctx, m, globalMoney.events)
+		Global.cs.Init(ctx, m, Global.events)
 		return nil
 	})
 
 	state.RegisterStop(func(ctx context.Context) error {
 		Abort(ctx)
-		globalBs.Stop(ctx)
-		globalCs.Stop(ctx)
+		Global.bs.Stop(ctx)
+		Global.cs.Stop(ctx)
 		// TODO return escrow
 		return nil
 	})

@@ -4,55 +4,55 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/hardware/mdb/bill"
+	"github.com/temoto/vender/hardware/mdb/coin"
 	"github.com/temoto/vender/hardware/money"
 )
 
-const (
-	InternalScalingFactor = 100
-)
-
-type BillState struct {
+type CoinState struct {
 	lk    sync.Mutex
 	alive *alive.Alive
-	// TODO escrow currency.NominalGroup
-	hw bill.BillValidator
+	hw    coin.CoinAcceptor
 }
 
-func (self *BillState) Init(ctx context.Context, m mdb.Mdber, events chan<- Event) error {
+func (self *CoinState) Init(ctx context.Context, mdber mdb.Mdber, events chan<- Event) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
 
-	log.Printf("head/money/bill init")
+	log.Printf("head/money/coin init")
 	self.alive = alive.NewAlive()
 	self.alive.Add(1)
 	pch := make(chan money.PollResult, 2)
-	if err := self.hw.Init(ctx, m); err != nil {
+	if err := self.hw.Init(ctx, mdber); err != nil {
 		return err
 	}
+	time.Sleep(coin.DelayNext)
 	go self.hw.Run(ctx, self.alive, pch)
 	go self.pollResultLoop(&Global, pch)
 	return nil
 }
 
-func (self *BillState) Stop(ctx context.Context) {
+func (self *CoinState) Stop(ctx context.Context) {
 	self.alive.Stop()
 	self.alive.Wait()
 }
 
-func (self *BillState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResult) {
-	const logPrefix = "head/money/bill"
+func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResult) {
+	const logPrefix = "head/money/coin"
 	h := func(m *MoneySystem, pr *money.PollResult, pi money.PollItem, hw Hardwarer) bool {
 		switch pi.Status {
-		case money.StatusRejected, money.StatusBusy, money.StatusDisabled:
+		case money.StatusRejected:
 			// TODO telemetry
-		case money.StatusEscrow:
-			// TODO self.hw.EscrowAccept / Reject
 		case money.StatusWasReset:
-			self.hw.InitSequence()
+			log.Printf("coin was reset")
+			// TODO telemetry
+			// self.hw.InitSequence()
+		case money.StatusCredit:
+			m.Events() <- Event{created: pr.Time, name: EventCredit, amount: pi.Amount()}
+			// self.hw.CommandDispense(currency.Nominal(100), 2)
 		default:
 			return false
 		}
@@ -63,6 +63,7 @@ func (self *BillState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 	}
 	onRestart := func(m *MoneySystem, hw Hardwarer) {
 		self.hw.CommandReset()
+		self.hw.InitSequence()
 	}
 	pollResultLoop(m, pch, h, onRefund, onRestart, &self.hw, logPrefix)
 }

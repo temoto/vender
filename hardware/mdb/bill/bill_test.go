@@ -3,57 +3,14 @@ package bill
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/hardware/money"
 )
 
-// TODO generate this code
-func (a *PollResult) testEqual(t *testing.T, b *PollResult) {
-	if a.Delay != b.Delay {
-		t.Errorf("PoolResult.Delay a=%v b=%v", a.Delay, b.Delay)
-	}
-	if a.Error != b.Error {
-		t.Errorf("PoolResult.Error a=%v b=%v", a.Error, b.Error)
-	}
-	if !a.Time.IsZero() && !b.Time.IsZero() && !a.Time.Equal(b.Time) {
-		t.Errorf("PoolResult.Time a=%v b=%v", a.Time, b.Time)
-	}
-	longest := len(a.Items)
-	if len(b.Items) > longest {
-		longest = len(b.Items)
-	}
-	if len(a.Items) != len(b.Items) {
-		t.Errorf("PoolResult.Items len a=%d b=%d", len(a.Items), len(b.Items))
-	}
-	for i := 0; i < longest; i++ {
-		var ia *PollItem
-		var ib *PollItem
-		ias, ibs := "-", "-"
-		if i < len(a.Items) {
-			ia = &a.Items[i]
-			ias = fmt.Sprintf("%s", ia)
-		}
-		if i < len(b.Items) {
-			ib = &b.Items[i]
-			ibs = fmt.Sprintf("%s", ib)
-		}
-		switch {
-		case ia == nil && ib == nil: // OK
-		case ia != nil && ib != nil && *ia == *ib: // OK
-		case ia != ib: // one side nil
-			fallthrough
-		case ia != nil && ib != nil && *ia != *ib: // both not nil, different values
-			t.Errorf("PoolResult.Items[%d] a=%s b=%s", i, ias, ibs)
-		default:
-			t.Fatalf("Code error, invalid condition check: PoolResult.Items[%d] a=%s b=%s", i, ias, ibs)
-		}
-	}
-}
-
-func checkPoll(t *testing.T, input string, expected PollResult) {
+func checkPoll(t *testing.T, input string, expected money.PollResult) {
 	inp := mdb.PacketFromHex(input)
 	m, mockRead, w := mdb.NewTestMDB(t)
 	bv := &BillValidator{mdb: m}
@@ -71,7 +28,7 @@ func checkPoll(t *testing.T, input string, expected PollResult) {
 	if !bytes.Equal(w.Bytes(), writeExpect) {
 		t.Fatalf("CommandPoll() must send packet, found=%x expected=%x", w.Bytes(), writeExpect)
 	}
-	actual.testEqual(t, &expected)
+	actual.TestEqual(t, &expected)
 }
 
 func TestBillPoll(t *testing.T) {
@@ -79,26 +36,26 @@ func TestBillPoll(t *testing.T) {
 	type Case struct {
 		name   string
 		input  string
-		expect PollResult
+		expect money.PollResult
 	}
 	cases := []Case{
-		Case{"empty", "", PollResult{Delay: delayNext}},
-		Case{"disabled", "09", PollResult{
-			Delay: delayNext,
-			Items: []PollItem{PollItem{Status: StatusDisabled}},
+		Case{"empty", "", money.PollResult{Delay: DelayNext}},
+		Case{"disabled", "09", money.PollResult{
+			Delay: DelayNext,
+			Items: []money.PollItem{money.PollItem{Status: money.StatusDisabled}},
 		}},
-		Case{"reset,disabled", "0609", PollResult{
-			Delay: delayNext,
-			Items: []PollItem{
-				PollItem{Status: StatusWasReset},
-				PollItem{Status: StatusDisabled},
+		Case{"reset,disabled", "0609", money.PollResult{
+			Delay: DelayNext,
+			Items: []money.PollItem{
+				money.PollItem{Status: money.StatusWasReset},
+				money.PollItem{Status: money.StatusDisabled},
 			},
 		}},
-		Case{"escrow", "9209", PollResult{
-			Delay: delayNext,
-			Items: []PollItem{
-				PollItem{Status: StatusEscrow, Nominal: 20},
-				PollItem{Status: StatusDisabled},
+		Case{"escrow", "9209", money.PollResult{
+			Delay: DelayNext,
+			Items: []money.PollItem{
+				money.PollItem{Status: money.StatusEscrow, DataNominal: 20},
+				money.PollItem{Status: money.StatusDisabled},
 			},
 		}},
 	}

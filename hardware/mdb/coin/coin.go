@@ -10,19 +10,30 @@ import (
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/hardware/money"
 )
 
 const (
 	coinTypeCount = 16
 
-	delayShort = 100 * time.Millisecond
-	delayErr   = 500 * time.Millisecond
-	delayNext  = 200 * time.Millisecond
+	DelayShort = 100 * time.Millisecond
+	DelayErr   = 500 * time.Millisecond
+	DelayNext  = 200 * time.Millisecond
 
 	RouteCashBox = 0
 	RouteTubes   = 1
 	RouteNotUsed = 2
 	RouteReject  = 3
+)
+
+//go:generate stringer -type=Features
+type Features uint32
+
+const (
+	FeatureAlternativePayout Features = 1 << iota
+	FeatureExtendedDiagnostic
+	FeatureControlledManualFillPayout
+	FeatureFTL
 )
 
 type CoinAcceptor struct {
@@ -33,6 +44,9 @@ type CoinAcceptor struct {
 	// These are final values including all scaling factors.
 	coinTypeCredit []currency.Nominal
 
+	featureLevel      uint8
+	supportedFeatures Features
+
 	internalScalingFactor int
 }
 
@@ -41,25 +55,23 @@ var (
 	packetSetup      = mdb.PacketFromHex("09")
 	packetTubeStatus = mdb.PacketFromHex("0a")
 	packetPoll       = mdb.PacketFromHex("0b")
+	packetExpIdent   = mdb.PacketFromHex("0f00")
 )
 
 var (
-	ErrNoCredit            = fmt.Errorf("No Credit")
-	ErrDefectiveTubeSensor = fmt.Errorf("Defective Tube Sensor")
-	ErrDoubleArrival       = fmt.Errorf("Double Arrival")
-	ErrAcceptorUnplugged   = fmt.Errorf("Acceptor Unplugged")
-	ErrTubeJam             = fmt.Errorf("Tube Jam")
-	ErrROMChecksum         = fmt.Errorf("ROM checksum")
-	ErrCoinRouting         = fmt.Errorf("Coin Routing")
-	ErrCoinJam             = fmt.Errorf("Coin Jam")
-	ErrFraud               = fmt.Errorf("Possible Credited Coin Removal")
+	ErrNoCredit      = fmt.Errorf("No Credit")
+	ErrDoubleArrival = fmt.Errorf("Double Arrival")
+	ErrCoinRouting   = fmt.Errorf("Coin Routing")
+	ErrCoinJam       = fmt.Errorf("Coin Jam")
+	ErrSlugs         = fmt.Errorf("Slugs")
 )
 
-func (self *CoinAcceptor) Init(ctx context.Context, m mdb.Mdber) error {
+func (self *CoinAcceptor) Init(ctx context.Context, mdber mdb.Mdber) error {
 	// TODO read config
 	self.byteOrder = binary.BigEndian
 	self.coinTypeCredit = make([]currency.Nominal, coinTypeCount)
-	self.mdb = m
+	self.mdb = mdber
+	self.internalScalingFactor = 1 // FIXME
 	// TODO maybe execute CommandReset?
 	err := self.InitSequence()
 	if err != nil {
@@ -69,7 +81,7 @@ func (self *CoinAcceptor) Init(ctx context.Context, m mdb.Mdber) error {
 	return err
 }
 
-func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- PollResult) {
+func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
 	stopch := a.StopChan()
 	for a.IsRunning() {
 		pr := self.CommandPoll()
@@ -87,93 +99,110 @@ func (self *CoinAcceptor) InitSequence() error {
 	if err != nil {
 		return err
 	}
-	self.mdb.TxDebug(mdb.PacketFromHex("0f00"), true) // 0f00 EXPANSION IDENTIFICATION
-	self.mdb.TxDebug(mdb.PacketFromHex("0f01"), true) // 0f01 EXPANSION FEATURE ENABLE
-	self.mdb.TxDebug(mdb.PacketFromHex("0f05"), true) // 0f05 EXPANSION SEND DIAG STATUS
-	err = self.CommandTubeStatus()
-	if err != nil {
+	if err = self.CommandExpansionIdentification(); err != nil {
 		return err
 	}
-	err = self.CommandCoinType(0xffff, 0xffff) // TODO read config
-	if err != nil {
+	if err = self.CommandFeatureEnable(FeatureExtendedDiagnostic); err != nil {
+		return err
+	}
+	if err = self.CommandExpansionSendDiagStatus(); err != nil {
+		return err
+	}
+	if err = self.CommandTubeStatus(); err != nil {
+		return err
+	}
+	// TODO read config
+	if err = self.CommandCoinType(0xffff, 0xffff); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (self *CoinAcceptor) CommandReset() {
-	self.mdb.TxDebug(packetReset, false)
+func (self *CoinAcceptor) CommandReset() error {
+	response := new(mdb.Packet)
+	return self.mdb.Tx(packetReset, response)
 }
 
 func (self *CoinAcceptor) CommandSetup() error {
-	const expectLength = 23
+	const expectLengthMin = 7
+	request := packetSetup
 	response := new(mdb.Packet)
-	err := self.mdb.Tx(packetSetup, response)
+	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", packetSetup.Format(), err)
+		log.Printf("mdb request=%s err: %s", request.Format(), err)
 		return err
 	}
 	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
 	bs := response.Bytes()
-	if len(bs) < expectLength {
-		return fmt.Errorf("hardware/mdb/coin SETUP response=%s expected %d bytes", response.Format(), expectLength)
+	if len(bs) < expectLengthMin {
+		return fmt.Errorf("hardware/mdb/coin SETUP response=%s expected >= %d bytes", response.Format(), expectLengthMin)
 	}
 	scalingFactor := bs[3]
-	for i, sf := range bs[7:23] {
+	for i, sf := range bs[7:] {
 		n := currency.Nominal(sf) * currency.Nominal(scalingFactor) * currency.Nominal(self.internalScalingFactor)
 		log.Printf("i=%d sf=%d nominal=%s", i, sf, currency.Amount(n).Format100I())
 		self.coinTypeCredit[i] = n
 	}
-	log.Printf("Changer Feature Level: %d", bs[0])
+	self.featureLevel = bs[0]
+	log.Printf("Changer Feature Level: %d", self.featureLevel)
 	log.Printf("Country / Currency Code: %x", bs[1:3])
 	log.Printf("Coin Scaling Factor: %d", scalingFactor)
 	log.Printf("Decimal Places: %d", bs[4])
 	log.Printf("Coin Type Routing: %d", self.byteOrder.Uint16(bs[5:7]))
-	log.Printf("Coin Type Credit: %x %#v", bs[7:23], self.coinTypeCredit)
+	log.Printf("Coin Type Credit: %x %#v", bs[7:], self.coinTypeCredit)
 	return nil
 }
 
-func (self *CoinAcceptor) CommandPoll() PollResult {
+func (self *CoinAcceptor) CommandPoll() money.PollResult {
 	now := time.Now()
 	response := new(mdb.Packet)
+	savedebug := self.mdb.SetDebug(false)
 	err := self.mdb.Tx(packetPoll, response)
-	result := PollResult{Time: now, Delay: delayNext}
+	self.mdb.SetDebug(savedebug)
+	result := money.PollResult{Time: now, Delay: DelayNext}
 	if err != nil {
 		result.Error = err
-		result.Delay = delayErr
+		result.Delay = DelayErr
 		return result
 	}
 	if response.Len() == 0 {
 		return result
 	}
-	result.Items = make([]PollItem, response.Len())
-	// log.Printf("poll response=%s", response.Format())
+	result.Items = make([]money.PollItem, response.Len())
+	log.Printf("poll response=%s", response.Format())
 	bs := response.Bytes()
+	skip := false
 	for i, b := range bs {
+		if skip {
+			skip = false
+			continue
+		}
 		b2 := byte(0)
 		if i+1 < len(bs) {
 			b2 = bs[i+1]
 		}
-		result.Items[i] = self.parsePollItem(b, b2)
+		result.Items[i], skip = self.parsePollItem(b, b2)
 	}
 	return result
 }
 
 func (self *CoinAcceptor) CommandTubeStatus() error {
-	const expectLength = 18
+	const expectLengthMin = 2
+	request := packetTubeStatus
 	response := new(mdb.Packet)
-	err := self.mdb.Tx(packetTubeStatus, response)
+	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", packetTubeStatus.Format(), err)
+		log.Printf("mdb request=%s err: %s", request.Format(), err)
 		return err
 	}
 	log.Printf("tubestatus response=(%d)%s", response.Len(), response.Format())
 	bs := response.Bytes()
-	if len(bs) < expectLength {
-		return fmt.Errorf("hardware/mdb/coin TUBE STATUS response=%s expected %d bytes", response.Format(), expectLength)
+	if len(bs) < expectLengthMin {
+		return fmt.Errorf("hardware/mdb/coin TUBE money.Status response=%s expected >= %d bytes", response.Format(), expectLengthMin)
 	}
 	full := self.byteOrder.Uint16(bs[0:2])
 	counts := bs[2:18]
+	log.Printf("tubestatus full=%b counts=%v", full, counts)
 	// TODO use full,counts
 	_ = full
 	_ = counts
@@ -181,17 +210,12 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 }
 
 func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) error {
-	buf := [4]byte{}
-	self.byteOrder.PutUint16(buf[0:2], accept)
-	self.byteOrder.PutUint16(buf[2:4], dispense)
-	var err error
+	buf := [5]byte{0x0c}
+	self.byteOrder.PutUint16(buf[1:], accept)
+	self.byteOrder.PutUint16(buf[3:], dispense)
+	request := mdb.PacketFromBytes(buf[:])
 	response := new(mdb.Packet)
-	request := mdb.PacketFromBytes([]byte{0x0c})
-	_, err = request.Write(buf[:])
-	if err != nil {
-		panic("code error")
-	}
-	err = self.mdb.Tx(request, response)
+	err := self.mdb.Tx(request, response)
 	if err != nil {
 		log.Printf("mdb request=%s err: %s", request.Format(), err)
 		return err
@@ -218,6 +242,48 @@ func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8)
 	return nil
 }
 
+func (self *CoinAcceptor) CommandExpansionIdentification() error {
+	const expectLength = 33
+	request := packetExpIdent
+	response := new(mdb.Packet)
+	err := self.mdb.Tx(request, response)
+	if err != nil {
+		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		return err
+	}
+	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
+	bs := response.Bytes()
+	if len(bs) < expectLength {
+		return fmt.Errorf("hardware/mdb/coin EXPANSION IDENTIFICATION response=%s expected %d bytes", response.Format(), expectLength)
+	}
+	self.supportedFeatures = Features(self.byteOrder.Uint32(bs[29:]))
+	log.Printf("Supported features: %b", self.supportedFeatures)
+	return nil
+}
+
+func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
+	f := requested & self.supportedFeatures
+	buf := [6]byte{0x0f, 0x01}
+	self.byteOrder.PutUint32(buf[2:], uint32(f))
+	request := mdb.PacketFromBytes(buf[:])
+	response := new(mdb.Packet)
+	err := self.mdb.Tx(request, response)
+	if err != nil {
+		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		return err
+	}
+	return nil
+}
+
+func (self *CoinAcceptor) CommandExpansionSendDiagStatus() error {
+	if self.supportedFeatures&FeatureExtendedDiagnostic == 0 {
+		log.Printf("CommandExpansionSendDiagStatus feature is not supported")
+		return nil
+	}
+	self.mdb.TxDebug(mdb.PacketFromHex("0f05"), true) // 0f05 EXPANSION SEND DIAG money.Status
+	return nil
+}
+
 func (self *CoinAcceptor) coinTypeNominal(b byte) currency.Nominal {
 	if b >= coinTypeCount {
 		log.Printf("invalid coin type: %d", b)
@@ -235,34 +301,34 @@ func (self *CoinAcceptor) nominalCoinType(nominal currency.Nominal) (byte, error
 	return 0, fmt.Errorf("Unknown nominal %s", currency.Amount(nominal).Format100I())
 }
 
-func (self *CoinAcceptor) parsePollItem(b, b2 byte) PollItem {
+func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 	switch b {
 	case 0x01: // Escrow request
-		return PollItem{Status: StatusEscrowRequest}
+		return money.PollItem{Status: money.StatusReturnRequest}, false
 	case 0x02: // Changer Payout Busy
-		return PollItem{Status: StatusBusy}
+		return money.PollItem{Status: money.StatusBusy}, false
 	case 0x03: // No Credit
-		return PollItem{Status: StatusError, Error: ErrNoCredit}
+		return money.PollItem{Status: money.StatusError, Error: ErrNoCredit}, false
 	case 0x04: // Defective Tube Sensor
-		return PollItem{Status: StatusFatal, Error: ErrDefectiveTubeSensor}
+		return money.PollItem{Status: money.StatusFatal, Error: money.ErrSensor}, false
 	case 0x05: // Double Arrival
-		return PollItem{Status: StatusError, Error: ErrDoubleArrival}
+		return money.PollItem{Status: money.StatusError, Error: ErrDoubleArrival}, false
 	case 0x06: // Acceptor Unplugged
-		return PollItem{Status: StatusFatal, Error: ErrAcceptorUnplugged}
+		return money.PollItem{Status: money.StatusFatal, Error: money.ErrNoStorage}, false
 	case 0x07: // Tube Jam
-		return PollItem{Status: StatusFatal, Error: ErrTubeJam}
+		return money.PollItem{Status: money.StatusFatal, Error: money.ErrJam}, false
 	case 0x08: // ROM checksum error
-		return PollItem{Status: StatusFatal, Error: ErrROMChecksum}
+		return money.PollItem{Status: money.StatusFatal, Error: money.ErrROMChecksum}, false
 	case 0x09: // Coin Routing Error
-		return PollItem{Status: StatusError, Error: ErrCoinRouting}
+		return money.PollItem{Status: money.StatusError, Error: ErrCoinRouting}, false
 	case 0x0a: // Changer Busy
-		return PollItem{Status: StatusBusy}
+		return money.PollItem{Status: money.StatusBusy}, false
 	case 0x0b: // Changer was Reset
-		return PollItem{Status: StatusWasReset}
+		return money.PollItem{Status: money.StatusWasReset}, false
 	case 0x0c: // Coin Jam
-		return PollItem{Status: StatusFatal, Error: ErrCoinJam}
+		return money.PollItem{Status: money.StatusFatal, Error: ErrCoinJam}, false
 	case 0x0d: // Possible Credited Coin Removal
-		return PollItem{Status: StatusError, Error: ErrFraud}
+		return money.PollItem{Status: money.StatusError, Error: money.ErrFraud}, false
 	}
 
 	if b&0x80 != 0 { // Coins Dispensed Manually
@@ -271,7 +337,7 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) PollItem {
 		// xxxx = coin type
 		count := (b >> 4) & 7
 		nominal := self.coinTypeNominal(b & 0xf)
-		return PollItem{Status: StatusDispensed, Nominal: nominal, Count: count}
+		return money.PollItem{Status: money.StatusDispensed, DataNominal: nominal, DataCount: count}, true
 	}
 	if b&0x7f == b { // Coins Deposited
 		// b=01yyxxxx b2=number of coins in tube
@@ -282,15 +348,15 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) PollItem {
 			panic("code error")
 		}
 		nominal := self.coinTypeNominal(b & 0xf)
-		return PollItem{Status: StatusDeposited, Nominal: nominal, Count: 1}
+		return money.PollItem{Status: money.StatusCredit, DataNominal: nominal, DataCount: 1}, true
 	}
 	if b&0x3f == b { // Slug count
 		slugs := b & 0x1f
 		log.Printf("Number of slugs: %d", slugs)
-		return PollItem{Status: StatusSlugs, Count: slugs}
+		return money.PollItem{Status: money.StatusInfo, Error: ErrSlugs, DataCount: slugs}, false
 	}
 
 	err := fmt.Errorf("parsePollItem unknown=%x", b)
 	log.Print(err)
-	return PollItem{Status: StatusFatal, Error: err}
+	return money.PollItem{Status: money.StatusFatal, Error: err}, false
 }

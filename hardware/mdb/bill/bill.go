@@ -11,14 +11,15 @@ import (
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/hardware/money"
 )
 
 const (
 	billTypeCount = 16
 
-	delayShort = 100 * time.Millisecond
-	delayErr   = 500 * time.Millisecond
-	delayNext  = 200 * time.Millisecond
+	DelayShort = 100 * time.Millisecond
+	DelayErr   = 500 * time.Millisecond
+	DelayNext  = 200 * time.Millisecond
 )
 
 type BillValidator struct {
@@ -29,6 +30,8 @@ type BillValidator struct {
 	// Indicates the value of the bill types 0 to 15.
 	// These are final values including all scaling factors.
 	billTypeCredit []currency.Nominal
+
+	featureLevel uint8
 
 	// Escrow capability.
 	escrowCap bool
@@ -44,17 +47,24 @@ var (
 	packetEscrowReject = mdb.PacketFromHex("3500")
 )
 
-func (self *BillValidator) Init(ctx context.Context, m mdb.Mdber) error {
+var (
+	ErrDefectiveMotor   = fmt.Errorf("Defective Motor")
+	ErrBillRemoved      = fmt.Errorf("Bill Removed")
+	ErrEscrowImpossible = fmt.Errorf("An ESCROW command was requested for a bill not in the escrow position.")
+	ErrAttempts         = fmt.Errorf("Attempts")
+)
+
+func (self *BillValidator) Init(ctx context.Context, mdber mdb.Mdber) error {
 	// TODO read config
 	self.byteOrder = binary.BigEndian
 	self.billTypeCredit = make([]currency.Nominal, billTypeCount)
-	self.mdb = m
+	self.mdb = mdber
 	// TODO maybe execute CommandReset?
 	self.InitSequence()
 	return nil
 }
 
-func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- PollResult) {
+func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
 	stopch := a.StopChan()
 	for a.IsRunning() {
 		pr := self.CommandPoll()
@@ -67,26 +77,38 @@ func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- Po
 	}
 }
 
-func (self *BillValidator) InitSequence() {
-	self.CommandSetup()
+func (self *BillValidator) InitSequence() error {
+	err := self.CommandSetup()
+	if err != nil {
+		return err
+	}
+	// TODO if err
 	self.mdb.TxDebug(mdb.PacketFromHex("3700"), true) // 3700 EXPANSION IDENTIFICATION
-	self.mdb.TxDebug(mdb.PacketFromHex("36"), true)   // 36 STACKER
-	self.CommandBillType()
+	// TODO if err
+	self.mdb.TxDebug(mdb.PacketFromHex("36"), true) // 36 STACKER
+	// TODO if err
+	// TODO read config
+	self.CommandBillType(0xffff, 0xffff)
+	return nil
 }
 
-func (self *BillValidator) CommandReset() {
-	self.mdb.TxDebug(packetReset, false)
+func (self *BillValidator) CommandReset() error {
+	return self.mdb.Tx(packetReset, new(mdb.Packet))
 }
 
-func (self *BillValidator) CommandBillType() bool {
-	// TODO configure types
-	request := mdb.PacketFromBytes([]byte{0x34, 0xff, 0xff, 0xff, 0xff})
-	err := self.mdb.Tx(request, new(mdb.Packet))
+func (self *BillValidator) CommandBillType(accept, escrow uint16) error {
+	buf := [5]byte{0x34}
+	self.byteOrder.PutUint16(buf[1:], accept)
+	self.byteOrder.PutUint16(buf[3:], escrow)
+	request := mdb.PacketFromBytes(buf[:])
+	response := new(mdb.Packet)
+	err := self.mdb.Tx(request, response)
 	log.Printf("CommandBillType request=%s err=%s", request.Format(), err)
-	return err == nil
+	return err
 }
 
 func (self *BillValidator) CommandSetup() error {
+	const expectLength = 27
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(packetSetup, response)
 	if err != nil {
@@ -95,41 +117,42 @@ func (self *BillValidator) CommandSetup() error {
 	}
 	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
 	bs := response.Bytes()
-	if len(bs) < 27 {
-		return fmt.Errorf("bill validator SETUP response=%s expected 27 bytes", response.Format())
+	if len(bs) < expectLength {
+		return fmt.Errorf("bill validator SETUP response=%s expected %d bytes", response.Format(), expectLength)
 	}
 	scalingFactor := self.byteOrder.Uint16(bs[3:5])
-	for i, sf := range bs[11:27] {
+	for i, sf := range bs[11:] {
 		n := currency.Nominal(sf) * currency.Nominal(scalingFactor) * currency.Nominal(self.internalScalingFactor)
 		log.Printf("i=%d sf=%d nominal=%s", i, sf, currency.Amount(n).Format100I())
 		self.billTypeCredit[i] = n
 	}
 	self.escrowCap = bs[10] == 0xff
-	log.Printf("Bill Validator Feature Level: %d", bs[0])
+	self.featureLevel = bs[0]
+	log.Printf("Bill Validator Feature Level: %d", self.featureLevel)
 	log.Printf("Country / Currency Code: %x", bs[1:3])
 	log.Printf("Bill Scaling Factor: %d", scalingFactor)
 	log.Printf("Decimal Places: %d", bs[5])
 	log.Printf("Stacker Capacity: %d", self.byteOrder.Uint16(bs[6:8]))
 	log.Printf("Bill Security Levels: %016b", self.byteOrder.Uint16(bs[8:10]))
 	log.Printf("Escrow/No Escrow: %t", self.escrowCap)
-	log.Printf("Bill Type Credit: %x %#v", bs[11:27], self.billTypeCredit)
+	log.Printf("Bill Type Credit: %x %#v", bs[11:], self.billTypeCredit)
 	return nil
 }
 
-func (self *BillValidator) CommandPoll() PollResult {
+func (self *BillValidator) CommandPoll() money.PollResult {
 	now := time.Now()
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(packetPoll, response)
-	result := PollResult{Time: now, Delay: delayNext}
+	result := money.PollResult{Time: now, Delay: DelayNext}
 	if err != nil {
 		result.Error = err
-		result.Delay = delayErr
+		result.Delay = DelayErr
 		return result
 	}
 	if response.Len() == 0 {
 		return result
 	}
-	result.Items = make([]PollItem, response.Len())
+	result.Items = make([]money.PollItem, response.Len())
 	// log.Printf("poll response=%s", response.Format())
 	for i, b := range response.Bytes() {
 		result.Items[i] = self.parsePollItem(b)
@@ -145,50 +168,50 @@ func (self *BillValidator) billTypeNominal(b byte) currency.Nominal {
 	return self.billTypeCredit[b]
 }
 
-func (self *BillValidator) parsePollItem(b byte) PollItem {
+func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 	switch b {
 	case 0x01: // Defective Motor
-		return PollItem{Status: StatusFatal, Error: fmt.Errorf("Defective Motor")}
+		return money.PollItem{Status: money.StatusFatal, Error: ErrDefectiveMotor}
 	case 0x02: // Sensor Problem
-		return PollItem{Status: StatusFatal, Error: fmt.Errorf("Sensor Problem")}
+		return money.PollItem{Status: money.StatusFatal, Error: money.ErrSensor}
 	case 0x03: // Validator Busy
-		return PollItem{Status: StatusBusy}
+		return money.PollItem{Status: money.StatusBusy}
 	case 0x04: // ROM Checksum Error
-		return PollItem{Status: StatusFatal, Error: fmt.Errorf("ROM Checksum Error")}
+		return money.PollItem{Status: money.StatusFatal, Error: money.ErrROMChecksum}
 	case 0x05: // Validator Jammed
-		return PollItem{Status: StatusFatal, Error: fmt.Errorf("Validator Jammed")}
+		return money.PollItem{Status: money.StatusFatal, Error: money.ErrJam}
 	case 0x06: // Validator was reset
-		return PollItem{Status: StatusWasReset}
+		return money.PollItem{Status: money.StatusWasReset}
 	case 0x07: // Bill Removed
-		return PollItem{Status: StatusError, Error: fmt.Errorf("Bill Removed")}
+		return money.PollItem{Status: money.StatusError, Error: ErrBillRemoved}
 	case 0x08: // Cash Box out of position
-		return PollItem{Status: StatusFatal, Error: fmt.Errorf("Cash Box out of position")}
+		return money.PollItem{Status: money.StatusFatal, Error: money.ErrNoStorage}
 	case 0x09: // Validator Disabled
-		return PollItem{Status: StatusDisabled}
+		return money.PollItem{Status: money.StatusDisabled}
 	case 0x0a: // Invalid Escrow request
-		return PollItem{Status: StatusError, Error: fmt.Errorf("An ESCROW command was requested for a bill not in the escrow position.")}
+		return money.PollItem{Status: money.StatusError, Error: ErrEscrowImpossible}
 	case 0x0b: // Bill Rejected
-		return PollItem{Status: StatusRejected}
+		return money.PollItem{Status: money.StatusRejected}
 	case 0x0c: // Possible Credited Bill Removal
-		return PollItem{Status: StatusError, Error: fmt.Errorf("There has been an attempt to remove a credited (stacked) bill.")}
+		return money.PollItem{Status: money.StatusError, Error: money.ErrFraud}
 	}
 
 	if b&0x8f == b { // Bill Stacked
 		amount := self.billTypeNominal(b & 0xf)
-		return PollItem{Status: StatusCredit, Nominal: amount}
+		return money.PollItem{Status: money.StatusCredit, DataNominal: amount}
 	}
 	if b&0x9f == b { // Escrow Position
 		amount := self.billTypeNominal(b & 0xf)
 		log.Printf("bill escrow TODO packetEscrowAccept")
-		return PollItem{Status: StatusEscrow, Nominal: amount}
+		return money.PollItem{Status: money.StatusEscrow, DataNominal: amount}
 	}
 	if b&0x5f == b { // Number of attempts to input a bill while validator is disabled.
 		attempts := b & 0x1f
 		log.Printf("Number of attempts to input a bill while validator is disabled: %d", attempts)
-		return PollItem{Status: StatusInfo, Attempts: attempts}
+		return money.PollItem{Status: money.StatusInfo, Error: ErrAttempts, DataCount: attempts}
 	}
 
 	err := fmt.Errorf("parsePollItem unknown=%x", b)
 	log.Print(err)
-	return PollItem{Status: StatusFatal, Error: err}
+	return money.PollItem{Status: money.StatusFatal, Error: err}
 }

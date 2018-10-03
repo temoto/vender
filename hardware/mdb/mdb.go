@@ -14,7 +14,7 @@ type Mdber interface {
 	BreakCustom(keep, sleep int) error
 	Tx(request, response *Packet) error
 	TxDebug(request *Packet, debug bool) (response *Packet)
-	SetDebug(bool)
+	SetDebug(bool) bool
 }
 
 // Context[key] -> Mdber or panic
@@ -54,8 +54,9 @@ func NewMDB(u Uarter, path string, baud int) (*mdb, error) {
 	return self, err
 }
 
-func (self *mdb) SetDebug(d bool) {
-	self.debug = d
+func (self *mdb) SetDebug(d bool) (previous bool) {
+	previous, self.debug = d, self.debug
+	return previous
 }
 
 func (self *mdb) BreakCustom(keep, sleep int) (err error) {

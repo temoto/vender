@@ -6,8 +6,8 @@ import (
 )
 
 func TestEvents01(t *testing.T) {
-	es := Events()
-	go func() { events <- Event{name: EventPing} }()
+	es := Global.events
+	go func() { es <- Event{name: EventPing} }()
 	select {
 	case e := <-es:
 		if e.Name() != EventPing {

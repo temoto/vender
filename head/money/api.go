@@ -42,27 +42,31 @@ const (
 	EventError  = "error"
 )
 
-var (
-	apiLock      sync.Mutex
-	globalCredit currency.Amount
-	events       chan Event = make(chan Event, 2)
+type MoneySystem struct {
+	events chan Event
+	bs     BillState
+	cs     CoinState
+}
 
-	globalBs BillState
-	globalCs ChangerState
+func (self *MoneySystem) Events() chan Event {
+	return self.events
+}
+
+var (
+	apiLock sync.Mutex
+	Global  = MoneySystem{
+		events: make(chan Event, 2),
+	}
 )
 
 var (
 	ErrNeedMoreMoney = errors.New("add-money")
 )
 
-func Events() <-chan Event {
-	return events
-}
-
 func Credit(ctx context.Context) currency.Amount {
 	apiLock.Lock()
 	defer apiLock.Unlock()
-	result := globalCredit
+	result := currency.Amount(0)
 	return result
 }
 

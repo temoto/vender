@@ -76,7 +76,7 @@ func main() {
 	for a.IsRunning() {
 		select {
 		case <-a.StopChan():
-		case em := <-money.Events():
+		case em := <-money.Global.Events():
 			log.Printf("money event: %s", em.String())
 			ui.Logf("money: %s", em.Amount().Format100I())
 		}
