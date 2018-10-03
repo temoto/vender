@@ -4,7 +4,7 @@ base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 target=./cmd/vender/vender
 gopkg=$(dirname $target)
 name=$(basename $target)
-remote="pi@pipi."
+remote="pi@pipi"
 set -x
 go test -v $gopkg ./head/...
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
