@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/temoto/alive"
+	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/mdb/coin"
 	"github.com/temoto/vender/hardware/money"
@@ -44,6 +45,8 @@ func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 	const logPrefix = "head/money/coin"
 	h := func(m *MoneySystem, pr *money.PollResult, pi money.PollItem, hw Hardwarer) bool {
 		switch pi.Status {
+		case money.StatusReturnRequest:
+			self.hw.CommandDispense(currency.Nominal(100), 2)
 		case money.StatusRejected:
 			// TODO telemetry
 		case money.StatusWasReset:
@@ -52,7 +55,6 @@ func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 			// self.hw.InitSequence()
 		case money.StatusCredit:
 			m.Events() <- Event{created: pr.Time, name: EventCredit, amount: pi.Amount()}
-			// self.hw.CommandDispense(currency.Nominal(100), 2)
 		default:
 			return false
 		}

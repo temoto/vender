@@ -88,7 +88,8 @@ func (self *BillValidator) InitSequence() error {
 	self.mdb.TxDebug(mdb.PacketFromHex("36"), true) // 36 STACKER
 	// TODO if err
 	// TODO read config
-	self.CommandBillType(0xffff, 0xffff)
+	// self.CommandBillType(0xffff, 0xffff)
+	self.CommandBillType(0xffff, 0)
 	return nil
 }
 
