@@ -168,9 +168,10 @@ func (self *CoinAcceptor) CommandPoll() money.PollResult {
 	if response.Len() == 0 {
 		return result
 	}
-	result.Items = make([]money.PollItem, response.Len())
+	result.Items = make([]money.PollItem, 0, response.Len())
 	log.Printf("poll response=%s", response.Format())
 	bs := response.Bytes()
+	pi := money.PollItem{}
 	skip := false
 	for i, b := range bs {
 		if skip {
@@ -181,7 +182,8 @@ func (self *CoinAcceptor) CommandPoll() money.PollResult {
 		if i+1 < len(bs) {
 			b2 = bs[i+1]
 		}
-		result.Items[i], skip = self.parsePollItem(b, b2)
+		pi, skip = self.parsePollItem(b, b2)
+		result.Items = append(result.Items, pi)
 	}
 	return result
 }
