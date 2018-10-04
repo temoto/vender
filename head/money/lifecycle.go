@@ -10,8 +10,8 @@ import (
 func init() {
 	state.RegisterStart(func(ctx context.Context) error {
 		m := mdb.ContextValueMdber(ctx, "run/mdber")
-		//globalMoney.bs.Init(ctx, m, globalMoney.events)
-		Global.cs.Init(ctx, m, Global.events)
+		Global.bs.Init(ctx, m, Global.Events())
+		Global.cs.Init(ctx, m, Global.Events())
 		return nil
 	})
 
