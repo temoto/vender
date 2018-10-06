@@ -65,7 +65,7 @@ func ReadConfig(r io.Reader) (*Config, error) {
 
 func ReadConfigFile(path string) (*Config, error) {
 	if pathAbs, err := filepath.Abs(path); err != nil {
-		log.Printf("filepath.Abs(%s) error: %s", path, err)
+		log.Printf("filepath.Abs(%s) error=%v", path, err)
 	} else {
 		path = pathAbs
 	}

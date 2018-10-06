@@ -129,7 +129,7 @@ func (self *CoinAcceptor) CommandSetup() error {
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return err
 	}
 	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
@@ -194,7 +194,7 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return err
 	}
 	log.Printf("tubestatus response=(%d)%s", response.Len(), response.Format())
@@ -219,7 +219,7 @@ func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) error {
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return err
 	}
 	return nil
@@ -238,7 +238,7 @@ func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8)
 	request := mdb.PacketFromBytes([]byte{0x0d, (count << 4) + coinType})
 	err = self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return err
 	}
 	return nil
@@ -250,7 +250,7 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return err
 	}
 	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
@@ -271,7 +271,7 @@ func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return err
 	}
 	return nil

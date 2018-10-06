@@ -40,11 +40,11 @@ func handlePollResult(m *MoneySystem, pr *money.PollResult, customItem HardwareS
 			log.Printf("%s info: %s", logPrefix, pi.String())
 			// TODO telemetry
 		case money.StatusError:
-			log.Printf("%s error: %s", logPrefix, pi.Error)
+			log.Printf("%s error: %v", logPrefix, pi.Error)
 			// TODO telemetry
 			doRefund = true
 		case money.StatusFatal:
-			log.Printf("%s fatal: %s", logPrefix, pi.Error)
+			log.Printf("%s fatal: %v", logPrefix, pi.Error)
 			// TODO telemetry
 			doRefund = true
 			doRestart = true

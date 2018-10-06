@@ -201,7 +201,7 @@ func (self *mdb) TxDebug(request *Packet, debug bool) *Packet {
 	err := self.Tx(request, response)
 	self.SetDebug(saveDebug)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", request.Format(), err)
+		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return nil
 	}
 	return response

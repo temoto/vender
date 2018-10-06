@@ -104,7 +104,7 @@ func (self *BillValidator) CommandBillType(accept, escrow uint16) error {
 	request := mdb.PacketFromBytes(buf[:])
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(request, response)
-	log.Printf("CommandBillType request=%s err=%s", request.Format(), err)
+	log.Printf("CommandBillType request=%s err=%v", request.Format(), err)
 	return err
 }
 
@@ -113,7 +113,7 @@ func (self *BillValidator) CommandSetup() error {
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(packetSetup, response)
 	if err != nil {
-		log.Printf("mdb request=%s err: %s", packetSetup.Format(), err)
+		log.Printf("mdb request=%s err=%v", packetSetup.Format(), err)
 		return err
 	}
 	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
