@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/temoto/alive"
@@ -48,6 +49,8 @@ type CoinAcceptor struct {
 	supportedFeatures Features
 
 	internalScalingFactor int
+	batch                 sync.Mutex
+	ready                 chan struct{}
 }
 
 var (
@@ -66,12 +69,19 @@ var (
 	ErrSlugs         = fmt.Errorf("Slugs")
 )
 
+// usage: defer coin.Batch()()
+func (self *CoinAcceptor) Batch() func() {
+	self.batch.Lock()
+	return self.batch.Unlock
+}
+
 func (self *CoinAcceptor) Init(ctx context.Context, mdber mdb.Mdber) error {
 	// TODO read config
 	self.byteOrder = binary.BigEndian
 	self.coinTypeCredit = make([]currency.Nominal, coinTypeCount)
 	self.mdb = mdber
 	self.internalScalingFactor = 1 // FIXME
+	self.ready = make(chan struct{})
 	// TODO maybe execute CommandReset?
 	err := self.InitSequence()
 	if err != nil {
@@ -81,20 +91,36 @@ func (self *CoinAcceptor) Init(ctx context.Context, mdber mdb.Mdber) error {
 	return err
 }
 
+func (self *CoinAcceptor) SupportedNominals() []currency.Nominal {
+	ns := make([]currency.Nominal, 0, len(self.coinTypeCredit))
+	for _, n := range self.coinTypeCredit {
+		if n > 0 {
+			ns = append(ns, n)
+		}
+	}
+	return ns
+}
+
 func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
 	stopch := a.StopChan()
 	for a.IsRunning() {
 		pr := self.CommandPoll()
-		ch <- pr
 		select {
+		case ch <- pr:
 		case <-stopch:
 			return
+		}
+		select {
 		case <-time.After(pr.Delay):
+		case <-stopch:
+			return
 		}
 	}
 }
 
 func (self *CoinAcceptor) InitSequence() error {
+	defer self.Batch()()
+
 	err := self.CommandSetup()
 	if err != nil {
 		return err
@@ -153,13 +179,23 @@ func (self *CoinAcceptor) CommandSetup() error {
 	return nil
 }
 
-func (self *CoinAcceptor) CommandPoll() money.PollResult {
+func (self *CoinAcceptor) CommandPoll() (result money.PollResult) {
+	defer func() {
+		if result.Ready() {
+			select {
+			case self.ready <- struct{}{}:
+			default:
+			}
+		}
+	}()
+
 	now := time.Now()
 	response := new(mdb.Packet)
 	savedebug := self.mdb.SetDebug(false)
 	err := self.mdb.Tx(packetPoll, response)
 	self.mdb.SetDebug(savedebug)
-	result := money.PollResult{Time: now, Delay: DelayNext}
+	result.Time = now
+	result.Delay = DelayNext
 	if err != nil {
 		result.Error = err
 		result.Delay = DelayErr
@@ -236,6 +272,7 @@ func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8)
 
 	response := new(mdb.Packet)
 	request := mdb.PacketFromBytes([]byte{0x0d, (count << 4) + coinType})
+	<-self.ready
 	err = self.mdb.Tx(request, response)
 	if err != nil {
 		log.Printf("mdb request=%s err=%v", request.Format(), err)

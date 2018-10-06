@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-systemd/daemon"
@@ -33,6 +35,22 @@ import (
 // seq.Wait()
 // time.Sleep(100 * time.Millisecond)
 
+func foldErrors(errs []error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	ss := make([]string, 0, len(errs))
+	for _, e := range errs {
+		if e != nil {
+			ss = append(ss, e.Error())
+		}
+	}
+	if len(ss) == 0 {
+		return nil
+	}
+	return fmt.Errorf(strings.Join(ss, "\n"))
+}
+
 func main() {
 	flagConfig := flag.String("config", "vender.hcl", "")
 	flag.Parse()
@@ -60,15 +78,17 @@ func main() {
 
 	config := state.MustReadConfigFile(log.Fatal, *flagConfig)
 	ctx = context.WithValue(ctx, "config", config)
-	state.DoValidate(ctx)
+	if err := foldErrors(state.DoValidate(ctx)); err != nil {
+		log.Fatal(err)
+	}
 
-	m, err := mdb.NewMDB(config.Mdb.Uarter, config.Mdb.UartDevice, config.Mdb.UartBaudrate)
+	mdber, err := mdb.NewMDB(config.Mdb.Uarter, config.Mdb.UartDevice, config.Mdb.UartBaudrate)
 	if err != nil {
 		log.Fatal(err)
 	}
-	m.SetDebug(config.Mdb.Debug)
-	m.BreakCustom(200, 500)
-	ctx = context.WithValue(ctx, "run/mdber", m)
+	mdber.SetDebug(config.Mdb.Debug)
+	mdber.BreakCustom(200, 500)
+	ctx = context.WithValue(ctx, "run/mdber", mdber)
 
 	state.DoStart(ctx)
 	sdnotify(daemon.SdNotifyReady)
@@ -78,7 +98,15 @@ func main() {
 		case <-a.StopChan():
 		case em := <-money.Global.Events():
 			log.Printf("money event: %s", em.String())
-			ui.Logf("money: %s", em.Amount().Format100I())
+			switch em.Name() {
+			case money.EventCredit:
+				ui.Logf("money: credit %s", em.Amount().Format100I())
+			case money.EventAbort:
+				err := money.Global.Abort(context.Background())
+				log.Printf("user requested abort err=%v", err)
+			default:
+				panic("head: unknown money event: " + em.String())
+			}
 		}
 	}
 

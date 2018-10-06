@@ -56,8 +56,23 @@ func (self *NominalGroup) Add(n Nominal, count uint) error {
 	return nil
 }
 
+func (self *NominalGroup) Clear() {
+	for n := range self.values {
+		self.values[n] = 0
+	}
+}
+
 func (self *NominalGroup) Contains(a Amount) bool {
 	return self.Withdraw(a, NewExpendLeastCount(), false) == nil
+}
+
+func (self *NominalGroup) Iter(f func(nominal Nominal, count uint) error) error {
+	for nominal, count := range self.values {
+		if err := f(nominal, count); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (self *NominalGroup) Total() Amount {
@@ -66,6 +81,12 @@ func (self *NominalGroup) Total() Amount {
 		sum += Amount(nominal) * Amount(count)
 	}
 	return sum
+}
+
+func (self *NominalGroup) Sub(other *NominalGroup) {
+	for nominal := range self.values {
+		self.values[nominal] -= other.values[nominal]
+	}
 }
 
 func (self *NominalGroup) Withdraw(a Amount, strategy ExpendStrategy, commit bool) error {

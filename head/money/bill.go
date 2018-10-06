@@ -22,7 +22,7 @@ type BillState struct {
 	hw bill.BillValidator
 }
 
-func (self *BillState) Init(ctx context.Context, m mdb.Mdber, events chan<- Event) error {
+func (self *BillState) Init(ctx context.Context, m mdb.Mdber) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
 

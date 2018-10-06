@@ -51,7 +51,7 @@ func handlePollResult(m *MoneySystem, pr *money.PollResult, customItem HardwareS
 		case money.StatusBusy:
 			// TODO telemetry
 		case money.StatusCredit:
-			m.Events() <- Event{created: pr.Time, name: EventCredit, amount: pi.Amount()}
+			m.events <- Event{created: pr.Time, name: EventCredit, amount: pi.Amount()}
 			// TODO telemetry
 		default:
 			panic("unhandled poll item status: " + pi.String())

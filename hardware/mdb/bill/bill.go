@@ -60,8 +60,8 @@ func (self *BillValidator) Init(ctx context.Context, mdber mdb.Mdber) error {
 	self.billTypeCredit = make([]currency.Nominal, billTypeCount)
 	self.mdb = mdber
 	// TODO maybe execute CommandReset?
-	self.InitSequence()
-	return nil
+	err := self.InitSequence()
+	return err
 }
 
 func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
