@@ -81,11 +81,10 @@ func (self *CoinAcceptor) Init(ctx context.Context, mdber mdb.Mdber) error {
 	self.mdb = mdber
 	self.internalScalingFactor = 1 // FIXME
 	self.ready = make(chan struct{})
-	// TODO maybe execute CommandReset?
+	// TODO maybe execute CommandReset then wait for StatusWasReset
 	err := self.InitSequence()
 	if err != nil {
 		log.Printf("hardware/mdb/coin/InitSequence error=%s", err)
-		// TODO maybe execute CommandReset?
 	}
 	return err
 }
@@ -345,24 +344,31 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 		return money.PollItem{Status: money.StatusReturnRequest}, false
 	case 0x02: // Changer Payout Busy
 		return money.PollItem{Status: money.StatusBusy}, false
+	// high
 	case 0x03: // No Credit
 		return money.PollItem{Status: money.StatusError, Error: ErrNoCredit}, false
+	// high
 	case 0x04: // Defective Tube Sensor
 		return money.PollItem{Status: money.StatusFatal, Error: money.ErrSensor}, false
 	case 0x05: // Double Arrival
 		return money.PollItem{Status: money.StatusInfo, Error: ErrDoubleArrival}, false
+	// high
 	case 0x06: // Acceptor Unplugged
 		return money.PollItem{Status: money.StatusFatal, Error: money.ErrNoStorage}, false
+	// high
 	case 0x07: // Tube Jam
 		return money.PollItem{Status: money.StatusFatal, Error: money.ErrJam}, false
+	// high
 	case 0x08: // ROM checksum error
 		return money.PollItem{Status: money.StatusFatal, Error: money.ErrROMChecksum}, false
+	// high
 	case 0x09: // Coin Routing Error
 		return money.PollItem{Status: money.StatusError, Error: ErrCoinRouting}, false
 	case 0x0a: // Changer Busy
 		return money.PollItem{Status: money.StatusBusy}, false
 	case 0x0b: // Changer was Reset
 		return money.PollItem{Status: money.StatusWasReset}, false
+	// high
 	case 0x0c: // Coin Jam
 		return money.PollItem{Status: money.StatusFatal, Error: ErrCoinJam}, false
 	case 0x0d: // Possible Credited Coin Removal

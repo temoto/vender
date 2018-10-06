@@ -18,9 +18,8 @@ import (
 const (
 	billTypeCount = 16
 
-	DelayShort = 100 * time.Millisecond
-	DelayErr   = 500 * time.Millisecond
-	DelayNext  = 200 * time.Millisecond
+	DelayErr  = 500 * time.Millisecond
+	DelayNext = 200 * time.Millisecond
 )
 
 type BillValidator struct {
