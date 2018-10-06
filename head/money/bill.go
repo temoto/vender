@@ -47,22 +47,23 @@ func (self *BillState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 	const logPrefix = "head/money/bill"
 	h := func(m *MoneySystem, pr *money.PollResult, pi money.PollItem, hw Hardwarer) bool {
 		switch pi.Status {
-		case money.StatusRejected, money.StatusBusy, money.StatusDisabled:
+		case money.StatusRejected:
+		case money.StatusDisabled:
 			// TODO telemetry
 		case money.StatusEscrow:
 			// TODO self.hw.EscrowAccept / Reject
 		case money.StatusWasReset:
 			self.hw.InitSequence()
+		case money.StatusBusy:
 		default:
 			return false
 		}
 		return true
 	}
-	onRefund := func(m *MoneySystem, hw Hardwarer) {
-		// TODO
-	}
 	onRestart := func(m *MoneySystem, hw Hardwarer) {
 		self.hw.CommandReset()
+		// InitSequence will be executed as reaction to StatusWasReset
+		// self.hw.InitSequence()
 	}
-	pollResultLoop(m, pch, h, onRefund, onRestart, &self.hw, logPrefix)
+	pollResultLoop(m, pch, h, onRestart, &self.hw, logPrefix)
 }

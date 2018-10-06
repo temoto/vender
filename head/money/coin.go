@@ -85,10 +85,9 @@ func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 		}
 		return true
 	}
-	onRefund := func(m *MoneySystem, hw Hardwarer) { self.Dispense(&self.credit) }
 	onRestart := func(m *MoneySystem, hw Hardwarer) {
 		self.hw.CommandReset()
 		self.hw.InitSequence()
 	}
-	pollResultLoop(m, pch, h, onRefund, onRestart, &self.hw, logPrefix)
+	pollResultLoop(m, pch, h, onRestart, &self.hw, logPrefix)
 }

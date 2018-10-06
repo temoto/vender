@@ -16,7 +16,10 @@ type PollResult struct {
 }
 
 func (self *PollResult) Ready() bool {
-	return self.Error == nil && len(self.Items) == 0
+	if self.Error != nil {
+		return false
+	}
+	return !self.HasStatus(StatusBusy)
 }
 
 func (self *PollResult) HasStatus(s PollItemStatus) bool {

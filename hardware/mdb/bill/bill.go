@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/temoto/alive"
@@ -37,6 +38,8 @@ type BillValidator struct {
 	escrowCap bool
 
 	internalScalingFactor int
+	batch                 sync.Mutex
+	ready                 chan struct{}
 }
 
 var (
@@ -53,6 +56,12 @@ var (
 	ErrEscrowImpossible = fmt.Errorf("An ESCROW command was requested for a bill not in the escrow position.")
 	ErrAttempts         = fmt.Errorf("Attempts")
 )
+
+// usage: defer coin.Batch()()
+func (self *BillValidator) Batch() func() {
+	self.batch.Lock()
+	return self.batch.Unlock
+}
 
 func (self *BillValidator) Init(ctx context.Context, mdber mdb.Mdber) error {
 	// TODO read config
@@ -78,6 +87,8 @@ func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- mo
 }
 
 func (self *BillValidator) InitSequence() error {
+	defer self.Batch()()
+
 	err := self.CommandSetup()
 	if err != nil {
 		return err
