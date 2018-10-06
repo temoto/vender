@@ -100,21 +100,22 @@ func (self *NominalGroup) Withdraw(a Amount, strategy ExpendStrategy, commit boo
 	return nil
 }
 
-func (self *NominalGroup) expendLoop(a Amount, strategy ExpendStrategy) error {
+func (self *NominalGroup) expendLoop(amount Amount, strategy ExpendStrategy) error {
 	strategy.Reset(self)
-	for a > 0 {
-		n, err := strategy.ExpendOne(self, a)
+	for amount > 0 {
+		nominal, err := strategy.ExpendOne(self, amount)
 		if err != nil {
 			return err
 		}
-		if n == 0 {
+		if nominal == 0 {
 			panic("ExpendStrategy returned Nominal 0 without error")
 		}
-		a -= Amount(n)
+		amount -= Amount(nominal)
 	}
 	return nil
 }
 
+// common code from strategies
 func expendOneOrdered(from *NominalGroup, order []Nominal, max Amount) (Nominal, error) {
 	if len(order) < len(from.values) {
 		panic("expendOneOrdered order must include all nominals")

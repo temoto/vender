@@ -77,6 +77,7 @@ func main() {
 	})
 
 	config := state.MustReadConfigFile(log.Fatal, *flagConfig)
+	log.Printf("config=%+v", config)
 	ctx = context.WithValue(ctx, "config", config)
 	if err := foldErrors(state.DoValidate(ctx)); err != nil {
 		log.Fatal(err)

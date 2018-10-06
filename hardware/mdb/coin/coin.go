@@ -17,9 +17,8 @@ import (
 const (
 	coinTypeCount = 16
 
-	DelayShort = 100 * time.Millisecond
-	DelayErr   = 500 * time.Millisecond
-	DelayNext  = 200 * time.Millisecond
+	DelayErr  = 500 * time.Millisecond
+	DelayNext = 200 * time.Millisecond
 
 	RouteCashBox = 0
 	RouteTubes   = 1

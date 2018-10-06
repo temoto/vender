@@ -15,6 +15,8 @@ import (
 const (
 	EventAbort  = "abort"
 	EventCredit = "credit"
+	// EventError = "error"
+	EventPing = "ping"
 )
 
 type Event struct {
@@ -37,12 +39,6 @@ func (e *Event) Error() string {
 func (e *Event) String() string {
 	return fmt.Sprintf("money.Event<name=%s err='%s' created=%s amount=%s>", e.name, e.Error(), e.created.Format(time.RFC3339Nano), e.amount.Format100I())
 }
-
-const (
-	EventPing   = "ping"
-	EventAmount = "amount"
-	EventError  = "error"
-)
 
 type MoneySystem struct {
 	lk     sync.Mutex

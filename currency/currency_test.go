@@ -61,6 +61,7 @@ func testCheckContains(t *testing.T, a Amount, expected bool) {
 }
 
 func TestNominalGroup(t *testing.T) {
+	t.Parallel()
 	t.Run("ExpendLeastCount", func(t *testing.T) { testCheckNominalGroup(t, NewExpendLeastCount()) })
 	t.Run("ExpendMostAvailable", func(t *testing.T) { testCheckNominalGroup(t, NewExpendMostAvailable()) })
 	t.Run("ExpendStatistical", func(t *testing.T) { testCheckNominalGroup(t, &ExpendStatistical{}) })
