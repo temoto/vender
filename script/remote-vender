@@ -6,7 +6,7 @@ gopkg=$(dirname $target)
 name=$(basename $target)
 remote="pi@pipi"
 set -x
-go test -v $gopkg ./head/...
+go test -v ./...
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
 rsync -a $base/$target $base/vender.hcl $remote:
 ssh -t $remote time sudo -n nice -n-5 env GODEBUG=gctrace=1 ./vender -config ./vender.hcl
