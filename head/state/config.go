@@ -16,7 +16,7 @@ import (
 
 type Config struct {
 	Mdb struct {
-		uart_driver  string
+		UartDriver   string `hcl:"uart_driver"`
 		Debug        bool
 		Uarter       mdb.Uarter
 		UartDevice   string `hcl:"uart_device"`
@@ -51,13 +51,13 @@ func ReadConfig(r io.Reader) (*Config, error) {
 	if c.Mdb.UartBaudrate == 0 {
 		c.Mdb.UartBaudrate = 9600
 	}
-	switch c.Mdb.uart_driver {
+	switch c.Mdb.UartDriver {
 	case "", "file":
 		c.Mdb.Uarter = mdb.NewFileUart()
 	case "fast":
 		c.Mdb.Uarter = mdb.NewFastUart()
 	default:
-		return nil, fmt.Errorf("config: unknown mdb.uart_driver=%s valid: file, fast", c.Mdb.uart_driver)
+		return nil, fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, fast", c.Mdb.UartDriver)
 	}
 
 	return c, err
