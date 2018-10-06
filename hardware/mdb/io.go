@@ -25,6 +25,15 @@ const (
 	cTCSETSF2 = 0x402c542d
 )
 
+type ErrTimeoutT string
+
+type Timeouter interface {
+	Timeout() bool
+}
+
+func (e ErrTimeoutT) Error() string { return string(e) }
+func (ErrTimeoutT) Timeout() bool   { return true }
+
 type cc_t byte
 type speed_t uint32
 type tcflag_t uint32
@@ -37,6 +46,20 @@ type termios2 struct {
 	c_cc     [cNCCS]cc_t // control characters
 	c_ispeed speed_t     // input speed
 	c_ospeed speed_t     // output speed
+}
+
+type fdReader struct {
+	fd      uintptr
+	timeout time.Duration
+}
+
+func (self fdReader) Read(p []byte) (n int, err error) {
+	err = io_wait_read(self.fd, 1, self.timeout)
+	if err != nil {
+		return 0, err
+	}
+	// TODO bench optimist read, then io_wait if needed
+	return syscall.Read(int(self.fd), p)
 }
 
 func ioctl(fd uintptr, op, arg uintptr) (err error) {
@@ -71,21 +94,22 @@ func io_read_slice(store []byte, l int, r io.Reader, delim byte) (int, []byte, e
 	}
 }
 
-func io_wait_read(fd uintptr, min int, wait time.Duration) (ok bool, err error) {
+func io_wait_read(fd uintptr, min int, wait time.Duration) error {
+	var err error
 	var out int
 	tbegin := time.Now()
 	tfinal := tbegin.Add(wait)
 	for {
 		err = ioctl(fd, uintptr(cFIONREAD), uintptr(unsafe.Pointer(&out)))
 		if err != nil {
-			return false, err
+			return err
 		}
 		if out >= min {
-			return true, nil
+			return nil
 		}
-		time.Sleep(wait / 20)
+		time.Sleep(wait / 16)
 		if time.Now().After(tfinal) {
-			return false, nil
+			return ErrTimeoutT("io_wait_read timeout")
 		}
 	}
 }
@@ -165,154 +189,6 @@ type Uarter interface {
 
 	set9(bool) error
 	write(p []byte) (int, error)
-}
-
-// Uarter with standard os.File
-type fileUart struct {
-	f  *os.File
-	r  *bufio.Reader
-	t2 termios2
-}
-
-func NewFileUart() *fileUart { return &fileUart{} }
-
-func (self *fileUart) set9(b bool) error { return io_set9(self.f.Fd(), &self.t2, b) }
-
-func (self *fileUart) write(p []byte) (int, error) { return self.f.Write(p) }
-
-func (self *fileUart) Break(d time.Duration) (err error) {
-	ms := int(d / time.Millisecond)
-	if err = self.ResetRead(); err != nil {
-		return err
-	}
-	return ioctl(self.f.Fd(), uintptr(cTCSBRKP), uintptr(ms/100))
-}
-
-func (self *fileUart) Close() error { return self.f.Close() }
-
-func (self *fileUart) Open(path string, baud int) (err error) {
-	if self.f != nil {
-		self.f.Close()
-	}
-	self.f, err = os.OpenFile(path, syscall.O_RDWR|syscall.O_NOCTTY, 0600)
-	if err != nil {
-		return err
-	}
-	self.r = bufio.NewReader(self.f)
-	err = io_reset_termios(self.f.Fd(), &self.t2, baud, 1)
-	if err != nil {
-		self.f.Close()
-		self.f = nil
-		self.r = nil
-		return err
-	}
-	return nil
-}
-
-func (self *fileUart) ReadByte() (byte, error) { return self.r.ReadByte() }
-
-func (self *fileUart) ReadSlice(delim byte) ([]byte, error) { return self.r.ReadSlice(delim) }
-
-func (self *fileUart) ResetRead() (err error) {
-	self.r.Reset(self.f)
-	if err = self.set9(false); err != nil {
-		return err
-	}
-	return nil
-}
-
-// WIP Uarter with low-level syscalls
-type fastUart struct {
-	fd  int
-	buf [PacketMaxLength]byte // read storage array
-	br  []byte                // ready to read, starts at buf[bri:]
-	bri int                   // buf[:bri] was consumed
-	t2  termios2
-}
-
-type fdReader int
-
-func (fd fdReader) Read(p []byte) (int, error) {
-	// io_wait_read(self.fd, 1, wait)
-	return syscall.Read(int(fd), p)
-}
-
-func NewFastUart() *fastUart { return &fastUart{fd: -1} }
-
-func (self *fastUart) set9(b bool) error { return io_set9(uintptr(self.fd), &self.t2, b) }
-
-func (self *fastUart) write(p []byte) (int, error) { return syscall.Write(self.fd, p) }
-
-func (self *fastUart) Break(d time.Duration) (err error) {
-	ms := int(d / time.Millisecond)
-	if err = self.ResetRead(); err != nil {
-		return err
-	}
-	return ioctl(uintptr(self.fd), uintptr(cTCSBRKP), uintptr(ms/100))
-}
-
-func (self *fastUart) Close() error {
-	self.ResetRead()
-	err := syscall.Close(self.fd)
-	self.fd = -1
-	return err
-}
-
-func (self *fastUart) Open(path string, baud int) (err error) {
-	if self.fd < 0 {
-		if err = self.Close(); err != nil {
-			return err
-		}
-	}
-
-	perm := uint32(0600)
-	const O_DIRECT = 0x4000
-	flag := syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOCTTY
-	// if linux
-	flag |= O_DIRECT
-	// TODO
-	// flag |= syscall.O_NONBLOCK
-	self.fd, err = syscall.Open(path, syscall.O_RDWR|syscall.O_CLOEXEC|syscall.O_NOCTTY|O_DIRECT, perm)
-	if err != nil {
-		return err
-	}
-	syscall.CloseOnExec(self.fd)
-
-	// TODO try vmin=0 + waitRecv
-	return io_reset_termios(uintptr(self.fd), &self.t2, baud, 1)
-}
-
-func (self *fastUart) ReadByte() (b byte, err error) {
-	if len(self.br) < 1 {
-		n, err := fdReader(self.fd).Read(self.buf[self.bri:])
-		if err != nil {
-			return 0, err
-		}
-		self.br = self.buf[self.bri : self.bri+n]
-	}
-	b = self.br[0]
-	self.br = self.br[1:]
-	self.bri++
-	return b, nil
-}
-
-func (self *fastUart) ReadSlice(delim byte) ([]byte, error) {
-	l1 := len(self.br)
-	l2, result, err := io_read_slice(self.buf[self.bri:], l1, fdReader(self.fd), delim)
-	if err != nil {
-		return nil, err
-	}
-	self.br = self.buf[self.bri : self.bri+l2]
-	return result, nil
-}
-
-func (self *fastUart) ResetRead() error {
-	self.br = nil
-	self.bri = 0
-	if err := self.set9(false); err != nil {
-		return err
-	}
-	return nil
 }
 
 // Mock Uarter for tests
