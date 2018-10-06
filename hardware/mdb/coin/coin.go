@@ -350,7 +350,7 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 	case 0x04: // Defective Tube Sensor
 		return money.PollItem{Status: money.StatusFatal, Error: money.ErrSensor}, false
 	case 0x05: // Double Arrival
-		return money.PollItem{Status: money.StatusError, Error: ErrDoubleArrival}, false
+		return money.PollItem{Status: money.StatusInfo, Error: ErrDoubleArrival}, false
 	case 0x06: // Acceptor Unplugged
 		return money.PollItem{Status: money.StatusFatal, Error: money.ErrNoStorage}, false
 	case 0x07: // Tube Jam
