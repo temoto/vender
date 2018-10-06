@@ -369,6 +369,34 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 		return money.PollItem{Status: money.StatusError, Error: money.ErrFraud}, false
 	}
 
+	if b>>5 == 1 { // Slug count 001xxxxx
+		slugs := b & 0x1f
+		log.Printf("Number of slugs: %d", slugs)
+		return money.PollItem{Status: money.StatusInfo, Error: ErrSlugs, DataCount: slugs}, false
+	}
+	if b>>6 == 1 { // Coins Deposited
+		// b=01yyxxxx b2=number of coins in tube
+		// yy = coin routing
+		// xxxx = coin type
+		routing := (b >> 4) & 3
+		pi := money.PollItem{
+			DataNominal: self.coinTypeNominal(b & 0xf),
+			DataCount:   1,
+		}
+		switch routing {
+		case RouteCashBox, RouteTubes:
+			pi.Status = money.StatusCredit
+		case RouteNotUsed:
+			pi.Status = money.StatusError
+			pi.Error = fmt.Errorf("routing=notused b=%x pi=%s", b, pi.String())
+		case RouteReject:
+			pi.Status = money.StatusRejected
+		default:
+			// pi.Status = money.StatusFatal
+			panic(fmt.Errorf("code error b=%x routing=%b", b, routing))
+		}
+		return pi, true
+	}
 	if b&0x80 != 0 { // Coins Dispensed Manually
 		// b=1yyyxxxx b2=number of coins in tube
 		// yyy = coins dispensed
@@ -376,22 +404,6 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 		count := (b >> 4) & 7
 		nominal := self.coinTypeNominal(b & 0xf)
 		return money.PollItem{Status: money.StatusDispensed, DataNominal: nominal, DataCount: count}, true
-	}
-	if b&0x7f == b { // Coins Deposited
-		// b=01yyxxxx b2=number of coins in tube
-		// yy = coin routing
-		// xxxx = coin type
-		routing := (b >> 4) & 3
-		if routing > 3 {
-			panic("code error")
-		}
-		nominal := self.coinTypeNominal(b & 0xf)
-		return money.PollItem{Status: money.StatusCredit, DataNominal: nominal, DataCount: 1}, true
-	}
-	if b&0x3f == b { // Slug count
-		slugs := b & 0x1f
-		log.Printf("Number of slugs: %d", slugs)
-		return money.PollItem{Status: money.StatusInfo, Error: ErrSlugs, DataCount: slugs}, false
 	}
 
 	err := fmt.Errorf("parsePollItem unknown=%x", b)
