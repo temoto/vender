@@ -54,7 +54,12 @@ func TestCoinPoll(t *testing.T) {
 		}},
 		Case{"deposited-cashbox", "4109", _PR{
 			Delay: DelayNext,
-			Items: []_PI{_PI{Status: money.StatusCredit, DataNominal: currency.Nominal(2), DataCount: 1}},
+			Items: []_PI{_PI{
+				Status:      money.StatusCredit,
+				DataNominal: currency.Nominal(2),
+				DataCount:   1,
+				DataCashbox: true,
+			}},
 		}},
 		Case{"deposited-tube", "521e", _PR{
 			Delay: DelayNext,

@@ -19,14 +19,19 @@ const (
 
 	DelayErr  = 500 * time.Millisecond
 	DelayNext = 200 * time.Millisecond
-
-	RouteCashBox = 0
-	RouteTubes   = 1
-	RouteNotUsed = 2
-	RouteReject  = 3
 )
 
-//go:generate stringer -type=Features
+//go:generate stringer -type=CoinRouting -trimprefix=Routing
+type CoinRouting uint8
+
+const (
+	RoutingCashBox CoinRouting = 0
+	RoutingTubes   CoinRouting = 1
+	RoutingNotUsed CoinRouting = 2
+	RoutingReject  CoinRouting = 3
+)
+
+//go:generate stringer -type=Features -trimprefix=Feature
 type Features uint32
 
 const (
@@ -114,6 +119,10 @@ func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- mon
 			return
 		}
 	}
+}
+
+func (self *CoinAcceptor) ReadyCh() <-chan struct{} {
+	return self.ready
 }
 
 func (self *CoinAcceptor) InitSequence() error {
@@ -270,8 +279,8 @@ func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8)
 
 	response := new(mdb.Packet)
 	request := mdb.PacketFromBytes([]byte{0x0d, (count << 4) + coinType})
-	<-self.ready
 	err = self.mdb.Tx(request, response)
+	<-self.ReadyCh()
 	if err != nil {
 		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return err
@@ -317,8 +326,21 @@ func (self *CoinAcceptor) CommandExpansionSendDiagStatus() error {
 		log.Printf("CommandExpansionSendDiagStatus feature is not supported")
 		return nil
 	}
-	self.mdb.TxDebug(mdb.PacketFromHex("0f05"), true) // 0f05 EXPANSION SEND DIAG money.Status
-	return nil
+	request := mdb.PacketFromHex("0f05") // 0f05 EXPANSION SEND DIAG STATUS
+	response := new(mdb.Packet)
+	err := self.mdb.Tx(request, response)
+	if err != nil {
+		return err
+	}
+	dr, err := parseDiagResult(response.Bytes(), self.byteOrder)
+	log.Printf("DiagStatus=%s", dr.Error())
+	if err != nil {
+		return err
+	}
+	if dr.OK() {
+		return nil
+	}
+	return dr
 }
 
 func (self *CoinAcceptor) coinTypeNominal(b byte) currency.Nominal {
@@ -384,23 +406,28 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 		// b=01yyxxxx b2=number of coins in tube
 		// yy = coin routing
 		// xxxx = coin type
-		routing := (b >> 4) & 3
+		coinType := b & 0xf
+		routing := CoinRouting((b >> 4) & 3)
 		pi := money.PollItem{
-			DataNominal: self.coinTypeNominal(b & 0xf),
+			DataNominal: self.coinTypeNominal(coinType),
 			DataCount:   1,
 		}
 		switch routing {
-		case RouteCashBox, RouteTubes:
+		case RoutingCashBox:
 			pi.Status = money.StatusCredit
-		case RouteNotUsed:
+			pi.DataCashbox = true
+		case RoutingTubes:
+			pi.Status = money.StatusCredit
+		case RoutingNotUsed:
 			pi.Status = money.StatusError
 			pi.Error = fmt.Errorf("routing=notused b=%x pi=%s", b, pi.String())
-		case RouteReject:
+		case RoutingReject:
 			pi.Status = money.StatusRejected
 		default:
 			// pi.Status = money.StatusFatal
 			panic(fmt.Errorf("code error b=%x routing=%b", b, routing))
 		}
+		log.Printf("deposited coinType=%d routing=%s pi=%s", coinType, routing.String(), pi.String())
 		return pi, true
 	}
 	if b&0x80 != 0 { // Coins Dispensed Manually

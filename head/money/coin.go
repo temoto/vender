@@ -47,13 +47,19 @@ func (self *CoinState) Dispense(ng *currency.NominalGroup) (currency.Amount, err
 	sum := currency.Amount(0)
 	err := ng.Iter(func(nominal currency.Nominal, count uint) error {
 		log.Printf("Dispense n=%v c=%d", nominal, count)
+		self.hw.CommandTubeStatus()
 		if count == 0 {
 			return nil
 		}
 		err := self.hw.CommandDispense(nominal, uint8(count))
+		log.Printf("dispense err=%v", err)
 		if err == nil {
 			sum += currency.Amount(nominal) * currency.Amount(count)
 		}
+		<-self.hw.ReadyCh()
+		self.hw.CommandTubeStatus()
+		self.hw.CommandExpansionSendDiagStatus()
+		log.Printf("Dispense end n=%v c=%d", nominal, count)
 		return err
 	})
 	return sum, err
@@ -65,6 +71,8 @@ func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 		switch pi.Status {
 		case money.StatusDispensed:
 			log.Printf("manual dispense: %s", pi.String())
+			self.hw.CommandTubeStatus()
+			self.hw.CommandExpansionSendDiagStatus()
 			// TODO telemetry
 		case money.StatusReturnRequest:
 			m.events <- Event{created: pr.Time, name: EventAbort}
@@ -79,6 +87,8 @@ func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 			if err != nil {
 				log.Printf("coin credit.Add n=%v c=%d err=%v", pi.DataNominal, pi.DataCount, err)
 			}
+			self.hw.CommandTubeStatus()
+			self.hw.CommandExpansionSendDiagStatus()
 			m.events <- Event{created: pr.Time, name: EventCredit, amount: pi.Amount()}
 		default:
 			return false

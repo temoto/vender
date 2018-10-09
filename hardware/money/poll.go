@@ -41,7 +41,7 @@ func (self *PollResult) SingleStatus() PollItemStatus {
 	return self.Items[0].Status
 }
 
-//go:generate stringer -type=PollItemStatus
+//go:generate stringer -type=PollItemStatus -trimprefix=Status
 type PollItemStatus byte
 
 const (
@@ -64,11 +64,13 @@ type PollItem struct {
 	Error       error
 	DataNominal currency.Nominal
 	DataCount   uint8
+	DataCashbox bool
 }
 
 func (self *PollItem) String() string {
-	return fmt.Sprintf("%s n=%s count=%d err=%v",
+	return fmt.Sprintf("status=%s cashbox=%v nominal=%s count=%d err=%v",
 		self.Status.String(),
+		self.DataCashbox,
 		currency.Amount(self.DataNominal).Format100I(),
 		self.DataCount,
 		self.Error,
