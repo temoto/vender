@@ -1,7 +1,6 @@
 package mdb
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"io"
@@ -33,6 +32,18 @@ type Timeouter interface {
 
 func (e ErrTimeoutT) Error() string { return string(e) }
 func (ErrTimeoutT) Timeout() bool   { return true }
+
+type Uarter interface {
+	Open(path string, baud int) error
+	Break(d time.Duration) error
+	ResetRead() error
+	ReadSlice(delim byte) ([]byte, error)
+	ReadByte() (byte, error)
+	Close() error
+
+	set9(bool) error
+	write(p []byte) (int, error)
+}
 
 type cc_t byte
 type speed_t uint32
@@ -176,62 +187,5 @@ func io_write(u Uarter, p []byte, start9 bool) (err error) {
 			return err
 		}
 	}
-	return nil
-}
-
-type Uarter interface {
-	Open(path string, baud int) error
-	Break(d time.Duration) error
-	ResetRead() error
-	ReadSlice(delim byte) ([]byte, error)
-	ReadByte() (byte, error)
-	Close() error
-
-	set9(bool) error
-	write(p []byte) (int, error)
-}
-
-// Mock Uarter for tests
-type nullUart struct {
-	src io.Reader
-	r   *bufio.Reader
-	w   io.Writer
-}
-
-func NewNullUart(r io.Reader, w io.Writer) *nullUart {
-	return &nullUart{
-		src: r,
-		r:   bufio.NewReader(r),
-		w:   w,
-	}
-}
-
-func (self *nullUart) set9(b bool) error { return nil }
-
-func (self *nullUart) read(p []byte) (int, error) { return self.r.Read(p) }
-
-func (self *nullUart) write(p []byte) (int, error) { return self.w.Write(p) }
-
-func (self *nullUart) Break(d time.Duration) (err error) {
-	self.ResetRead()
-	time.Sleep(d)
-	return nil
-}
-
-func (self *nullUart) Close() error {
-	self.src = nil
-	self.r = nil
-	self.w = nil
-	return nil
-}
-
-func (self *nullUart) Open(path string, baud int) (err error) { return nil }
-
-func (self *nullUart) ReadByte() (byte, error) { return self.r.ReadByte() }
-
-func (self *nullUart) ReadSlice(delim byte) ([]byte, error) { return self.r.ReadSlice(delim) }
-
-func (self *nullUart) ResetRead() error {
-	self.r.Reset(self.src)
 	return nil
 }

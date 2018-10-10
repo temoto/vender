@@ -48,8 +48,17 @@ const (
 type DiagResult []DiagStatus
 
 func (self DiagResult) OK() bool {
-	l := len(self)
-	return l == 0 || (l == 1 && self[0] == DiagOK)
+	if len(self) == 0 {
+		return true
+	}
+	for _, ds := range self {
+		switch ds {
+		case DiagOK, DiagPoweringUp, DiagInhibited:
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (self DiagResult) Error() string {

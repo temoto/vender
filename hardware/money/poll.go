@@ -15,6 +15,12 @@ type PollResult struct {
 	Items []PollItem
 }
 
+func NewPollResult(itemsCap uint) *PollResult {
+	return &PollResult{
+		Items: make([]PollItem, 0, itemsCap),
+	}
+}
+
 func (self *PollResult) Ready() bool {
 	if self.Error != nil {
 		return false
@@ -86,7 +92,7 @@ func (self *PollItem) Amount() currency.Amount {
 }
 
 // TODO generate this code
-func (a *PollResult) TestEqual(t *testing.T, b *PollResult) {
+func (a *PollResult) TestEqual(t testing.TB, b *PollResult) {
 	if a.Delay != b.Delay {
 		t.Errorf("PoolResult.Delay a=%v b=%v", a.Delay, b.Delay)
 	}

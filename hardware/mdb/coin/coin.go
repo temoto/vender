@@ -49,6 +49,8 @@ type CoinAcceptor struct {
 	// These are final values including all scaling factors.
 	coinTypeCredit []currency.Nominal
 
+	coinTypeRouting uint16
+
 	featureLevel      uint8
 	supportedFeatures Features
 
@@ -63,6 +65,7 @@ var (
 	packetTubeStatus = mdb.PacketFromHex("0a")
 	packetPoll       = mdb.PacketFromHex("0b")
 	packetExpIdent   = mdb.PacketFromHex("0f00")
+	packetDiagStatus = mdb.PacketFromHex("0f05")
 )
 
 var (
@@ -107,11 +110,19 @@ func (self *CoinAcceptor) SupportedNominals() []currency.Nominal {
 func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
 	stopch := a.StopChan()
 	for a.IsRunning() {
-		pr := self.CommandPoll()
-		select {
-		case ch <- pr:
-		case <-stopch:
-			return
+		// TODO to reuse single PollResult safely, must clone .Items before sending to chan
+		pr := money.NewPollResult(mdb.PacketMaxLength)
+		if err := self.CommandPoll(pr); err != nil {
+			log.Printf("coin.Run CommandPoll err=%v", err)
+			if pr.Delay == 0 {
+				pr.Delay = DelayErr
+			}
+		} else {
+			select {
+			case ch <- *pr:
+			case <-stopch:
+				return
+			}
 		}
 		select {
 		case <-time.After(pr.Delay):
@@ -121,7 +132,7 @@ func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- mon
 	}
 }
 
-func (self *CoinAcceptor) ReadyCh() <-chan struct{} {
+func (self *CoinAcceptor) ReadyChan() <-chan struct{} {
 	return self.ready
 }
 
@@ -138,7 +149,8 @@ func (self *CoinAcceptor) InitSequence() error {
 	if err = self.CommandFeatureEnable(FeatureExtendedDiagnostic); err != nil {
 		return err
 	}
-	if err = self.CommandExpansionSendDiagStatus(); err != nil {
+	diagResult := new(DiagResult)
+	if err = self.CommandExpansionSendDiagStatus(diagResult); err != nil {
 		return err
 	}
 	if err = self.CommandTubeStatus(); err != nil {
@@ -171,6 +183,7 @@ func (self *CoinAcceptor) CommandSetup() error {
 		return fmt.Errorf("hardware/mdb/coin SETUP response=%s expected >= %d bytes", response.Format(), expectLengthMin)
 	}
 	scalingFactor := bs[3]
+	self.coinTypeRouting = self.byteOrder.Uint16(bs[5 : 5+2])
 	for i, sf := range bs[7:] {
 		n := currency.Nominal(sf) * currency.Nominal(scalingFactor) * currency.Nominal(self.internalScalingFactor)
 		log.Printf("i=%d sf=%d nominal=%s", i, sf, currency.Amount(n).Format100I())
@@ -181,54 +194,9 @@ func (self *CoinAcceptor) CommandSetup() error {
 	log.Printf("Country / Currency Code: %x", bs[1:3])
 	log.Printf("Coin Scaling Factor: %d", scalingFactor)
 	log.Printf("Decimal Places: %d", bs[4])
-	log.Printf("Coin Type Routing: %d", self.byteOrder.Uint16(bs[5:7]))
+	log.Printf("Coin Type Routing: %b", self.coinTypeRouting)
 	log.Printf("Coin Type Credit: %x %#v", bs[7:], self.coinTypeCredit)
 	return nil
-}
-
-func (self *CoinAcceptor) CommandPoll() (result money.PollResult) {
-	defer func() {
-		if result.Ready() {
-			select {
-			case self.ready <- struct{}{}:
-			default:
-			}
-		}
-	}()
-
-	now := time.Now()
-	response := new(mdb.Packet)
-	savedebug := self.mdb.SetDebug(false)
-	err := self.mdb.Tx(packetPoll, response)
-	self.mdb.SetDebug(savedebug)
-	result.Time = now
-	result.Delay = DelayNext
-	if err != nil {
-		result.Error = err
-		result.Delay = DelayErr
-		return result
-	}
-	if response.Len() == 0 {
-		return result
-	}
-	result.Items = make([]money.PollItem, 0, response.Len())
-	log.Printf("poll response=%s", response.Format())
-	bs := response.Bytes()
-	pi := money.PollItem{}
-	skip := false
-	for i, b := range bs {
-		if skip {
-			skip = false
-			continue
-		}
-		b2 := byte(0)
-		if i+1 < len(bs) {
-			b2 = bs[i+1]
-		}
-		pi, skip = self.parsePollItem(b, b2)
-		result.Items = append(result.Items, pi)
-	}
-	return result
 }
 
 func (self *CoinAcceptor) CommandTubeStatus() error {
@@ -254,6 +222,44 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 	return nil
 }
 
+func (self *CoinAcceptor) CommandPoll(result *money.PollResult) error {
+	result.Delay = DelayNext
+	result.Error = nil
+	result.Items = result.Items[:0]
+	result.Time = time.Now()
+	response := new(mdb.Packet)
+	err := self.mdb.Tx(packetPoll, response)
+	if err != nil {
+		result.Delay = DelayErr
+		result.Error = err
+		return err
+	}
+	bs := response.Bytes()
+	if len(bs) == 0 {
+		sendNothing(self.ready)
+		return nil
+	}
+	log.Printf("poll response=%s", response.Format())
+	pi := money.PollItem{}
+	skip := false
+	for i, b := range bs {
+		if skip {
+			skip = false
+			continue
+		}
+		b2 := byte(0)
+		if i+1 < len(bs) {
+			b2 = bs[i+1]
+		}
+		pi, skip = self.parsePollItem(b, b2)
+		result.Items = append(result.Items, pi)
+	}
+	if result.Ready() {
+		sendNothing(self.ready)
+	}
+	return nil
+}
+
 func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) error {
 	buf := [5]byte{0x0c}
 	self.byteOrder.PutUint16(buf[1:], accept)
@@ -272,15 +278,24 @@ func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8)
 	if count >= 16 {
 		return fmt.Errorf("CommandDispense count=%d overflow >=16", count)
 	}
-	coinType, err := self.nominalCoinType(nominal)
-	if err != nil {
-		return err
+	coinType := self.nominalCoinType(nominal)
+	if coinType < 0 {
+		return fmt.Errorf("dispense not supported for nominal=%v", currency.Amount(nominal).Format100I())
 	}
 
-	response := new(mdb.Packet)
-	request := mdb.PacketFromBytes([]byte{0x0d, (count << 4) + coinType})
-	err = self.mdb.Tx(request, response)
-	<-self.ReadyCh()
+	request := mdb.PacketFromBytes([]byte{0x0d, (count << 4) + uint8(coinType)})
+	<-self.ReadyChan()
+	err := self.mdb.Tx(request, new(mdb.Packet))
+	if err != nil {
+		log.Printf("mdb request=%s err=%v", request.Format(), err)
+	}
+	return err
+}
+
+func (self *CoinAcceptor) CommandPayout(amount currency.Amount) error {
+	request := mdb.PacketFromBytes([]byte{0x0f, 0x02, byte(int(amount) / 100 / self.internalScalingFactor)})
+	<-self.ReadyChan()
+	err := self.mdb.Tx(request, new(mdb.Packet))
 	if err != nil {
 		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return err
@@ -302,9 +317,34 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 	if len(bs) < expectLength {
 		return fmt.Errorf("hardware/mdb/coin EXPANSION IDENTIFICATION response=%s expected %d bytes", response.Format(), expectLength)
 	}
-	self.supportedFeatures = Features(self.byteOrder.Uint32(bs[29:]))
-	log.Printf("Supported features: %b", self.supportedFeatures)
+	self.supportedFeatures = Features(self.byteOrder.Uint32(bs[29 : 29+4]))
+	log.Printf("Manufacturer Code: %x", bs[0:0+3])
+	log.Printf("Serial Number: '%s'", string(bs[3:3+12]))
+	log.Printf("Model #/Tuning Revision: '%s'", string(bs[15:15+12]))
+	log.Printf("Software Version: %x", bs[27:27+2])
+	log.Printf("Optional Features: %b", self.supportedFeatures)
 	return nil
+}
+
+// CommandExpansionSendDiagStatus returns:
+// - `nil` if command is not supported by device, result is not modified
+// - otherwise returns nil or MDB/parse error, result set to valid DiagResult
+func (self *CoinAcceptor) CommandExpansionSendDiagStatus(result *DiagResult) error {
+	if self.supportedFeatures&FeatureExtendedDiagnostic == 0 {
+		log.Printf("CommandExpansionSendDiagStatus feature is not supported")
+		return nil
+	}
+	response := new(mdb.Packet)
+	err := self.mdb.Tx(packetDiagStatus, response)
+	if err != nil {
+		return err
+	}
+	dr, err := parseDiagResult(response.Bytes(), self.byteOrder)
+	log.Printf("DiagStatus=%s", dr.Error())
+	if result != nil {
+		*result = dr
+	}
+	return err
 }
 
 func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
@@ -312,35 +352,11 @@ func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
 	buf := [6]byte{0x0f, 0x01}
 	self.byteOrder.PutUint32(buf[2:], uint32(f))
 	request := mdb.PacketFromBytes(buf[:])
-	response := new(mdb.Packet)
-	err := self.mdb.Tx(request, response)
+	err := self.mdb.Tx(request, new(mdb.Packet))
 	if err != nil {
 		log.Printf("mdb request=%s err=%v", request.Format(), err)
-		return err
 	}
-	return nil
-}
-
-func (self *CoinAcceptor) CommandExpansionSendDiagStatus() error {
-	if self.supportedFeatures&FeatureExtendedDiagnostic == 0 {
-		log.Printf("CommandExpansionSendDiagStatus feature is not supported")
-		return nil
-	}
-	request := mdb.PacketFromHex("0f05") // 0f05 EXPANSION SEND DIAG STATUS
-	response := new(mdb.Packet)
-	err := self.mdb.Tx(request, response)
-	if err != nil {
-		return err
-	}
-	dr, err := parseDiagResult(response.Bytes(), self.byteOrder)
-	log.Printf("DiagStatus=%s", dr.Error())
-	if err != nil {
-		return err
-	}
-	if dr.OK() {
-		return nil
-	}
-	return dr
+	return err
 }
 
 func (self *CoinAcceptor) coinTypeNominal(b byte) currency.Nominal {
@@ -351,13 +367,13 @@ func (self *CoinAcceptor) coinTypeNominal(b byte) currency.Nominal {
 	return self.coinTypeCredit[b]
 }
 
-func (self *CoinAcceptor) nominalCoinType(nominal currency.Nominal) (byte, error) {
+func (self *CoinAcceptor) nominalCoinType(nominal currency.Nominal) int8 {
 	for ct, n := range self.coinTypeCredit {
-		if n == nominal {
-			return byte(ct), nil
+		if n == nominal && ((1<<uint(ct))&self.coinTypeRouting != 0) {
+			return int8(ct)
 		}
 	}
-	return 0, fmt.Errorf("Unknown nominal %s", currency.Amount(nominal).Format100I())
+	return -1
 }
 
 func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
@@ -442,4 +458,11 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 	err := fmt.Errorf("parsePollItem unknown=%x", b)
 	log.Print(err)
 	return money.PollItem{Status: money.StatusFatal, Error: err}, false
+}
+
+func sendNothing(ch chan<- struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
 }

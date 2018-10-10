@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"testing"
 )
 
 const (
@@ -117,4 +118,15 @@ func (self *Packet) Wire(ffDance bool) []byte {
 	}
 	w[l-1] = chk
 	return w
+}
+
+// Without checksum
+func (self *Packet) TestHex(t testing.TB, expect string) {
+	if _, err := hex.DecodeString(expect); err != nil {
+		t.Fatalf("invalid expect=%s err=%s", expect, err)
+	}
+	actual := hex.EncodeToString(self.Bytes())
+	if actual != expect {
+		t.Fatalf("Packet=%s expected=%s", actual, expect)
+	}
 }
