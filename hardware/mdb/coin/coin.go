@@ -164,8 +164,7 @@ func (self *CoinAcceptor) InitSequence() error {
 }
 
 func (self *CoinAcceptor) CommandReset() error {
-	response := new(mdb.Packet)
-	return self.mdb.Tx(packetReset, response)
+	return self.mdb.Tx(packetReset, new(mdb.Packet))
 }
 
 func (self *CoinAcceptor) CommandSetup() error {
@@ -182,6 +181,7 @@ func (self *CoinAcceptor) CommandSetup() error {
 	if len(bs) < expectLengthMin {
 		return fmt.Errorf("hardware/mdb/coin SETUP response=%s expected >= %d bytes", response.Format(), expectLengthMin)
 	}
+	self.featureLevel = bs[0]
 	scalingFactor := bs[3]
 	self.coinTypeRouting = self.byteOrder.Uint16(bs[5 : 5+2])
 	for i, sf := range bs[7:] {
@@ -189,9 +189,8 @@ func (self *CoinAcceptor) CommandSetup() error {
 		log.Printf("i=%d sf=%d nominal=%s", i, sf, currency.Amount(n).Format100I())
 		self.coinTypeCredit[i] = n
 	}
-	self.featureLevel = bs[0]
 	log.Printf("Changer Feature Level: %d", self.featureLevel)
-	log.Printf("Country / Currency Code: %x", bs[1:3])
+	log.Printf("Country / Currency Code: %x", bs[1:1+2])
 	log.Printf("Coin Scaling Factor: %d", scalingFactor)
 	log.Printf("Decimal Places: %d", bs[4])
 	log.Printf("Coin Type Routing: %b", self.coinTypeRouting)
@@ -265,13 +264,11 @@ func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) error {
 	self.byteOrder.PutUint16(buf[1:], accept)
 	self.byteOrder.PutUint16(buf[3:], dispense)
 	request := mdb.PacketFromBytes(buf[:])
-	response := new(mdb.Packet)
-	err := self.mdb.Tx(request, response)
+	err := self.mdb.Tx(request, new(mdb.Packet))
 	if err != nil {
 		log.Printf("mdb request=%s err=%v", request.Format(), err)
-		return err
 	}
-	return nil
+	return err
 }
 
 func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8) error {
@@ -298,9 +295,8 @@ func (self *CoinAcceptor) CommandPayout(amount currency.Amount) error {
 	err := self.mdb.Tx(request, new(mdb.Packet))
 	if err != nil {
 		log.Printf("mdb request=%s err=%v", request.Format(), err)
-		return err
 	}
-	return nil
+	return err
 }
 
 func (self *CoinAcceptor) CommandExpansionIdentification() error {
@@ -312,7 +308,7 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 		log.Printf("mdb request=%s err=%v", request.Format(), err)
 		return err
 	}
-	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
+	log.Printf("EXPANSION IDENTIFICATION response=(%d)%s", response.Len(), response.Format())
 	bs := response.Bytes()
 	if len(bs) < expectLength {
 		return fmt.Errorf("hardware/mdb/coin EXPANSION IDENTIFICATION response=%s expected %d bytes", response.Format(), expectLength)
@@ -456,7 +452,6 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 	}
 
 	err := fmt.Errorf("parsePollItem unknown=%x", b)
-	log.Print(err)
 	return money.PollItem{Status: money.StatusFatal, Error: err}, false
 }
 
