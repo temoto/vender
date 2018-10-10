@@ -1,33 +1,58 @@
 package bill
 
 import (
-	"bytes"
 	"context"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 )
 
-func checkPoll(t *testing.T, input string, expected money.PollResult) {
-	inp := mdb.PacketFromHex(input)
-	m, mockRead, w := mdb.NewTestMDB(t)
-	bv := &BillValidator{mdb: m}
-	bv.Init(context.Background(), m)
-	w.Reset()
-	mockRead(inp.Wire(true))
+type _PR = money.PollResult
+type _PI = money.PollItem
+
+func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *BillValidator {
+	mdber, reqCh, respCh := mdb.NewTestMDBChan(t)
+	go func() {
+		defer close(respCh)
+		// InitSequence, SETUP
+		// TODO fill real response
+		mdb.TestChanTx(t, reqCh, respCh, "31", "02164300320000640205ff0a143264000000000000000000000000")
+
+		// InitSequence, EXPANSION IDENTIFICATION
+		// TODO fill real response
+		mdb.TestChanTx(t, reqCh, respCh, "3700", "434f47303030303030303030303030463030313230303120202020029000000003")
+
+		// InitSequence, STACKER
+		mdb.TestChanTx(t, reqCh, respCh, "36", "000b")
+
+		// InitSequence, BILL TYPE
+		mdb.TestChanTx(t, reqCh, respCh, "34ffff0000", "")
+
+		if replyFunc != nil {
+			replyFunc(t, reqCh, respCh)
+		}
+	}()
+	bv := &BillValidator{mdb: mdber}
+	err := bv.Init(context.Background(), mdber)
+	if err != nil {
+		t.Fatalf("bv.Init err=%v", err)
+	}
 	bv.billTypeCredit[0] = currency.Nominal(5)
 	bv.billTypeCredit[1] = currency.Nominal(10)
 	bv.billTypeCredit[2] = currency.Nominal(20)
+	return bv
+}
+
+func checkPoll(t *testing.T, input string, expected _PR) {
+	reply := func(t testing.TB, reqCh <-chan *mdb.Packet, respCh chan<- *mdb.Packet) {
+		mdb.TestChanTx(t, reqCh, respCh, "33", input)
+	}
+	bv := testMake(t, reply)
 	actual := bv.CommandPoll()
-	writeExpect := mdb.PacketFromHex("33").Wire(false)
-	if len(input) > 0 {
-		writeExpect = append(writeExpect, 0)
-	}
-	if !bytes.Equal(w.Bytes(), writeExpect) {
-		t.Fatalf("CommandPoll() must send packet, found=%x expected=%x", w.Bytes(), writeExpect)
-	}
 	actual.TestEqual(t, &expected)
 }
 
@@ -59,7 +84,10 @@ func TestBillPoll(t *testing.T) {
 			},
 		}},
 	}
+	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) { checkPoll(t, c.input, c.expect) })
+		t.Run(c.name, func(t *testing.T) {
+			checkPoll(t, c.input, c.expect)
+		})
 	}
 }
