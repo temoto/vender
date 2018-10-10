@@ -103,20 +103,24 @@ func (self *Packet) Format() string {
 
 func (self *Packet) Wire(ffDance bool) []byte {
 	chk := byte(0)
+	j := 0
+	w := make([]byte, (self.l+2)*2)
 	for _, b := range self.b[:self.l] {
+		if ffDance && b == 0xff {
+			w[j] = 0xff
+			j++
+		}
+		w[j] = b
+		j++
 		chk += b
 	}
-	l := self.l + 1
 	if ffDance {
-		l += 2
+		w[j] = 0xff
+		w[j+1] = 0x00
+		j += 2
 	}
-	w := make([]byte, l)
-	copy(w, self.b[:self.l])
-	if ffDance {
-		w[l-3] = 0xff
-		w[l-2] = 0x00
-	}
-	w[l-1] = chk
+	w[j] = chk
+	w = w[:j+1]
 	return w
 }
 
