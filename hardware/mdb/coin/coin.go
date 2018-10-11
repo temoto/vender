@@ -184,7 +184,7 @@ func (self *CoinAcceptor) CommandSetup() error {
 	self.featureLevel = bs[0]
 	scalingFactor := bs[3]
 	self.coinTypeRouting = self.byteOrder.Uint16(bs[5 : 5+2])
-	for i, sf := range bs[7:] {
+	for i, sf := range bs[7 : 7+16] {
 		n := currency.Nominal(sf) * currency.Nominal(scalingFactor) * currency.Nominal(self.internalScalingFactor)
 		log.Printf("i=%d sf=%d nominal=%s", i, sf, currency.Amount(n).Format100I())
 		self.coinTypeCredit[i] = n
