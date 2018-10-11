@@ -45,6 +45,10 @@ func (self InvalidChecksum) Error() string {
 	return "Invalid checksum"
 }
 
+type FeatureNotSupported string
+
+func (self FeatureNotSupported) Error() string { return string(self) }
+
 func NewMDB(u Uarter, path string, baud int) (*mdb, error) {
 	self := &mdb{
 		io:      u,

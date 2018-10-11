@@ -20,11 +20,11 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *BillValidator {
 		defer close(respCh)
 		// InitSequence, SETUP
 		// TODO fill real response
-		mdb.TestChanTx(t, reqCh, respCh, "31", "02164300320000640205ff0a143264000000000000000000000000")
+		mdb.TestChanTx(t, reqCh, respCh, "31", "011810000a0000c8001fff01050a32640000000000000000000000")
 
 		// InitSequence, EXPANSION IDENTIFICATION
 		// TODO fill real response
-		mdb.TestChanTx(t, reqCh, respCh, "3700", "434f47303030303030303030303030463030313230303120202020029000000003")
+		mdb.TestChanTx(t, reqCh, respCh, "3700", "49435430303030303030303030303056372d5255523530303030300120")
 
 		// InitSequence, STACKER
 		mdb.TestChanTx(t, reqCh, respCh, "36", "000b")
