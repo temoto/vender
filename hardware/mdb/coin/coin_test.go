@@ -10,6 +10,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/helpers"
 )
 
 type _PR = money.PollResult
@@ -67,7 +68,8 @@ func checkPoll(t testing.TB, input string, expected _PR) {
 }
 
 func TestCoinPoll(t *testing.T) {
-	t.Parallel()
+	helpers.LogToTest(t)
+	// t.Parallel() incompatible with LogToTest
 	type Case struct {
 		name   string
 		input  string
@@ -108,8 +110,6 @@ func TestCoinPoll(t *testing.T) {
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			// FIXME race
-			// t.Parallel()
 			checkPoll(t, c.input, c.expect)
 		})
 	}
@@ -137,6 +137,7 @@ func checkDiag(t testing.TB, input string, expected DiagResult) {
 }
 
 func TestCoinDiag(t *testing.T) {
+	helpers.LogToTest(t)
 	// FIXME race
 	// t.Parallel()
 	type Case struct {
@@ -154,14 +155,13 @@ func TestCoinDiag(t *testing.T) {
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			// FIXME race
-			// t.Parallel()
 			checkDiag(t, c.input, c.expect)
 		})
 	}
 }
 
 func BenchmarkCoinPoll(b *testing.B) {
+	helpers.LogDiscard()
 	type Case struct {
 		name  string
 		input string

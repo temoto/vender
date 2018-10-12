@@ -13,6 +13,7 @@ func open(t helpers.Fataler, r io.Reader, w io.Writer) *mdb {
 	if err != nil {
 		t.Fatal(err)
 	}
+	m.SetLog(t.Logf)
 	return m
 }
 
@@ -54,6 +55,7 @@ func TestPacketFormat(t *testing.T) {
 
 func BenchmarkTx1(b *testing.B) {
 	m := open(b, bytes.NewBufferString(""), bytes.NewBuffer(nil))
+	m.SetLog(helpers.Discardf)
 	response := new(Packet)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

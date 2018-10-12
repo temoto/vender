@@ -17,7 +17,7 @@ func main() {
 	mfast, _ := mdb.NewMDB(mdb.NewFastUart(), "/dev/ttyAMA0", 9600)
 	_, _ = mfile, mfast
 	var m mdb.Mdber = mfile
-	m.SetDebug(true)
+	m.SetLog(log.Printf)
 	stdin := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Fprintf(os.Stdout, "> ")
@@ -35,10 +35,10 @@ func main() {
 			switch {
 			case word == "break":
 				m.BreakCustom(200, 500)
-			case word == "debug=yes":
-				m.SetDebug(true)
-			case word == "debug=no":
-				m.SetDebug(false)
+			case word == "log=yes":
+				m.SetLog(log.Printf)
+			case word == "log=no":
+				m.SetLog(helpers.Discardf)
 			case word[0] == 'l':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
 					log.Fatal(err)

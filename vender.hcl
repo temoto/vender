@@ -1,5 +1,5 @@
 mdb {
-  debug       = true
+  log_enable  = false
   uart_driver = "file"
   uart_device = "/dev/ttyAMA0"
 }

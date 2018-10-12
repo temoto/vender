@@ -9,6 +9,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/helpers"
 )
 
 type _PR = money.PollResult
@@ -57,7 +58,8 @@ func checkPoll(t *testing.T, input string, expected _PR) {
 }
 
 func TestBillPoll(t *testing.T) {
-	t.Parallel()
+	helpers.LogToTest(t)
+	// t.Parallel() incompatible with LogToTest
 	type Case struct {
 		name   string
 		input  string

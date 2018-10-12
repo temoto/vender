@@ -86,8 +86,9 @@ func main() {
 	mdber, err := mdb.NewMDB(config.Mdb.Uarter, config.Mdb.UartDevice, config.Mdb.UartBaudrate)
 	if err != nil {
 		log.Fatal(err)
+	if config.Mdb.Log {
+		mdber.SetLog(log.Printf)
 	}
-	mdber.SetDebug(config.Mdb.Debug)
 	mdber.BreakCustom(200, 500)
 	ctx = context.WithValue(ctx, "run/mdber", mdber)
 

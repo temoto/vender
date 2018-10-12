@@ -13,8 +13,7 @@ import (
 type Mdber interface {
 	BreakCustom(keep, sleep int) error
 	Tx(request, response *Packet) error
-	TxDebug(request *Packet, debug bool) (response *Packet)
-	SetDebug(bool) bool
+	SetLog(logf helpers.LogFunc) helpers.LogFunc
 }
 
 // Context[key] -> Mdber or panic
@@ -30,7 +29,7 @@ func ContextValueMdber(ctx context.Context, key interface{}) Mdber {
 }
 
 type mdb struct {
-	debug   bool
+	log     helpers.LogFunc
 	recvBuf []byte
 	io      Uarter
 	lk      sync.Mutex
@@ -52,21 +51,20 @@ func (self FeatureNotSupported) Error() string { return string(self) }
 func NewMDB(u Uarter, path string, baud int) (*mdb, error) {
 	self := &mdb{
 		io:      u,
+		log:     helpers.Discardf,
 		recvBuf: make([]byte, 0, PacketMaxLength),
 	}
 	err := self.io.Open(path, baud)
 	return self, err
 }
 
-func (self *mdb) SetDebug(d bool) (previous bool) {
-	previous, self.debug = d, self.debug
+func (self *mdb) SetLog(logf helpers.LogFunc) (previous helpers.LogFunc) {
+	previous, self.log = logf, self.log
 	return previous
 }
 
 func (self *mdb) BreakCustom(keep, sleep int) (err error) {
-	if self.debug {
-		log.Printf("debug: mdb.BreakCustom keep=%d sleep=%d", keep, sleep)
-	}
+	self.log("debug: mdb.BreakCustom keep=%d sleep=%d", keep, sleep)
 	err = self.io.Break(time.Duration(keep) * time.Millisecond)
 	if err == nil {
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
@@ -196,17 +194,4 @@ func (self *mdb) Tx(request, response *Packet) error {
 			request.l, request.Format(), response.l, response.Format(), acks, err)
 	}
 	return err
-}
-
-func (self *mdb) TxDebug(request *Packet, debug bool) *Packet {
-	response := new(Packet)
-	saveDebug := self.debug
-	self.SetDebug(debug)
-	err := self.Tx(request, response)
-	self.SetDebug(saveDebug)
-	if err != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), err)
-		return nil
-	}
-	return response
 }

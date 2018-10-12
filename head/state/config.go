@@ -17,7 +17,7 @@ import (
 type Config struct {
 	Mdb struct {
 		UartDriver   string `hcl:"uart_driver"`
-		Debug        bool
+		Log          bool `hcl:"log_enable"`
 		Uarter       mdb.Uarter
 		UartDevice   string `hcl:"uart_device"`
 		UartBaudrate int    `hcl:"uart_baudrate"`
