@@ -1,10 +1,11 @@
 package mdb
 
-// Public API to easy create MDB stubs to test your code.
+// Public API to easy create MDB stubs for test code.
 import (
 	"bufio"
 	"bytes"
 	"io"
+	"log"
 	"testing"
 	"time"
 
@@ -14,45 +15,99 @@ import (
 // Mock Uarter for tests
 type nullUart struct {
 	src io.Reader
-	r   *bufio.Reader
+	br  *bufio.Reader
 	w   io.Writer
 }
 
 func NewNullUart(r io.Reader, w io.Writer) *nullUart {
 	return &nullUart{
 		src: r,
-		r:   bufio.NewReader(r),
+		br:  bufio.NewReader(r),
 		w:   w,
 	}
 }
 
-func (self *nullUart) set9(b bool) error { return nil }
-
-func (self *nullUart) read(p []byte) (int, error) { return self.r.Read(p) }
-
-func (self *nullUart) write(p []byte) (int, error) { return self.w.Write(p) }
-
-func (self *nullUart) Break(d time.Duration) (err error) {
-	self.ResetRead()
+func (self *nullUart) Break(d time.Duration) error {
+	self.resetRead()
 	time.Sleep(d)
 	return nil
 }
 
 func (self *nullUart) Close() error {
 	self.src = nil
-	self.r = nil
 	self.w = nil
 	return nil
 }
 
 func (self *nullUart) Open(path string, baud int) (err error) { return nil }
 
-func (self *nullUart) ReadByte() (byte, error) { return self.r.ReadByte() }
+func (self *nullUart) Tx(request, response []byte) (n int, err error) {
+	if _, err = self.write9(request, true); err != nil {
+		return 0, err
+	}
+	if _, err = self.write9([]byte{checksum(request)}, false); err != nil {
+		return 0, err
+	}
+	buf := [PacketMaxLength]byte{}
+	if n, err = self.ReadPacket(buf[:]); err != nil {
+		return n, err
+	}
+	chkin := response[n-1]
+	n--
+	chkcomp := checksum(response)
+	if chkin != chkcomp {
+		log.Printf("debug: mdb.fileUart.Tx InvalidChecksum frompacket=%x actual=%x", chkin, chkcomp)
+		return n, errors.Trace(InvalidChecksum{Received: chkin, Actual: chkcomp})
+	}
+	n = copy(response, buf[:n])
+	if n > 0 {
+		_, err = self.write9(PacketNul1.b[:1], false)
+	}
+	return n, err
+}
 
-func (self *nullUart) ReadSlice(delim byte) ([]byte, error) { return self.r.ReadSlice(delim) }
+func (self *nullUart) ReadPacket(buf []byte) (n int, err error) {
+	var b byte
+	for {
+		b, err = self.br.ReadByte()
+		if err != nil {
+			return 0, err
+		}
+		if b != 0xff {
+			buf[n] = b
+			n++
+			continue
+		}
+		b, err = self.br.ReadByte() // after ff
+		if err != nil {
+			return 0, err
+		}
+		switch b {
+		case 0xff:
+			buf[n] = b
+			n++
+			continue
+		case 0x00:
+			b, err = self.br.ReadByte() // chk
+			if err != nil {
+				return 0, err
+			}
+			buf[n] = b
+			n++
+			return n, err
+		default:
+			err = errors.Errorf("ReadPacket unknown sequence ff %x", b)
+			return 0, err
+		}
+	}
+}
 
-func (self *nullUart) ResetRead() error {
-	self.r.Reset(self.src)
+func (self *nullUart) write9(p []byte, start9 bool) (int, error) {
+	return self.w.Write(p)
+}
+
+func (self *nullUart) resetRead() error {
+	self.br.Reset(self.src)
 	return nil
 }
 
@@ -60,7 +115,7 @@ func NewTestMDBRaw(t testing.TB) (Mdber, func([]byte), *bytes.Buffer) {
 	r := bytes.NewBuffer(nil)
 	w := bytes.NewBuffer(nil)
 	uarter := NewNullUart(r, w)
-	m, err := NewMDB(uarter, "", 9600)
+	m, err := NewMDB(uarter, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +123,7 @@ func NewTestMDBRaw(t testing.TB) (Mdber, func([]byte), *bytes.Buffer) {
 		if _, err := r.Write(b); err != nil {
 			t.Fatal(err)
 		}
-		uarter.ResetRead()
+		uarter.resetRead()
 	}
 	return m, mockRead, w
 }
@@ -114,7 +169,7 @@ func NewChanIO(timeout time.Duration) *ChanIO {
 func NewTestMDBChan(t testing.TB) (Mdber, <-chan *Packet, chan<- *Packet) {
 	cio := NewChanIO(5 * time.Second)
 	uarter := NewNullUart(cio, cio)
-	m, err := NewMDB(uarter, "", 9600)
+	m, err := NewMDB(uarter, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

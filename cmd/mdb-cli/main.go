@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -11,13 +12,25 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/helpers"
 )
 
 func main() {
-	mfile, _ := mdb.NewMDB(mdb.NewFileUart(), "/dev/ttyAMA0", 9600)
-	mfast, _ := mdb.NewMDB(mdb.NewFastUart(), "/dev/ttyAMA0", 9600)
-	_, _ = mfile, mfast
-	var m mdb.Mdber = mfile
+	uarterName := flag.String("io", "", "file|cgo|cproc|rustlib")
+	flag.Parse()
+
+	var uarter mdb.Uarter
+	switch *uarterName {
+	case "", "file":
+		uarter = mdb.NewFileUart()
+	default:
+		log.Fatalf("invalid -io=%s", *uarterName)
+	}
+	devicePath := "/dev/ttyAMA0" // TODO flag
+	m, err := mdb.NewMDB(uarter, devicePath, 0)
+	if err != nil {
+		log.Fatalf("mdb open: %v", errors.ErrorStack(err))
+	}
 	m.SetLog(log.Printf)
 	stdin := bufio.NewReader(os.Stdin)
 	for {

@@ -16,10 +16,10 @@ import (
 
 type Config struct {
 	Mdb struct {
-		UartDriver   string `hcl:"uart_driver"`
 		Log          bool `hcl:"log_enable"`
 		Uarter       mdb.Uarter
 		UartDevice   string `hcl:"uart_device"`
+		UartDriver   string `hcl:"uart_driver"`
 		UartBaudrate int    `hcl:"uart_baudrate"`
 	}
 	Papa struct {
@@ -48,14 +48,9 @@ func ReadConfig(r io.Reader) (*Config, error) {
 	c := new(Config)
 	err = hcl.Unmarshal(b, c)
 
-	if c.Mdb.UartBaudrate == 0 {
-		c.Mdb.UartBaudrate = 9600
-	}
 	switch c.Mdb.UartDriver {
 	case "", "file":
 		c.Mdb.Uarter = mdb.NewFileUart()
-	case "fast":
-		c.Mdb.Uarter = mdb.NewFastUart()
 	default:
 		return nil, fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, fast", c.Mdb.UartDriver)
 	}

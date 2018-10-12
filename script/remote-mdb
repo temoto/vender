@@ -9,4 +9,4 @@ set -x
 go test -v $gopkg ./hardware/mdb
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
 rsync -a $base/$target $remote:
-ssh -t $remote ./$name
+ssh -t $remote ./$name "$@"

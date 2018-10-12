@@ -7,12 +7,22 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
+
 	"github.com/juju/errors"
+	"github.com/temoto/vender/helpers"
 )
+
+type Uarter interface {
+	Break(d time.Duration) error
+	Close() error
+	Open(path string, baud int) error
+	Tx(request, response []byte) (int, error)
+}
 
 type Mdber interface {
 	BreakCustom(keep, sleep int) error
 	Tx(request, response *Packet) error
+	TxRetry(request, response *Packet) error
 	SetLog(logf helpers.LogFunc) helpers.LogFunc
 }
 
@@ -41,12 +51,20 @@ type InvalidChecksum struct {
 }
 
 func (self InvalidChecksum) Error() string {
-	return "Invalid checksum"
+	return fmt.Sprintf("Invalid checksum received=%x actual=%x", self.Received, self.Actual)
 }
 
 type FeatureNotSupported string
 
 func (self FeatureNotSupported) Error() string { return string(self) }
+
+func checksum(bs []byte) byte {
+	var chk byte
+	for _, b := range bs {
+		chk += b
+	}
+	return chk
+}
 
 func NewMDB(u Uarter, path string, baud int) (*mdb, error) {
 	self := &mdb{
@@ -54,8 +72,11 @@ func NewMDB(u Uarter, path string, baud int) (*mdb, error) {
 		log:     helpers.Discardf,
 		recvBuf: make([]byte, 0, PacketMaxLength),
 	}
+	if baud == 0 {
+		baud = 9600
+	}
 	err := self.io.Open(path, baud)
-	return self, err
+	return self, errors.Trace(err)
 }
 
 func (self *mdb) SetLog(logf helpers.LogFunc) (previous helpers.LogFunc) {
@@ -63,91 +84,13 @@ func (self *mdb) SetLog(logf helpers.LogFunc) (previous helpers.LogFunc) {
 	return previous
 }
 
-func (self *mdb) BreakCustom(keep, sleep int) (err error) {
+func (self *mdb) BreakCustom(keep, sleep int) error {
 	self.log("debug: mdb.BreakCustom keep=%d sleep=%d", keep, sleep)
-	err = self.io.Break(time.Duration(keep) * time.Millisecond)
+	err := self.io.Break(time.Duration(keep) * time.Millisecond)
 	if err == nil {
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
 	}
-	return err
-}
-
-func (self *mdb) locked_send(b []byte) (err error) {
-	if len(b) == 0 {
-		return nil
-	}
-
-	var chk byte
-	for _, x := range b {
-		chk += x
-	}
-	b = append(b, chk)
-	if self.debug {
-		log.Printf("debug: mdb.send  out='%x'", b)
-	}
-
-	return io_write(self.io, b, true)
-}
-
-func (self *mdb) locked_sendAck() (err error) {
-	return io_write(self.io, PacketNul1.b[:1], false)
-}
-
-func (self *mdb) locked_recv(dst *Packet) error {
-	var err error
-	var b, chkin, chkout byte
-	var part []byte
-	self.recvBuf = self.recvBuf[:0]
-
-	// begin critical path
-	if err = self.io.ResetRead(); err != nil {
-		return err
-	}
-recvLoop:
-	for {
-		if part, err = self.io.ReadSlice(0xff); err != nil {
-			return err
-		}
-		n := len(part)
-		if n > 1 {
-			self.recvBuf = append(self.recvBuf, part[:n-1]...)
-		}
-		if b, err = self.io.ReadByte(); err != nil {
-			return err
-		}
-		switch b {
-		case 0x00:
-			if chkin, err = self.io.ReadByte(); err != nil {
-				return err
-			}
-			break recvLoop
-		case 0xff:
-			self.recvBuf = append(self.recvBuf, b)
-		default:
-			err = fmt.Errorf("recv unknown sequence ff %x", b)
-			return err
-		}
-		if len(self.recvBuf) > PacketMaxLength {
-			err = errors.New("recv self.recvBuf overflow")
-			return err
-		}
-	}
-	// end critical path
-
-	for _, b = range self.recvBuf {
-		chkout += b
-	}
-	// if self.Debug {
-	// 	PacketFromBytes(self.recvBuf).Logf("debug: mdb.recv %s")
-	// }
-	if chkin != chkout {
-		if self.debug {
-			log.Printf("debug: mdb.recv InvalidChecksum frompacket=%x actual=%x", chkin, chkout)
-		}
-		return InvalidChecksum{Received: chkin, Actual: chkout}
-	}
-	dst.write(self.recvBuf)
-	return nil
+	return errors.Trace(err)
 }
 
 func (self *mdb) Tx(request, response *Packet) error {
@@ -160,6 +103,7 @@ func (self *mdb) Tx(request, response *Packet) error {
 	if request.Len() == 0 {
 		return nil
 	}
+	var n int
 	var err error
 
 	self.lk.Lock()
@@ -172,26 +116,30 @@ func (self *mdb) Tx(request, response *Packet) error {
 	// self.f.SetDeadline(time.Now().Add(time.Second))
 	// defer self.f.SetDeadline(time.Time{})
 
-	if err = self.locked_send(request.Bytes()); err != nil {
-		return err
-	}
-	// ack must arrive <5ms after recv
-	// begin critical path
-	if err = self.locked_recv(response); err != nil {
-		return err
-	}
-	if response.l > 0 {
-		err = self.locked_sendAck()
-	}
-	// end critical path
+	n, err = self.io.Tx(request.Bytes(), response.b[:])
+	response.l = n
 
-	if self.debug {
-		acks := ""
-		if response.l > 0 {
-			acks = "\n> (01) 00 (ACK)"
-		}
-		log.Printf("debug: mdb.Tx (multi-line)\n> (%02d) %s\n< (%02d) %s%s\nerr=%v",
-			request.l, request.Format(), response.l, response.Format(), acks, err)
+	acks := ""
+	if response.l > 0 {
+		acks = "\n> (01) 00 (ACK)"
 	}
-	return err
+	self.log("debug: mdb.Tx (multi-line)\n> (%02d) %s\n< (%02d) %s%s\nerr=%v",
+		request.l, request.Format(), response.l, response.Format(), acks, err)
+	return errors.Trace(err)
+}
+
+func (self *mdb) TxRetry(request, response *Packet) error {
+	const retries = 5
+	delay := 100 * time.Millisecond
+	var err error
+	for i := 1; i <= retries; i++ {
+		err = self.Tx(request, response)
+		if errors.IsTimeout(err) {
+			log.Printf("mdb request=%s err=%v timeout, retry in %v", request.Format(), err, delay)
+			delay *= 2
+			continue
+		}
+		break
+	}
+	return errors.Trace(err)
 }
