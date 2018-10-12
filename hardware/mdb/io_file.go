@@ -5,6 +5,7 @@ import (
 	"os"
 	"syscall"
 	"time"
+	"github.com/juju/errors"
 )
 
 type fileUart struct {
@@ -22,8 +23,8 @@ func (self *fileUart) write(p []byte) (int, error) { return self.f.Write(p) }
 
 func (self *fileUart) Break(d time.Duration) (err error) {
 	ms := int(d / time.Millisecond)
-	if err = self.ResetRead(); err != nil {
-		return err
+	if err = self.resetRead(); err != nil {
+		return errors.Trace(err)
 	}
 	return ioctl(self.f.Fd(), uintptr(cTCSBRKP), uintptr(ms/100))
 }
@@ -45,7 +46,7 @@ func (self *fileUart) Open(path string, baud int) (err error) {
 		self.f.Close()
 		self.f = nil
 		self.r = nil
-		return err
+		return errors.Trace(err)
 	}
 	return nil
 }

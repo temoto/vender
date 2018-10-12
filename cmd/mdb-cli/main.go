@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/mdb"
 )
 
@@ -23,7 +24,7 @@ func main() {
 		fmt.Fprintf(os.Stdout, "> ")
 		bline, _, err := stdin.ReadLine()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal(errors.ErrorStack(err))
 		}
 		line := string(bline)
 
@@ -41,7 +42,7 @@ func main() {
 				m.SetLog(helpers.Discardf)
 			case word[0] == 'l':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
-					log.Fatal(err)
+					log.Fatal(errors.ErrorStack(err))
 				} else {
 					iteration++
 					if iteration <= i {
@@ -50,7 +51,7 @@ func main() {
 				}
 			case word[0] == 's':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
-					log.Fatal(err)
+					log.Fatal(errors.ErrorStack(err))
 				} else {
 					time.Sleep(time.Duration(i) * time.Millisecond)
 				}
@@ -62,7 +63,7 @@ func main() {
 					response.Logf("< %s")
 				}
 				if err != nil {
-					log.Fatal(err)
+					log.Fatal(errors.ErrorStack(err))
 				}
 			default:
 				log.Printf("error: invalid command: '%s'", word)

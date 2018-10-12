@@ -7,6 +7,8 @@ import (
 	"io"
 	"testing"
 	"time"
+
+	"github.com/juju/errors"
 )
 
 // Mock Uarter for tests

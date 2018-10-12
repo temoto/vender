@@ -2,12 +2,12 @@ package mdb
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"runtime/debug"
 	"sync"
 	"time"
+	"github.com/juju/errors"
 )
 
 type Mdber interface {

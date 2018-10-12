@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/daemon"
+	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/money"
@@ -21,19 +22,6 @@ import (
 	_ "github.com/temoto/vender/head/papa"
 	_ "github.com/temoto/vender/head/telemetry"
 )
-
-// TODO decide
-// seq := msync.NewSequence("head-init")
-// seq.Append(msync.NewAction("", Hello))
-// seq.Append(msync.MustGlobalAction("display-init"))
-//
-// seq.Start()
-// time.Sleep(100 * time.Millisecond)
-// seq.Abort()
-//
-// seq.Start()
-// seq.Wait()
-// time.Sleep(100 * time.Millisecond)
 
 func foldErrors(errs []error) error {
 	if len(errs) == 0 {
@@ -80,12 +68,13 @@ func main() {
 	log.Printf("config=%+v", config)
 	ctx = context.WithValue(ctx, "config", config)
 	if err := foldErrors(state.DoValidate(ctx)); err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 
 	mdber, err := mdb.NewMDB(config.Mdb.Uarter, config.Mdb.UartDevice, config.Mdb.UartBaudrate)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.ErrorStack(err))
+	}
 	if config.Mdb.Log {
 		mdber.SetLog(log.Printf)
 	}
@@ -136,7 +125,7 @@ func Hello(w *msync.MultiWait, args interface{}) (err error) {
 func sdnotify(s string) bool {
 	ok, err := daemon.SdNotify(false, s)
 	if err != nil {
-		log.Fatal("sdnotify: ", err)
+		log.Fatal("sdnotify: ", errors.ErrorStack(err))
 	}
 	return ok
 }

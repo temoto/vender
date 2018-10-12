@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/juju/errors"
 )
 
 type FatalFunc func(...interface{})
@@ -39,3 +41,19 @@ func LogToTest(t testing.TB) {
 	log.SetOutput(TestLogWriter{t})
 }
 
+func RandUnix() *rand.Rand {
+	return rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+func AssertEqual(t testing.TB, a, b interface{}) {
+	t.Helper()
+	switch a.(type) {
+	case string:
+		as, bs := a.(string), b.(string)
+		if as != bs {
+			t.Fatalf("assert equal fail\na=%s\nb=%s", as, bs)
+		}
+	default:
+		panic(errors.Errorf("code error AssertEqual does not support type %#v", a))
+	}
+}
