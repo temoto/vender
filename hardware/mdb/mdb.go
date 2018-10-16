@@ -116,7 +116,9 @@ func (self *mdb) Tx(request, response *Packet) error {
 	// self.f.SetDeadline(time.Now().Add(time.Second))
 	// defer self.f.SetDeadline(time.Time{})
 
-	n, err = self.io.Tx(request.Bytes(), response.b[:])
+	rbs := request.Bytes()
+	// rbs = append(rbs, checksum(rbs))
+	n, err = self.io.Tx(rbs, response.b[:])
 	response.l = n
 
 	acks := ""

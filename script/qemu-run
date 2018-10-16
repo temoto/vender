@@ -1,0 +1,22 @@
+#!/bin/bash
+base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+set -eux
+export QEMU_AUDIO_DRV=none
+kernel_path=qemu-raspbian-network-master/kernel-qemu-4.4.34-jessie
+kernel_cmdline='root=/dev/sda2 panic=1 rootfstype=ext4 rw rootwait vga=normal'
+if [[ -t 0 ]] ; then
+  kernel_cmdline="$kernel_cmdline console=ttyAMA0"
+fi
+disk='format=qcow2,file=raspbian-builder.qcow2'
+flags=(
+#  -M versatilepb
+  -append "$kernel_cmdline"
+  -cpu arm1176
+  -display vnc=:1
+  -drive "$disk"
+  -kernel "$kernel_path"
+  -m 1024
+  -no-reboot
+  -serial stdio
+)
+exec qemu-system-arm "${flags[@]}"

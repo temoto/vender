@@ -8,8 +8,11 @@
 *.so
 *.test
 .DS_Store
+/build
 /cmd/display-mt16-test/display-mt16-test
 /cmd/i2c-test/i2c-test
+/cmd/iodin/target
+/cmd/iodin/src/proto/iodin.rs
 /cmd/mdb-cli/mdb-cli
 /cmd/vender/vender
 /cover.out
@@ -17,7 +20,11 @@
 /display-mt16-test
 /i2c-test
 /mdb-cli
+/mdbr/target
+/qemu
+/target
 /vender
+/vender.sublime-*
 _cgo_defun.c
 _cgo_export.*
 _cgo_gotypes.go

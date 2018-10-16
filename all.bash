@@ -5,16 +5,20 @@ set -eu
 main() {
 	cd $base
 
+	git submodule update --init
+	cc=$(which cc)
+	if which ccache &>/dev/null ; then
+		cc="$(which ccache) cc"
+	fi
+	( cd hardware/pigpio ; make CC="$cc" )
+
 	paths=$(find . -type d ! -path '.' ! -path '*/.*' ! -path './script*' ! -path './vendor*')
 
-	go get -v github.com/golang/protobuf/protoc-gen-go
-	for d in $paths ; do
-		if ls $base/$d/*.proto >/dev/null 2>&1 ; then
-			protoc -I=$base/$d --go_out=plugins=grpc:$base/$d $base/$d/*.proto
-		fi
-	done
+	cargo build
+	cargo test
 
 	go get -t -v ./...
+	go get -v github.com/golang/protobuf/protoc-gen-go
 	go get -v golang.org/x/tools/cmd/stringer
 	go generate ./...
 	go build ./...

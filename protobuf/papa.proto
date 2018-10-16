@@ -1,5 +1,5 @@
 syntax = "proto3";
-package talk;
+package papa;
 
 service Papa {
   rpc Pull(stream PapaTask) returns (stream PapaTask);

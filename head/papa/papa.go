@@ -7,10 +7,11 @@ import (
 	"time"
 
 	"github.com/temoto/vender/head/state"
-	"github.com/temoto/vender/talk"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
+
+//go:generate protoc -I=../../protobuf --go_out=plugins=grpc:./ ../../protobuf/papa.proto
 
 func netLoop(ctx context.Context) {
 	// TODO alive
@@ -34,7 +35,7 @@ func netLoop(ctx context.Context) {
 	}
 }
 
-func network(ctx context.Context, client talk.PapaClient) error {
+func network(ctx context.Context, client PapaClient) error {
 	pull, err := client.Pull(ctx)
 	if err != nil {
 		return err
@@ -57,13 +58,13 @@ func network(ctx context.Context, client talk.PapaClient) error {
 		}
 
 		// TODO write task to disk, then execute
-		err = pull.Send(&talk.PapaTask{Id: task.Id})
+		err = pull.Send(&PapaTask{Id: task.Id})
 		// TODO handle error
 		_ = err
 	}
 }
 
-func dial(ctx context.Context) (talk.PapaClient, error) {
+func dial(ctx context.Context) (PapaClient, error) {
 	config := state.GetConfig(ctx)
 
 	optSecurity := grpc.WithInsecure()
@@ -82,7 +83,7 @@ func dial(ctx context.Context) (talk.PapaClient, error) {
 		return nil, err
 	}
 
-	client := talk.NewPapaClient(conn)
+	client := NewPapaClient(conn)
 	return client, nil
 }
 

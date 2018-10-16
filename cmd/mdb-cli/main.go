@@ -11,23 +11,31 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	iodin "github.com/temoto/vender/hardware/iodin-client"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 )
 
 func main() {
-	uarterName := flag.String("io", "", "file|cgo|cproc|rustlib")
+	devicePath := flag.String("device", "/dev/ttyAMA0", "")
+	iodinPath := flag.String("iodin", "./iodin", "Path to iodin executable")
+	uarterName := flag.String("io", "", "file|iodin")
 	flag.Parse()
 
 	var uarter mdb.Uarter
 	switch *uarterName {
 	case "", "file":
 		uarter = mdb.NewFileUart()
+	case "iodin":
+		iodin, err := iodin.NewClient(*iodinPath)
+		if err != nil {
+			log.Fatal(errors.Trace(err))
+		}
+		uarter = mdb.NewIodinUart(iodin)
 	default:
 		log.Fatalf("invalid -io=%s", *uarterName)
 	}
-	devicePath := "/dev/ttyAMA0" // TODO flag
-	m, err := mdb.NewMDB(uarter, devicePath, 0)
+	m, err := mdb.NewMDB(uarter, *devicePath, 0)
 	if err != nil {
 		log.Fatalf("mdb open: %v", errors.ErrorStack(err))
 	}
