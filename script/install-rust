@@ -1,0 +1,11 @@
+#!/bin/bash
+set -eux
+rust_version=$1
+if [[ -z "${rust_version}" ]] ; then
+	echo "Usage: $0 rust-version" >&2
+	exit 1
+fi
+
+if ! cargo +$rust_version version ; then
+	curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain $rust_version
+fi

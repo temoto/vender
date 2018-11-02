@@ -5,9 +5,10 @@ remote_target="pipi"
 src_path="~/src/github.com/temoto/vender"
 
 rsync -acv --delete --exclude-from=.gitignore --exclude=target/ --exclude=build/ ./ "$remote_build":src/github.com/temoto/vender/
-ssh "$remote_build" bash -l -c "\"cd $src_path ; cargo build\""
-ssh "$remote_build" bash -l -c "\"cd $src_path ; go build ./cmd/mdb-cli\""
-ssh "$remote_build" bash -l -c "\"cd $src_path ; go build ./cmd/vender\""
+ssh "$remote_build" bash -l -c "\"cd $src_path ; ./all.bash\""
+# ssh "$remote_build" bash -l -c "\"cd $src_path ; cargo build\""
+# ssh "$remote_build" bash -l -c "\"cd $src_path ; go build ./cmd/mdb-cli\""
+# ssh "$remote_build" bash -l -c "\"cd $src_path ; go build ./cmd/vender\""
 rsync -acv "$remote_build:$src_path/target/debug/iodin" build/
 rsync -acv "$remote_build:$src_path/mdb-cli" build/
 rsync -acv "$remote_build:$src_path/vender" build/

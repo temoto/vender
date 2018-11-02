@@ -1,18 +1,35 @@
-language: go
-go: "1.10"
+sudo: false
 cache:
   apt: true
+  cargo: true
+  ccache: true
   go: true
   directories:
   - $HOME/.cache
+  - $HOME/.rustup
   - $HOME/bin
 env:
   global:
   - "PATH=$PATH:$HOME/bin"
-  - PROTOC_VERSION=3.1.0
-sudo: false
-
-before_install: ./script/install-protoc $PROTOC_VERSION
-script: ./all.bash
-before_cache: rm -f $HOME/.cache/go-build/log.txt
-after_success: bash <(curl -s https://codecov.io/bash)
+  - protoc_version=3.1.0
+  # TODO rust_version=1.31.0
+  - rust_version=beta
+language: go
+go: "1.10"
+matrix:
+  include:
+    - language: rust
+      rust: beta
+      env: task=iodin
+      before_install:
+        - ./script/install-protoc $protoc_version
+        - ./script/install-rust $rust_version
+      script:
+        - cargo +$rust_version build --verbose --all
+        - cargo +$rust_version test --verbose --all
+      # TODO rust coverage
+    - env: task=vender
+      before_install: ./script/install-protoc $protoc_version
+      script: build_rust=0 ./all.bash
+      before_cache: rm -f $HOME/.cache/go-build/log.txt
+      after_success: bash <(curl -s https://codecov.io/bash)
