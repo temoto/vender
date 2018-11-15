@@ -21,13 +21,17 @@ matrix:
     - language: rust
       rust: beta
       env: task=iodin
+      # addons:
+      #   apt:
+      #     packages:
+      #     - clang
+      #     - lcov
       before_install:
         - ./script/install-protoc $protoc_version
-        - ./script/install-rust $rust_version
-      script:
-        - cargo +$rust_version build --verbose --all
-        - cargo +$rust_version test --verbose --all
-      # TODO rust coverage
+        # - rustup component add rustfmt-preview
+        # - cargo install --force cargo-cov
+      script: build_go=0 ./all.bash
+      after_success: bash <(curl -s https://codecov.io/bash)
     - env: task=vender
       before_install: ./script/install-protoc $protoc_version
       script: build_rust=0 ./all.bash

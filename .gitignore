@@ -3,6 +3,8 @@
 *.cgo2.c
 *.dSYM/
 *.exe
+*.gcda
+*.gcno
 *.o
 *.prof
 *.so
@@ -16,6 +18,7 @@
 /cmd/mdb-cli/mdb-cli
 /cmd/vender/vender
 /cover.out
+/coverage*.info
 /coverage*.txt
 /display-mt16-test
 /i2c-test
