@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/temoto/vender/hardware/display"
+	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/head/state"
 )
 

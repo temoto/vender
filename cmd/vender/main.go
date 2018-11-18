@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/juju/errors"
@@ -15,7 +14,6 @@ import (
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/head/ui"
-	"github.com/temoto/vender/msync"
 
 	// invoke package init to register lifecycles
 	_ "github.com/temoto/vender/head/kitchen"
@@ -102,24 +100,6 @@ func main() {
 	}
 
 	a.Wait()
-}
-
-func Hello(w *msync.MultiWait, args interface{}) (err error) {
-	if w.IsDone() {
-		log.Println("hello aborted")
-		return
-	}
-	log.Println("hello begin")
-	select {
-	case <-time.After(1 * time.Second):
-	case <-w.Chan():
-	}
-	if w.IsDone() {
-		log.Println("hello aborted")
-		return
-	}
-	log.Println("hello done")
-	return
 }
 
 func sdnotify(s string) bool {

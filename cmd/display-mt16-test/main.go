@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/temoto/vender/hardware/display"
+	"github.com/temoto/vender/hardware/lcd"
 )
 
 func main() {
