@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"io"
 	"os"
+	"runtime/debug"
 	"syscall"
 	"time"
 	"unsafe"
@@ -121,6 +122,16 @@ func (self *fileUart) Tx(request, response []byte) (n int, err error) {
 	if len(request) == 0 {
 		return 0, errors.New("Tx request empty")
 	}
+
+	saveGCPercent := debug.SetGCPercent(-1)
+	defer debug.SetGCPercent(saveGCPercent)
+
+	// FIXME crutch to avoid slow set9 with drain
+	time.Sleep(20 * time.Millisecond)
+	// TODO
+	// self.f.SetDeadline(time.Now().Add(time.Second))
+	// defer self.f.SetDeadline(time.Time{})
+
 	chkoutb := []byte{checksum(request)}
 	if _, err = self.write9(request, true); err != nil {
 		return 0, errors.Trace(err)

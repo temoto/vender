@@ -1,4 +1,11 @@
-// head <-> money interface
+// Package money provides high-level interaction with money devices.
+// Overview:
+// - head->money: enable accepting coins and bills
+//   inits required devices, starts polling
+// - (parsed device status)
+//   money->ui: X money inserted
+// - head->money: (ready to serve product) secure transaction, release change
+//   operate involved devices
 package money
 
 import (
@@ -6,10 +13,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/temoto/vender/currency"
+)
+
+const (
+	InternalScalingFactor = 100
 )
 
 const (
@@ -40,22 +50,9 @@ func (e *Event) String() string {
 	return fmt.Sprintf("money.Event<name=%s err='%s' created=%s amount=%s>", e.name, e.Error(), e.created.Format(time.RFC3339Nano), e.amount.Format100I())
 }
 
-type MoneySystem struct {
-	lk     sync.Mutex
-	events chan Event
-	bs     BillState
-	cs     CoinState
-}
-
 func (self *MoneySystem) Events() <-chan Event {
 	return self.events
 }
-
-var (
-	Global = MoneySystem{
-		events: make(chan Event, 2),
-	}
-)
 
 var (
 	ErrNeedMoreMoney = errors.New("add-money")

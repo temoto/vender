@@ -20,7 +20,7 @@ type CoinState struct {
 	credit currency.NominalGroup
 }
 
-func (self *CoinState) Init(ctx context.Context, mdber mdb.Mdber) error {
+func (self *CoinState) Init(ctx context.Context, parent *MoneySystem, mdber mdb.Mdber) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
 
@@ -34,7 +34,7 @@ func (self *CoinState) Init(ctx context.Context, mdber mdb.Mdber) error {
 	time.Sleep(coin.DelayNext)
 	pch := make(chan money.PollResult, 2)
 	go self.hw.Run(ctx, self.alive, pch)
-	go self.pollResultLoop(&Global, pch)
+	go self.pollResultLoop(parent, pch)
 	return nil
 }
 

@@ -10,12 +10,15 @@ import (
 	"path/filepath"
 
 	"github.com/hashicorp/hcl"
+	"github.com/juju/errors"
+	iodin "github.com/temoto/vender/hardware/iodin-client"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 )
 
 type Config struct {
-	Mdb struct {
+	IodinPath string `hcl:"iodin_path"`
+	Mdb       struct {
 		Log          bool `hcl:"log_enable"`
 		Uarter       mdb.Uarter
 		UartDevice   string `hcl:"uart_device"`
@@ -25,6 +28,7 @@ type Config struct {
 	Papa struct {
 		Address  string
 		CertFile string
+		Enabled  bool
 	}
 }
 
@@ -51,6 +55,12 @@ func ReadConfig(r io.Reader) (*Config, error) {
 	switch c.Mdb.UartDriver {
 	case "", "file":
 		c.Mdb.Uarter = mdb.NewFileUart()
+	case "iodin":
+		iodin, err := iodin.NewClient(c.IodinPath)
+		if err != nil {
+			return nil, errors.Annotatef(err, "config: mdb.uart_driver=%s iodin_path=%s", c.Mdb.UartDriver, c.IodinPath)
+		}
+		c.Mdb.Uarter = mdb.NewIodinUart(iodin)
 	default:
 		return nil, fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, fast", c.Mdb.UartDriver)
 	}

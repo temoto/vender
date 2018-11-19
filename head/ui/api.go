@@ -5,8 +5,8 @@ import (
 	"log"
 )
 
-func Logf(format string, a ...interface{}) {
+func (self *UISystem) Logf(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
 	log.Printf("ui: Log() %s", s)
-	display.WriteString(s, 0, 0)
+	self.display.WriteString(s, 0, 0)
 }

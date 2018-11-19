@@ -3,38 +3,29 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
-	"strings"
+	"runtime"
+	"time"
 
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/head/kitchen"
 	"github.com/temoto/vender/head/money"
+	"github.com/temoto/vender/head/papa"
 	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/head/telemetry"
 	"github.com/temoto/vender/head/ui"
-
-	// invoke package init to register lifecycles
-	_ "github.com/temoto/vender/head/kitchen"
-	_ "github.com/temoto/vender/head/papa"
-	_ "github.com/temoto/vender/head/telemetry"
+	"github.com/temoto/vender/helpers"
 )
 
-func foldErrors(errs []error) error {
-	if len(errs) == 0 {
-		return nil
-	}
-	ss := make([]string, 0, len(errs))
-	for _, e := range errs {
-		if e != nil {
-			ss = append(ss, e.Error())
-		}
-	}
-	if len(ss) == 0 {
-		return nil
-	}
-	return fmt.Errorf(strings.Join(ss, "\n"))
+type systems struct {
+	kitchen   kitchen.KitchenSystem
+	money     money.MoneySystem
+	papa      papa.PapaSystem
+	telemetry telemetry.TelemetrySystem
+	ui        ui.UISystem
 }
 
 func main() {
@@ -52,20 +43,23 @@ func main() {
 	log.Println("hello")
 
 	a := alive.NewAlive()
-	a.Add(1)
+	lifecycle := new(state.Lifecycle) // validate/start/stop events
+	sys := systems{}
+
+	lifecycle.RegisterSystem(&sys.kitchen)
+	lifecycle.RegisterSystem(&sys.money)
+	lifecycle.RegisterSystem(&sys.papa)
+	lifecycle.RegisterSystem(&sys.telemetry)
+	lifecycle.RegisterSystem(&sys.ui)
+
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, "alive", a)
-
-	state.RegisterStop(func(ctx context.Context) error {
-		a.Done()
-		a.Stop()
-		return nil
-	})
+	ctx = context.WithValue(ctx, "lifecycle", lifecycle)
 
 	config := state.MustReadConfigFile(log.Fatal, *flagConfig)
 	log.Printf("config=%+v", config)
 	ctx = context.WithValue(ctx, "config", config)
-	if err := foldErrors(state.DoValidate(ctx)); err != nil {
+	if err := helpers.FoldErrors(lifecycle.OnValidate.Do(ctx)); err != nil {
 		log.Fatal(errors.ErrorStack(err))
 	}
 
@@ -76,22 +70,23 @@ func main() {
 	if config.Mdb.Log {
 		mdber.SetLog(log.Printf)
 	}
-	mdber.BreakCustom(200, 500)
+	mdber.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
 	ctx = context.WithValue(ctx, "run/mdber", mdber)
 
-	state.DoStart(ctx)
+	lifecycle.OnStart.Do(ctx)
 	sdnotify(daemon.SdNotifyReady)
 
+	stopCh := a.StopChan()
 	for a.IsRunning() {
 		select {
-		case <-a.StopChan():
-		case em := <-money.Global.Events():
+		case <-stopCh:
+		case em := <-sys.money.Events():
 			log.Printf("money event: %s", em.String())
 			switch em.Name() {
 			case money.EventCredit:
-				ui.Logf("money: credit %s", em.Amount().Format100I())
+				sys.ui.Logf("money: credit %s", em.Amount().Format100I())
 			case money.EventAbort:
-				err := money.Global.Abort(context.Background())
+				err := sys.money.Abort(ctx)
 				log.Printf("user requested abort err=%v", err)
 			default:
 				panic("head: unknown money event: " + em.String())
@@ -100,6 +95,11 @@ func main() {
 	}
 
 	a.Wait()
+	// maybe these KeepAlive() are redundant
+	runtime.KeepAlive(a)
+	runtime.KeepAlive(ctx)
+	runtime.KeepAlive(lifecycle)
+	runtime.KeepAlive(sys)
 }
 
 func sdnotify(s string) bool {

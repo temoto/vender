@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	iodin "github.com/temoto/vender/hardware/iodin-client"
+	"github.com/temoto/vender/hardware/iodin-client"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 )
@@ -55,8 +55,17 @@ func main() {
 		for _, word := range words {
 			log.Printf("(%d)%s", iteration, word)
 			switch {
+			case word == "help":
+				log.Printf(`syntax: commands separated by whitespace
+- break    MDB bus reset (TX high for 200ms, wait for 500ms)
+- log=yes  enable debug logging
+- log=no   disable debug logging
+- lN       loop N times all commands on this line
+- sN       pause N milliseconds
+- tXX...   send MDB block from hex XX...
+`)
 			case word == "break":
-				m.BreakCustom(200, 500)
+				m.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
 			case word == "log=yes":
 				m.SetLog(log.Printf)
 			case word == "log=no":

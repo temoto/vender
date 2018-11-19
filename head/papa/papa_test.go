@@ -10,5 +10,8 @@ import (
 func TestPapaStart(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, "config", &state.Config{})
-	onStart(ctx)
+	sys := PapaSystem{}
+	if err := sys.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
 }

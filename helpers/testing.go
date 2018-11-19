@@ -48,12 +48,24 @@ func RandUnix() *rand.Rand {
 func AssertEqual(t testing.TB, a, b interface{}) {
 	t.Helper()
 	switch a.(type) {
+	case bool:
+		if a.(bool) == b.(bool) {
+			return
+		}
+	case int:
+		if a.(int) == b.(int) {
+			return
+		}
+	case uint32:
+		if a.(uint32) == b.(uint32) {
+			return
+		}
 	case string:
-		as, bs := a.(string), b.(string)
-		if as != bs {
-			t.Fatalf("assert equal fail\na=%s\nb=%s", as, bs)
+		if a.(string) == b.(string) {
+			return
 		}
 	default:
-		panic(errors.Errorf("code error AssertEqual does not support type %#v", a))
+		panic(errors.Errorf("code error AssertEqual does not support type of %#v", a))
 	}
+	t.Fatalf("assert equal fail\na=%#v\nb=%#v", a, b)
 }

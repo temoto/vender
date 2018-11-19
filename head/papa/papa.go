@@ -13,9 +13,9 @@ import (
 
 //go:generate protoc -I=../../protobuf --go_out=plugins=grpc:./ ../../protobuf/papa.proto
 
-func netLoop(ctx context.Context) {
+func (self *PapaSystem) netLoop(ctx context.Context) {
 	// TODO alive
-	for {
+	for self.alive.IsRunning() {
 		client, err := dial(ctx)
 		if err == nil {
 			err = network(ctx, client)
@@ -53,7 +53,8 @@ func network(ctx context.Context, client PapaClient) error {
 		switch task.GetName() {
 		case "restart-head":
 			go time.AfterFunc(5*time.Second, func() {
-				state.Restart()
+				l := ctx.Value("lifecycle").(*state.Lifecycle)
+				l.Restart(ctx)
 			})
 		}
 
@@ -85,15 +86,4 @@ func dial(ctx context.Context) (PapaClient, error) {
 
 	client := NewPapaClient(conn)
 	return client, nil
-}
-
-func onStart(ctx context.Context) error {
-	// TODO alive
-	// FIXME temp disabled
-	// go netLoop(ctx)
-	return nil
-}
-
-func init() {
-	state.RegisterStart(onStart)
 }

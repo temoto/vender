@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -20,7 +19,7 @@ type Uarter interface {
 }
 
 type Mdber interface {
-	BreakCustom(keep, sleep int) error
+	BreakCustom(keep, sleep time.Duration) error
 	Tx(request, response *Packet) error
 	TxRetry(request, response *Packet) error
 	SetLog(logf helpers.LogFunc) helpers.LogFunc
@@ -84,11 +83,11 @@ func (self *mdb) SetLog(logf helpers.LogFunc) (previous helpers.LogFunc) {
 	return previous
 }
 
-func (self *mdb) BreakCustom(keep, sleep int) error {
-	self.log("debug: mdb.BreakCustom keep=%d sleep=%d", keep, sleep)
-	err := self.io.Break(time.Duration(keep) * time.Millisecond)
+func (self *mdb) BreakCustom(keep, sleep time.Duration) error {
+	self.log("debug: mdb.BreakCustom keep=%v sleep=%v", keep, sleep)
+	err := self.io.Break(keep)
 	if err == nil {
-		time.Sleep(time.Duration(sleep) * time.Millisecond)
+		time.Sleep(sleep)
 	}
 	return errors.Trace(err)
 }
@@ -103,30 +102,16 @@ func (self *mdb) Tx(request, response *Packet) error {
 	if request.Len() == 0 {
 		return nil
 	}
-	var n int
-	var err error
 
 	self.lk.Lock()
 	defer self.lk.Unlock()
-	saveGCPercent := debug.SetGCPercent(-1)
-	defer debug.SetGCPercent(saveGCPercent)
-	// FIXME crutch to avoid slow set9 with drain
-	time.Sleep(10 * time.Millisecond)
-	// TODO
-	// self.f.SetDeadline(time.Now().Add(time.Second))
-	// defer self.f.SetDeadline(time.Time{})
 
 	rbs := request.Bytes()
-	// rbs = append(rbs, checksum(rbs))
-	n, err = self.io.Tx(rbs, response.b[:])
+	n, err := self.io.Tx(rbs, response.b[:])
 	response.l = n
 
-	acks := ""
-	if response.l > 0 {
-		acks = "\n> (01) 00 (ACK)"
-	}
-	self.log("debug: mdb.Tx (multi-line)\n> (%02d) %s\n< (%02d) %s%s\nerr=%v",
-		request.l, request.Format(), response.l, response.Format(), acks, err)
+	self.log("debug: mdb.Tx (multi-line)\n  ...send: (%02d) %s\n  ...recv: (%02d) %s\n  ...err=%v",
+		request.l, request.Format(), response.l, response.Format(), err)
 	return errors.Trace(err)
 }
 

@@ -11,10 +11,6 @@ import (
 	"github.com/temoto/vender/hardware/money"
 )
 
-const (
-	InternalScalingFactor = 100
-)
-
 type BillState struct {
 	lk    sync.Mutex
 	alive *alive.Alive
@@ -22,7 +18,7 @@ type BillState struct {
 	hw bill.BillValidator
 }
 
-func (self *BillState) Init(ctx context.Context, m mdb.Mdber) error {
+func (self *BillState) Init(ctx context.Context, parent *MoneySystem, m mdb.Mdber) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
 
@@ -34,7 +30,7 @@ func (self *BillState) Init(ctx context.Context, m mdb.Mdber) error {
 		return err
 	}
 	go self.hw.Run(ctx, self.alive, pch)
-	go self.pollResultLoop(&Global, pch)
+	go self.pollResultLoop(parent, pch)
 	return nil
 }
 
