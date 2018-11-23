@@ -24,11 +24,11 @@ func (self *BillState) Init(ctx context.Context, parent *MoneySystem, m mdb.Mdbe
 
 	log.Printf("head/money/bill init")
 	self.alive = alive.NewAlive()
-	self.alive.Add(1)
 	pch := make(chan money.PollResult, 2)
 	if err := self.hw.Init(ctx, m); err != nil {
 		return err
 	}
+	self.alive.Add(2)
 	go self.hw.Run(ctx, self.alive, pch)
 	go self.pollResultLoop(parent, pch)
 	return nil
@@ -40,6 +40,8 @@ func (self *BillState) Stop(ctx context.Context) {
 }
 
 func (self *BillState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResult) {
+	defer self.alive.Done()
+
 	const logPrefix = "head/money/bill"
 	h := func(m *MoneySystem, pr *money.PollResult, pi money.PollItem, hw Hardwarer) bool {
 		switch pi.Status {

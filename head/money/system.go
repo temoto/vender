@@ -2,8 +2,10 @@ package money
 
 import (
 	"context"
+	"log"
 	"sync"
 
+	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/mdb"
 )
 
@@ -25,14 +27,21 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 
 	m := mdb.ContextValueMdber(ctx, "run/mdber")
 	self.events = make(chan Event, 2)
-	_ = self.bs.Init(ctx, self, m)
-	_ = self.cs.Init(ctx, self, m)
+	// TODO determine if combination of errors is fatal for money subsystem
+	if err := self.bs.Init(ctx, self, m); err != nil {
+		self.bs.Stop(ctx)
+		log.Printf("MoneySystem.Start bill error=%v", errors.ErrorStack(err))
+	}
+	if err := self.cs.Init(ctx, self, m); err != nil {
+		self.cs.Stop(ctx)
+		log.Printf("MoneySystem.Start coin error=%v", errors.ErrorStack(err))
+	}
 	return nil
 }
 func (self *MoneySystem) Stop(ctx context.Context) error {
 	self.Abort(ctx)
+	// TODO return escrow
 	self.bs.Stop(ctx)
 	self.cs.Stop(ctx)
-	// TODO return escrow
 	return nil
 }

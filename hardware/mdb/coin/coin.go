@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
@@ -91,10 +92,7 @@ func (self *CoinAcceptor) Init(ctx context.Context, mdber mdb.Mdber) error {
 	self.ready = make(chan struct{})
 	// TODO maybe execute CommandReset then wait for StatusWasReset
 	err := self.InitSequence()
-	if err != nil {
-		log.Printf("hardware/mdb/coin/InitSequence error=%s", err)
-	}
-	return err
+	return errors.Annotate(err, "hardware/mdb/coin/Init")
 }
 
 func (self *CoinAcceptor) SupportedNominals() []currency.Nominal {
@@ -108,6 +106,8 @@ func (self *CoinAcceptor) SupportedNominals() []currency.Nominal {
 }
 
 func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
+	defer a.Done()
+
 	stopch := a.StopChan()
 	for a.IsRunning() {
 		// TODO to reuse single PollResult safely, must clone .Items before sending to chan
@@ -143,20 +143,22 @@ func (self *CoinAcceptor) InitSequence() error {
 	if err != nil {
 		return err
 	}
-	if err = self.CommandExpansionIdentification(); err != nil {
+	// timeout is unfortunately common "response" for unsupported commands
+	if err = self.CommandExpansionIdentification(); err != nil && !errors.IsTimeout(err) {
 		return err
 	}
-	if err = self.CommandFeatureEnable(FeatureExtendedDiagnostic); err != nil {
+	if err = self.CommandFeatureEnable(FeatureExtendedDiagnostic); err != nil && !errors.IsTimeout(err) {
 		return err
 	}
 	diagResult := new(DiagResult)
-	if err = self.CommandExpansionSendDiagStatus(diagResult); err != nil {
+	if err = self.CommandExpansionSendDiagStatus(diagResult); err != nil && !errors.IsTimeout(err) {
 		return err
 	}
 	if err = self.CommandTubeStatus(); err != nil {
 		return err
 	}
 	// TODO read config
+	time.Sleep(DelayNext)
 	if err = self.CommandCoinType(0xffff, 0xffff); err != nil {
 		return err
 	}
@@ -173,8 +175,7 @@ func (self *CoinAcceptor) CommandSetup() error {
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), err)
-		return err
+		return errors.Annotate(err, "hardware/mdb/coin SETUP")
 	}
 	log.Printf("setup response=(%d)%s", response.Len(), response.Format())
 	bs := response.Bytes()
@@ -204,8 +205,7 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), err)
-		return err
+		return errors.Annotate(err, "hardware/mdb/coin TUBE STATUS")
 	}
 	log.Printf("tubestatus response=(%d)%s", response.Len(), response.Format())
 	bs := response.Bytes()
@@ -231,7 +231,7 @@ func (self *CoinAcceptor) CommandPoll(result *money.PollResult) error {
 	if err != nil {
 		result.Delay = DelayErr
 		result.Error = err
-		return err
+		return errors.Annotate(err, "hardware/mdb/coin POLL")
 	}
 	bs := response.Bytes()
 	if len(bs) == 0 {
@@ -265,10 +265,7 @@ func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) error {
 	self.byteOrder.PutUint16(buf[3:], dispense)
 	request := mdb.PacketFromBytes(buf[:])
 	err := self.mdb.Tx(request, new(mdb.Packet))
-	if err != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), err)
-	}
-	return err
+	return errors.Annotate(err, "hardware/mdb/coin COIN TYPE")
 }
 
 func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8) error {
@@ -283,20 +280,14 @@ func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8)
 	request := mdb.PacketFromBytes([]byte{0x0d, (count << 4) + uint8(coinType)})
 	<-self.ReadyChan()
 	err := self.mdb.Tx(request, new(mdb.Packet))
-	if err != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), err)
-	}
-	return err
+	return errors.Annotate(err, "hardware/mdb/coin DISPENSE")
 }
 
 func (self *CoinAcceptor) CommandPayout(amount currency.Amount) error {
 	request := mdb.PacketFromBytes([]byte{0x0f, 0x02, byte(int(amount) / 100 / self.internalScalingFactor)})
 	<-self.ReadyChan()
 	err := self.mdb.Tx(request, new(mdb.Packet))
-	if err != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), err)
-	}
-	return err
+	return errors.Annotate(err, "hardware/mdb/coin PAYOUT")
 }
 
 func (self *CoinAcceptor) CommandExpansionIdentification() error {
@@ -305,8 +296,7 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(request, response)
 	if err != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), err)
-		return err
+		return errors.Annotate(err, "hardware/mdb/coin/CommandExpansionIdentification")
 	}
 	log.Printf("EXPANSION IDENTIFICATION response=(%d)%s", response.Len(), response.Format())
 	bs := response.Bytes()
@@ -333,14 +323,14 @@ func (self *CoinAcceptor) CommandExpansionSendDiagStatus(result *DiagResult) err
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(packetDiagStatus, response)
 	if err != nil {
-		return err
+		return errors.Annotate(err, "hardware/mdb/coin/CommandExpansionSendDiagStatus")
 	}
 	dr, err := parseDiagResult(response.Bytes(), self.byteOrder)
 	log.Printf("DiagStatus=%s", dr.Error())
 	if result != nil {
 		*result = dr
 	}
-	return err
+	return errors.Annotate(err, "hardware/mdb/coin/CommandExpansionSendDiagStatus")
 }
 
 func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
@@ -349,10 +339,7 @@ func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
 	self.byteOrder.PutUint32(buf[2:], uint32(f))
 	request := mdb.PacketFromBytes(buf[:])
 	err := self.mdb.Tx(request, new(mdb.Packet))
-	if err != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), err)
-	}
-	return err
+	return errors.Annotate(err, "hardware/mdb/coin/CommandFeatureEnable")
 }
 
 func (self *CoinAcceptor) coinTypeNominal(b byte) currency.Nominal {

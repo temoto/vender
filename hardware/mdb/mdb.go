@@ -75,7 +75,7 @@ func NewMDB(u Uarter, path string, baud int) (*mdb, error) {
 		baud = 9600
 	}
 	err := self.io.Open(path, baud)
-	return self, errors.Trace(err)
+	return self, errors.Annotate(err, "NewMDB")
 }
 
 func (self *mdb) SetLog(logf helpers.LogFunc) (previous helpers.LogFunc) {
@@ -103,16 +103,15 @@ func (self *mdb) Tx(request, response *Packet) error {
 		return nil
 	}
 
-	self.lk.Lock()
-	defer self.lk.Unlock()
-
 	rbs := request.Bytes()
+	self.lk.Lock()
 	n, err := self.io.Tx(rbs, response.b[:])
+	self.lk.Unlock()
 	response.l = n
 
 	self.log("debug: mdb.Tx (multi-line)\n  ...send: (%02d) %s\n  ...recv: (%02d) %s\n  ...err=%v",
 		request.l, request.Format(), response.l, response.Format(), err)
-	return errors.Trace(err)
+	return errors.Annotatef(err, "Tx send=%s recv=%s", request.Format(), response.Format())
 }
 
 func (self *mdb) TxRetry(request, response *Packet) error {

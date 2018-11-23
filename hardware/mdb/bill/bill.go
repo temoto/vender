@@ -86,6 +86,8 @@ func (self *BillValidator) Init(ctx context.Context, mdber mdb.Mdber) error {
 }
 
 func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
+	defer a.Done()
+
 	stopch := a.StopChan()
 	for a.IsRunning() {
 		pr := self.CommandPoll()

@@ -24,15 +24,16 @@ func (self *CoinState) Init(ctx context.Context, parent *MoneySystem, mdber mdb.
 	self.lk.Lock()
 	defer self.lk.Unlock()
 
-	log.Printf("head/money/coin init")
+	log.Printf("head/money/coin/Init begin")
 	self.alive = alive.NewAlive()
-	self.alive.Add(1)
 	if err := self.hw.Init(ctx, mdber); err != nil {
 		return err
 	}
 	self.credit.SetValid(self.hw.SupportedNominals())
 	time.Sleep(coin.DelayNext)
 	pch := make(chan money.PollResult, 2)
+	self.alive.Add(2)
+	log.Printf("head/money/coin/Init end, running")
 	go self.hw.Run(ctx, self.alive, pch)
 	go self.pollResultLoop(parent, pch)
 	return nil
@@ -44,6 +45,9 @@ func (self *CoinState) Stop(ctx context.Context) {
 }
 
 func (self *CoinState) Dispense(ng *currency.NominalGroup) (currency.Amount, error) {
+	self.alive.Add(1)
+	defer self.alive.Done()
+
 	sum := currency.Amount(0)
 	err := ng.Iter(func(nominal currency.Nominal, count uint) error {
 		log.Printf("Dispense n=%v c=%d", nominal, count)
@@ -67,6 +71,8 @@ func (self *CoinState) Dispense(ng *currency.NominalGroup) (currency.Amount, err
 }
 
 func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResult) {
+	defer self.alive.Done()
+
 	const logPrefix = "head/money/coin"
 	h := func(m *MoneySystem, pr *money.PollResult, pi money.PollItem, hw Hardwarer) bool {
 		switch pi.Status {

@@ -75,7 +75,7 @@ func (self *fileUart) write9(p []byte, start9 bool) (n int, err error) {
 func (self *fileUart) Break(d time.Duration) (err error) {
 	ms := int(d / time.Millisecond)
 	if err = self.resetRead(); err != nil {
-		return errors.Trace(err)
+		return errors.Annotate(err, "fileUart.Break")
 	}
 	return ioctl(self.fd, uintptr(cTCSBRKP), uintptr(ms/100))
 }
@@ -89,14 +89,14 @@ func (self *fileUart) Close() error {
 
 func (self *fileUart) Open(path string, baud int) (err error) {
 	if baud != 9600 {
-		return errors.New("Not implemented support for baud rate other than 9600")
+		return errors.NotSupportedf("fileUart: baud rate other than 9600 is not supported")
 	}
 	if self.f != nil {
 		self.Close() // skip error
 	}
 	self.f, err = os.OpenFile(path, syscall.O_RDWR|syscall.O_NOCTTY, 0600)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.Annotate(err, "fileUart.Open:OpenFile")
 	}
 	self.fd = self.f.Fd()
 	self.r = fdReader{fd: self.fd, timeout: 20 * time.Millisecond}
@@ -113,7 +113,7 @@ func (self *fileUart) Open(path string, baud int) (err error) {
 	err = ioctl(self.fd, uintptr(cTCSETSF2), uintptr(unsafe.Pointer(&self.t2)))
 	if err != nil {
 		self.Close()
-		return errors.Trace(err)
+		return errors.Annotate(err, "fileUart.Open:ioctl")
 	}
 	return nil
 }
@@ -195,8 +195,8 @@ func bufferReadPacket(src *bufio.Reader, dst []byte) (n int, err error) {
 			n++
 			// log.Printf("bufferReadPacket seq=ffff dst=%x", dst[:n])
 		default:
-			err = errors.Errorf("bufferReadPacket unknown sequence ff %x", b)
-			return n, errors.Trace(err)
+			err = errors.NotValidf("bufferReadPacket unknown sequence ff %x", b)
+			return n, err
 		}
 	}
 }
@@ -261,7 +261,7 @@ func ioctl(fd uintptr, op, arg uintptr) (err error) {
 	if err != nil {
 		// log.Printf("debug: mdb.ioctl op=%x arg=%x err=%s", op, arg, err)
 	}
-	return errors.Trace(err)
+	return errors.Annotate(err, "ioctl")
 }
 
 func io_wait_read(fd uintptr, min int, wait time.Duration) error {

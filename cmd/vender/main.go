@@ -60,7 +60,7 @@ func main() {
 	log.Printf("config=%+v", config)
 	ctx = context.WithValue(ctx, "config", config)
 	if err := helpers.FoldErrors(lifecycle.OnValidate.Do(ctx)); err != nil {
-		log.Fatal(errors.ErrorStack(err))
+		log.Fatal(err)
 	}
 
 	mdber, err := mdb.NewMDB(config.Mdb.Uarter, config.Mdb.UartDevice, config.Mdb.UartBaudrate)
@@ -73,9 +73,12 @@ func main() {
 	mdber.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
 	ctx = context.WithValue(ctx, "run/mdber", mdber)
 
-	lifecycle.OnStart.Do(ctx)
+	if err := helpers.FoldErrors(lifecycle.OnStart.Do(ctx)); err != nil {
+		log.Fatal(err)
+	}
 	sdnotify(daemon.SdNotifyReady)
 
+	log.Printf("systems init complete, running")
 	stopCh := a.StopChan()
 	for a.IsRunning() {
 		select {
