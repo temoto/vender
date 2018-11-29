@@ -93,7 +93,10 @@ func main() {
 					response.Logf("< %s")
 				}
 				if err != nil {
-					log.Fatal(errors.ErrorStack(err))
+					log.Printf(errors.ErrorStack(err))
+					if !errors.IsTimeout(err) {
+						break wordLoop
+					}
 				}
 			default:
 				log.Printf("error: invalid command: '%s'", word)

@@ -10,11 +10,12 @@
 *.so
 *.test
 .DS_Store
+/.vagrant
 /build
 /cmd/display-mt16-test/display-mt16-test
 /cmd/i2c-test/i2c-test
-/cmd/iodin/target
 /cmd/iodin/src/proto/iodin.rs
+/cmd/iodin/target
 /cmd/mdb-cli/mdb-cli
 /cmd/vender/vender
 /cover.out

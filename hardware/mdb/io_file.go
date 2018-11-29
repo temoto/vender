@@ -94,7 +94,7 @@ func (self *fileUart) Open(path string, baud int) (err error) {
 	if self.f != nil {
 		self.Close() // skip error
 	}
-	self.f, err = os.OpenFile(path, syscall.O_RDWR|syscall.O_NOCTTY, 0600)
+	self.f, err = os.OpenFile(path, syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_NDELAY, 0600)
 	if err != nil {
 		return errors.Annotate(err, "fileUart.Open:OpenFile")
 	}
@@ -105,6 +105,7 @@ func (self *fileUart) Open(path string, baud int) (err error) {
 
 	self.t2 = termios2{
 		c_iflag:  unix.IGNBRK | unix.INPCK | unix.PARMRK,
+		c_lflag:  0,
 		c_cflag:  cCMSPAR | syscall.CLOCAL | syscall.CREAD | unix.CSTART | syscall.CS8 | unix.PARENB | unix.PARMRK | unix.IGNPAR,
 		c_ispeed: speed_t(unix.B9600),
 		c_ospeed: speed_t(unix.B9600),
@@ -114,6 +115,17 @@ func (self *fileUart) Open(path string, baud int) (err error) {
 	if err != nil {
 		self.Close()
 		return errors.Annotate(err, "fileUart.Open:ioctl")
+	}
+	var ser serial_info
+	err = ioctl(self.fd, uintptr(cTIOCGSERIAL), uintptr(unsafe.Pointer(&ser)))
+	if err != nil {
+		log.Printf("get serial fail err=%v", err)
+	} else {
+		ser.flags |= cASYNC_LOW_LATENCY
+		err = ioctl(self.fd, uintptr(cTIOCSSERIAL), uintptr(unsafe.Pointer(&ser)))
+		if err != nil {
+			log.Printf("set serial fail err=%v", err)
+		}
 	}
 	return nil
 }
@@ -210,14 +222,17 @@ func (self *fileUart) resetRead() (err error) {
 }
 
 const (
-	cBOTHER   = 0x1000
-	cCMSPAR   = 0x40000000
-	cFIONREAD = 0x541b
-	cNCCS     = 19
-	cTCSBRKP  = 0x5425
-	cTCSETS2  = 0x402c542b
-	cTCSETSW2 = 0x402c542c // flush output TODO verify
-	cTCSETSF2 = 0x402c542d // flush both input,output TODO verify
+	cBOTHER            = 0x1000
+	cCMSPAR            = 0x40000000
+	cFIONREAD          = 0x541b
+	cNCCS              = 19
+	cTCSBRKP           = 0x5425
+	cTCSETS2           = 0x402c542b
+	cTCSETSW2          = 0x402c542c // flush output TODO verify
+	cTCSETSF2          = 0x402c542d // flush both input,output TODO verify
+	cASYNC_LOW_LATENCY = 1 << 13
+	cTIOCGSERIAL       = 0x541E
+	cTIOCSSERIAL       = 0x541F
 )
 
 type cc_t byte
@@ -232,6 +247,15 @@ type termios2 struct {
 	c_cc     [cNCCS]cc_t // control characters
 	c_ispeed speed_t     // input speed
 	c_ospeed speed_t     // output speed
+}
+type serial_info struct {
+	_type          int32
+	line           int32
+	port           uint32
+	irq            int32
+	flags          int32
+	xmit_fifo_size int32
+	_pad           [200]byte
 }
 
 type fdReader struct {

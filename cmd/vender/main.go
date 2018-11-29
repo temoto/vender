@@ -60,7 +60,7 @@ func main() {
 	log.Printf("config=%+v", config)
 	ctx = context.WithValue(ctx, "config", config)
 	if err := helpers.FoldErrors(lifecycle.OnValidate.Do(ctx)); err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 
 	mdber, err := mdb.NewMDB(config.Mdb.Uarter, config.Mdb.UartDevice, config.Mdb.UartBaudrate)
