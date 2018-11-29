@@ -3,6 +3,7 @@ package mdb
 import (
 	"bufio"
 	"io"
+	"log"
 	"os"
 	"runtime/debug"
 	"syscall"
