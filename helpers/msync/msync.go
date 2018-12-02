@@ -7,9 +7,14 @@ import (
 type Nothing struct{}
 type Signal chan Nothing
 
-func NewSignal() Signal { return make(chan Nothing, 1) }
-func (s Signal) Set()   { s <- Nothing{} }
-func (s Signal) Wait()  { <-s }
+func NewSignal() Signal { return make(chan Nothing) }
+func (s Signal) Set() {
+	select {
+	case s <- Nothing{}:
+	default:
+	}
+}
+func (s Signal) Wait() { <-s }
 
 type SignalError chan error
 

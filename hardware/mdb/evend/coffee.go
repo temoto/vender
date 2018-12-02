@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/helpers/msync"
 )
 
 type DeviceCoffee struct {
@@ -16,7 +17,7 @@ func (self *DeviceCoffee) Init(ctx context.Context, mdber mdb.Mdber) error {
 	return self.g.Init(ctx, mdber, 0xe8, "coffee")
 }
 
-func (self *DeviceCoffee) ReadyChan() <-chan struct{} {
+func (self *DeviceCoffee) ReadyChan() <-chan msync.Nothing {
 	return self.g.ready
 }
 

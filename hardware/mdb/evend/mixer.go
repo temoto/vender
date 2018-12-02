@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/helpers/msync"
 )
 
 type DeviceMixer struct {
@@ -17,7 +18,7 @@ func (self *DeviceMixer) Init(ctx context.Context, mdber mdb.Mdber) error {
 	return self.g.Init(ctx, mdber, 0xc8, "mixer")
 }
 
-func (self *DeviceMixer) ReadyChan() <-chan struct{} {
+func (self *DeviceMixer) ReadyChan() <-chan msync.Nothing {
 	return self.g.ready
 }
 

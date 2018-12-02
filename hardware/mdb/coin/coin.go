@@ -13,6 +13,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/helpers/msync"
 )
 
 const (
@@ -57,7 +58,7 @@ type CoinAcceptor struct {
 
 	internalScalingFactor int
 	batch                 sync.Mutex
-	ready                 chan struct{}
+	ready                 msync.Signal
 }
 
 var (
@@ -89,7 +90,7 @@ func (self *CoinAcceptor) Init(ctx context.Context, mdber mdb.Mdber) error {
 	self.coinTypeCredit = make([]currency.Nominal, coinTypeCount)
 	self.mdb = mdber
 	self.internalScalingFactor = 1 // FIXME
-	self.ready = make(chan struct{})
+	self.ready = msync.NewSignal()
 	// TODO maybe execute CommandReset then wait for StatusWasReset
 	err := self.InitSequence()
 	return errors.Annotate(err, "hardware/mdb/coin/Init")
@@ -132,7 +133,7 @@ func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- mon
 	}
 }
 
-func (self *CoinAcceptor) ReadyChan() <-chan struct{} {
+func (self *CoinAcceptor) ReadyChan() <-chan msync.Nothing {
 	return self.ready
 }
 
@@ -235,7 +236,7 @@ func (self *CoinAcceptor) CommandPoll(result *money.PollResult) error {
 	}
 	bs := response.Bytes()
 	if len(bs) == 0 {
-		sendNothing(self.ready)
+		self.ready.Set()
 		return nil
 	}
 	log.Printf("poll response=%s", response.Format())
@@ -254,7 +255,7 @@ func (self *CoinAcceptor) CommandPoll(result *money.PollResult) error {
 		result.Items = append(result.Items, pi)
 	}
 	if result.Ready() {
-		sendNothing(self.ready)
+		self.ready.Set()
 	}
 	return nil
 }
@@ -440,11 +441,4 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 
 	err := fmt.Errorf("parsePollItem unknown=%x", b)
 	return money.PollItem{Status: money.StatusFatal, Error: err}, false
-}
-
-func sendNothing(ch chan<- struct{}) {
-	select {
-	case ch <- struct{}{}:
-	default:
-	}
 }

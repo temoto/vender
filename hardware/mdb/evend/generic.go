@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/helpers/msync"
 )
 
 const (
@@ -24,7 +25,7 @@ type DeviceGeneric struct {
 	name      string
 	byteOrder binary.ByteOrder
 	batch     sync.Mutex
-	ready     chan struct{}
+	ready     msync.Signal
 
 	setupResponse []byte
 
@@ -50,7 +51,7 @@ func (self *DeviceGeneric) Init(ctx context.Context, mdber mdb.Mdber, address ui
 	self.byteOrder = binary.BigEndian
 	self.name = name
 	self.mdb = mdber
-	self.ready = make(chan struct{})
+	self.ready = msync.NewSignal()
 	self.setupResponse = make([]byte, 0, mdb.PacketMaxLength)
 	self.packetReset = mdb.PacketFromBytes([]byte{self.address + 0})
 	self.packetSetup = mdb.PacketFromBytes([]byte{self.address + 1})
@@ -63,7 +64,7 @@ func (self *DeviceGeneric) Init(ctx context.Context, mdber mdb.Mdber, address ui
 	return err
 }
 
-func (self *DeviceGeneric) ReadyChan() <-chan struct{} {
+func (self *DeviceGeneric) ReadyChan() <-chan msync.Nothing {
 	return self.ready
 }
 
@@ -105,18 +106,11 @@ func (self *DeviceGeneric) CommandPoll() error {
 	log.Printf("device=%s poll response=%s", self.name, response.Format())
 	bs := response.Bytes()
 	if len(bs) == 0 {
-		sendNothing(self.ready)
+		self.ready.Set()
 		return nil
 	}
 	// if err != nil {
 	// 	return err
 	// }
 	return err
-}
-
-func sendNothing(ch chan<- struct{}) {
-	select {
-	case ch <- struct{}{}:
-	default:
-	}
 }

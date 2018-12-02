@@ -13,6 +13,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/helpers/msync"
 )
 
 const (
@@ -47,7 +48,7 @@ type BillValidator struct {
 
 	internalScalingFactor int
 	batch                 sync.Mutex
-	ready                 chan struct{}
+	ready                 msync.Signal
 }
 
 var (
@@ -79,7 +80,7 @@ func (self *BillValidator) Init(ctx context.Context, mdber mdb.Mdber) error {
 	self.byteOrder = binary.BigEndian
 	self.billTypeCredit = make([]currency.Nominal, billTypeCount)
 	self.mdb = mdber
-	self.ready = make(chan struct{})
+	self.ready = msync.NewSignal()
 	// TODO maybe execute CommandReset?
 	err := self.InitSequence()
 	return err
@@ -104,7 +105,7 @@ func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- mo
 	}
 }
 
-func (self *BillValidator) ReadyChan() <-chan struct{} {
+func (self *BillValidator) ReadyChan() <-chan msync.Nothing {
 	return self.ready
 }
 
@@ -196,7 +197,7 @@ func (self *BillValidator) CommandPoll() money.PollResult {
 	}
 	bs := response.Bytes()
 	if len(bs) == 0 {
-		sendNothing(self.ready)
+		self.ready.Set()
 		return result
 	}
 	result.Items = make([]money.PollItem, len(bs))
@@ -332,11 +333,4 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 	err := fmt.Errorf("parsePollItem unknown=%x", b)
 	log.Print(err)
 	return money.PollItem{Status: money.StatusFatal, Error: err}
-}
-
-func sendNothing(ch chan<- struct{}) {
-	select {
-	case ch <- struct{}{}:
-	default:
-	}
 }

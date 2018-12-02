@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/helpers/msync"
 )
 
 type DeviceHopper struct {
@@ -16,7 +17,7 @@ func (self *DeviceHopper) Init(ctx context.Context, mdber mdb.Mdber) error {
 	return self.g.Init(ctx, mdber, 0xb8, "hopper")
 }
 
-func (self *DeviceHopper) ReadyChan() <-chan struct{} {
+func (self *DeviceHopper) ReadyChan() <-chan msync.Nothing {
 	return self.g.ready
 }
 
