@@ -1,6 +1,6 @@
+// Public API to easy create MDB stubs for test code.
 package mdb
 
-// Public API to easy create MDB stubs for test code.
 import (
 	"bufio"
 	"bytes"

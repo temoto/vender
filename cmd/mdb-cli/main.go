@@ -18,10 +18,11 @@ import (
 )
 
 func main() {
-	devicePath := flag.String("device", "/dev/ttyAMA0", "")
-	iodinPath := flag.String("iodin", "./iodin", "Path to iodin executable")
-	uarterName := flag.String("io", "", "file|iodin")
-	flag.Parse()
+	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	devicePath := cmdline.String("device", "/dev/ttyAMA0", "")
+	iodinPath := cmdline.String("iodin", "./iodin", "Path to iodin executable")
+	uarterName := cmdline.String("io", "", "file|iodin")
+	cmdline.Parse(os.Args[1:])
 
 	var uarter mdb.Uarter
 	switch *uarterName {

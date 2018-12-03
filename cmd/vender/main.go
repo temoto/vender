@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"os"
 	"runtime"
 	"time"
 
@@ -29,8 +30,9 @@ type systems struct {
 }
 
 func main() {
-	flagConfig := flag.String("config", "vender.hcl", "")
-	flag.Parse()
+	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	flagConfig := cmdline.String("config", "vender.hcl", "")
+	cmdline.Parse(os.Args[1:])
 
 	const logFlagsService = log.Lshortfile
 	const logFlagsInteractive = log.Lshortfile | log.Ltime | log.Lmicroseconds
