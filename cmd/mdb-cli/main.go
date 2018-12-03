@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -35,6 +36,8 @@ func main() {
 	default:
 		log.Fatalf("invalid -io=%s", *uarterName)
 	}
+	defer uarter.Close()
+
 	m, err := mdb.NewMDB(uarter, *devicePath, 0)
 	if err != nil {
 		log.Fatalf("mdb open: %v", errors.ErrorStack(err))
@@ -45,6 +48,9 @@ func main() {
 		fmt.Fprintf(os.Stdout, "> ")
 		bline, _, err := stdin.ReadLine()
 		if err != nil {
+			if err == io.EOF {
+				return
+			}
 			log.Fatal(errors.ErrorStack(err))
 		}
 		line := string(bline)

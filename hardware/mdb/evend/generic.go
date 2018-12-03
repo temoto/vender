@@ -60,6 +60,7 @@ func (self *DeviceGeneric) Init(ctx context.Context, mdber mdb.Mdber, address ui
 	if err := self.CommandReset(); err != nil {
 		return err
 	}
+	time.Sleep(200 * time.Millisecond)
 	_, err := self.CommandSetup()
 	return err
 }

@@ -12,10 +12,12 @@ type iodinUart struct {
 }
 
 func NewIodinUart(c *iodin.Client) *iodinUart {
+	c.IncRef("mdb")
 	return &iodinUart{c: c}
 }
 
 func (self *iodinUart) Close() error {
+	self.c.DecRef("mdb")
 	self.c = nil
 	return nil
 }
