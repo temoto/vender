@@ -63,11 +63,11 @@ func main() {
 		log.Fatal(errors.ErrorStack(err))
 	}
 
-	mdber, err := mdb.NewMDB(config.Mdb.Uarter, config.Mdb.UartDevice, config.Mdb.UartBaudrate)
+	mdber, err := mdb.NewMDB(config.Hardware.Mdb.Uarter, config.Hardware.Mdb.UartDevice)
 	if err != nil {
 		log.Fatal(errors.ErrorStack(err))
 	}
-	if config.Mdb.Log {
+	if config.Hardware.Mdb.Log {
 		mdber.SetLog(log.Printf)
 	}
 	mdber.BreakCustom(200*time.Millisecond, 500*time.Millisecond)

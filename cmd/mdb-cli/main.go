@@ -38,7 +38,7 @@ func main() {
 	}
 	defer uarter.Close()
 
-	m, err := mdb.NewMDB(uarter, *devicePath, 0)
+	m, err := mdb.NewMDB(uarter, *devicePath)
 	if err != nil {
 		log.Fatalf("mdb open: %v", errors.ErrorStack(err))
 	}

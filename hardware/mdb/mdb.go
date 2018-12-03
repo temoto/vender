@@ -14,7 +14,7 @@ import (
 type Uarter interface {
 	Break(d time.Duration) error
 	Close() error
-	Open(path string, baud int) error
+	Open(path string) error
 	Tx(request, response []byte) (int, error)
 }
 
@@ -65,16 +65,13 @@ func checksum(bs []byte) byte {
 	return chk
 }
 
-func NewMDB(u Uarter, path string, baud int) (*mdb, error) {
+func NewMDB(u Uarter, path string) (*mdb, error) {
 	self := &mdb{
 		io:      u,
 		log:     helpers.Discardf,
 		recvBuf: make([]byte, 0, PacketMaxLength),
 	}
-	if baud == 0 {
-		baud = 9600
-	}
-	err := self.io.Open(path, baud)
+	err := self.io.Open(path)
 	return self, errors.Annotate(err, "NewMDB")
 }
 

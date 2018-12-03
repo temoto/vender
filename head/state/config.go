@@ -17,13 +17,14 @@ import (
 )
 
 type Config struct {
-	IodinPath string `hcl:"iodin_path"`
-	Mdb       struct {
-		Log          bool `hcl:"log_enable"`
-		Uarter       mdb.Uarter
-		UartDevice   string `hcl:"uart_device"`
-		UartDriver   string `hcl:"uart_driver"`
-		UartBaudrate int    `hcl:"uart_baudrate"`
+	Hardware struct {
+		IodinPath string `hcl:"iodin_path"`
+		Mdb       struct {
+			Log        bool `hcl:"log_enable"`
+			Uarter     mdb.Uarter
+			UartDevice string `hcl:"uart_device"`
+			UartDriver string `hcl:"uart_driver"`
+		}
 	}
 	Papa struct {
 		Address  string
@@ -52,17 +53,17 @@ func ReadConfig(r io.Reader) (*Config, error) {
 	c := new(Config)
 	err = hcl.Unmarshal(b, c)
 
-	switch c.Mdb.UartDriver {
+	switch c.Hardware.Mdb.UartDriver {
 	case "", "file":
-		c.Mdb.Uarter = mdb.NewFileUart()
+		c.Hardware.Mdb.Uarter = mdb.NewFileUart()
 	case "iodin":
-		iodin, err := iodin.NewClient(c.IodinPath)
+		iodin, err := iodin.NewClient(c.Hardware.IodinPath)
 		if err != nil {
-			return nil, errors.Annotatef(err, "config: mdb.uart_driver=%s iodin_path=%s", c.Mdb.UartDriver, c.IodinPath)
+			return nil, errors.Annotatef(err, "config: mdb.uart_driver=%s iodin_path=%s", c.Hardware.Mdb.UartDriver, c.Hardware.IodinPath)
 		}
-		c.Mdb.Uarter = mdb.NewIodinUart(iodin)
+		c.Hardware.Mdb.Uarter = mdb.NewIodinUart(iodin)
 	default:
-		return nil, fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, fast", c.Mdb.UartDriver)
+		return nil, fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, fast", c.Hardware.Mdb.UartDriver)
 	}
 
 	return c, err

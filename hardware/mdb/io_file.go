@@ -88,10 +88,7 @@ func (self *fileUart) Close() error {
 	return self.f.Close()
 }
 
-func (self *fileUart) Open(path string, baud int) (err error) {
-	if baud != 9600 {
-		return errors.NotSupportedf("fileUart: baud rate other than 9600 is not supported")
-	}
+func (self *fileUart) Open(path string) (err error) {
 	if self.f != nil {
 		self.Close() // skip error
 	}

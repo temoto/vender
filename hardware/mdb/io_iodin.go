@@ -29,10 +29,7 @@ func (self *iodinUart) Break(d time.Duration) error {
 	return errors.Trace(err)
 }
 
-func (self *iodinUart) Open(path string, baud int) error {
-	if baud != 9600 {
-		return errors.New("Not implemented support for baud rate other than 9600")
-	}
+func (self *iodinUart) Open(path string) error {
 	var r iodin.Response
 	err := self.c.Do(&iodin.Request{Command: iodin.Request_MDB_OPEN, ArgBytes: []byte(path)}, &r)
 	return errors.Trace(err)

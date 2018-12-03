@@ -14,10 +14,10 @@ func TestReadConfig(t *testing.T) {
 	}
 	cases := []Case{
 		Case{"empty", "",
-			func(c *Config) bool { return !c.Mdb.Log }},
+			func(c *Config) bool { return !c.Hardware.Mdb.Log }},
 		Case{"mdb",
-			"mdb { uart_device = \"/dev/shmoo\" }",
-			func(c *Config) bool { return c.Mdb.UartDevice == "/dev/shmoo" },
+			"hardware { mdb { uart_device = \"/dev/shmoo\" } }",
+			func(c *Config) bool { return c.Hardware.Mdb.UartDevice == "/dev/shmoo" },
 		},
 	}
 	mkCheck := func(c Case) func(*testing.T) {

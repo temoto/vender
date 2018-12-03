@@ -39,7 +39,7 @@ func (self *nullUart) Close() error {
 	return nil
 }
 
-func (self *nullUart) Open(path string, baud int) (err error) { return nil }
+func (self *nullUart) Open(path string) error { return nil }
 
 func (self *nullUart) Tx(request, response []byte) (n int, err error) {
 	if _, err = self.write9(request, true); err != nil {
@@ -115,7 +115,7 @@ func NewTestMDBRaw(t testing.TB) (Mdber, func([]byte), *bytes.Buffer) {
 	r := bytes.NewBuffer(nil)
 	w := bytes.NewBuffer(nil)
 	uarter := NewNullUart(r, w)
-	m, err := NewMDB(uarter, "", 0)
+	m, err := NewMDB(uarter, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func NewChanIO(timeout time.Duration) *ChanIO {
 func NewTestMDBChan(t testing.TB) (Mdber, <-chan *Packet, chan<- *Packet) {
 	cio := NewChanIO(5 * time.Second)
 	uarter := NewNullUart(cio, cio)
-	m, err := NewMDB(uarter, "", 0)
+	m, err := NewMDB(uarter, "")
 	if err != nil {
 		t.Fatal(err)
 	}

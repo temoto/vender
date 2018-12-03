@@ -1,13 +1,15 @@
-iodin_path = "target/release/iodin"
+hardware {
+  iodin_path = "target/release/iodin"
 
-mdb {
-  log_enable = false
+  mdb {
+    log_enable = false
 
-  uart_driver = "file"
-  uart_device = "/dev/ttyAMA0"
+    uart_driver = "file"
+    uart_device = "/dev/ttyAMA0"
 
-  #uart_driver = "iodin"
-  #uart_device = "\x0f\x0e"
+    #uart_driver = "iodin"
+    #uart_device = "\x0f\x0e"
+  }
 }
 
 papa {

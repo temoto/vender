@@ -11,7 +11,7 @@ import (
 )
 
 func testMdberStrings(t testing.TB, r io.Reader, w io.Writer) Mdber {
-	m, err := NewMDB(NewNullUart(r, w), "", 0)
+	m, err := NewMDB(NewNullUart(r, w), "")
 	if err != nil {
 		t.Fatal(errors.ErrorStack(err))
 	}
