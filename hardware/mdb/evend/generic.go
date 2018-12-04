@@ -1,4 +1,4 @@
-// Package evend incapsulates common parts of MDB protocol to Device
+// Package evend incapsulates common parts of MDB protocol for Evend machine
 // devices like conveyor, hopper, cup dispenser, elevator, etc.
 package evend
 

@@ -56,6 +56,14 @@ func AssertEqual(t testing.TB, a, b interface{}) {
 		if a.(int) == b.(int) {
 			return
 		}
+	case uint:
+		if a.(uint) == b.(uint) {
+			return
+		}
+	case int32:
+		if a.(int32) == b.(int32) {
+			return
+		}
 	case uint32:
 		if a.(uint32) == b.(uint32) {
 			return

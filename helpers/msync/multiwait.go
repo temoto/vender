@@ -1,30 +1,6 @@
 package msync
 
-import (
-	"sync"
-)
-
-type Nothing struct{}
-type Signal chan Nothing
-
-func NewSignal() Signal { return make(chan Nothing) }
-func (s Signal) Set() {
-	select {
-	case s <- Nothing{}:
-	default:
-	}
-}
-func (s Signal) Wait() { <-s }
-
-type SignalError chan error
-
-type ErrorWaiter interface {
-	Wait() error
-}
-
-func NewSignalError() SignalError     { return make(chan error, 1) }
-func (s SignalError) Set(value error) { s <- value }
-func (s SignalError) Wait() error     { return <-s }
+import "sync"
 
 // Internal structure, may be changed.
 // Requirements for this data structure:
