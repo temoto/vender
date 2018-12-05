@@ -37,6 +37,7 @@ main() {
 		# end workaround cannot use test profile flag with multiple packages
 
 		go test -bench=. ./...
+        go vet ./...
 	fi
 
 	paths=$(find . -type d ! -path '.' ! -path '*/.*' ! -path './script*' ! -path './target*' ! -path './vendor*')

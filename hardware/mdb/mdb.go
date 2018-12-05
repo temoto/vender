@@ -76,7 +76,7 @@ func NewMDB(u Uarter, path string) (*mdb, error) {
 }
 
 func (self *mdb) SetLog(logf helpers.LogFunc) (previous helpers.LogFunc) {
-	previous, self.log = logf, self.log
+	previous, self.log = self.log, logf
 	return previous
 }
 

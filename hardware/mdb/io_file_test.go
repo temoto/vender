@@ -43,7 +43,6 @@ func (self *mockReader) Read(p []byte) (int, error) {
 			return n, nil
 		}
 	}
-	panic("code error")
 }
 
 func parseMockReader(s string) *mockReader {

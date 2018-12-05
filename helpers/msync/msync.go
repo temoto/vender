@@ -64,7 +64,6 @@ func (self *MultiWait) WaitDone() error {
 		}
 		self.cond.Wait()
 	}
-	panic("Unexpected branch")
 }
 
 func (self *MultiWait) Done(err error) {

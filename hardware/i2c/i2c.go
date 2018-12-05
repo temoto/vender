@@ -49,11 +49,11 @@ type i2cBus struct {
 
 // I2CBus interface is used to interact with the I2C bus.
 type I2CBus interface {
-	ReadByte(addr byte) (value byte, err error)
-	WriteByte(addr, value byte) error
+	ReadByteAt(addr byte) (value byte, err error)
+	WriteByteAt(addr, value byte) error
 
-	ReadBytes(addr byte, buf []byte) (n int, err error)
-	WriteBytes(addr byte, buf []byte) error
+	ReadBytesAt(addr byte, buf []byte) (n int, err error)
+	WriteBytesAt(addr byte, buf []byte) error
 
 	Close() error
 }
@@ -90,9 +90,9 @@ func (b *i2cBus) setAddress(addr byte) error {
 	return nil
 }
 
-func (b *i2cBus) ReadByte(addr byte) (byte, error) {
+func (b *i2cBus) ReadByteAt(addr byte) (byte, error) {
 	buf := []byte{0}
-	n, err := b.ReadBytes(addr, buf)
+	n, err := b.ReadBytesAt(addr, buf)
 	if err != nil {
 		return 0, err
 	}
@@ -102,7 +102,7 @@ func (b *i2cBus) ReadByte(addr byte) (byte, error) {
 	return buf[0], nil
 }
 
-func (b *i2cBus) ReadBytes(addr byte, buf []byte) (n int, err error) {
+func (b *i2cBus) ReadBytesAt(addr byte, buf []byte) (n int, err error) {
 	b.lk.Lock()
 	defer b.lk.Unlock()
 
@@ -117,11 +117,11 @@ func (b *i2cBus) ReadBytes(addr byte, buf []byte) (n int, err error) {
 	return n, nil
 }
 
-func (b *i2cBus) WriteByte(addr, value byte) error {
-	return b.WriteBytes(addr, []byte{value})
+func (b *i2cBus) WriteByteAt(addr, value byte) error {
+	return b.WriteBytesAt(addr, []byte{value})
 }
 
-func (b *i2cBus) WriteBytes(addr byte, buf []byte) (err error) {
+func (b *i2cBus) WriteBytesAt(addr byte, buf []byte) (err error) {
 	b.lk.Lock()
 	defer b.lk.Unlock()
 

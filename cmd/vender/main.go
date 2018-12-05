@@ -104,7 +104,7 @@ func main() {
 	runtime.KeepAlive(a)
 	runtime.KeepAlive(ctx)
 	runtime.KeepAlive(lifecycle)
-	runtime.KeepAlive(sys)
+	runtime.KeepAlive(&sys)
 }
 
 func sdnotify(s string) bool {

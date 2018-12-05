@@ -23,7 +23,7 @@ func main1() {
 	//log.Printf("read err=%v buf=%02x%02x%02x", err, buf[0], buf[1], buf[2])
 
 	for {
-		b, err := twi.ReadByte(addr)
+		b, err := twi.ReadByteAt(addr)
 		if err == nil {
 			log.Printf("read %02x", b)
 		} else {
@@ -64,13 +64,13 @@ func (self *tmega) SendUART(data byte, bit9 bool) error {
 	}
 	msg := newMegaMsg(cmd, data)
 	log.Printf("SendUART msg %s", msg.String())
-	return self.bus.WriteBytes(self.Addr, msg[:])
+	return self.bus.WriteBytesAt(self.Addr, msg[:])
 }
 
 func (self *tmega) ReadMsg(timeout time.Duration) (out megaMsg, err error) {
 	retryEnd := time.Now().Add(timeout)
 	for {
-		_, err = self.bus.ReadBytes(self.Addr, out[:])
+		_, err = self.bus.ReadBytesAt(self.Addr, out[:])
 		if err != nil || !out.IsTryAgain() || time.Now().After(retryEnd) {
 			break
 		}
