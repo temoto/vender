@@ -3,7 +3,6 @@ package money
 import (
 	"context"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/temoto/alive"
@@ -14,16 +13,12 @@ import (
 )
 
 type CoinState struct {
-	lk     sync.Mutex
 	alive  *alive.Alive
 	hw     coin.CoinAcceptor
 	credit currency.NominalGroup
 }
 
 func (self *CoinState) Init(ctx context.Context, parent *MoneySystem, mdber mdb.Mdber) error {
-	self.lk.Lock()
-	defer self.lk.Unlock()
-
 	log.Printf("head/money/coin/Init begin")
 	self.alive = alive.NewAlive()
 	if err := self.hw.Init(ctx, mdber); err != nil {
@@ -35,7 +30,7 @@ func (self *CoinState) Init(ctx context.Context, parent *MoneySystem, mdber mdb.
 	self.alive.Add(2)
 	log.Printf("head/money/coin/Init end, running")
 	go self.hw.Run(ctx, self.alive, pch)
-	go self.pollResultLoop(parent, pch)
+	go self.pollResultLoop(ctx, parent, pch)
 	return nil
 }
 
@@ -70,11 +65,11 @@ func (self *CoinState) Dispense(ng *currency.NominalGroup) (currency.Amount, err
 	return sum, err
 }
 
-func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResult) {
+func (self *CoinState) pollResultLoop(ctx context.Context, m *MoneySystem, pch <-chan money.PollResult) {
 	defer self.alive.Done()
 
 	const logPrefix = "head/money/coin"
-	h := func(m *MoneySystem, pr *money.PollResult, pi money.PollItem, hw Hardwarer) bool {
+	h := func(m *MoneySystem, pr *money.PollResult, pi money.PollItem) bool {
 		switch pi.Status {
 		case money.StatusDispensed:
 			log.Printf("manual dispense: %s", pi.String())
@@ -88,7 +83,6 @@ func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 		case money.StatusWasReset:
 			log.Printf("coin was reset")
 			// TODO telemetry
-			// self.hw.InitSequence()
 		case money.StatusCredit:
 			err := self.credit.Add(pi.DataNominal, uint(pi.DataCount))
 			if err != nil {
@@ -102,9 +96,5 @@ func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 		}
 		return true
 	}
-	onRestart := func(m *MoneySystem, hw Hardwarer) {
-		self.hw.CommandReset()
-		self.hw.InitSequence()
-	}
-	genericPollResultLoop(m, pch, h, onRestart, &self.hw, logPrefix)
+	genericPollResultLoop(ctx, m, pch, h, self.hw.Restarter(), logPrefix)
 }

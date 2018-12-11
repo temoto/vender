@@ -2,13 +2,13 @@ package bill
 
 import (
 	"context"
-	"math/rand"
+	"strings"
 	"testing"
-	"time"
 
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/helpers"
 )
 
@@ -37,14 +37,17 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *BillValidator {
 			replyFunc(t, reqCh, respCh)
 		}
 	}()
-	bv := &BillValidator{mdb: mdber}
-	err := bv.Init(context.Background(), mdber)
+	bv := &BillValidator{}
+	ctx := state.ContextWithConfig(
+		context.Background(),
+		state.MustReadConfig(t.Fatal, strings.NewReader("")))
+	err := bv.Init(ctx, mdber)
 	if err != nil {
 		t.Fatalf("bv.Init err=%v", err)
 	}
-	bv.billTypeCredit[0] = currency.Nominal(5)
-	bv.billTypeCredit[1] = currency.Nominal(10)
-	bv.billTypeCredit[2] = currency.Nominal(20)
+	bv.billNominals[0] = currency.Nominal(5)
+	bv.billNominals[1] = currency.Nominal(10)
+	bv.billNominals[2] = currency.Nominal(20)
 	return bv
 }
 
@@ -53,11 +56,11 @@ func checkPoll(t *testing.T, input string, expected _PR) {
 		mdb.TestChanTx(t, reqCh, respCh, "33", input)
 	}
 	bv := testMake(t, reply)
-	pr := money.NewPollResult(mdb.PacketMaxLength)
-	if err := bv.CommandPoll(pr); err != nil {
+	cmd := CommandPoll{bv: bv}
+    if err := cmd.Do(context.Background()); err != nil {
 		t.Fatalf("CommandPoll() err=%v", err)
-	}
-	pr.TestEqual(t, &expected)
+    }
+	cmd.R.TestEqual(t, &expected)
 }
 
 func TestBillPoll(t *testing.T) {
@@ -86,7 +89,7 @@ func TestBillPoll(t *testing.T) {
 			},
 		}},
 	}
-	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
+	helpers.RandUnix().Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
 		// c := c
 		t.Run(c.name, func(t *testing.T) {

@@ -1,35 +1,36 @@
 package money
 
 import (
+	"context"
 	"log"
 
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/helpers/msync"
 )
 
-type Hardwarer interface {
-	InitSequence() error
-	CommandReset() error
-}
+type HardwareStatusHandler func(m *MoneySystem, pr *money.PollResult, pi money.PollItem) bool
+type HardwareFunc func(m *MoneySystem, restart msync.Doer)
 
-type HardwareStatusHandler func(m *MoneySystem, pr *money.PollResult, pi money.PollItem, hw Hardwarer) bool
-type HardwareFunc func(m *MoneySystem, hw Hardwarer)
-
-func genericPollResultLoop(m *MoneySystem, pch <-chan money.PollResult, customItem HardwareStatusHandler, onRestart HardwareFunc, hw Hardwarer, logPrefix string) {
+func genericPollResultLoop(ctx context.Context, m *MoneySystem, pch <-chan money.PollResult,
+	customItem HardwareStatusHandler, restart msync.Doer, logPrefix string,
+) {
 	for pr := range pch {
-		handlePollResult(m, &pr, customItem, hw, onRestart, logPrefix)
+		handlePollResult(ctx, m, &pr, customItem, restart, logPrefix)
 	}
 }
 
-func handlePollResult(m *MoneySystem, pr *money.PollResult, customItem HardwareStatusHandler, hw Hardwarer, onRestart HardwareFunc, logPrefix string) {
-	// FIXME is it redundant?
+func handlePollResult(ctx context.Context, m *MoneySystem, pr *money.PollResult,
+	customItem HardwareStatusHandler, restart msync.Doer, logPrefix string,
+) {
 	// if pr.SingleStatus() == money.StatusBusy {
-	// 	log.Printf("%s poll busy", logPrefix)
-	// 	return
+	//	log.Printf("%s poll busy", logPrefix)
+	//	time.Sleep(pr.Delay)
+	//	return
 	// }
 
 	doRestart := false
 	for _, pi := range pr.Items {
-		if customItem != nil && customItem(m, pr, pi, hw) {
+		if customItem != nil && customItem(m, pr, pi) {
 			continue
 		}
 
@@ -49,6 +50,6 @@ func handlePollResult(m *MoneySystem, pr *money.PollResult, customItem HardwareS
 		}
 	}
 	if doRestart {
-		onRestart(m, hw)
+		restart.Do(ctx)
 	}
 }

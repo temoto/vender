@@ -51,6 +51,10 @@ func GetConfig(ctx context.Context) *Config {
 	panic("context['config'] expected type *Config")
 }
 
+func ContextWithConfig(ctx context.Context, config *Config) context.Context {
+	return context.WithValue(ctx, "config", config)
+}
+
 func ReadConfig(r io.Reader) (*Config, error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {

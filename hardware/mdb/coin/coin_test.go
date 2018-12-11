@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/helpers"
 )
 
@@ -42,8 +44,11 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *CoinAcceptor {
 			replyFunc(t, reqCh, respCh)
 		}
 	}()
-	c := &CoinAcceptor{mdb: mdber}
-	err := c.Init(context.Background(), mdber)
+	c := &CoinAcceptor{}
+	ctx := state.ContextWithConfig(
+		context.Background(),
+		state.MustReadConfig(t.Fatal, strings.NewReader("")))
+	err := c.Init(ctx, mdber)
 	if err != nil {
 		t.Fatalf("c.Init err=%v", err)
 	}

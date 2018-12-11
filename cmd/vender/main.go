@@ -11,6 +11,7 @@ import (
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
+	iodin "github.com/temoto/vender/hardware/iodin-client"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/kitchen"
 	"github.com/temoto/vender/head/money"
@@ -32,6 +33,7 @@ type systems struct {
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	flagConfig := cmdline.String("config", "vender.hcl", "")
+	flagUarter := cmdline.String("uarter", "file", "")
 	cmdline.Parse(os.Args[1:])
 
 	const logFlagsService = log.Lshortfile
@@ -60,9 +62,19 @@ func main() {
 
 	config := state.MustReadConfigFile(log.Fatal, *flagConfig)
 	log.Printf("config=%+v", config)
-	ctx = context.WithValue(ctx, "config", config)
+	ctx = state.ContextWithConfig(ctx, config)
 	if err := helpers.FoldErrors(lifecycle.OnValidate.Do(ctx)); err != nil {
 		log.Fatal(errors.ErrorStack(err))
+	}
+
+	if *flagUarter == "iodin" {
+		iodin, err := iodin.NewClient(config.Hardware.IodinPath)
+		if err != nil {
+			err = errors.Annotatef(err, "config: mdb.uart_driver=%s iodin_path=%s", config.Hardware.Mdb.UartDriver, config.Hardware.IodinPath)
+			log.Fatal(err)
+		}
+		config.Hardware.Mdb.Uarter = mdb.NewIodinUart(iodin)
+		config.Hardware.Mdb.UartDevice = "\x0f\x0e"
 	}
 
 	mdber, err := mdb.NewMDB(config.Hardware.Mdb.Uarter, config.Hardware.Mdb.UartDevice)

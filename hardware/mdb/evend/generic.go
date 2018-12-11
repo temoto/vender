@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/temoto/vender/hardware/mdb"
@@ -20,12 +19,8 @@ const (
 )
 
 type DeviceGeneric struct {
-	mdb       mdb.Mdber
-	address   uint8
-	name      string
-	byteOrder binary.ByteOrder
-	batch     sync.Mutex
-	ready     msync.Signal
+	dev   mdb.Device
+	ready msync.Signal
 
 	setupResponse []byte
 
@@ -39,23 +34,17 @@ var (
 	ErrTODO = fmt.Errorf("TODO")
 )
 
-// usage: defer x.Batch()()
-func (self *DeviceGeneric) Batch() func() {
-	self.batch.Lock()
-	return self.batch.Unlock
-}
-
 func (self *DeviceGeneric) Init(ctx context.Context, mdber mdb.Mdber, address uint8, name string) error {
 	// TODO read config
-	self.address = address
-	self.byteOrder = binary.BigEndian
-	self.name = name
-	self.mdb = mdber
+	self.dev.Address = address
+	self.dev.ByteOrder = binary.BigEndian
+	self.dev.Name = name
+	self.dev.Mdber = mdber
 	self.ready = msync.NewSignal()
 	self.setupResponse = make([]byte, 0, mdb.PacketMaxLength)
-	self.packetReset = mdb.PacketFromBytes([]byte{self.address + 0})
-	self.packetSetup = mdb.PacketFromBytes([]byte{self.address + 1})
-	self.packetPoll = mdb.PacketFromBytes([]byte{self.address + 3})
+	self.packetReset = mdb.PacketFromBytes([]byte{self.dev.Address + 0})
+	self.packetSetup = mdb.PacketFromBytes([]byte{self.dev.Address + 1})
+	self.packetPoll = mdb.PacketFromBytes([]byte{self.dev.Address + 3})
 
 	if err := self.CommandReset(); err != nil {
 		return err
@@ -70,48 +59,42 @@ func (self *DeviceGeneric) ReadyChan() <-chan msync.Nothing {
 }
 
 func (self *DeviceGeneric) CommandReset() error {
-	return self.mdb.Tx(self.packetReset, new(mdb.Packet))
+	return self.dev.Tx(self.packetReset).E
 }
 
 func (self *DeviceGeneric) CommandSetup() ([]byte, error) {
-	response := new(mdb.Packet)
-	err := self.mdb.Tx(self.packetSetup, response)
-	if err != nil {
-		log.Printf("device=%s mdb request=%s err=%v", self.name, self.packetSetup.Format(), err)
-		return nil, err
+	r := self.dev.Tx(self.packetSetup)
+	if r.E != nil {
+		log.Printf("device=%s mdb request=%s err=%v", self.dev.Name, self.packetSetup.Format(), r.E)
+		return nil, r.E
 	}
-	self.setupResponse = append(self.setupResponse[:0], response.Bytes()...)
-	log.Printf("device=%s setup response=(%d)%s", self.name, response.Len(), response.Format())
+	self.setupResponse = append(self.setupResponse[:0], r.P.Bytes()...)
+	log.Printf("device=%s setup response=(%d)%s", self.dev.Name, r.P.Len(), r.P.Format())
 	return self.setupResponse, nil
 }
 
 func (self *DeviceGeneric) CommandAction(args []byte) error {
 	bs := make([]byte, len(args)+1)
-	bs[0] = self.address + 2
+	bs[0] = self.dev.Address + 2
 	copy(bs[1:], args)
 	request := mdb.PacketFromBytes(bs)
-	response := new(mdb.Packet)
-	err := self.mdb.Tx(request, response)
-	if err != nil {
-		log.Printf("device=%s mdb request=%s err=%v", self.name, self.packetSetup.Format(), err)
-		return err
+	r := self.dev.Tx(request)
+	if r.E != nil {
+		log.Printf("device=%s mdb request=%s err=%v", self.dev.Name, self.packetSetup.Format(), r.E)
+		return r.E
 	}
-	log.Printf("device=%s setup response=(%d)%s", self.name, response.Len(), response.Format())
+	log.Printf("device=%s setup response=(%d)%s", self.dev.Name, r.P.Len(), r.P.Format())
 	return nil
 }
 
 func (self *DeviceGeneric) CommandPoll() error {
 	// now := time.Now()
-	response := new(mdb.Packet)
-	err := self.mdb.Tx(self.packetPoll, response)
-	log.Printf("device=%s poll response=%s", self.name, response.Format())
-	bs := response.Bytes()
+	r := self.dev.Tx(self.packetPoll)
+	log.Printf("device=%s poll response=%s", self.dev.Name, r.P.Format())
+	bs := r.P.Bytes()
 	if len(bs) == 0 {
 		self.ready.Set()
 		return nil
 	}
-	// if err != nil {
-	// 	return err
-	// }
-	return err
+	return r.E
 }
