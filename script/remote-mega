@@ -1,0 +1,12 @@
+#!/bin/bash
+set -eu
+base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+target=./cmd/mega-cli/mega-cli
+gopkg=$(dirname $target)
+name=$(basename $target)
+remote="pi@pipi"
+set -x
+go test -v $gopkg ./hardware/mega-client
+GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
+rsync -a $base/$target $remote:~/bin/
+ssh -t $remote \~/bin/$name "$@"

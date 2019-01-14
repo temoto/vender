@@ -17,14 +17,17 @@
 /cmd/iodin/src/proto/iodin.rs
 /cmd/iodin/target
 /cmd/mdb-cli/mdb-cli
+/cmd/mega-cli/mega-cli
 /cmd/vender/vender
 /cover.out
 /coverage*.info
 /coverage*.txt
 /display-mt16-test
+/hardware/mega-client/mega
 /i2c-test
 /mdb-cli
 /mdbr/target
+/mega-cli
 /qemu
 /target
 /vender

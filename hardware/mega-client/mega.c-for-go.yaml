@@ -1,0 +1,19 @@
+---
+GENERATOR:
+  PackageName: mega
+
+PARSER:
+  IncludePaths: ["./c4go_stub_include", "../i2c-mdb-atmega-gate/i2c-mdb_atmega-gate"]
+  SourcesPaths: ["main.h"]
+
+TRANSLATOR:
+  ConstRules:
+    defines: eval
+    enum: eval
+    const: eval
+  Rules:
+    global:
+      - {action: accept, from: "^Command_"}
+      - {action: accept, from: "^COMMAND_"}
+      - {action: accept, from: "^Response_"}
+      - {action: accept, from: "^RESPONSE_"}

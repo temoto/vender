@@ -1,3 +1,9 @@
 .vs/
-i2c-mdb_atmega-gate/Debug/
-i2c-mdb_atmega-gate/Release/
+*.elf
+*.hex
+*.lst
+*.o
+crc_test
+Debug/
+main_test
+Release/

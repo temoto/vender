@@ -1,279 +1,203 @@
 /*
-* i2c-mdb_atmega-gate.c
-*
-* Created: 18/06/2018 21:16:04
-* Author : Alex
-*/
+ * Created: 18/06/2018 21:16:04
+ * Author : Alex
+ */
 
-#include <avr/io.h>
+#define F_CPU 16000000UL  // Clock Speed
+
+#include "main.h"
 #include <avr/interrupt.h>
-#include <stdbool.h>
+#include <avr/io.h>
+#include <avr/wdt.h>
 #include <inttypes.h>
+#include <stdbool.h>
+#include <string.h>
+#include <util/atomic.h>
+#include <util/delay.h>
+#include "crc.h"
 
-#define F_CPU 16000000UL // Clock Speed
-#define USART_BAUDRATE 9600
-#define BAUD_PRESCALE (((F_CPU / (USART_BAUDRATE * 16UL))) - 1)
+// must include .c after main.h
+#include "buffer.c"
+#include "mdb.c"
+#include "twi.c"
 
-#define MDB_9BIT					 0b00000001
-#define MDB_TRANSMIT_READY 0b00000010
-#define MDB_RECEIVE_READY  0b00000100
-#define MDB_SESSION_READY  0b00001000
+static uint8_t volatile mcu_status;
 
-#define MDB_ACK 0x00
-#define MDB_RET 0xAA
-#define MDB_NAK 0xFF
-
-#define ERROR_TIMEOUT										0b00000001
-#define ERROR_START_FRAME								0b00000010
-#define ERROR_RECIEVED_WITHOUT_SESSION	0b00000100
-#define ERROR_RECIEVED_BYTE							0b00001000
-#define ERROR_RESPOND_TIMEOUT						0b00010000
-#define ERROR_CHECKSUM									0b00100000
-#define ERROR_RECEIVED_LENTH						0b01000000
-#define ERROR_RECEIVED_NOT_ACK					0b10000000
-
-#define COMMAND_COMPLITE					0x01
-#define COMMAND_MDB_WITHOUT_RET		0x02
-#define COMMAND_MDB_WITH_RET			0x02
-
-volatile uint8_t data_in[36];				// buffer for data from mdb
-volatile uint8_t data_in_len;				// recieved bytes
-volatile uint8_t data_in_checksum;  // recieved checksum
-
-volatile uint8_t data_out[36];			// buffer for data to mdb
-volatile uint8_t data_out_len;			// Number of bytes to transfer total bytes
-volatile uint8_t data_out_byte;			// total of bytes to transfer
-volatile uint8_t data_out_checksum; // checksum
-
-
-//volatile uint8_t hLockData;
-volatile uint8_t MDBState;
-volatile uint8_t mdb_error;
-volatile uint8_t command;
-// hLockData &= ~setbit
-// hLockData |= clearbit
-volatile unsigned char data_count;
-const char testdata[3] = {1,14,55};
-
-/*
-Baud Rate = 9600 +1%/-2% NRZ
-t = 1.0 mS inter-byte (max.)
-t = 5.0 mS response (max.)
-t = 100 mS break (min.)
-t = 200 mS setup (min.)
-
-Typical Session Examples
-VMC ---ADD*---CHK--
-Per -------------ACK*-
-
-VMC ---ADD*---CHK----------------ACK-
-Per -------------DAT---DAT---CHK*----
-
-VMC ---ADD*---DAT---DAT---CHK-----
-Per -------------------------ACK*-
-
-VMC ---ADD*---DAT--CHK----------------RET----------------ACK--
-Per ------------------DAT---DAT---CHK*---DAT---DAT---CHK*-----
-
-silence max 5mc
-VMC ---ADD*---CHK------------ADD*---CHK------
-Per --------------[silence]------------ACK*--
-*/
-void MDB_Init();
-void MDB_Start_session ();
-void MDB_Stop_session ();
-void timer_set(uint16_t ms);
-void timer_stop();
-
-volatile bool update = false;
-
-int main(void)
-{
-
-	MDB_Init();
-	data_out[0] = 1;
-	data_out[1] = 14;
-	data_out[2] = 251;
-	data_out_len = 3;
-	uint8_t aa = 0;
-	uint8_t ab = (aa >> 1) & 0x01;
-	
-		
-	MDB_Start_session ();
-	while (1)
-	{
-		if ( (MDBState & MDB_SESSION_READY) && (MDBState & MDB_TRANSMIT_READY) && (data_out_byte < data_out_len) && !mdb_error ) {
-			// transmit
-				uint8_t data;
-				data = data_out[data_out_byte];
-				data_out_checksum += data;
-				UDR0 = data;
-				data_out_byte ++;
-				MDBState &= ~MDB_TRANSMIT_READY;
-				timer_set(5);
-		}
-		if ( (MDBState & MDB_SESSION_READY) && (MDBState & MDB_TRANSMIT_READY) && (data_out_byte == data_out_len)  && !mdb_error )  {				
-				// send last byte (checksum)
-				data_out_byte ++; // set overflow. ( disable handler)
-				UDR0 = data_out_checksum;
-				data_in_checksum = 0;
-				data_in_len = 0;
-				timer_set(5);
-				MDBState &= ~MDB_TRANSMIT_READY;
-		}
-		if ( (MDBState & MDB_SESSION_READY) && (MDBState & MDB_RECEIVE_READY) && !(MDBState & MDB_9BIT) && !mdb_error){
-			// receive next byte
-			uint8_t	data = UDR0;
-			if(data_in_len >36) { //max packet size 36 byte
-				mdb_error |= ERROR_RECEIVED_LENTH;
-				MDB_Stop_session();
-				return;
-			} 
-			data_in_checksum += data;
-			data_in[data_in_len] = data;
-			data_in_len ++;
-			MDBState &= ~MDB_RECEIVE_READY;
-			timer_set(5);
-		}
-
-		if ( (MDBState & MDB_SESSION_READY) && (MDBState & MDB_RECEIVE_READY) && (MDBState & MDB_9BIT) && (data_in_len == 0) && !mdb_error){
-			//	VMC ---ADD*---CHK--
-			//	Per -------------ACK*-
-			uint8_t	data = UDR0;
-			if (data != MDB_ACK) {
-				// error. returned not ACK
-				mdb_error |= ERROR_RECEIVED_NOT_ACK;
-			}
-			command = COMMAND_COMPLITE;
-			MDB_Stop_session();
-		}
-
-		if ( (MDBState & MDB_SESSION_READY) && (MDBState & MDB_RECEIVE_READY) && (MDBState & MDB_9BIT) && (data_in_len > 0) && !mdb_error){
-			//	VMC ---ADD*---CHK----------------ACK-
-			//	Per -------------DAT---DAT---CHK*----
-			uint8_t	data = UDR0;
-			if (data != data_in_checksum && command == COMMAND_MDB_WITHOUT_RET){
-				UDR0 = MDB_ACK;
-				mdb_error |= ERROR_CHECKSUM;
-				MDB_Stop_session();
-				return;
-			}
-			if (data != data_in_checksum && command == COMMAND_MDB_WITH_RET){
-				//VMC ---ADD*---DAT--CHK----------------RET----------------ACK--
-				//Per ------------------DAT---DAT---CHK*---DAT---DAT---CHK*-----
-				UDR0 = MDB_RET;
-				command = COMMAND_MDB_WITHOUT_RET;
-				data_in_checksum = 0;
-				data_in_len = 0;
-				MDBState &= ~MDB_RECEIVE_READY;
-				timer_set(5);
-				return;
-			}
-			UDR0 = MDB_ACK;
-			command = COMMAND_COMPLITE;
-			MDB_Stop_session();
-		}
-		if(mdb_error) {
-			MDB_Stop_session();
-		}
-	}
+void early_init(void) __attribute__((naked)) __attribute__((section(".init3")));
+void early_init(void) {
+  wdt_disable();
+  mcu_status = MCUSR;
+  MCUSR = 0;
 }
 
-void MDB_Init()
-{
-	//set baud rate
-	UBRR0H = (BAUD_PRESCALE >> 8);
-	UBRR0L = BAUD_PRESCALE;
-	//Enable receiver and transmitter
-	UCSR0B = (1 << RXEN0) | (1 << TXEN0);
-	//Set session format: 8 data, 1 stop bit
-	UCSR0C = (3 << UCSZ00);
-	//Activates 9th data bit
-	UCSR0B |= (1 << UCSZ02);
-	// RX Complete Interrupt Enable
-	UCSR0B |= (1 << RXCIE0);
-	// TX Complete Interrupt Enable
-	UCSR0B |= (1 << TXCIE0);
-	
-	//Global Interrupt Enable
-	sei();
+// Watchdog for software reset
+static void soft_reset(void) __attribute__((noreturn));
+static void soft_reset(void) {
+  cli();
+  wdt_enable(WDTO_60MS);
+  for (;;)
+    ;
 }
 
-//void MDB_Flush( void )
-//{
-//unsigned char dummy;
-//while ( UCSR0A & (1<<RXC0) ) dummy = UDR0;
-//}void MDB_Stop_session (){
-	timer_stop();
-	data_out_checksum = 0;
-	data_out_byte = 0;
-	data_in_checksum = 0;
-	data_in_len = 0;
-	MDBState = 0;
+int main(void) {
+  cli();
+  wdt_disable();
+  timer0_stop();
+  twi_init_slave(0x78);
+  mdb_init();
+  // disable ADC
+  bit_mask_clear(ADCSRA, _BV(ADEN));
+  // power reduction
+  PRR = _BV(PRTIM2) | _BV(PRSPI) | _BV(PRADC);
+  // hello after reset
+  master_out_n(Response_Debug, Response_BeeBee, sizeof(Response_BeeBee));
+
+  sei();
+
+  for (;;) {
+    bool again = false;
+    if (twi_idle) {
+      again |= twi_step();  // may take 130us on FCPU=16MHz
+    }
+    if (mdb_state != MDB_STATE_IDLE) {
+      // cli(); // TODO double check if mdb_step() is safe with interrupts
+      again |= mdb_step();
+      // sei();
+    }
+    if (!again) {
+      // TODO measure idle time
+      _delay_us(300);
+    }
+  }
+
+  return 0;
 }
 
-void MDB_Start_session ()
-{
-	data_out_byte = 0;
-	data_out_checksum = data_out[0];
-	timer_set(5);
-	if(!(UCSR0A & (1 << UDRE0))) {
-		mdb_error |= ERROR_START_FRAME;
-		return;
-	}
-	MDBState |= MDB_SESSION_READY;
-	UCSR0B |= (1<<TXB80); //set 9 bit
-	UDR0 = data_out[0];
-	UCSR0B &= ~(1<<TXB80); //clear 9 bit
-	data_out_byte = 1;
-	if((UCSR0A & (1 << UDRE0))) {
-		MDBState |= MDB_TRANSMIT_READY; // for use second recieve buffer byte
-	}
+static uint8_t master_command(uint8_t const *const bs,
+                              uint8_t const max_length) {
+  if (max_length < 3) {
+    master_out_2(Response_Bad_Packet, 0);
+    return max_length;
+  }
+  uint8_t const length = bs[0];
+  if (length > max_length) {
+    master_out_2(Response_Bad_Packet, 0);
+    return length;
+  }
+  uint8_t const crc_in = bs[length - 1];
+  uint8_t const crc_local = crc8_p93_n(0, bs, length - 1);
+
+  if (crc_in != crc_local) {
+    master_out_2(Response_Invalid_CRC, crc_in);
+    return length;
+  }
+
+  Command_t const header = bs[1];
+  uint8_t const data_length = length - 3;
+  uint8_t const *const data = bs + 2;
+  if (header == Command_Poll) {
+    if (length == 3) {
+      master_out_2(Response_Queue_Size, master_out.length);
+    } else {
+      master_out_2(Response_Bad_Packet, 1);
+    }
+  } else if (header == Command_Config) {
+    // TODO
+    master_out_1(Response_Not_Implemented);
+  } else if (header == Command_Reset) {
+    soft_reset();  // noreturn
+  } else if (header == Command_Debug) {
+    char *buf = "M=xT=xxxxxxxxxxxxxx";
+    buf[2] = '0' + mdb_state;
+    for (uint8_t i = 0; i < sizeof(TwiStat_t); i++) {
+      shex(buf + 5 + (i * 2), *((uint8_t *)&twi_stat + i));
+    }
+    master_out_n(Response_Debug, (uint8_t *)buf, sizeof(buf));
+  } else if (header == Command_Flash) {
+    // TODO
+    master_out_1(Response_Not_Implemented);
+  } else if (header == Command_MDB_Bus_Reset) {
+    if (data_length != 2) {
+      master_out_1(Response_Bad_Packet);
+      return length;
+    }
+    if (mdb_state != MDB_STATE_IDLE) {
+      master_out_1(Response_MDB_Busy);
+      return length;
+    }
+    mdb_state = MDB_STATE_BUS_RESET;
+    uint16_t const duration = (data[0] << 8) | data[1];
+    bit_mask_clear(UCSR0B, _BV(TXEN0));  // disable UART TX
+    bit_mask_set(DDRD, _BV(1));          // set TX pin to output
+    bit_mask_clear(PORTD, _BV(PORTD1));  // pull TX pin low
+    timer0_set((uint8_t)duration);
+    master_out_1(Response_MDB_Started);
+  } else if (header == Command_MDB_Transaction_Simple) {
+    if (mdb_state != MDB_STATE_IDLE) {
+      master_out_1(Response_MDB_Busy);
+      return length;
+    }
+    // TODO Buffer_Clear_Fast(&mdb_out)  after thorough testing
+    Buffer_Clear_Full(&mdb_out);
+    Buffer_AppendN(&mdb_out, data, data_length);
+    Buffer_Append(&mdb_out, memsum(data, data_length));
+    mdb_start_send();
+    master_out_1(Response_MDB_Started);
+  } else if (header == Command_MDB_Transaction_Custom) {
+    // TODO read options from data: timeout, retry
+    // then proceed as Command_MDB_Transaction_Simple
+    master_out_1(Response_Not_Implemented);
+  } else {
+    master_out_1(Response_Unknown_Command);
+  }
+  return length;
 }
 
-void timer_set(uint16_t ms) {
-	TCCR1B |= (1<<CS11) | (1<<CS10);  // prescale 64 & CTC mode
-	TIMSK1 |= (1<<TOIE1);
-	TCNT1 = 65536-(ms*250);
+static uint8_t memsum(uint8_t const *const src, uint8_t const length) {
+  uint8_t sum = 0;
+  for (uint8_t i = 0; i < length; i++) {
+    sum += src[i];
+  }
+  return sum;
 }
 
-void timer_stop() {
-	MDBState = 0;
-	TIMSK1 &= ~(1 << TOIE1);
+// static uint8_t uint8_min(uint8_t const a, uint8_t const b) {
+//   return a < b ? a : b;
+// }
+
+static void shex(char *dst, uint8_t const value) {
+  uint8_t const alpha[16] = "0123456789abcdef";
+  dst[0] = alpha[value & 0xf];
+  dst[1] = alpha[(value >> 4) & 0xf];
 }
 
-ISR(TIMER1_OVF_vect){
-	if (MDBState != 0) {
-		mdb_error |= ERROR_TIMEOUT;	
-		MDBState = 0;
-	}
-	TIMSK1 &= ~(1 << TOIE1);
+static void timer0_set(uint8_t const ms) {
+  timer0_stop();
+  uint8_t const per_ms = (F_CPU / 1024000UL);
+  uint8_t const cnt = 256 - (ms * per_ms);
+  TCNT0 = cnt;
+  TIMSK0 = _BV(TOIE0);
+  TCCR0B = _BV(CS02) | _BV(CS00);  // prescale 1024, normal mode
+}
+static void timer0_stop(void) {
+  TCCR0B = 0;
+  TCCR0A = 0;
+  TIMSK0 = 0;
 }
 
-
-ISR(USART_RX_vect)
-{
-
-	if(MDBState & MDB_SESSION_READY) {
-		//check receive error
-		if ( UCSR0A & (1<<FE0)|(1<<DOR0)|(1<<UPE0) ) {
-			mdb_error |= ERROR_RECIEVED_BYTE;
-			MDBState = 0;
-			return;
-		}
-		MDBState &= ~MDB_9BIT;							// clear 9 bit
-		MDBState += (UCSR0B & (1<<TXB80));	// if 9 bit true then set
-		MDBState |= MDB_RECEIVE_READY;
-	} else {
-		// error received data in not session
-		volatile uint8_t tmp = UDR0; // Clear the receive buffer
-		mdb_error |= ERROR_RECIEVED_WITHOUT_SESSION;
-	}
-}
-
-ISR(USART_TX_vect)
-{
-	if(MDBState & MDB_SESSION_READY) {
-		MDBState |= MDB_TRANSMIT_READY;
-	}
+ISR(TIMER0_OVF_vect) {
+  timer0_stop();
+  if (mdb_state == MDB_STATE_IDLE) {
+    // FIXME something is wrong?
+  } else if (mdb_state == MDB_STATE_BUS_RESET) {
+    // MDB BUS BREAK is finished, re-enable UART TX
+    bit_mask_set(UCSR0B, _BV(TXEN0));
+  } else {
+    // MDB timeout while sending or receiving
+    // silence max 5ms
+    // VMC ---ADD*---CHK------------ADD*---CHK------
+    // Per --------------[silence]------------ACK*--
+    uint8_t const time_passed = 5;  // FIXME get real value
+    mdb_fast_error(Response_MDB_Timeout, time_passed);
+  }
 }

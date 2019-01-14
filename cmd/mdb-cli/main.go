@@ -45,6 +45,7 @@ func main() {
 	}
 	m.SetLog(log.Printf)
 	stdin := bufio.NewReader(os.Stdin)
+	defer os.Stdout.WriteString("\n")
 	for {
 		fmt.Fprintf(os.Stdout, "> ")
 		bline, _, err := stdin.ReadLine()
@@ -55,6 +56,9 @@ func main() {
 			log.Fatal(errors.ErrorStack(err))
 		}
 		line := string(bline)
+		if len(line) == 0 {
+			continue
+		}
 
 		words := strings.Split(line, " ")
 		iteration := uint64(1)
@@ -69,7 +73,7 @@ func main() {
 - log=no   disable debug logging
 - lN       loop N times all commands on this line
 - sN       pause N milliseconds
-- tXX...   send MDB block from hex XX...
+- tXX...   transmit MDB block from hex XX..., show response
 `)
 			case word == "break":
 				m.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
