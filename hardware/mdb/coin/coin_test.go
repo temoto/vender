@@ -109,7 +109,9 @@ func TestCoinPoll(t *testing.T) {
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
+		c := c
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			checkPoll(t, c.input, c.expect)
 		})
 	}
