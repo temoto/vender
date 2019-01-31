@@ -20,9 +20,10 @@ func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	i2cBusNo := cmdline.Uint("i2cbus", 0, "")
 	addr := cmdline.Uint("addr", 0x78, "")
+	pin := cmdline.Uint("pin", 23, "")
 	cmdline.Parse(os.Args[1:])
 
-	client, err := mega.NewClient(byte(*i2cBusNo), byte(*addr))
+	client, err := mega.NewClient(byte(*i2cBusNo), byte(*addr), *pin)
 	if err != nil {
 		log.Fatal(errors.Trace(err))
 	}
@@ -44,7 +45,7 @@ func main() {
 
 		words := strings.Split(line, " ")
 		iteration := uint64(1)
-		// wordLoop:
+	wordLoop:
 		for _, word := range words {
 			log.Printf("(%d)%s", iteration, word)
 			switch {
@@ -65,6 +66,15 @@ func main() {
 				fallthrough
 			case word == "pin=no":
 				log.Printf("TODO token=%s not implemented", word)
+			case word[0] == 'l':
+				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
+					log.Fatal(errors.ErrorStack(err))
+				} else {
+					iteration++
+					if iteration <= i {
+						goto wordLoop
+					}
+				}
 			case word[0] == 'p':
 				if bs, err := hex.DecodeString(word[1:]); err != nil {
 					log.Fatalf("token=%s error=%v", word, errors.ErrorStack(err))
@@ -76,7 +86,7 @@ func main() {
 						break
 					}
 					err = mega.ParseResponse(tx.Rs, func(p mega.Packet) {
-						log.Printf("- packet=%s %s data=%02x", p.Hex(), p.Header.String(), p.Data)
+						log.Printf("- packet=%s %s", p.Hex(), p.String())
 					})
 					if err != nil {
 						log.Printf("tx rq=%02x rs=%02x parse error=%v", tx.Rq, tx.Rs, err)
@@ -88,7 +98,19 @@ func main() {
 					log.Fatal(errors.ErrorStack(err))
 				} else {
 					buf := make([]byte, i)
-					client.RawRead(buf)
+					err = client.RawRead(buf)
+					if err != nil {
+						log.Printf("read error=%v", err)
+						break
+					}
+					// FIXME duplicate code
+					err = mega.ParseResponse(buf, func(p mega.Packet) {
+						log.Printf("- packet=%s %s", p.Hex(), p.String())
+					})
+					if err != nil {
+						log.Printf("rs=%02x parse error=%v", buf, err)
+						break
+					}
 				}
 			case word[0] == 's':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {

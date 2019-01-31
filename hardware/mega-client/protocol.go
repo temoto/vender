@@ -1,6 +1,7 @@
 package mega
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -14,6 +15,7 @@ import (
 //go:generate mv mega/types.go types.gen.go
 //go:generate stringer -type=Command_t -trimprefix=Command_
 //go:generate stringer -type=Response_t -trimprefix=Response_
+//go:generate stringer -type=MDB_State_t -trimprefix=MDB_State_
 
 type Packet struct {
 	length byte
@@ -63,24 +65,60 @@ func (self *Packet) Hex() string {
 	return hex.EncodeToString(tmp)
 }
 
+func (self *Packet) String() string {
+	info := ""
+	switch self.Header {
+	case Response_Debug:
+		if bytes.Equal(self.Data, []byte{0xbe, 0xeb, 0xee}) {
+			info = "just reset"
+			break
+		}
+		if len(self.Data) < 15 {
+			info = "invalid format"
+			break
+		}
+		mcusr := self.Data[14]
+		resetReason := ""
+		if mcusr&(1<<0) != 0 {
+			resetReason += "+PO"
+		}
+		if mcusr&(1<<1) != 0 {
+			resetReason += "+EXT"
+		}
+		if mcusr&(1<<2) != 0 {
+			resetReason += "+BO"
+		}
+		if mcusr&(1<<3) != 0 {
+			resetReason += "+WD(PROBLEM)"
+		}
+		info = fmt.Sprintf("MDB=%s TWI=%v reset=%s",
+			MDB_State_t(self.Data[2]).String(),
+			self.Data[5:5+8],
+			resetReason,
+		)
+	}
+	return fmt.Sprintf("header=%s data=%s info=%s", self.Header.String(), hex.EncodeToString(self.Data), info)
+}
+
 func ParseResponse(b []byte, fun func(p Packet)) error {
 	if len(b) == 0 {
 		return errors.NotValidf("response empty")
 	}
 	total := b[0]
 	if total == 0 {
-		return errors.NotValidf("response=%02x claims length=0", b)
+		return nil
 	}
 	if total > RESPONSE_MAX_LENGTH {
 		return errors.NotValidf("response=%02x claims length=%d > MAX=%d", b, total, RESPONSE_MAX_LENGTH)
 	}
-	if int(total) > len(b) {
-		return errors.NotValidf("response=%02x claims length=%d > buffer=%d", b, total, len(b))
+	bufLen := len(b) - 1
+	if int(total) > bufLen {
+		return errors.NotValidf("response=%02x claims length=%d > buffer=%d", b, total, bufLen)
 	}
-	b = b[:total]
+	b = b[:total+1]
 	var err error
 	var offset uint8 = 1
-	for offset < total {
+	for offset <= total {
 		p := Packet{}
 		if err = p.Parse(b[offset:]); err != nil {
 			return err

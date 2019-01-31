@@ -6,8 +6,8 @@ avr_objcopy = avr-objcopy
 avr_size = avr-size
 avrdude = avrdude
 
-cflags_common = -Wall -Wpedantic -Werror -std=c11 -pipe
-CFLAGS = -mmcu=$(mmcu) -O3 $(cflags_common)
+cflags_common = -std=c11 -Wall -Wextra -Werror -pedantic -pipe -finline-functions -findirect-inlining -fno-predictive-commoning
+CFLAGS = -mmcu=$(mmcu) -O2 $(cflags_common)
 MAPFLAGS = -Wl,-Map,
 
 .PHONY : all clean main_test upload upload-a fuse
@@ -29,13 +29,15 @@ clean:
 format:
 	-clang-format -style=Google -i *.c *.h
 
-main.hex: main.elf crc.c crc.h
+main.hex: main.elf
 	$(avr_objcopy) -O ihex $< $@
 
-main.elf: main.c crc.c crc.h
+main.elf: main.c crc.c
 	$(avr_gcc) $(CFLAGS) -o $@ $^
 	$(avr_size) --common $@
 	cp main.elf i2c-mdb_atmega-gate.elf
+
+main.o: main.c buffer.c crc.c crc.h main.h mdb.c twi.c
 
 crc_test: crc.c crc.h crc_test.c
 	$(CC) $(cflags_common) -DDEBUG -DTEST -g -O0 -o $@ crc_test.c crc.c

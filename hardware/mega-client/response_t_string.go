@@ -5,7 +5,7 @@ package mega
 import "strconv"
 
 const (
-	_Response_t_name_0 = "Queue_Size"
+	_Response_t_name_0 = "Status"
 	_Response_t_name_1 = "DebugTWI"
 	_Response_t_name_2 = "MDB_StartedMDB_Success"
 	_Response_t_name_3 = "ErrorBad_PacketInvalid_CRCBuffer_OverflowUnknown_CommandCorruptionNot_Implemented"

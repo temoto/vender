@@ -15,9 +15,9 @@ typedef struct {
   uint8_t st_data_nack;
   uint8_t st_last_data;
   uint8_t sr_stop;
+  uint8_t out_empty_set_length;
 } TwiStat_t;
 
-// static uint8_t volatile twi_send_limit = 0;
 static bool volatile twi_idle = true;
 static uint8_t volatile twi_in_data[COMMAND_MAX_LENGTH];
 static Buffer_t volatile twi_in;
@@ -36,7 +36,6 @@ static void twi_init_slave(uint8_t const address) {
   TWAR = address << 1;
   TWSR = 0;
   twi_idle = true;
-  // twi_send_limit = 0;
   Buffer_Init(&twi_in, (uint8_t *)twi_in_data, sizeof(twi_in_data));
   Buffer_Init(&master_out, (uint8_t *)twi_out_data1, sizeof(twi_out_data1));
   Buffer_Init(&twi_out, (uint8_t *)twi_out_data2, sizeof(twi_out_data2));
@@ -82,15 +81,11 @@ static bool twi_step(void) {
   return again;
 }
 
-static void twi_out_set_2(uint8_t const header, uint8_t const data) {
-  Buffer_Clear_Fast(&twi_out);
-  uint8_t const length = 4;
-  twi_out.data[0] = length;
-  twi_out.data[1] = header;
-  twi_out.data[2] = data;
-  twi_out.data[3] = crc8_p93_n(0, twi_out.data, length - 1);
-  twi_out.data[4] = 0;
-  twi_out.length = length;
+static void twi_out_set_2(Response_t const header, uint8_t const data) {
+  uint8_t const packet_length = 3 + 1;
+  uint8_t const crc = crc8_p93_3b(packet_length, header, data);
+  uint8_t const packet[] = {packet_length, header, data, crc};
+  Buffer_Copy(&twi_out, packet, packet_length);
 }
 
 static void master_out_1(Response_t const header) {
@@ -105,7 +100,7 @@ static void master_out_1(Response_t const header) {
 static void master_out_2(Response_t const header, uint8_t const data) {
   uint8_t const packet_length = 4;
   uint8_t const crc = crc8_p93_3b(packet_length, header, data);
-  uint8_t const packet[4] = {packet_length, header, data, crc};
+  uint8_t const packet[] = {packet_length, header, data, crc};
   if (!Buffer_AppendN(&master_out, packet, packet_length)) {
     twi_out_set_2(Response_Buffer_Overflow, packet_length);
   }
@@ -114,7 +109,7 @@ static void master_out_2(Response_t const header, uint8_t const data) {
 static void master_out_n(Response_t const header, uint8_t const *const data,
                          uint8_t const data_length) {
   uint8_t const packet_length = 3 + data_length;
-  if (master_out.free < packet_length) {
+  if (master_out.length + packet_length > master_out.size) {
     twi_out_set_2(Response_Buffer_Overflow, packet_length);
     return;
   }
@@ -163,7 +158,6 @@ ISR(TWI_vect) {
     case TW_SR_ARB_LOST_SLA_ACK:
     case TW_SR_ARB_LOST_GCALL_ACK:
       twi_idle = false;
-      // twi_send_limit = UINT8_MAX;
       Buffer_Clear_Fast(&twi_in);
       ack = true;
       break;
@@ -187,9 +181,6 @@ ISR(TWI_vect) {
     case TW_SR_STOP:
       twi_stat.sr_stop++;
       twi_idle = true;
-      Buffer_Clear_Fast(&twi_in);
-      // FIXME likely not needed
-      // twi_in.used = twi_in.length;
       ack = true;
       break;
 
@@ -197,19 +188,20 @@ ISR(TWI_vect) {
     case TW_ST_SLA_ACK:
       twi_idle = false;
       if (twi_out.length == 0) {
-        twi_out_set_2(Response_Queue_Size, twi_out.length);
-      } else {
-        twi_out.used = 0;
+        twi_stat.out_empty_set_length++;
+        // twi_out_set_2(Response_Status, master_out.length);
+        TWDR = 0;
+        ack = false;
+        break;
       }
+      twi_out.used = 0;
       TWDR = twi_out.length;
-      // ack = (twi_out.used < uint8_min(twi_send_limit, twi_out.length));
       ack = (twi_out.used < twi_out.length);
       break;
 
     // Send Byte Receive ACK
     case TW_ST_DATA_ACK:
       twi_idle = false;
-      // ack = (twi_out.used < uint8_min(twi_send_limit, twi_out.length));
       ack = (twi_out.used < twi_out.length);
       if (ack) {
         TWDR = twi_out.data[twi_out.used];
@@ -221,11 +213,14 @@ ISR(TWI_vect) {
 
     // Send Last Byte Receive ACK
     case TW_ST_LAST_DATA:
-    // Send Last Byte Receive NACK
-    case TW_ST_DATA_NACK:
       twi_idle = true;
       Buffer_Clear_Fast(&twi_out);
       ack = true;
+      break;
+    // Send Last Byte Receive NACK
+    case TW_ST_DATA_NACK:
+      twi_idle = true;
+      twi_out.used = 0;
       break;
   }
   TWCR = _BV(TWINT) | (ack ? _BV(TWEA) : 0) | _BV(TWEN) | _BV(TWIE);

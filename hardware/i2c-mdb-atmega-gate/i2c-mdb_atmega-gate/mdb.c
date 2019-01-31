@@ -11,7 +11,7 @@ MDB timings:
   t = 200 mS setup (min.)
 */
 
-static uint8_t volatile mdb_state = MDB_STATE_IDLE;
+static MDB_State_t volatile mdb_state = MDB_State_Idle;
 static Buffer_t volatile mdb_in;
 static uint8_t volatile mdb_in_data[MDB_PACKET_SIZE];  // data from MDB
 static uint8_t volatile mdb_in_checksum;   // calculated checksum of mdb_in
@@ -20,7 +20,7 @@ static Buffer_t volatile mdb_out;
 static uint8_t volatile mdb_out_data[MDB_PACKET_SIZE];  // data to MDB
 static bool volatile mdb_state_retry;
 static Response_t volatile mdb_fast_error_code;
-static uint8_t volatile mdb_fast_error_state;
+static MDB_State_t volatile mdb_fast_error_state;
 static uint8_t volatile mdb_fast_error_data;
 
 static void mdb_finish_2(Response_t const code, uint8_t const data);
@@ -61,7 +61,7 @@ static void mdb_reset(void) {
   Buffer_Clear_Full(&mdb_out);
   mdb_in_checksum = 0;
   mdb_in_last_byte = 0;
-  mdb_state = MDB_STATE_IDLE;
+  mdb_state = MDB_State_Idle;
   mdb_state_retry = false;
 }
 
@@ -72,7 +72,7 @@ static void mdb_start_send(void) {
     return;
   }
   timer0_set(MDB_TIMEOUT);
-  mdb_state = MDB_STATE_SEND;
+  mdb_state = MDB_State_Send;
   mdb_state_retry = false;
 
   UCSR0B |= (1 << TXB80);  // set 9 bit
@@ -85,13 +85,17 @@ static void mdb_start_send(void) {
   return;
 }
 
-static void mdb_fast_error(uint8_t const code, uint8_t const data) {
+static void mdb_fast_error(Response_t const code, uint8_t const data) {
   mdb_fast_error_state = mdb_state;
-  mdb_state = MDB_STATE_ERROR;
+  mdb_state = MDB_State_Error;
   mdb_fast_error_code = code;
   mdb_fast_error_data = data;
 }
 
+static void mdb_finish_1(Response_t const code) {
+  master_out_1(code);
+  mdb_reset();
+}
 static void mdb_finish_2(Response_t const code, uint8_t const data) {
   master_out_2(code, data);
   mdb_reset();
@@ -115,18 +119,18 @@ static bool mdb_step(void) {
     return true;
   }
 
-  if (mdb_state == MDB_STATE_IDLE) {
+  if (mdb_state == MDB_State_Idle) {
     return false;
-  } else if (mdb_state == MDB_STATE_SEND) {
+  } else if (mdb_state == MDB_State_Send) {
     // XXX
-  } else if (mdb_state == MDB_STATE_RECV_END) {
+  } else if (mdb_state == MDB_State_Recv_End) {
     if (mdb_in.length == 0) {
       // VMC ---ADD*---DAT---DAT---CHK-----
       // VMC ---ADD*---CHK--
       // Per -------------ACK*-
       // Per -------------NAK*-
       if (mdb_in_last_byte == MDB_ACK) {
-        mdb_finish_2(Response_MDB_Success, mdb_in_last_byte);
+        mdb_finish_1(Response_MDB_Success);
       } else if (mdb_in_last_byte == MDB_NAK) {
         mdb_finish_2(Response_MDB_NAK, mdb_in_last_byte);
       } else {
@@ -178,22 +182,22 @@ ISR(USART_RX_vect) {
   }
 
   // received data out of session
-  if (mdb_state != MDB_STATE_RECV) {
+  if (mdb_state != MDB_State_Recv) {
     mdb_fast_error(Response_UART_Read_Unexpected, data);
     return;
   }
 
   if (bit_mask_test(csb, _BV(RXB80))) {
-    mdb_state = MDB_STATE_RECV_END;
     mdb_in_last_byte = data;
+    mdb_state = MDB_State_Recv_End;
   } else {
     mdb_in_checksum += data;
     if (!Buffer_Append(&mdb_in, data)) {
       mdb_fast_error(Response_MDB_Receive_Overflow, mdb_in.length);
       return;
     }
+    timer0_set(MDB_TIMEOUT);
   }
-  timer0_set(MDB_TIMEOUT);
 }
 
 // UART TX buffer space available
@@ -224,7 +228,7 @@ ISR(USART_TX_vect) {
   timer0_stop();
   bit_mask_clear(UCSR0B, 1 << TXCIE0);  // disable (this) TX completed interrupt
   mdb_start_receive();
-  mdb_state = MDB_STATE_RECV;
+  mdb_state = MDB_State_Recv;
 }
 
 #endif  // INCLUDE_MDB_C

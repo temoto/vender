@@ -15,5 +15,6 @@ TRANSLATOR:
     global:
       - {action: accept, from: "^Command_"}
       - {action: accept, from: "^COMMAND_"}
+      - {action: accept, from: "^MDB_State_"}
       - {action: accept, from: "^Response_"}
       - {action: accept, from: "^RESPONSE_"}

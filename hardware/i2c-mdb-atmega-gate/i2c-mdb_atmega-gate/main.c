@@ -21,49 +21,62 @@
 #include "mdb.c"
 #include "twi.c"
 
-static uint8_t volatile mcu_status;
+// Just .noinit is not enough for GCC 8.2
+// https://github.com/technomancy/atreus/issues/34 uint8_t mcu_status
+// __attribute__((section(".noinit")));
+uint8_t mcusr_saved __attribute__((section(".noinit,\"aw\",@nobits;")));
+bool watchdog_expect __attribute__((section(".noinit,\"aw\",@nobits;")));
 
-void early_init(void) __attribute__((naked)) __attribute__((section(".init3")));
+void early_init(void) __attribute__((naked, used, section(".init3")));
 void early_init(void) {
   wdt_disable();
-  mcu_status = MCUSR;
+  mcusr_saved = MCUSR;
   MCUSR = 0;
+  if (bit_mask_test(mcusr_saved, _BV(WDRF)) && watchdog_expect) {
+    bit_mask_clear(mcusr_saved, _BV(WDRF));
+  }
+  watchdog_expect = false;
 }
 
 // Watchdog for software reset
 static void soft_reset(void) __attribute__((noreturn));
 static void soft_reset(void) {
   cli();
-  wdt_enable(WDTO_60MS);
+  watchdog_expect = true;
   for (;;)
     ;
 }
 
 int main(void) {
   cli();
-  wdt_disable();
+  wdt_enable(WDTO_30MS);
+  wdt_reset();
   timer0_stop();
   twi_init_slave(0x78);
   mdb_init();
+  master_notify_init();
   // disable ADC
   bit_mask_clear(ADCSRA, _BV(ADEN));
   // power reduction
-  PRR = _BV(PRTIM2) | _BV(PRSPI) | _BV(PRADC);
+  PRR = _BV(PRTIM1) | _BV(PRTIM2) | _BV(PRSPI) | _BV(PRADC);
   // hello after reset
   master_out_n(Response_Debug, Response_BeeBee, sizeof(Response_BeeBee));
 
   sei();
 
   for (;;) {
+    wdt_reset();
     bool again = false;
     if (twi_idle) {
       again |= twi_step();  // may take 130us on FCPU=16MHz
     }
-    if (mdb_state != MDB_STATE_IDLE) {
+    if (mdb_state != MDB_State_Idle) {
       // cli(); // TODO double check if mdb_step() is safe with interrupts
       again |= mdb_step();
       // sei();
     }
+    master_notify_set((!twi_idle) || (twi_out.used < twi_out.length) ||
+                      (master_out.length > 0));
     if (!again) {
       // TODO measure idle time
       _delay_us(300);
@@ -96,24 +109,35 @@ static uint8_t master_command(uint8_t const *const bs,
   uint8_t const data_length = length - 3;
   uint8_t const *const data = bs + 2;
   if (header == Command_Poll) {
-    if (length == 3) {
-      master_out_2(Response_Queue_Size, master_out.length);
-    } else {
+    if (length != 3) {
       master_out_2(Response_Bad_Packet, 1);
+      return length;
     }
   } else if (header == Command_Config) {
+    mcusr_saved = 0;
     // TODO
     master_out_1(Response_Not_Implemented);
   } else if (header == Command_Reset) {
     soft_reset();  // noreturn
   } else if (header == Command_Debug) {
-    char *buf = "M=xT=xxxxxxxxxxxxxx";
-    buf[2] = '0' + mdb_state;
-    for (uint8_t i = 0; i < sizeof(TwiStat_t); i++) {
-      shex(buf + 5 + (i * 2), *((uint8_t *)&twi_stat + i));
-    }
+    uint8_t buf[40];
+    memset(buf, 0, sizeof(buf));
+    uint8_t *bufp = buf;
+    *bufp++ = 'M';
+    *bufp++ = 1;  // length of MDB status
+    *bufp++ = mdb_state;
+    *bufp++ = 'T';
+    uint8_t const twi_stat_len = sizeof(TwiStat_t);
+    *bufp++ = twi_stat_len;  // length of TWI status
+    memcpy(bufp, (void *)&twi_stat, twi_stat_len);
+    bufp += twi_stat_len;
+    *bufp++ = 'U';
+    *bufp++ = mcusr_saved;
     master_out_n(Response_Debug, (uint8_t *)buf, sizeof(buf));
   } else if (header == Command_Flash) {
+    // FIXME simulate bad watchdog event
+    for (;;)
+      ;
     // TODO
     master_out_1(Response_Not_Implemented);
   } else if (header == Command_MDB_Bus_Reset) {
@@ -121,11 +145,11 @@ static uint8_t master_command(uint8_t const *const bs,
       master_out_1(Response_Bad_Packet);
       return length;
     }
-    if (mdb_state != MDB_STATE_IDLE) {
+    if (mdb_state != MDB_State_Idle) {
       master_out_1(Response_MDB_Busy);
       return length;
     }
-    mdb_state = MDB_STATE_BUS_RESET;
+    mdb_state = MDB_State_Bus_Reset;
     uint16_t const duration = (data[0] << 8) | data[1];
     bit_mask_clear(UCSR0B, _BV(TXEN0));  // disable UART TX
     bit_mask_set(DDRD, _BV(1));          // set TX pin to output
@@ -133,7 +157,7 @@ static uint8_t master_command(uint8_t const *const bs,
     timer0_set((uint8_t)duration);
     master_out_1(Response_MDB_Started);
   } else if (header == Command_MDB_Transaction_Simple) {
-    if (mdb_state != MDB_STATE_IDLE) {
+    if (mdb_state != MDB_State_Idle) {
       master_out_1(Response_MDB_Busy);
       return length;
     }
@@ -153,22 +177,24 @@ static uint8_t master_command(uint8_t const *const bs,
   return length;
 }
 
+static void master_notify_init(void) {
+  bit_mask_set(MASTER_NOTIFY_DDR, _BV(MASTER_NOTIFY_PIN));
+  master_notify_set(false);
+}
+static void master_notify_set(bool const on) {
+  if (on) {
+    bit_mask_set(MASTER_NOTIFY_PORT, _BV(MASTER_NOTIFY_PIN));
+  } else {
+    bit_mask_clear(MASTER_NOTIFY_PORT, _BV(MASTER_NOTIFY_PIN));
+  }
+}
+
 static uint8_t memsum(uint8_t const *const src, uint8_t const length) {
   uint8_t sum = 0;
   for (uint8_t i = 0; i < length; i++) {
     sum += src[i];
   }
   return sum;
-}
-
-// static uint8_t uint8_min(uint8_t const a, uint8_t const b) {
-//   return a < b ? a : b;
-// }
-
-static void shex(char *dst, uint8_t const value) {
-  uint8_t const alpha[16] = "0123456789abcdef";
-  dst[0] = alpha[value & 0xf];
-  dst[1] = alpha[(value >> 4) & 0xf];
 }
 
 static void timer0_set(uint8_t const ms) {
@@ -187,9 +213,9 @@ static void timer0_stop(void) {
 
 ISR(TIMER0_OVF_vect) {
   timer0_stop();
-  if (mdb_state == MDB_STATE_IDLE) {
+  if (mdb_state == MDB_State_Idle) {
     // FIXME something is wrong?
-  } else if (mdb_state == MDB_STATE_BUS_RESET) {
+  } else if (mdb_state == MDB_State_Bus_Reset) {
     // MDB BUS BREAK is finished, re-enable UART TX
     bit_mask_set(UCSR0B, _BV(TXEN0));
   } else {

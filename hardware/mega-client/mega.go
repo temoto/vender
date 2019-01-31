@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/brian-armstrong/gpio"
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/crc"
@@ -15,19 +16,22 @@ import (
 const modName string = "mega-client"
 
 type Client struct {
-	bus i2c.I2CBus
-	// TODO listen gpio pin
-	addr     byte
+	bus  i2c.I2CBus
+	addr byte
+	// pinWatch *gpio.Watcher
+	pin      uint
 	refcount int32
 	alive    *alive.Alive
 	out      chan Tx
 	in       chan []byte
 }
 
-func NewClient(busNo byte, addr byte) (*Client, error) {
+func NewClient(busNo byte, addr byte, pin uint) (*Client, error) {
 	c := &Client{
-		addr:  addr,
-		bus:   i2c.NewI2CBus(busNo),
+		addr: addr,
+		bus:  i2c.NewI2CBus(busNo),
+		// pinWatch: gpio.NewWatcher(),
+		pin:   pin,
 		alive: alive.NewAlive(),
 		out:   make(chan Tx),
 		in:    make(chan []byte),
@@ -115,24 +119,43 @@ func (self *Client) Do(t *Tx) error {
 }
 
 func (self *Client) run() {
+	pinWatch := gpio.NewWatcher()
+	pinWatch.AddPinWithEdgeAndLogic(self.pin, gpio.EdgeRising, gpio.ActiveHigh)
+	defer pinWatch.Close()
+
 	stopch := self.alive.StopChan()
 	// TODO listen gpio pin
-	backup := time.NewTicker(740 * time.Millisecond)
-	backup.Stop()
+	// backup := time.NewTicker(740 * time.Millisecond)
+	// backup.Stop()
 	buf := make([]byte, RESPONSE_MAX_LENGTH+1)
 	for self.alive.IsRunning() {
 		select {
 		case tx := <-self.out:
 			_ = self.RawWrite(tx.Rq)
-			// TODO listen gpio pin
-		case <-backup.C:
-			// TODO expect empty, otherwise log "gpio fail"
+
+		case <-pinWatch.Notification:
 			err := self.RawRead(buf)
 			if err != nil {
-				log.Printf("%s backup read=%02x error=%v", modName, self.addr, err)
+				log.Printf("%s pin read=%02x error=%v", modName, self.addr, err)
 				break
 			}
-			log.Printf("%s backup read buf=%02x", modName, buf)
+			// FIXME duplicate code
+			err = ParseResponse(buf, func(p Packet) {
+				log.Printf("- packet=%s %s", p.Hex(), p.String())
+			})
+			if err != nil {
+				log.Printf("pin read=%02x parse error=%v", buf, err)
+				break
+			}
+
+		// case <-backup.C:
+		// 	// TODO expect empty, otherwise log "gpio fail"
+		// 	err := self.RawRead(buf)
+		// 	if err != nil {
+		// 		log.Printf("%s backup read=%02x error=%v", modName, self.addr, err)
+		// 		break
+		// 	}
+		// 	log.Printf("%s backup read buf=%02x", modName, buf)
 		case <-stopch:
 			return
 		}

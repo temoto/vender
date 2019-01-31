@@ -7,19 +7,22 @@
 #define bit_mask_clear(x, m) ((x) &= ~(m))
 #define bit_mask_set(x, m) ((x) |= (m))
 
-uint8_t volatile _drop_byte;
+#define MASTER_NOTIFY_DDR DDRB
+#define MASTER_NOTIFY_PORT PORTB
+#define MASTER_NOTIFY_PIN PINB2
 
 #define MDB_PACKET_SIZE 36
 #define MDB_TIMEOUT 6  // ms
 static uint8_t const MDB_ACK = 0x00;
 static uint8_t const MDB_RET = 0xaa;
 static uint8_t const MDB_NAK = 0xff;
-#define MDB_STATE_IDLE 0
-#define MDB_STATE_ERROR 1
-#define MDB_STATE_SEND 2
-#define MDB_STATE_RECV 3
-#define MDB_STATE_RECV_END 4
-#define MDB_STATE_BUS_RESET 5
+typedef uint8_t MDB_State_t;
+MDB_State_t const MDB_State_Idle = 0;
+MDB_State_t const MDB_State_Error = 1;
+MDB_State_t const MDB_State_Send = 2;
+MDB_State_t const MDB_State_Recv = 3;
+MDB_State_t const MDB_State_Recv_End = 4;
+MDB_State_t const MDB_State_Bus_Reset = 5;
 
 // master command
 #define COMMAND_MAX_LENGTH 93
@@ -37,7 +40,7 @@ Command_t const Command_MDB_Transaction_Custom = 0x09;
 typedef uint8_t Response_t;
 // slave ok
 Response_t const Response_BeeBee[3] = {0xbe, 0xeb, 0xee};
-Response_t const Response_Queue_Size = 0x01;
+Response_t const Response_Status = 0x01;
 Response_t const Response_Debug = 0x04;
 Response_t const Response_TWI = 0x05;
 Response_t const Response_MDB_Started = 0x08;
@@ -73,6 +76,8 @@ static void master_out_1(Response_t const header);
 static void master_out_2(Response_t const header, uint8_t const data);
 static void master_out_n(Response_t const header, uint8_t const *const data,
                          uint8_t const data_length);
+static void master_notify_init(void);
+static void master_notify_set(bool const on);
 static void twi_out_set_2(uint8_t const header, uint8_t const data);
 static void twi_init_slave(uint8_t const address);
 static bool twi_step(void);
@@ -81,7 +86,5 @@ static void timer0_set(uint8_t const ms);
 static void timer0_stop(void);
 
 static uint8_t memsum(uint8_t const *const src, uint8_t const length);
-// static uint8_t uint8_min(uint8_t const a, uint8_t const b);
-static void shex(char *dst, uint8_t const value);
 
 #endif  // INCLUDE_MAIN_H
