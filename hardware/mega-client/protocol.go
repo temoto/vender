@@ -10,16 +10,21 @@ import (
 	"github.com/temoto/vender/crc"
 )
 
-//go:generate c-for-go -nocgo mega.c-for-go.yaml
-//go:generate mv mega/const.go const.gen.go
-//go:generate mv mega/types.go types.gen.go
-//go:generate stringer -type=Command_t -trimprefix=Command_
-//go:generate stringer -type=Response_t -trimprefix=Response_
-//go:generate stringer -type=MDB_State_t -trimprefix=MDB_State_
+//go:generate ./generate
+
+type ResetFlag uint8
+
+const (
+	ResetFlagPowerOn = ResetFlag(1 << iota)
+	ResetFlagExternal
+	ResetFlagBrownOut
+	ResetFlagWatchdog
+)
 
 type Packet struct {
 	length byte
-	Header Response_t
+	Id     byte
+	Header byte
 	Data   []byte
 }
 
@@ -28,8 +33,8 @@ func (self *Packet) Parse(b []byte) error {
 		return errors.NotValidf("packet empty")
 	}
 	self.length = b[0]
-	if self.length < 3 {
-		return errors.NotValidf("packet=%02x claims length=%d < min=3", b, self.length)
+	if self.length < 4 {
+		return errors.NotValidf("packet=%02x claims length=%d < min=4", b, self.length)
 	}
 	if int(self.length) > len(b) {
 		return errors.NotValidf("packet=%02x claims length=%d > buffer=%d", b, self.length, len(b))
@@ -40,64 +45,121 @@ func (self *Packet) Parse(b []byte) error {
 	if crcIn != crcLocal {
 		return errors.NotValidf("packet=%02x crc=%02x actual=%02x", b, crcIn, crcLocal)
 	}
-	self.Header = Response_t(b[1])
-	if strings.HasPrefix(self.Header.String(), "Response_t(") {
+	self.Id = b[1]
+	self.Header = b[2]
+	if strings.HasPrefix(Response_t(self.Header).String(), "Response_t(") {
 		return errors.NotValidf("packet=%02x header=%02x", b, byte(self.Header))
 	}
-	dataLength := self.length - 3
+	dataLength := self.length - 4
 	if dataLength > 0 {
-		self.Data = b[2 : 2+dataLength] // GC concern, maybe copy?
+		self.Data = b[3 : 3+dataLength] // GC concern, maybe copy?
 	}
 	return nil
 }
 
 func (self *Packet) Error() string {
-	if self.Header&0x80 == 0 {
+	if self.Header&RESPONSE_MASK_ERROR == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s(%02x)", self.Header.String(), self.Data)
+	return fmt.Sprintf("%s(%02x)", Response_t(self.Header).String(), self.Data)
 }
 
-func (self *Packet) Hex() string {
-	tmp := make([]byte, 1+len(self.Data))
-	tmp[0] = byte(self.Header)
-	copy(tmp[1:], self.Data)
-	return hex.EncodeToString(tmp)
+func (self *Packet) Bytes() []byte {
+	plen := 4 + len(self.Data)
+	b := make([]byte, plen)
+	b[0] = byte(plen)
+	b[1] = self.Id
+	b[2] = byte(self.Header)
+	copy(b[3:], self.Data)
+	b[plen-1] = crc.CRC8_p93_n(0, b[:plen-1])
+	return b
+}
+
+func (self *Packet) SimpleHex() string {
+	b := self.Bytes()
+	plen := len(b)
+	if plen < 4 {
+		panic(fmt.Sprintf("code error mega packet='%02x'", b))
+	}
+	return hex.EncodeToString(b[2 : plen-1])
+}
+
+func mcusrString(b byte) string {
+	s := ""
+	if ResetFlag(b)&ResetFlagPowerOn != 0 {
+		s += "+PO"
+	}
+	if ResetFlag(b)&ResetFlagExternal != 0 {
+		s += "+EXT"
+	}
+	if ResetFlag(b)&ResetFlagBrownOut != 0 {
+		s += "+BO"
+	}
+	if ResetFlag(b)&ResetFlagWatchdog != 0 {
+		s += "+WD(PROBLEM)"
+	}
+	return s
+}
+
+func parseTagged(b []byte) string {
+	ss := make([]string, 0, 8)
+	idx := uint8(0)
+	for int(idx) < len(b) {
+		tag := Field_t(b[idx])
+		idx++
+		switch tag {
+		case FIELD_PROTOCOL:
+			ss = append(ss, fmt.Sprintf("protocol=%d", b[idx]))
+			idx++
+		case FIELD_FIRMWARE_VERSION:
+			ss = append(ss, fmt.Sprintf("firmware=%02x%02x", b[idx], b[idx+1]))
+			idx += 2
+		case FIELD_BEEBEE:
+			arg := b[idx : idx+3]
+			if bytes.Equal(arg, []byte{0xbe, 0xeb, 0xee}) {
+				ss = append(ss, "beebee-mark")
+			} else {
+				ss = append(ss, fmt.Sprintf("ERR:invalid-beebee:%02x", arg))
+			}
+			idx += 3
+		case FIELD_MCUSR:
+			ss = append(ss, "reset="+mcusrString(b[idx]))
+			idx++
+		case FIELD_QUEUE_MASTER:
+			ss = append(ss, fmt.Sprintf("master.length=%d", b[idx]))
+			idx++
+		case FIELD_QUEUE_TWI:
+			ss = append(ss, fmt.Sprintf("twi.length=%d", b[idx]))
+			idx++
+		case FIELD_MDB_PROTOTCOL_STATE:
+			ss = append(ss, fmt.Sprintf("mdb.state=%d", b[idx]))
+			idx++
+		case FIELD_MDB_STAT:
+			n := b[idx]
+			idx++
+			ss = append(ss, fmt.Sprintf("mdb_stat=%02x", b[idx:idx+n]))
+			idx += n
+		case FIELD_TWI_STAT:
+			n := b[idx]
+			idx++
+			ss = append(ss, fmt.Sprintf("twi_stat=%02x", b[idx:idx+n]))
+			idx += n
+		default:
+			// TODO return err
+			ss = append(ss, fmt.Sprintf("ERR:unknown-tag:%02x", tag))
+		}
+	}
+	return strings.Join(ss, ",")
 }
 
 func (self *Packet) String() string {
 	info := ""
-	switch self.Header {
-	case Response_Debug:
-		if bytes.Equal(self.Data, []byte{0xbe, 0xeb, 0xee}) {
-			info = "just reset"
-			break
-		}
-		if len(self.Data) < 15 {
-			info = "invalid format"
-			break
-		}
-		mcusr := self.Data[14]
-		resetReason := ""
-		if mcusr&(1<<0) != 0 {
-			resetReason += "+PO"
-		}
-		if mcusr&(1<<1) != 0 {
-			resetReason += "+EXT"
-		}
-		if mcusr&(1<<2) != 0 {
-			resetReason += "+BO"
-		}
-		if mcusr&(1<<3) != 0 {
-			resetReason += "+WD(PROBLEM)"
-		}
-		info = fmt.Sprintf("MDB=%s TWI=%v reset=%s",
-			MDB_State_t(self.Data[2]).String(),
-			self.Data[5:5+8],
-			resetReason,
-		)
+	switch Response_t(self.Header) {
+	case RESPONSE_STATUS, RESPONSE_JUST_RESET, RESPONSE_DEBUG:
+		info = parseTagged(self.Data)
 	}
-	return fmt.Sprintf("header=%s data=%s info=%s", self.Header.String(), hex.EncodeToString(self.Data), info)
+	return fmt.Sprintf("cmdid=%02x header=%s data=%s info=%s",
+		self.Id, Response_t(self.Header).String(), hex.EncodeToString(self.Data), info)
 }
 
 func ParseResponse(b []byte, fun func(p Packet)) error {

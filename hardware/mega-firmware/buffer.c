@@ -9,26 +9,26 @@ typedef struct {
   uint8_t length;  // stored
   uint8_t used;    // read/processed/sent/etc
   uint8_t *data;
-} volatile Buffer_t;
+} volatile buffer_t;
 
-static inline void Buffer_Clear_Fast(Buffer_t *const b) {
+static inline void buffer_clear_fast(buffer_t *const b) {
   b->length = 0;
   b->used = 0;
 }
 
-static void Buffer_Clear_Full(Buffer_t *const b) {
+static void buffer_clear_full(buffer_t *const b) {
   memset(b->data, 0, b->size);
-  Buffer_Clear_Fast(b);
+  buffer_clear_fast(b);
 }
 
-static void Buffer_Init(Buffer_t *const b, uint8_t *const storage,
+static void buffer_init(buffer_t *const b, uint8_t *const storage,
                         uint8_t const size) {
   b->size = size;
   b->data = storage;
-  Buffer_Clear_Full(b);
+  buffer_clear_full(b);
 }
 
-static bool Buffer_Append(Buffer_t *const b, uint8_t const data) {
+static bool buffer_append(buffer_t *const b, uint8_t const data) {
   if (b->length + 1 > b->size) {
     return false;
   }
@@ -37,8 +37,8 @@ static bool Buffer_Append(Buffer_t *const b, uint8_t const data) {
   return true;
 }
 
-static bool Buffer_AppendN(Buffer_t *const b, uint8_t const *const src,
-                           uint8_t const n) {
+static bool buffer_append_n(buffer_t *const b, uint8_t const *const src,
+                            uint8_t const n) {
   if (b->length + n > b->size) {
     return false;
   }
@@ -47,7 +47,7 @@ static bool Buffer_AppendN(Buffer_t *const b, uint8_t const *const src,
   return true;
 }
 
-static bool Buffer_Copy(Buffer_t *const b, uint8_t const *const src,
+static bool buffer_copy(buffer_t *const b, uint8_t const *const src,
                         uint8_t const n) {
   uint8_t const len = (n < b->size ? n : b->size);
   memcpy(b->data, src, len);
@@ -55,11 +55,11 @@ static bool Buffer_Copy(Buffer_t *const b, uint8_t const *const src,
   return true;
 }
 
-static void Buffer_Swap(Buffer_t *const b1, Buffer_t *const b2) {
-  Buffer_t tmp;
-  memcpy((void *)&tmp, (void const *)b1, sizeof(Buffer_t));
-  memcpy((void *)b1, (void const *)b2, sizeof(Buffer_t));
-  memcpy((void *)b2, (void const *)&tmp, sizeof(Buffer_t));
+static void buffer_swap(buffer_t *const b1, buffer_t *const b2) {
+  buffer_t tmp;
+  memcpy((void *)&tmp, (void const *)b1, sizeof(buffer_t));
+  memcpy((void *)b1, (void const *)b2, sizeof(buffer_t));
+  memcpy((void *)b2, (void const *)&tmp, sizeof(buffer_t));
 }
 
 #endif  // INCLUDE_BUFFER_C

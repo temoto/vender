@@ -55,11 +55,18 @@ type I2CBus interface {
 	ReadBytesAt(addr byte, buf []byte) (n int, err error)
 	WriteBytesAt(addr byte, buf []byte) error
 
+	Init() error
 	Close() error
 }
 
 func NewI2CBus(busNo byte) I2CBus {
 	return &i2cBus{busNo: busNo}
+}
+
+func (b *i2cBus) Init() error {
+	b.lk.Lock()
+	defer b.lk.Unlock()
+	return b.init()
 }
 
 func (b *i2cBus) init() error {

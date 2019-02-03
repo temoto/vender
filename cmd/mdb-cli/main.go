@@ -14,6 +14,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/iodin-client"
 	"github.com/temoto/vender/hardware/mdb"
+	mega "github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/helpers"
 )
 
@@ -21,12 +22,15 @@ func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	devicePath := cmdline.String("device", "/dev/ttyAMA0", "")
 	iodinPath := cmdline.String("iodin", "./iodin", "Path to iodin executable")
-	uarterName := cmdline.String("io", "", "file|iodin")
+	megaI2CBus := cmdline.Uint("mega-i2c-bus", 0, "mega I2C bus number")
+	megaI2CAddr := cmdline.Uint("mega-i2c-addr", 0x78, "mega I2C address")
+	megaPin := cmdline.Uint("mega-pin", 23, "mega notify pin")
+	uarterName := cmdline.String("io", "file", "file|iodin|mega")
 	cmdline.Parse(os.Args[1:])
 
 	var uarter mdb.Uarter
 	switch *uarterName {
-	case "", "file":
+	case "file":
 		uarter = mdb.NewFileUart()
 	case "iodin":
 		iodin, err := iodin.NewClient(*iodinPath)
@@ -34,6 +38,12 @@ func main() {
 			log.Fatal(errors.Trace(err))
 		}
 		uarter = mdb.NewIodinUart(iodin)
+	case "mega":
+		mega, err := mega.NewClient(byte(*megaI2CBus), byte(*megaI2CAddr), *megaPin)
+		if err != nil {
+			log.Fatal(errors.Trace(err))
+		}
+		uarter = mdb.NewMegaUart(mega)
 	default:
 		log.Fatalf("invalid -io=%s", *uarterName)
 	}

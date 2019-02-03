@@ -1,7 +1,6 @@
 // stimfile
 
 $repeat 101
-ADC = *UDR0
-SPDR = UDR0
+// TODO
 #7000
 $endrep

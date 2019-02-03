@@ -23,6 +23,8 @@ func main() {
 	pin := cmdline.Uint("pin", 23, "")
 	cmdline.Parse(os.Args[1:])
 
+	log.SetFlags(log.Lshortfile | log.Ltime | log.Lmicroseconds)
+
 	client, err := mega.NewClient(byte(*i2cBusNo), byte(*addr), *pin)
 	if err != nil {
 		log.Fatal(errors.Trace(err))
@@ -79,17 +81,13 @@ func main() {
 				if bs, err := hex.DecodeString(word[1:]); err != nil {
 					log.Fatalf("token=%s error=%v", word, errors.ErrorStack(err))
 				} else {
-					tx := &mega.Tx{Rq: bs}
-					err = client.Do(tx)
-					if err != nil {
-						log.Printf("tx rq=%02x rs=%02x error=%v", tx.Rq, tx.Rs, err)
+					if len(bs) < 1 {
+						log.Printf("pXX... requires at least 1 byte for command")
 						break
 					}
-					err = mega.ParseResponse(tx.Rs, func(p mega.Packet) {
-						log.Printf("- packet=%s %s", p.Hex(), p.String())
-					})
+					p, err := client.Do(mega.Command_t(bs[0]), bs[1:])
 					if err != nil {
-						log.Printf("tx rq=%02x rs=%02x parse error=%v", tx.Rq, tx.Rs, err)
+						log.Printf("p rq=%02x rs=%s error=%v", bs, p.String(), err)
 						break
 					}
 				}
@@ -105,7 +103,7 @@ func main() {
 					}
 					// FIXME duplicate code
 					err = mega.ParseResponse(buf, func(p mega.Packet) {
-						log.Printf("- packet=%s %s", p.Hex(), p.String())
+						log.Printf("- packet=%s %s", p.SimpleHex(), p.String())
 					})
 					if err != nil {
 						log.Printf("rs=%02x parse error=%v", buf, err)

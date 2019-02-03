@@ -1,0 +1,10 @@
+#!/bin/bash
+set -eux
+c-for-go -nocgo mega.c-for-go.yaml
+rm -f *.gen.go *_string.go
+mv mega/const.go const.gen.go
+mv mega/types.go types.gen.go
+stringer -type=Command_t -trimprefix=COMMAND_
+stringer -type=Response_t -trimprefix=RESPONSE_
+stringer -type=Mdb_state_t -trimprefix=MDB_STATE_
+stringer -type=ResetFlag -trimprefix=ResetFlag

@@ -16,19 +16,18 @@ typedef struct {
   uint8_t st_last_data;
   uint8_t sr_stop;
   uint8_t out_empty_set_length;
-} TwiStat_t;
+} twi_stat_t;
 
 static bool volatile twi_idle = true;
 static uint8_t volatile twi_in_data[COMMAND_MAX_LENGTH];
-static Buffer_t volatile twi_in;
+static buffer_t volatile twi_in;
 static uint8_t volatile twi_out_data1[RESPONSE_MAX_LENGTH];
 static uint8_t volatile twi_out_data2[RESPONSE_MAX_LENGTH];
-// XXX
-static TwiStat_t volatile twi_stat;
+static twi_stat_t volatile twi_stat;
 
 // master_out/twi_out is double buffer
-static Buffer_t volatile master_out;
-static Buffer_t volatile twi_out;
+static buffer_t volatile master_out;
+static buffer_t volatile twi_out;
 
 static void twi_init_slave(uint8_t const address) {
   TWCR = 0;
@@ -36,10 +35,10 @@ static void twi_init_slave(uint8_t const address) {
   TWAR = address << 1;
   TWSR = 0;
   twi_idle = true;
-  Buffer_Init(&twi_in, (uint8_t *)twi_in_data, sizeof(twi_in_data));
-  Buffer_Init(&master_out, (uint8_t *)twi_out_data1, sizeof(twi_out_data1));
-  Buffer_Init(&twi_out, (uint8_t *)twi_out_data2, sizeof(twi_out_data2));
-  memset((void *)&twi_stat, 0, sizeof(TwiStat_t));
+  buffer_init(&twi_in, (uint8_t *)twi_in_data, sizeof(twi_in_data));
+  buffer_init(&master_out, (uint8_t *)twi_out_data1, sizeof(twi_out_data1));
+  buffer_init(&twi_out, (uint8_t *)twi_out_data2, sizeof(twi_out_data2));
+  memset((void *)&twi_stat, 0, sizeof(twi_stat_t));
   TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
 }
 
@@ -47,78 +46,88 @@ static bool twi_step(void) {
   bool again = false;
 
   // TWI read is finished
-  if (twi_in.length > 0) {
+  uint8_t const in_length = twi_in.length;  // anti-volatile
+  if (in_length > 0) {
     uint8_t *src = twi_in.data;
-    if (twi_in.length == 1) {
+    if (in_length == 1) {
       // keyboard sends 1 byte
-      master_out_2(Response_TWI, src[0]);
+      master_out_1(0, RESPONSE_TWI, src[0]);
       again = true;
     } else {
-      // master sends >= 3 bytes
+      // master sends >= 4 bytes
       uint8_t i = 0;
       for (;;) {
-        uint8_t const consumed = master_command(src, twi_in.length - i);
+        uint8_t const consumed = master_command(src, in_length - i);
         if (consumed == 0) {
           break;
         }
         i += consumed;
         src += consumed;
-        if (i >= twi_in.length) {
+        if (i >= in_length) {
           break;
         }
       }
       again = true;
     }
-    Buffer_Clear_Fast(&twi_in);
+    buffer_clear_fast(&twi_in);
   }
   if ((twi_out.used >= twi_out.length) && (master_out.length > 0)) {
-    Buffer_Swap(&twi_out, &master_out);
+    buffer_swap(&twi_out, &master_out);
     twi_out.used = 0;
-    Buffer_Clear_Full(&master_out);
+    buffer_clear_full(&master_out);
     again = true;
   }
 
   return again;
 }
 
-static void twi_out_set_2(Response_t const header, uint8_t const data) {
-  uint8_t const packet_length = 3 + 1;
-  uint8_t const crc = crc8_p93_3b(packet_length, header, data);
-  uint8_t const packet[] = {packet_length, header, data, crc};
-  Buffer_Copy(&twi_out, packet, packet_length);
+static void twi_out_set_1(uint8_t const command_id, response_t const header,
+                          uint8_t const data) {
+  uint8_t const length = 4 + 1;
+  uint8_t packet[] = {length, command_id, header, data, 0};
+  packet[length - 1] = crc8_p93_n(0, packet, length - 1);
+  buffer_copy(&twi_out, packet, length);
 }
 
-static void master_out_1(Response_t const header) {
-  uint8_t const packet_length = 3;
-  uint8_t const crc = crc8_p93_2b(packet_length, header);
-  uint8_t const packet[] = {packet_length, header, crc};
-  if (!Buffer_AppendN(&master_out, packet, packet_length)) {
-    twi_out_set_2(Response_Buffer_Overflow, packet_length);
+static void master_out_0(uint8_t const command_id, response_t const header) {
+  uint8_t const length = 4 + 0;
+  uint8_t const crc = crc8_p93_3b(length, command_id, header);
+  uint8_t const packet[] = {length, command_id, header, crc};
+  if (!buffer_append_n(&master_out, packet, length)) {
+    twi_out_set_1(command_id, RESPONSE_BUFFER_OVERFLOW, length);
   }
 }
-
-static void master_out_2(Response_t const header, uint8_t const data) {
-  uint8_t const packet_length = 4;
-  uint8_t const crc = crc8_p93_3b(packet_length, header, data);
-  uint8_t const packet[] = {packet_length, header, data, crc};
-  if (!Buffer_AppendN(&master_out, packet, packet_length)) {
-    twi_out_set_2(Response_Buffer_Overflow, packet_length);
+static void master_out_1(uint8_t const command_id, response_t const header,
+                         uint8_t const data) {
+  uint8_t packet[] = {0, command_id, header, data, 0};
+  uint8_t const length = packet[0] = sizeof(packet);
+  packet[length - 1] = crc8_p93_n(0, packet, length - 1);
+  if (!buffer_append_n(&master_out, packet, length)) {
+    twi_out_set_1(command_id, RESPONSE_BUFFER_OVERFLOW, length);
   }
 }
-
-static void master_out_n(Response_t const header, uint8_t const *const data,
-                         uint8_t const data_length) {
-  uint8_t const packet_length = 3 + data_length;
+static void master_out_2(uint8_t const command_id, response_t const header,
+                         uint8_t const data1, uint8_t const data2) {
+  uint8_t packet[] = {0, command_id, header, data1, data2, 0};
+  uint8_t const length = packet[0] = sizeof(packet);
+  packet[length - 1] = crc8_p93_n(length, packet, length - 1);
+  if (!buffer_append_n(&master_out, packet, length)) {
+    twi_out_set_1(command_id, RESPONSE_BUFFER_OVERFLOW, length);
+  }
+}
+static void master_out_n(uint8_t const command_id, response_t const header,
+                         uint8_t const *const data, uint8_t const data_length) {
+  uint8_t const packet_length = 4 + data_length;
   if (master_out.length + packet_length > master_out.size) {
-    twi_out_set_2(Response_Buffer_Overflow, packet_length);
+    twi_out_set_1(command_id, RESPONSE_BUFFER_OVERFLOW, packet_length);
     return;
   }
-  Buffer_Append(&master_out, packet_length);
-  Buffer_Append(&master_out, header);
-  Buffer_AppendN(&master_out, data, data_length);
-  uint8_t crc = crc8_p93_2b(packet_length, header);
+  uint8_t const prefix[] = {packet_length, command_id, header};
+  buffer_append_n(&master_out, prefix, sizeof(prefix));
+  buffer_append_n(&master_out, data, data_length);
+  uint8_t crc = crc8_p93_3b(packet_length, command_id, header);
   crc = crc8_p93_n(crc, data, data_length);
-  Buffer_Append(&master_out, crc);
+  buffer_append(&master_out, crc);
 }
 
 ISR(TWI_vect) {
@@ -146,8 +155,8 @@ ISR(TWI_vect) {
 
     case TW_BUS_ERROR:
       twi_stat.bus_error++;
-      Buffer_Clear_Fast(&twi_in);
-      Buffer_Clear_Fast(&twi_out);  // TODO maybe bad idea
+      buffer_clear_fast(&twi_in);
+      buffer_clear_fast(&twi_out);  // TODO maybe bad idea
       TWCR = _BV(TWSTO) | _BV(TWINT) | _BV(TWEN) | _BV(TWIE);
       return;
 
@@ -158,7 +167,7 @@ ISR(TWI_vect) {
     case TW_SR_ARB_LOST_SLA_ACK:
     case TW_SR_ARB_LOST_GCALL_ACK:
       twi_idle = false;
-      Buffer_Clear_Fast(&twi_in);
+      buffer_clear_fast(&twi_in);
       ack = true;
       break;
 
@@ -166,7 +175,7 @@ ISR(TWI_vect) {
     case TW_SR_DATA_ACK:
     case TW_SR_GCALL_DATA_ACK:
       twi_idle = false;
-      Buffer_Append(&twi_in, TWDR);
+      buffer_append(&twi_in, TWDR);
       ack = true;
       break;
 
@@ -214,7 +223,7 @@ ISR(TWI_vect) {
     // Send Last Byte Receive ACK
     case TW_ST_LAST_DATA:
       twi_idle = true;
-      Buffer_Clear_Fast(&twi_out);
+      buffer_clear_fast(&twi_out);
       ack = true;
       break;
     // Send Last Byte Receive NACK

@@ -3,7 +3,7 @@ GENERATOR:
   PackageName: mega
 
 PARSER:
-  IncludePaths: ["./c4go_stub_include", "../i2c-mdb-atmega-gate/i2c-mdb_atmega-gate"]
+  IncludePaths: ["./c4go_stub_include", "../mega-firmware"]
   SourcesPaths: ["main.h"]
 
 TRANSLATOR:
@@ -13,8 +13,13 @@ TRANSLATOR:
     const: eval
   Rules:
     global:
-      - {action: accept, from: "^Command_"}
       - {action: accept, from: "^COMMAND_"}
-      - {action: accept, from: "^MDB_State_"}
-      - {action: accept, from: "^Response_"}
+      - {action: accept, from: "^FIELD_"}
+      - {action: accept, from: "^MDB_STATE_"}
+      - {action: accept, from: "^PROTOCOL_"}
       - {action: accept, from: "^RESPONSE_"}
+      - {action: accept, from: "command_t"}
+      - {action: accept, from: "field_t"}
+      - {action: accept, from: "mdb_state_t"}
+      - {action: accept, from: "response_t"}
+      - {transform: export}

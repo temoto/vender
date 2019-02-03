@@ -2,6 +2,7 @@ package mega
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
@@ -21,16 +22,16 @@ func TestParseResponse(t *testing.T) {
 		{"response-empty-valid-length", "00", "", ""},
 		{"response-length-max", "f1", "", "response=f1 claims length=241 > MAX=80 not valid"},
 		{"response-under-length", "01", "", "response=01 claims length=1 > buffer=0 not valid"},
-		{"packet-short", "0101", "", "packet=01 claims length=1 < min=3 not valid"},
-		{"packet-under-length", "0103", "", "packet=03 claims length=3 > buffer=1 not valid"},
-		{"packet-corrupted", "030300ff", "", "packet=0300ff crc=ff actual=5b not valid"},
-		{"packet-invalid-header", "0303005b", "", "packet=03005b header=00 not valid"},
-		{"ok", "030301c8", "01", ""},
-		{"ok-and-garbage", "030301c8ffffff", "01", ""},
-		{"ok-and-short", "050301c804ff", "01", "packet=04ff claims length=4 > buffer=2 not valid"},
-		{"debug-beebee", "060604beebee65", "04beebee", ""},
-		{"mdb-started", "0303083a", "08", ""},
-		{"mdb-started-and-timeout", "0703083a048b0569", "08,8b05", ""},
+		{"packet-short", "0101", "", "packet=01 claims length=1 < min=4 not valid"},
+		{"packet-under-length", "0104", "", "packet=04 claims length=4 > buffer=1 not valid"},
+		{"packet-corrupted", "04040000ff", "", "packet=040000ff crc=ff actual=86 not valid"},
+		{"packet-invalid-header", "0404000086", "", "packet=04000086 header=00 not valid"},
+		{"ok", "0404000115", "00:01", ""},
+		{"ok-and-garbage", "0404d0019cffffff", "d0:01", ""},
+		{"ok-and-short", "060485018c04ff", "85:01", "packet=04ff claims length=4 > buffer=2 not valid"},
+		{"debug-beebee", "07070004beebeefe", "00:04beebee", ""},
+		{"mdb-success", "04043e0821", "3e:08", ""},
+		{"mdb-success-and-twi", "09041508cd0500063077", "15:08,00:0630", ""},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
@@ -42,7 +43,9 @@ func TestParseResponse(t *testing.T) {
 				t.Fatalf("invalid input=%s err='%v'", c.input, err)
 			}
 			var ps []string
-			err = ParseResponse(input, func(p Packet) { ps = append(ps, p.Hex()) })
+			err = ParseResponse(input, func(p Packet) {
+				ps = append(ps, fmt.Sprintf("%02x:%s", p.Id, p.SimpleHex()))
+			})
 			errString := ""
 			if err != nil {
 				errString = err.Error()
