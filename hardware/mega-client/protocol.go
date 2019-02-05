@@ -53,6 +53,8 @@ func (self *Packet) Parse(b []byte) error {
 	dataLength := self.length - 4
 	if dataLength > 0 {
 		self.Data = b[3 : 3+dataLength] // GC concern, maybe copy?
+		// self.Data = make([]byte, dataLength)
+		// copy(self.Data, b[3:3+dataLength])
 	}
 	return nil
 }

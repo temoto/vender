@@ -1,6 +1,12 @@
 hardware {
   iodin_path = "target/release/iodin"
 
+  mega {
+    i2c_bus  = 0
+    i2c_addr = 0x78
+    pin      = 23
+  }
+
   mdb {
     log_enable = false
 

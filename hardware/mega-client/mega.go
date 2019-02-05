@@ -17,6 +17,7 @@ import (
 )
 
 const modName string = "mega-client"
+const DefaultTimeout = 500 * time.Millisecond
 
 type Client struct {
 	bus       i2c.I2CBus
@@ -91,20 +92,20 @@ func (self *Client) RawWrite(b []byte) error {
 }
 
 func (self *Client) DoStatus() (Packet, error) {
-	return self.Do(COMMAND_STATUS, nil)
+	return self.DoTimeout(COMMAND_STATUS, nil, DefaultTimeout)
 }
 
 func (self *Client) DoMdbBusReset(d time.Duration) (Packet, error) {
 	buf := [2]byte{}
 	binary.BigEndian.PutUint16(buf[:], uint16(d/time.Millisecond))
-	return self.Do(COMMAND_MDB_BUS_RESET, buf[:])
+	return self.DoTimeout(COMMAND_MDB_BUS_RESET, buf[:], DefaultTimeout)
 }
 
 func (self *Client) DoMdbTxSimple(data []byte) (Packet, error) {
-	return self.Do(COMMAND_MDB_TRANSACTION_SIMPLE, data)
+	return self.DoTimeout(COMMAND_MDB_TRANSACTION_SIMPLE, data, DefaultTimeout)
 }
 
-func (self *Client) Do(cmd Command_t, data []byte) (Packet, error) {
+func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration) (Packet, error) {
 	self.serialize.Lock()
 	defer self.serialize.Unlock()
 
@@ -127,12 +128,13 @@ func (self *Client) Do(cmd Command_t, data []byte) (Packet, error) {
 		select {
 		case resPacket := <-self.respCh:
 			if resPacket.Id != 0 && resPacket.Id != cmdPacket.Id {
-				self.strayCh <- resPacket
+				log.Printf("CRITICAL stray command=%02x response=%s", cmdPacket.Bytes(), resPacket.String())
+				// self.strayCh <- resPacket
 				break
 			}
 			return resPacket, nil
-		case <-time.After(500 * time.Millisecond):
-			err = errors.Timeoutf("omg")
+		case <-time.After(timeout):
+			err = errors.Timeoutf("omg") // FIXME text
 			return Packet{}, err
 		}
 	}
@@ -163,7 +165,8 @@ func (self *Client) reader() {
 					self.twiCh <- p
 				default:
 					if p.Id == 0 {
-						self.strayCh <- p
+						log.Printf("INFO non-response=%s", p.String())
+						// self.strayCh <- p
 					} else {
 						self.respCh <- p
 					}

@@ -16,7 +16,8 @@ func NewMegaUart(client *mega.Client) Uarter {
 }
 func (self *megaUart) Open(_ string) error {
 	self.c.IncRef("mdb-uart")
-	return nil
+	_, err := self.c.DoTimeout(mega.COMMAND_STATUS, nil, 5*time.Second)
+	return err
 }
 func (self *megaUart) Close() error {
 	return self.c.DecRef("mdb-uart")

@@ -13,13 +13,19 @@ import (
 	"github.com/juju/errors"
 	iodin "github.com/temoto/vender/hardware/iodin-client"
 	"github.com/temoto/vender/hardware/mdb"
+	mega "github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/helpers"
 )
 
 type Config struct {
 	Hardware struct {
 		IodinPath string `hcl:"iodin_path"`
-		Mdb       struct {
+		Mega      struct {
+			I2CBus  int `hcl:"i2c_bus"`
+			I2CAddr int `hcl:"i2c_addr"`
+			Pin     int `hcl:"pin"`
+		}
+		Mdb struct {
 			Log        bool `hcl:"log_enable"`
 			Uarter     mdb.Uarter
 			UartDevice string `hcl:"uart_device"`
@@ -56,6 +62,12 @@ func ReadConfig(r io.Reader) (*Config, error) {
 	switch c.Hardware.Mdb.UartDriver {
 	case "", "file":
 		c.Hardware.Mdb.Uarter = mdb.NewFileUart()
+	case "mega":
+		mega, err := mega.NewClient(byte(c.Hardware.Mega.I2CBus), byte(c.Hardware.Mega.I2CAddr), uint(c.Hardware.Mega.Pin))
+		if err != nil {
+			return nil, errors.Annotatef(err, "config: mdb.uart_driver=%s mega=%#v", c.Hardware.Mdb.UartDriver, c.Hardware.Mega)
+		}
+		c.Hardware.Mdb.Uarter = mdb.NewMegaUart(mega)
 	case "iodin":
 		iodin, err := iodin.NewClient(c.Hardware.IodinPath)
 		if err != nil {

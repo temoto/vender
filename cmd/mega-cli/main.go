@@ -85,7 +85,7 @@ func main() {
 						log.Printf("pXX... requires at least 1 byte for command")
 						break
 					}
-					p, err := client.Do(mega.Command_t(bs[0]), bs[1:])
+					p, err := client.DoTimeout(mega.Command_t(bs[0]), bs[1:], mega.DefaultTimeout)
 					if err != nil {
 						log.Printf("p rq=%02x rs=%s error=%v", bs, p.String(), err)
 						break
