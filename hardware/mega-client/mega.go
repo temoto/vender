@@ -14,35 +14,46 @@ import (
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/hardware/i2c"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/helpers/msync"
 )
 
 const modName string = "mega-client"
 const DefaultTimeout = 500 * time.Millisecond
 
 type Client struct {
-	bus       i2c.I2CBus
-	addr      byte
-	pin       uint
-	twiCh     chan Packet
-	respCh    chan Packet
-	strayCh   chan Packet
-	refcount  int32
-	alive     *alive.Alive
-	serialize sync.Mutex
-	rnd       *rand.Rand
-	expectId  uint32
+	bus        i2c.I2CBus
+	addr       byte
+	pin        uint
+	respCh     chan Packet
+	strayCh    chan Packet
+	twiCh      chan Packet
+	readSignal msync.Signal
+	refcount   int32
+	alive      *alive.Alive
+	serialize  sync.Mutex
+	rnd        *rand.Rand
+	stat       Stat
+}
+type Stat struct {
+	Error         uint
+	Command       uint
+	ResponseAll   uint
+	ResponseMatch uint
+	Twi           uint
+	Stray         uint
 }
 
 func NewClient(busNo byte, addr byte, pin uint) (*Client, error) {
 	self := &Client{
-		addr:    addr,
-		bus:     i2c.NewI2CBus(busNo),
-		pin:     pin,
-		alive:   alive.NewAlive(),
-		respCh:  make(chan Packet, 16),
-		strayCh: make(chan Packet, 16),
-		twiCh:   make(chan Packet, 16),
-		rnd:     helpers.RandUnix(),
+		addr:       addr,
+		bus:        i2c.NewI2CBus(busNo),
+		pin:        pin,
+		alive:      alive.NewAlive(),
+		respCh:     make(chan Packet, 16),
+		strayCh:    make(chan Packet, 16),
+		twiCh:      make(chan Packet, 16),
+		readSignal: msync.NewSignal(),
+		rnd:        helpers.RandUnix(),
 	}
 	if err := self.bus.Init(); err != nil {
 		return nil, err
@@ -77,6 +88,7 @@ func (self *Client) DecRef(debug string) error {
 func (self *Client) RawRead(b []byte) error {
 	_, err := self.bus.ReadBytesAt(self.addr, b)
 	if err != nil {
+		self.stat.Error++
 		// log.Printf("%s RawRead addr=%02x error=%v", modName, self.addr, err)
 		return err
 	}
@@ -87,6 +99,9 @@ func (self *Client) RawRead(b []byte) error {
 // TODO make it private, used by mega-cli
 func (self *Client) RawWrite(b []byte) error {
 	err := self.bus.WriteBytesAt(self.addr, b)
+	if err != nil {
+		self.stat.Error++
+	}
 	// log.Printf("%s RawWrite addr=%02x buf=%02x err=%v", modName, self.addr, b, err)
 	return err
 }
@@ -109,31 +124,40 @@ func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration)
 	self.serialize.Lock()
 	defer self.serialize.Unlock()
 
+	self.stat.Command++
+
 	bufOut := make([]byte, COMMAND_MAX_LENGTH)
-	cmdPacket := Packet{
-		Id:     byte((self.rnd.Uint32() % 254) + 1),
-		Header: byte(cmd),
-		Data:   data,
-	}
+	cmdPacket := NewPacket(
+		byte((self.rnd.Uint32()%254)+1),
+		byte(cmd),
+		data...,
+	)
 
 	// FIXME n,_:=p.WriteTo(bufOut)
 	pb := cmdPacket.Bytes()
 	plen := copy(bufOut, pb)
 	err := self.RawWrite(bufOut[:plen])
 	if err != nil {
+		self.stat.Error++
 		return Packet{}, err
 	}
 
 	for try := 1; try < 5; try++ {
 		select {
 		case resPacket := <-self.respCh:
-			if resPacket.Id != 0 && resPacket.Id != cmdPacket.Id {
-				log.Printf("CRITICAL stray command=%02x response=%s", cmdPacket.Bytes(), resPacket.String())
-				// self.strayCh <- resPacket
-				break
+			if resPacket.Id != 0 {
+				if resPacket.Id != cmdPacket.Id {
+					self.stat.Stray++
+					log.Printf("CRITICAL stray command=%02x response=%s", cmdPacket.Bytes(), resPacket.String())
+					// self.strayCh <- resPacket
+					break
+				}
+				self.stat.ResponseMatch++
 			}
 			return resPacket, nil
 		case <-time.After(timeout):
+			self.stat.Error++
+			self.readSignal.Set()
 			err = errors.Timeoutf("omg") // FIXME text
 			return Packet{}, err
 		}
@@ -142,9 +166,13 @@ func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration)
 	return Packet{}, err
 }
 
+func (self *Client) Stat() Stat {
+	return self.stat
+}
+
 func (self *Client) reader() {
-	stopch := self.alive.StopChan()
 	bufIn := make([]byte, RESPONSE_MAX_LENGTH)
+	stopch := self.alive.StopChan()
 
 	pinWatch := gpio.NewWatcher()
 	pinWatch.AddPinWithEdgeAndLogic(self.pin, gpio.EdgeRising, gpio.ActiveHigh)
@@ -153,32 +181,40 @@ func (self *Client) reader() {
 	for self.alive.IsRunning() {
 		select {
 		case <-pinWatch.Notification:
-			err := self.RawRead(bufIn)
-			if err != nil {
-				log.Printf("%s pin read=%02x error=%v", modName, self.addr, err)
-				break
-			}
-			err = ParseResponse(bufIn, func(p Packet) {
-				log.Printf("debug pin parsed packet=%02x %s", p.Bytes(), p.String())
-				switch Response_t(p.Header) {
-				case RESPONSE_TWI:
-					self.twiCh <- p
-				default:
-					if p.Id == 0 {
-						log.Printf("INFO non-response=%s", p.String())
-						// self.strayCh <- p
-					} else {
-						self.respCh <- p
-					}
-				}
-			})
-			if err != nil {
-				log.Printf("pin read=%02x parse error=%v", bufIn, err)
-				break
-			}
-
+			self.read(bufIn)
+		case <-self.readSignal:
+			self.read(bufIn)
 		case <-stopch:
 			return
 		}
+	}
+}
+
+func (self *Client) read(buf []byte) {
+	err := self.RawRead(buf)
+	if err != nil {
+		self.stat.Error++
+		log.Printf("%s pin read=%02x error=%v", modName, self.addr, err)
+		return
+	}
+	err = ParseResponse(buf, func(p Packet) {
+		// log.Printf("debug pin parsed packet=%02x %s", p.Bytes(), p.String())
+		switch Response_t(p.Header) {
+		case RESPONSE_TWI:
+			self.stat.Twi++
+			self.twiCh <- p
+		default:
+			if p.Id == 0 {
+				log.Printf("INFO non-response=%s", p.String())
+				// self.strayCh <- p
+			} else {
+				self.stat.ResponseAll++
+				self.respCh <- p
+			}
+		}
+	})
+	if err != nil {
+		self.stat.Error++
+		log.Printf("pin read=%02x parse error=%v", buf, err)
 	}
 }

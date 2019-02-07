@@ -39,6 +39,6 @@ func (self *megaUart) Tx(request, response []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	n := copy(response, p.Data)
+	n := copy(response, p.Data())
 	return n, nil
 }

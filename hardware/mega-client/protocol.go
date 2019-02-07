@@ -21,69 +21,73 @@ const (
 	ResetFlagWatchdog
 )
 
+const packetOverhead = 4
+
 type Packet struct {
-	length byte
-	Id     byte
-	Header byte
-	Data   []byte
+	buf     [RESPONSE_MAX_LENGTH]byte
+	Id      byte
+	Header  byte
+	dataLen uint8
 }
 
-func (self *Packet) Parse(b []byte) error {
+func NewPacket(id, header byte, data ...byte) Packet {
+	p := Packet{Id: id, Header: header}
+	p.Id = id
+	p.Header = header
+	p.dataLen = uint8(len(data))
+	plen := packetOverhead + p.dataLen
+	p.buf[0] = plen
+	p.buf[1] = p.Id
+	p.buf[2] = p.Header
+	copy(p.buf[3:], data)
+	p.buf[plen-1] = crc.CRC8_p93_n(0, p.buf[:plen-1])
+	return p
+}
+
+func (self *Packet) Data() []byte {
+	if self.dataLen == 0 {
+		return nil
+	}
+	return self.buf[3 : 3+self.dataLen]
+}
+
+func (self *Packet) Parse(b []byte) (uint8, error) {
 	if len(b) == 0 {
-		return errors.NotValidf("packet empty")
+		return 0, errors.NotValidf("packet empty")
 	}
-	self.length = b[0]
-	if self.length < 4 {
-		return errors.NotValidf("packet=%02x claims length=%d < min=4", b, self.length)
+	length := b[0]
+	if length < packetOverhead {
+		return length, errors.NotValidf("packet=%02x claims length=%d < min=%d", b, length, packetOverhead)
 	}
-	if int(self.length) > len(b) {
-		return errors.NotValidf("packet=%02x claims length=%d > buffer=%d", b, self.length, len(b))
+	if int(length) > len(self.buf) {
+		return length, errors.NotValidf("packet=%02x claims length=%d > max=%d", b, length, len(self.buf))
 	}
-	b = b[:self.length]
-	crcIn := b[self.length-1]
-	crcLocal := crc.CRC8_p93_n(0, b[:self.length-1])
+	if int(length) > len(b) {
+		return length, errors.NotValidf("packet=%02x claims length=%d > input=%d", b, length, len(b))
+	}
+	b = b[:length]
+	crcIn := b[length-1]
+	crcLocal := crc.CRC8_p93_n(0, b[:length-1])
 	if crcIn != crcLocal {
-		return errors.NotValidf("packet=%02x crc=%02x actual=%02x", b, crcIn, crcLocal)
+		return length, errors.NotValidf("packet=%02x crc=%02x actual=%02x", b, crcIn, crcLocal)
 	}
 	self.Id = b[1]
 	self.Header = b[2]
 	if strings.HasPrefix(Response_t(self.Header).String(), "Response_t(") {
-		return errors.NotValidf("packet=%02x header=%02x", b, byte(self.Header))
+		return length, errors.NotValidf("packet=%02x header=%02x", b, byte(self.Header))
 	}
-	dataLength := self.length - 4
-	if dataLength > 0 {
-		self.Data = b[3 : 3+dataLength] // GC concern, maybe copy?
-		// self.Data = make([]byte, dataLength)
-		// copy(self.Data, b[3:3+dataLength])
-	}
-	return nil
-}
-
-func (self *Packet) Error() string {
-	if self.Header&RESPONSE_MASK_ERROR == 0 {
-		return ""
-	}
-	return fmt.Sprintf("%s(%02x)", Response_t(self.Header).String(), self.Data)
+	copy(self.buf[:], b)
+	self.dataLen = length - packetOverhead
+	return length, nil
 }
 
 func (self *Packet) Bytes() []byte {
-	plen := 4 + len(self.Data)
-	b := make([]byte, plen)
-	b[0] = byte(plen)
-	b[1] = self.Id
-	b[2] = byte(self.Header)
-	copy(b[3:], self.Data)
-	b[plen-1] = crc.CRC8_p93_n(0, b[:plen-1])
-	return b
+	return self.buf[:packetOverhead+self.dataLen]
 }
 
 func (self *Packet) SimpleHex() string {
 	b := self.Bytes()
-	plen := len(b)
-	if plen < 4 {
-		panic(fmt.Sprintf("code error mega packet='%02x'", b))
-	}
-	return hex.EncodeToString(b[2 : plen-1])
+	return hex.EncodeToString(b[2 : self.dataLen+3])
 }
 
 func mcusrString(b byte) string {
@@ -103,65 +107,77 @@ func mcusrString(b byte) string {
 	return s
 }
 
-func parseTagged(b []byte) string {
-	ss := make([]string, 0, 8)
+func (f Field_t) parseAppend(b []byte, arg []byte) ([]byte, uint8) {
+	switch f {
+	case FIELD_PROTOCOL:
+		b = append(b, fmt.Sprintf("protocol=%d", arg[0])...)
+		return b, 1
+	case FIELD_FIRMWARE_VERSION:
+		b = append(b, fmt.Sprintf("firmware=%02x%02x", arg[0], arg[1])...)
+		return b, 2
+	case FIELD_BEEBEE:
+		if bytes.Equal(arg[:3], []byte{0xbe, 0xeb, 0xee}) {
+			b = append(b, "beebee-mark"...)
+		} else {
+			b = append(b, fmt.Sprintf("ERR:invalid-beebee:%02x", arg[:3])...)
+		}
+		return b, 3
+	case FIELD_MCUSR:
+		b = append(b, "reset="+mcusrString(arg[0])...)
+		return b, 1
+	case FIELD_QUEUE_MASTER:
+		b = append(b, fmt.Sprintf("master.length=%d", arg[0])...)
+		return b, 1
+	case FIELD_QUEUE_TWI:
+		b = append(b, fmt.Sprintf("twi.length=%d", arg[0])...)
+		return b, 1
+	case FIELD_MDB_PROTOTCOL_STATE:
+		b = append(b, fmt.Sprintf("mdb.state=%d", arg[0])...)
+		return b, 1
+	case FIELD_MDB_STAT:
+		n := arg[0]
+		b = append(b, fmt.Sprintf("mdb_stat=%02x", arg[1:1+n])...)
+		return b, n
+	case FIELD_TWI_STAT:
+		n := arg[0]
+		b = append(b, fmt.Sprintf("twi_stat=%02x", arg[1:1+n])...)
+		return b, n
+	default:
+		return b, 0
+	}
+}
+
+func ParseFields(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
 	idx := uint8(0)
+	flen := uint8(0)
+	result := make([]byte, 0, 128)
 	for int(idx) < len(b) {
+		if idx > 0 {
+			result = append(result, ',')
+		}
 		tag := Field_t(b[idx])
 		idx++
-		switch tag {
-		case FIELD_PROTOCOL:
-			ss = append(ss, fmt.Sprintf("protocol=%d", b[idx]))
-			idx++
-		case FIELD_FIRMWARE_VERSION:
-			ss = append(ss, fmt.Sprintf("firmware=%02x%02x", b[idx], b[idx+1]))
-			idx += 2
-		case FIELD_BEEBEE:
-			arg := b[idx : idx+3]
-			if bytes.Equal(arg, []byte{0xbe, 0xeb, 0xee}) {
-				ss = append(ss, "beebee-mark")
-			} else {
-				ss = append(ss, fmt.Sprintf("ERR:invalid-beebee:%02x", arg))
-			}
-			idx += 3
-		case FIELD_MCUSR:
-			ss = append(ss, "reset="+mcusrString(b[idx]))
-			idx++
-		case FIELD_QUEUE_MASTER:
-			ss = append(ss, fmt.Sprintf("master.length=%d", b[idx]))
-			idx++
-		case FIELD_QUEUE_TWI:
-			ss = append(ss, fmt.Sprintf("twi.length=%d", b[idx]))
-			idx++
-		case FIELD_MDB_PROTOTCOL_STATE:
-			ss = append(ss, fmt.Sprintf("mdb.state=%d", b[idx]))
-			idx++
-		case FIELD_MDB_STAT:
-			n := b[idx]
-			idx++
-			ss = append(ss, fmt.Sprintf("mdb_stat=%02x", b[idx:idx+n]))
-			idx += n
-		case FIELD_TWI_STAT:
-			n := b[idx]
-			idx++
-			ss = append(ss, fmt.Sprintf("twi_stat=%02x", b[idx:idx+n]))
-			idx += n
-		default:
+		result, flen = tag.parseAppend(result, b[idx:])
+		if flen == 0 {
 			// TODO return err
-			ss = append(ss, fmt.Sprintf("ERR:unknown-tag:%02x", tag))
+			result = append(result, fmt.Sprintf("ERR:unknown-tag:%02x", tag)...)
 		}
+		idx += flen
 	}
-	return strings.Join(ss, ",")
+	return string(result)
 }
 
 func (self *Packet) String() string {
 	info := ""
 	switch Response_t(self.Header) {
 	case RESPONSE_STATUS, RESPONSE_JUST_RESET, RESPONSE_DEBUG:
-		info = parseTagged(self.Data)
+		info = ParseFields(self.Data())
 	}
 	return fmt.Sprintf("cmdid=%02x header=%s data=%s info=%s",
-		self.Id, Response_t(self.Header).String(), hex.EncodeToString(self.Data), info)
+		self.Id, Response_t(self.Header).String(), hex.EncodeToString(self.Data()), info)
 }
 
 func ParseResponse(b []byte, fun func(p Packet)) error {
@@ -173,25 +189,26 @@ func ParseResponse(b []byte, fun func(p Packet)) error {
 		return nil
 	}
 	if total > RESPONSE_MAX_LENGTH {
-		return errors.NotValidf("response=%02x claims length=%d > MAX=%d", b, total, RESPONSE_MAX_LENGTH)
+		return errors.NotValidf("response=%02x claims length=%d > max=%d", b, total, RESPONSE_MAX_LENGTH)
 	}
 	bufLen := len(b) - 1
 	if int(total) > bufLen {
-		return errors.NotValidf("response=%02x claims length=%d > buffer=%d", b, total, bufLen)
+		return errors.NotValidf("response=%02x claims length=%d > input=%d", b, total, bufLen)
 	}
 	b = b[:total+1]
 	var err error
 	var offset uint8 = 1
+	var plen byte
 	for offset <= total {
 		p := Packet{}
-		if err = p.Parse(b[offset:]); err != nil {
+		if plen, err = p.Parse(b[offset:]); err != nil {
 			return err
 		}
-		if p.length == 0 {
-			panic("dead loop packet.length=0")
+		if plen == 0 {
+			panic("dead loop plen=0")
 		}
 		fun(p)
-		offset += p.length
+		offset += plen
 	}
 	return nil
 }

@@ -90,6 +90,7 @@ func main() {
 						log.Printf("p rq=%02x rs=%s error=%v", bs, p.String(), err)
 						break
 					}
+					log.Printf("response=%02x %s", p.Bytes(), p.String())
 				}
 			case word[0] == 'r':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
