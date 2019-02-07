@@ -7,6 +7,10 @@ import (
 	mega "github.com/temoto/vender/hardware/mega-client"
 )
 
+var (
+	ErrTimeout = errors.NewErr("MDB timeout")
+)
+
 type megaUart struct {
 	c *mega.Client
 }
@@ -23,15 +27,31 @@ func (self *megaUart) Close() error {
 	return self.c.DecRef("mdb-uart")
 }
 
+func responseError(p *mega.Packet) error {
+	switch mega.Response_t(p.Header) {
+	case mega.RESPONSE_MDB_SUCCESS:
+		return nil
+	case mega.RESPONSE_MDB_BUSY:
+		err := errors.NewErr("MDB busy TODO=autoretry")
+		err.SetLocation(2)
+		return &err
+	case mega.RESPONSE_MDB_TIMEOUT:
+		err := ErrTimeout
+		err.SetLocation(2)
+		return &err
+	default:
+		err := errors.NewErr("mega response=%s", p.String())
+		err.SetLocation(2)
+		return &err
+	}
+}
+
 func (self *megaUart) Break(d time.Duration) error {
 	p, err := self.c.DoMdbBusReset(d)
 	if err != nil {
 		return err
 	}
-	if mega.Response_t(p.Header) != mega.RESPONSE_MDB_SUCCESS {
-		return errors.NotValidf("MdbBusReset response=%s", p)
-	}
-	return nil
+	return responseError(&p)
 }
 
 func (self *megaUart) Tx(request, response []byte) (int, error) {
@@ -39,6 +59,10 @@ func (self *megaUart) Tx(request, response []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	n := copy(response, p.Data())
-	return n, nil
+	err = responseError(&p)
+	n := 0
+	if err == nil {
+		n = copy(response, p.Data())
+	}
+	return n, err
 }
