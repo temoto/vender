@@ -60,8 +60,7 @@ func checkPoll(t testing.TB, input string, expected _PR) {
 	}
 	ca := testMake(t, reply)
 	pr := money.NewPollResult(mdb.PacketMaxLength)
-	err := ca.CommandPoll(pr)
-	if err != nil {
+	if err := ca.CommandPoll(pr); err != nil {
 		t.Fatalf("CommandPoll() err=%v", err)
 	}
 	pr.TestEqual(t, &expected)
@@ -76,17 +75,14 @@ func TestCoinPoll(t *testing.T) {
 		expect _PR
 	}
 	cases := []Case{
-		Case{"empty", "", _PR{Delay: DelayNext}},
+		Case{"empty", "", _PR{}},
 		Case{"reset", "0b", _PR{
-			Delay: DelayNext,
 			Items: []_PI{_PI{Status: money.StatusWasReset}},
 		}},
 		Case{"slugs", "21", _PR{
-			Delay: DelayNext,
 			Items: []_PI{_PI{Status: money.StatusInfo, Error: ErrSlugs, DataCount: 1}},
 		}},
 		Case{"deposited-cashbox", "4109", _PR{
-			Delay: DelayNext,
 			Items: []_PI{_PI{
 				Status:      money.StatusCredit,
 				DataNominal: currency.Nominal(2),
@@ -95,15 +91,12 @@ func TestCoinPoll(t *testing.T) {
 			}},
 		}},
 		Case{"deposited-tube", "521e", _PR{
-			Delay: DelayNext,
 			Items: []_PI{_PI{Status: money.StatusCredit, DataNominal: currency.Nominal(5), DataCount: 1}},
 		}},
 		Case{"deposited-reject", "7300", _PR{
-			Delay: DelayNext,
 			Items: []_PI{_PI{Status: money.StatusRejected, DataNominal: currency.Nominal(10), DataCount: 1}},
 		}},
 		Case{"dispensed", "9251", _PR{
-			Delay: DelayNext,
 			Items: []_PI{_PI{Status: money.StatusDispensed, DataNominal: currency.Nominal(5), DataCount: 1}},
 		}},
 	}

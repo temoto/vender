@@ -19,8 +19,10 @@ import (
 const (
 	coinTypeCount = 16
 
-	DelayErr  = 500 * time.Millisecond
-	DelayNext = 200 * time.Millisecond
+	DelayErr      = 500 * time.Millisecond
+	DelayNext     = 200 * time.Millisecond
+	DelayIdle     = 700 * time.Millisecond
+	IdleThreshold = 30 * time.Second
 )
 
 //go:generate stringer -type=CoinRouting -trimprefix=Routing
@@ -109,15 +111,15 @@ func (self *CoinAcceptor) SupportedNominals() []currency.Nominal {
 func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
 	defer a.Done()
 
+	lastActive := time.Now()
 	stopch := a.StopChan()
 	for a.IsRunning() {
+		delay := DelayNext
 		// TODO to reuse single PollResult safely, must clone .Items before sending to chan
 		pr := money.NewPollResult(mdb.PacketMaxLength)
 		if err := self.CommandPoll(pr); err != nil {
 			log.Printf("coin.Run CommandPoll err=%v", err)
-			if pr.Delay == 0 {
-				pr.Delay = DelayErr
-			}
+			delay = DelayErr
 		} else {
 			select {
 			case ch <- *pr:
@@ -125,8 +127,16 @@ func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- mon
 				return
 			}
 		}
+		now := time.Now()
+		if len(pr.Items) > 0 {
+			lastActive = now
+		} else {
+			if delay == DelayNext && now.Sub(lastActive) > IdleThreshold {
+				delay = DelayIdle
+			}
+		}
 		select {
-		case <-time.After(pr.Delay):
+		case <-time.After(delay):
 		case <-stopch:
 			return
 		}
@@ -223,14 +233,12 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 }
 
 func (self *CoinAcceptor) CommandPoll(result *money.PollResult) error {
-	result.Delay = DelayNext
 	result.Error = nil
 	result.Items = result.Items[:0]
 	result.Time = time.Now()
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(packetPoll, response)
 	if err != nil {
-		result.Delay = DelayErr
 		result.Error = err
 		return errors.Annotate(err, "hardware/mdb/coin POLL")
 	}

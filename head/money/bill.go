@@ -63,5 +63,5 @@ func (self *BillState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 		// InitSequence will be executed as reaction to StatusWasReset
 		// self.hw.InitSequence()
 	}
-	pollResultLoop(m, pch, h, onRestart, &self.hw, logPrefix)
+	genericPollResultLoop(m, pch, h, onRestart, &self.hw, logPrefix)
 }

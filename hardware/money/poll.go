@@ -11,7 +11,6 @@ import (
 type PollResult struct {
 	Time  time.Time
 	Error error
-	Delay time.Duration
 	Items []PollItem
 }
 
@@ -93,9 +92,6 @@ func (self *PollItem) Amount() currency.Amount {
 
 // TODO generate this code
 func (a *PollResult) TestEqual(t testing.TB, b *PollResult) {
-	if a.Delay != b.Delay {
-		t.Errorf("PoolResult.Delay a=%v b=%v", a.Delay, b.Delay)
-	}
 	if a.Error != b.Error {
 		t.Errorf("PoolResult.Error a=%v b=%v", a.Error, b.Error)
 	}

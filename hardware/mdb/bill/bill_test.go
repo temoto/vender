@@ -53,8 +53,11 @@ func checkPoll(t *testing.T, input string, expected _PR) {
 		mdb.TestChanTx(t, reqCh, respCh, "33", input)
 	}
 	bv := testMake(t, reply)
-	actual := bv.CommandPoll()
-	actual.TestEqual(t, &expected)
+	pr := money.NewPollResult(mdb.PacketMaxLength)
+	if err := bv.CommandPoll(pr); err != nil {
+		t.Fatalf("CommandPoll() err=%v", err)
+	}
+	pr.TestEqual(t, &expected)
 }
 
 func TestBillPoll(t *testing.T) {
@@ -66,20 +69,17 @@ func TestBillPoll(t *testing.T) {
 		expect money.PollResult
 	}
 	cases := []Case{
-		Case{"empty", "", money.PollResult{Delay: DelayNext}},
+		Case{"empty", "", money.PollResult{}},
 		Case{"disabled", "09", money.PollResult{
-			Delay: DelayNext,
 			Items: []money.PollItem{money.PollItem{Status: money.StatusDisabled}},
 		}},
 		Case{"reset,disabled", "0609", money.PollResult{
-			Delay: DelayNext,
 			Items: []money.PollItem{
 				money.PollItem{Status: money.StatusWasReset},
 				money.PollItem{Status: money.StatusDisabled},
 			},
 		}},
 		Case{"escrow", "9209", money.PollResult{
-			Delay: DelayNext,
 			Items: []money.PollItem{
 				money.PollItem{Status: money.StatusEscrow, DataNominal: 20},
 				money.PollItem{Status: money.StatusDisabled},

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
@@ -19,8 +20,10 @@ import (
 const (
 	billTypeCount = 16
 
-	DelayErr  = 500 * time.Millisecond
-	DelayNext = 200 * time.Millisecond
+	DelayErr      = 500 * time.Millisecond
+	DelayNext     = 200 * time.Millisecond
+	DelayIdle     = 700 * time.Millisecond
+	IdleThreshold = 30 * time.Second
 )
 
 //go:generate stringer -type=Features -trimprefix=Feature
@@ -89,16 +92,31 @@ func (self *BillValidator) Init(ctx context.Context, mdber mdb.Mdber) error {
 func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
 	defer a.Done()
 
+	lastActive := time.Now()
 	stopch := a.StopChan()
 	for a.IsRunning() {
-		pr := self.CommandPoll()
-		select {
-		case ch <- pr:
-		case <-stopch:
-			return
+		delay := DelayNext
+		// TODO to reuse single PollResult safely, must clone .Items before sending to chan
+		pr := money.NewPollResult(mdb.PacketMaxLength)
+		if err := self.CommandPoll(pr); err != nil {
+			delay = DelayErr
+		} else {
+			select {
+			case ch <- *pr:
+			case <-stopch:
+				return
+			}
+		}
+		now := time.Now()
+		if len(pr.Items) > 0 {
+			lastActive = now
+		} else {
+			if delay == DelayNext && now.Sub(lastActive) > IdleThreshold {
+				delay = DelayIdle
+			}
 		}
 		select {
-		case <-time.After(pr.Delay):
+		case <-time.After(delay):
 		case <-stopch:
 			return
 		}
@@ -132,6 +150,7 @@ func (self *BillValidator) InitSequence() error {
 	// TODO if err
 	// TODO read config
 	// self.CommandBillType(0xffff, 0xffff)
+	time.Sleep(DelayNext)
 	if err = self.CommandBillType(0xffff, 0); err != nil {
 		return err
 	}
@@ -185,27 +204,27 @@ func (self *BillValidator) CommandSetup() error {
 	return nil
 }
 
-func (self *BillValidator) CommandPoll() money.PollResult {
-	now := time.Now()
+func (self *BillValidator) CommandPoll(result *money.PollResult) error {
+	result.Error = nil
+	result.Items = result.Items[:0]
+	result.Time = time.Now()
 	response := new(mdb.Packet)
 	err := self.mdb.Tx(packetPoll, response)
-	result := money.PollResult{Time: now, Delay: DelayNext}
 	if err != nil {
 		result.Error = err
-		result.Delay = DelayErr
-		return result
+		return errors.Annotate(err, "hardware/mdb/bill POLL")
 	}
 	bs := response.Bytes()
 	if len(bs) == 0 {
 		self.ready.Set()
-		return result
+		return nil
 	}
-	result.Items = make([]money.PollItem, len(bs))
 	// log.Printf("poll response=%s", response.Format())
-	for i, b := range bs {
-		result.Items[i] = self.parsePollItem(b)
+	for _, b := range bs {
+		pi := self.parsePollItem(b)
+		result.Items = append(result.Items, pi)
 	}
-	return result
+	return nil
 }
 
 func (self *BillValidator) CommandStacker() error {

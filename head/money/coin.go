@@ -106,5 +106,5 @@ func (self *CoinState) pollResultLoop(m *MoneySystem, pch <-chan money.PollResul
 		self.hw.CommandReset()
 		self.hw.InitSequence()
 	}
-	pollResultLoop(m, pch, h, onRestart, &self.hw, logPrefix)
+	genericPollResultLoop(m, pch, h, onRestart, &self.hw, logPrefix)
 }
