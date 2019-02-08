@@ -132,9 +132,15 @@ type ChanIO struct {
 	r       chan []byte
 	w       chan []byte
 	timeout time.Duration
+	rtmr    *time.Timer
+	wtmr    *time.Timer
 }
 
 func (self *ChanIO) Read(p []byte) (int, error) {
+	if !self.rtmr.Stop() {
+		<-self.rtmr.C
+	}
+	self.rtmr.Reset(self.timeout)
 	select {
 	case b, ok := <-self.w:
 		if !ok {
@@ -142,17 +148,21 @@ func (self *ChanIO) Read(p []byte) (int, error) {
 		}
 		copy(p, b)
 		return len(b), nil
-	case <-time.After(self.timeout):
+	case <-self.rtmr.C:
 		panic("mdb mock ChanIO.Read timeout guard. mdber.Tx() without corresponding Packet channel receive")
 	}
 }
 
 func (self *ChanIO) Write(p []byte) (int, error) {
 	// log.Printf("cio.Write %x", p)
+	if !self.wtmr.Stop() {
+		<-self.wtmr.C
+	}
+	self.wtmr.Reset(self.timeout - time.Second)
 	select {
 	case self.r <- p:
 		return len(p), nil
-	case <-time.After(self.timeout - time.Second):
+	case <-self.wtmr.C:
 		panic("mdb mock ChanIO.Write timeout guard")
 	}
 }
@@ -162,19 +172,21 @@ func NewChanIO(timeout time.Duration) *ChanIO {
 		r:       make(chan []byte),
 		w:       make(chan []byte),
 		timeout: timeout,
+		rtmr:    time.NewTimer(0),
+		wtmr:    time.NewTimer(0),
 	}
 	return c
 }
 
-func NewTestMDBChan(t testing.TB) (Mdber, <-chan *Packet, chan<- *Packet) {
+func NewTestMDBChan(t testing.TB) (Mdber, <-chan Packet, chan<- Packet) {
 	cio := NewChanIO(5 * time.Second)
 	uarter := NewNullUart(cio, cio)
 	m, err := NewMDB(uarter, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqCh := make(chan *Packet)
-	respCh := make(chan *Packet)
+	reqCh := make(chan Packet)
+	respCh := make(chan Packet)
 
 	go func() {
 		for {
@@ -192,7 +204,10 @@ func NewTestMDBChan(t testing.TB) (Mdber, <-chan *Packet, chan<- *Packet) {
 				rb = append(rb, rb2...)
 			}
 			rb = rb[:len(rb)-1] // minus checksum
-			request := PacketFromBytes(rb)
+			request, err := PacketFromBytes(rb, true)
+			if err != nil {
+				t.Fatal(err)
+			}
 			reqCh <- request
 			response, ok := <-respCh
 			if ok {
@@ -213,10 +228,14 @@ func NewTestMDBChan(t testing.TB) (Mdber, <-chan *Packet, chan<- *Packet) {
 	return m, reqCh, respCh
 }
 
-type TestReplyFunc func(t testing.TB, reqCh <-chan *Packet, respCh chan<- *Packet)
+type TestReplyFunc func(t testing.TB, reqCh <-chan Packet, respCh chan<- Packet)
 
-func TestChanTx(t testing.TB, reqCh <-chan *Packet, respCh chan<- *Packet, expectRequestHex, responseHex string) {
+func TestChanTx(t testing.TB, reqCh <-chan Packet, respCh chan<- Packet, expectRequestHex, responseHex string) {
 	request := <-reqCh
 	request.TestHex(t, expectRequestHex)
-	respCh <- PacketFromHex(responseHex)
+	response, err := PacketFromHex(responseHex, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	respCh <- response
 }

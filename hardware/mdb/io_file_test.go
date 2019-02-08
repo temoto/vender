@@ -133,11 +133,12 @@ func TestUarterTx(t *testing.T) {
 }
 
 func BenchmarkFileUartTx(b *testing.B) {
+	b.ReportAllocs()
 	u := testFileUart(bytes.NewBufferString(""), bytes.NewBuffer(nil))
 	helpers.LogDiscard()
 	response := [PacketMaxLength]byte{}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 1; i <= b.N; i++ {
 		u.Tx(PacketNul1.Bytes(), response[:])
 	}
 }

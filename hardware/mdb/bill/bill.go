@@ -56,14 +56,14 @@ type BillValidator struct {
 }
 
 var (
-	packetReset           = mdb.PacketFromHex("30")
-	packetSetup           = mdb.PacketFromHex("31")
-	packetPoll            = mdb.PacketFromHex("33")
-	packetEscrowAccept    = mdb.PacketFromHex("3501")
-	packetEscrowReject    = mdb.PacketFromHex("3500")
-	packetStacker         = mdb.PacketFromHex("36")
-	packetExpIdent        = mdb.PacketFromHex("3700")
-	packetExpIdentOptions = mdb.PacketFromHex("3702")
+	packetReset           = mdb.MustPacketFromHex("30", true)
+	packetSetup           = mdb.MustPacketFromHex("31", true)
+	packetPoll            = mdb.MustPacketFromHex("33", true)
+	packetEscrowAccept    = mdb.MustPacketFromHex("3501", true)
+	packetEscrowReject    = mdb.MustPacketFromHex("3500", true)
+	packetStacker         = mdb.MustPacketFromHex("36", true)
+	packetExpIdent        = mdb.MustPacketFromHex("3700", true)
+	packetExpIdentOptions = mdb.MustPacketFromHex("3702", true)
 )
 
 var (
@@ -114,7 +114,6 @@ func (self *BillValidator) Init(ctx context.Context, mdber mdb.Mdber) error {
 	self.DoIniter = self.newIniter()
 
 	self.ready = msync.NewSignal()
-	// TODO maybe execute CommandReset?
 	err := self.DoIniter.Do(ctx)
 	return err
 }
@@ -162,8 +161,9 @@ func (self *BillValidator) ReadyChan() <-chan msync.Nothing {
 func (self *BillValidator) newIniter() msync.Doer {
 	tx := msync.NewTransaction(self.dev.Name + "-init")
 	tx.Root.
-		Append(&msync.DoFunc0{F: self.CommandSetup}).
-		Append(&msync.DoFunc0{F: func() error {
+		// TODO maybe execute CommandReset?
+		Append(msync.DoFunc0{F: self.CommandSetup}).
+		Append(msync.DoFunc0{F: func() error {
 			if err := self.CommandExpansionIdentificationOptions(); err != nil {
 				if _, ok := err.(mdb.FeatureNotSupported); ok {
 					if err = self.CommandExpansionIdentification(); err != nil {
@@ -176,13 +176,13 @@ func (self *BillValidator) newIniter() msync.Doer {
 			return nil
 		}}).
 		Append(&CommandStacker{Dev: &self.dev}).
-		Append(&msync.DoSleep{DelayNext}).
+		Append(msync.DoSleep{DelayNext}).
 		Append(self.DoConfigBills)
 	return tx
 }
 
 func (self *BillValidator) newConfigBills() msync.Doer {
-	return &msync.DoFunc{
+	return msync.DoFunc{
 		Name: "enable-bills-config",
 		F: func(ctx context.Context) error {
 			config := state.GetConfig(ctx)
@@ -196,8 +196,8 @@ func (self *BillValidator) newConfigBills() msync.Doer {
 func (self *BillValidator) NewRestarter() msync.Doer {
 	tx := msync.NewTransaction(self.dev.Name + "-restart")
 	tx.Root.
-		Append(&msync.DoFunc0{F: self.CommandReset}).
-		Append(&msync.DoSleep{200 * time.Millisecond}).
+		Append(msync.DoFunc0{F: self.CommandReset}).
+		Append(msync.DoSleep{DelayNext}).
 		Append(self.newIniter())
 	return tx
 }
@@ -210,7 +210,7 @@ func (self *BillValidator) CommandBillType(accept, escrow uint16) error {
 	buf := [5]byte{0x34}
 	self.dev.ByteOrder.PutUint16(buf[1:], accept)
 	self.dev.ByteOrder.PutUint16(buf[3:], escrow)
-	request := mdb.PacketFromBytes(buf[:])
+	request := mdb.MustPacketFromBytes(buf[:], true)
 	err := self.dev.Tx(request).E
 	log.Printf("CommandBillType request=%s err=%v", request.Format(), err)
 	return err
@@ -310,7 +310,7 @@ func (self *BillValidator) CommandFeatureEnable(requested Features) error {
 	f := requested & self.supportedFeatures
 	buf := [6]byte{0x37, 0x01}
 	self.dev.ByteOrder.PutUint32(buf[2:], uint32(f))
-	request := mdb.PacketFromBytes(buf[:])
+	request := mdb.MustPacketFromBytes(buf[:], true)
 	err := self.dev.Tx(request).E
 	if err != nil {
 		log.Printf("mdb request=%s err=%v", request.Format(), err)

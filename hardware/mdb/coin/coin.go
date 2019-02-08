@@ -65,12 +65,12 @@ type CoinAcceptor struct {
 }
 
 var (
-	packetReset      = mdb.PacketFromHex("08")
-	packetSetup      = mdb.PacketFromHex("09")
-	packetTubeStatus = mdb.PacketFromHex("0a")
-	packetPoll       = mdb.PacketFromHex("0b")
-	packetExpIdent   = mdb.PacketFromHex("0f00")
-	packetDiagStatus = mdb.PacketFromHex("0f05")
+	packetReset      = mdb.MustPacketFromHex("08", true)
+	packetSetup      = mdb.MustPacketFromHex("09", true)
+	packetTubeStatus = mdb.MustPacketFromHex("0a", true)
+	packetPoll       = mdb.MustPacketFromHex("0b", true)
+	packetExpIdent   = mdb.MustPacketFromHex("0f00", true)
+	packetDiagStatus = mdb.MustPacketFromHex("0f05", true)
 )
 
 var (
@@ -114,6 +114,8 @@ func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- mon
 
 	lastActive := time.Now()
 	stopch := a.StopChan()
+	delayTimer := time.NewTimer(DelayNext)
+	delayTimer.Stop()
 	for a.IsRunning() {
 		delay := DelayNext
 		// TODO to reuse single PollResult safely, must clone .Items before sending to chan
@@ -136,8 +138,12 @@ func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- mon
 				delay = DelayIdle
 			}
 		}
+		if !delayTimer.Stop() {
+			<-delayTimer.C
+		}
+		delayTimer.Reset(delay)
 		select {
-		case <-time.After(delay):
+		case <-delayTimer.C:
 		case <-stopch:
 			return
 		}
@@ -152,7 +158,7 @@ func (self *CoinAcceptor) newIniter() msync.Doer {
 	tx := msync.NewTransaction("coin-init")
 	tx.Root.
 		Append(self.doSetup).
-		Append(&msync.DoFunc0{F: func() error {
+		Append(msync.DoFunc0{F: func() error {
 			var err error
 			// timeout is unfortunately common "response" for unsupported commands
 			if err = self.CommandExpansionIdentification(); err != nil && !errors.IsTimeout(err) {
@@ -167,9 +173,9 @@ func (self *CoinAcceptor) newIniter() msync.Doer {
 			}
 			return nil
 		}}).
-		Append(&msync.DoFunc0{F: self.CommandTubeStatus}).
-		Append(&msync.DoSleep{DelayNext}).
-		Append(&msync.DoFunc{F: func(ctx context.Context) error {
+		Append(msync.DoFunc0{F: self.CommandTubeStatus}).
+		Append(msync.DoSleep{DelayNext}).
+		Append(msync.DoFunc{F: func(ctx context.Context) error {
 			config := state.GetConfig(ctx)
 			// TODO read enabled nominals from config
 			_ = config
@@ -182,13 +188,13 @@ func (self *CoinAcceptor) Restarter() msync.Doer {
 	tx := msync.NewTransaction("coin-restart")
 	tx.Root.
 		Append(self.doReset).
-		Append(&msync.DoSleep{DelayNext}).
+		Append(msync.DoSleep{DelayNext}).
 		Append(self.newIniter())
 	return tx
 }
 
 func (self *CoinAcceptor) newSetuper() msync.Doer {
-	return &msync.DoFunc0{F: func() error {
+	return msync.DoFunc0{F: func() error {
 		const expectLengthMin = 7
 		r := self.dev.Tx(packetSetup)
 		if r.E != nil {
@@ -277,7 +283,7 @@ func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) msync.Doer {
 	buf := [5]byte{0x0c}
 	self.dev.ByteOrder.PutUint16(buf[1:], accept)
 	self.dev.ByteOrder.PutUint16(buf[3:], dispense)
-	request := mdb.PacketFromBytes(buf[:])
+	request := mdb.MustPacketFromBytes(buf[:], true)
 	return self.dev.NewDoTxNR(request)
 }
 
@@ -290,7 +296,7 @@ func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8)
 		return fmt.Errorf("dispense not supported for nominal=%v", currency.Amount(nominal).Format100I())
 	}
 
-	request := mdb.PacketFromBytes([]byte{0x0d, (count << 4) + uint8(coinType)})
+	request := mdb.MustPacketFromBytes([]byte{0x0d, (count << 4) + uint8(coinType)}, true)
 	<-self.ReadyChan()
 	err := self.dev.Tx(request).E
 	return errors.Annotate(err, "hardware/mdb/coin DISPENSE")
@@ -298,7 +304,7 @@ func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8)
 
 func (self *CoinAcceptor) CommandPayout(amount currency.Amount) error {
 	// FIXME 100 magic number
-	request := mdb.PacketFromBytes([]byte{0x0f, 0x02, byte(int(amount) / 100 / self.internalScalingFactor)})
+	request := mdb.MustPacketFromBytes([]byte{0x0f, 0x02, byte(int(amount) / 100 / self.internalScalingFactor)}, true)
 	<-self.ReadyChan()
 	err := self.dev.Tx(request).E
 	return errors.Annotate(err, "hardware/mdb/coin PAYOUT")
@@ -349,7 +355,7 @@ func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
 	f := requested & self.supportedFeatures
 	buf := [6]byte{0x0f, 0x01}
 	self.dev.ByteOrder.PutUint32(buf[2:], uint32(f))
-	request := mdb.PacketFromBytes(buf[:])
+	request := mdb.MustPacketFromBytes(buf[:], true)
 	err := self.dev.Tx(request).E
 	return errors.Annotate(err, "hardware/mdb/coin/CommandFeatureEnable")
 }

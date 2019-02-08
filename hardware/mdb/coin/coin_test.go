@@ -60,7 +60,7 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *CoinAcceptor {
 }
 
 func checkPoll(t testing.TB, input string, expected _PR) {
-	reply := func(t testing.TB, reqCh <-chan *mdb.Packet, respCh chan<- *mdb.Packet) {
+	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "0b", input)
 	}
 	ca := testMake(t, reply)
@@ -116,7 +116,7 @@ func TestCoinPoll(t *testing.T) {
 }
 
 func checkDiag(t testing.TB, input string, expected DiagResult) {
-	reply := func(t testing.TB, reqCh <-chan *mdb.Packet, respCh chan<- *mdb.Packet) {
+	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "0f05", input)
 	}
 	ca := testMake(t, reply)
@@ -171,9 +171,10 @@ func BenchmarkCoinPoll(b *testing.B) {
 		Case{"reset", "0b"},
 	}
 	for _, c := range cases {
+		c := c
 		b.Run(c.name, func(b *testing.B) {
 			b.ReportAllocs()
-			reply := func(t testing.TB, reqCh <-chan *mdb.Packet, respCh chan<- *mdb.Packet) {
+			reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 				for i := 1; i <= b.N; i++ {
 					mdb.TestChanTx(t, reqCh, respCh, "0b", c.input)
 				}

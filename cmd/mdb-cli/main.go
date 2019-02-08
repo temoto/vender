@@ -107,9 +107,9 @@ func main() {
 					time.Sleep(time.Duration(i) * time.Millisecond)
 				}
 			case word[0] == 't':
-				request := mdb.PacketFromHex(word[1:])
 				response := new(mdb.Packet)
-				if request != nil {
+				request, err := mdb.PacketFromHex(word[1:], true)
+				if err == nil {
 					err = m.Tx(request, response)
 					response.Logf("< %s")
 				}

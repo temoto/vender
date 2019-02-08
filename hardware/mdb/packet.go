@@ -28,23 +28,36 @@ type Packet struct {
 	readonly bool
 }
 
-func PacketFromBytes(b []byte) *Packet {
-	p := &Packet{}
+func PacketFromBytes(b []byte, readonly bool) (Packet, error) {
+	p := Packet{}
 	_, err := p.Write(b)
 	if err != nil {
-		return nil
+		return *PacketEmpty, err
+	}
+	p.readonly = readonly
+	return p, nil
+}
+func MustPacketFromBytes(b []byte, readonly bool) Packet {
+	p, err := PacketFromBytes(b, readonly)
+	if err != nil {
+		panic(err)
 	}
 	return p
 }
 
-func PacketFromString(s string) *Packet { return PacketFromBytes([]byte(s)) }
-
-func PacketFromHex(s string) *Packet {
+func PacketFromHex(s string, readonly bool) (Packet, error) {
 	b, err := hex.DecodeString(s)
 	if err != nil {
-		return nil
+		return *PacketEmpty, err
 	}
-	return PacketFromBytes(b)
+	return PacketFromBytes(b, readonly)
+}
+func MustPacketFromHex(s string, readonly bool) Packet {
+	p, err := PacketFromHex(s, readonly)
+	if err != nil {
+		panic(err)
+	}
+	return p
 }
 
 func (self *Packet) Bytes() []byte {
@@ -53,11 +66,6 @@ func (self *Packet) Bytes() []byte {
 
 func (self *Packet) Equal(p2 *Packet) bool {
 	return self.l == p2.l && bytes.Equal(self.Bytes(), p2.Bytes())
-}
-
-func (self *Packet) ReadFromPacket(src *Packet) error {
-	_, err := self.Write(src.b[:src.l])
-	return err
 }
 
 func (self *Packet) write(p []byte) {

@@ -20,8 +20,8 @@ type Uarter interface {
 
 type Mdber interface {
 	BreakCustom(keep, sleep time.Duration) error
-	Tx(request, response *Packet) error
-	TxRetry(request, response *Packet) error
+	Tx(request Packet, response *Packet) error
+	TxRetry(request Packet, response *Packet) error
 	SetLog(logf helpers.LogFunc) helpers.LogFunc
 }
 
@@ -89,9 +89,9 @@ func (self *mdb) BreakCustom(keep, sleep time.Duration) error {
 	return errors.Trace(err)
 }
 
-func (self *mdb) Tx(request, response *Packet) error {
-	if request == nil || response == nil {
-		panic("mdb.Tx() both request and response must be not nil")
+func (self *mdb) Tx(request Packet, response *Packet) error {
+	if response == nil {
+		panic("code error mdb.Tx() response=nil")
 	}
 	if response.readonly {
 		return ErrPacketReadonly
@@ -106,12 +106,16 @@ func (self *mdb) Tx(request, response *Packet) error {
 	self.lk.Unlock()
 	response.l = n
 
+	// TODO construct arguments only when logging is enabled
 	self.log("debug: mdb.Tx (multi-line)\n  ...send: (%02d) %s\n  ...recv: (%02d) %s\n  ...err=%v",
 		request.l, request.Format(), response.l, response.Format(), err)
-	return errors.Annotatef(err, "Tx send=%s recv=%s", request.Format(), response.Format())
+	if err != nil {
+		return errors.Annotatef(err, "Tx send=%s recv=%s", request.Format(), response.Format())
+	}
+	return nil
 }
 
-func (self *mdb) TxRetry(request, response *Packet) error {
+func (self *mdb) TxRetry(request Packet, response *Packet) error {
 	const retries = 5
 	delay := 100 * time.Millisecond
 	var err error

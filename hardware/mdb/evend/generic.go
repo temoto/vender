@@ -24,10 +24,10 @@ type DeviceGeneric struct {
 
 	setupResponse []byte
 
-	packetReset  *mdb.Packet
-	packetSetup  *mdb.Packet
-	packetAction *mdb.Packet
-	packetPoll   *mdb.Packet
+	packetReset  mdb.Packet
+	packetSetup  mdb.Packet
+	packetAction mdb.Packet
+	packetPoll   mdb.Packet
 }
 
 var (
@@ -42,13 +42,14 @@ func (self *DeviceGeneric) Init(ctx context.Context, mdber mdb.Mdber, address ui
 	self.dev.Mdber = mdber
 	self.ready = msync.NewSignal()
 	self.setupResponse = make([]byte, 0, mdb.PacketMaxLength)
-	self.packetReset = mdb.PacketFromBytes([]byte{self.dev.Address + 0})
-	self.packetSetup = mdb.PacketFromBytes([]byte{self.dev.Address + 1})
-	self.packetPoll = mdb.PacketFromBytes([]byte{self.dev.Address + 3})
+	self.packetReset = mdb.MustPacketFromBytes([]byte{self.dev.Address + 0}, true)
+	self.packetSetup = mdb.MustPacketFromBytes([]byte{self.dev.Address + 1}, true)
+	self.packetPoll = mdb.MustPacketFromBytes([]byte{self.dev.Address + 3}, true)
 
 	if err := self.CommandReset(); err != nil {
 		return err
 	}
+	// FIXME magic number
 	time.Sleep(200 * time.Millisecond)
 	_, err := self.CommandSetup()
 	return err
@@ -77,7 +78,7 @@ func (self *DeviceGeneric) CommandAction(args []byte) error {
 	bs := make([]byte, len(args)+1)
 	bs[0] = self.dev.Address + 2
 	copy(bs[1:], args)
-	request := mdb.PacketFromBytes(bs)
+	request := mdb.MustPacketFromBytes(bs, true)
 	r := self.dev.Tx(request)
 	if r.E != nil {
 		log.Printf("device=%s mdb request=%s err=%v", self.dev.Name, self.packetSetup.Format(), r.E)

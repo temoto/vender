@@ -19,7 +19,7 @@ func testMdberStrings(t testing.TB, r io.Reader, w io.Writer) Mdber {
 	return m
 }
 
-func checkTx(t testing.TB, send, recv *Packet, wexpects, rexpects string) {
+func checkTx(t testing.TB, send, recv Packet, wexpects, rexpects string) {
 	helpers.LogToTest(t)
 	t.Logf("send=%s wexp=%x recv=%s rexp=%x", send.Format(), wexpects, recv.Format(), rexpects)
 	r := bytes.NewReader(recv.Bytes())
@@ -63,7 +63,7 @@ func TestTx1(t *testing.T) {
 	helpers.RandUnix().Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			checkTx(t, PacketFromHex(c.send), PacketFromHex(c.recv), c.wexpect, c.rexpect)
+			checkTx(t, testPacketFromHex(t, c.send), testPacketFromHex(t, c.recv), c.wexpect, c.rexpect)
 		})
 	}
 }

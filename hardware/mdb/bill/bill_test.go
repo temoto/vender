@@ -37,29 +37,30 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *BillValidator {
 			replyFunc(t, reqCh, respCh)
 		}
 	}()
-	bv := &BillValidator{}
+	bv := &BillValidator{dev: mdb.Device{Mdber: mdber}}
+	return bv
+}
+
+func checkPoll(t *testing.T, input string, expected _PR) {
+	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
+		mdb.TestChanTx(t, reqCh, respCh, "33", input)
+	}
+	bv := testMake(t, reply)
 	ctx := state.ContextWithConfig(
 		context.Background(),
 		state.MustReadConfig(t.Fatal, strings.NewReader("")))
-	err := bv.Init(ctx, mdber)
+	err := bv.Init(ctx, bv.dev.Mdber)
 	if err != nil {
 		t.Fatalf("bv.Init err=%v", err)
 	}
 	bv.billNominals[0] = currency.Nominal(5)
 	bv.billNominals[1] = currency.Nominal(10)
 	bv.billNominals[2] = currency.Nominal(20)
-	return bv
-}
 
-func checkPoll(t *testing.T, input string, expected _PR) {
-	reply := func(t testing.TB, reqCh <-chan *mdb.Packet, respCh chan<- *mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "33", input)
-	}
-	bv := testMake(t, reply)
 	cmd := CommandPoll{bv: bv}
-    if err := cmd.Do(context.Background()); err != nil {
+	if err := cmd.Do(context.Background()); err != nil {
 		t.Fatalf("CommandPoll() err=%v", err)
-    }
+	}
 	cmd.R.TestEqual(t, &expected)
 }
 
@@ -96,5 +97,16 @@ func TestBillPoll(t *testing.T) {
 			// t.Parallel()
 			checkPoll(t, c.input, c.expect)
 		})
+	}
+}
+
+// measure allocations by real Doer graph
+func BenchmarkNewIniter(b *testing.B) {
+	b.ReportAllocs()
+	helpers.LogDiscard()
+	bv := &BillValidator{}
+	b.ResetTimer()
+	for i := 1; i <= b.N; i++ {
+		bv.newIniter()
 	}
 }

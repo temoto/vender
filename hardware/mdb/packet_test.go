@@ -4,10 +4,24 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math/rand"
-	"strings"
 	"testing"
 	"time"
 )
+
+func testPacketFromHex(t testing.TB, s string) Packet {
+	p, err := PacketFromHex(s, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+func testPacketFromBytes(t testing.TB, b []byte) Packet {
+	p, err := PacketFromBytes(b, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
 
 func TestPacketFromHexToWire(t *testing.T) {
 	t.Parallel()
@@ -28,10 +42,7 @@ func TestPacketFromHexToWire(t *testing.T) {
 			if _, err := hex.DecodeString(c.expect); err != nil {
 				t.Fatalf("invalid expect=%s err=%s", c.expect, err)
 			}
-			p := PacketFromHex(c.input)
-			if p == nil {
-				t.Fatalf("input=%s parsed nil", c.input)
-			}
+			p := testPacketFromHex(t, c.input)
 			wireRaw := hex.EncodeToString(p.Wire(false))
 			if wireRaw != c.expect {
 				t.Errorf("ffDance=false wire='%s' expected='%s'", wireRaw, c.expect)
@@ -48,12 +59,12 @@ func TestPacketFormat(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name   string
-		p      *Packet
+		p      Packet
 		expect string
 	}{
-		{"empty", new(Packet), ""},
-		{"short", &Packet{l: 3}, "000000"},
-		{"long", PacketFromString("0q9w8e7r6t5"), "30713977 38653772 367435"},
+		{"empty", Packet{}, ""},
+		{"short", Packet{l: 3}, "000000"},
+		{"long", testPacketFromBytes(t, []byte("0q9w8e7r6t5")), "30713977 38653772 367435"},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
@@ -69,20 +80,22 @@ func TestPacketFormat(t *testing.T) {
 func TestInvalidPacketFrom(t *testing.T) {
 	t.Parallel()
 	type Case struct {
-		name string
-		fun  func() *Packet
+		name  string
+		input []byte
+		fun   func([]byte, bool) (Packet, error)
 	}
+	checkHex := func(s []byte, readonly bool) (Packet, error) { return PacketFromHex(string(s), readonly) }
 	cases := []Case{
-		{"hex", func() *Packet { return PacketFromHex("invalid hex") }},
-		{"bytes", func() *Packet { return PacketFromBytes(bytes.Repeat([]byte{'.'}, 41)) }},
-		{"string", func() *Packet { return PacketFromString(strings.Repeat("long", 20)) }},
+		{"hex", []byte("invalid hex"), checkHex},
+		{"bytes", bytes.Repeat([]byte{'.'}, 41), PacketFromBytes},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
+		c := c
 		t.Run(c.name, func(t *testing.T) {
-			p := c.fun()
-			if p != nil {
-				t.Fatalf("expected nil parsed='%x'", p.Wire(false))
+			_, err := c.fun(c.input, true)
+			if err == nil {
+				t.Fatalf("input=%v expected error", err)
 			}
 		})
 	}

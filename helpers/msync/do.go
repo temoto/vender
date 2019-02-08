@@ -111,20 +111,20 @@ type DoFunc struct {
 	F    func(context.Context) error
 }
 
-func (self *DoFunc) Do(ctx context.Context) error { return self.F(ctx) }
+func (self DoFunc) Do(ctx context.Context) error { return self.F(ctx) }
 
 // reflect.ValueOf()+runtime.FuncForPC().Name()
-func (self *DoFunc) String() string { return "Func=" + self.Name }
+func (self DoFunc) String() string { return "Func=" + self.Name }
 
 type DoFunc0 struct {
 	Name string
 	F    func() error
 }
 
-func (self *DoFunc0) Do(ctx context.Context) error { return self.F() }
+func (self DoFunc0) Do(ctx context.Context) error { return self.F() }
 
 // reflect.ValueOf()+runtime.FuncForPC().Name()
-func (self *DoFunc0) String() string { return "Func=" + self.Name }
+func (self DoFunc0) String() string { return "Func=" + self.Name }
 
 type DoSleep struct{ time.Duration }
 
