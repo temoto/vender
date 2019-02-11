@@ -1,26 +1,11 @@
 #!/bin/bash
 base="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-: ${build_rust:=1}
 : ${build_go:=1}
 set -eu
 
 main() {
 	cd $base
 	rm -f $base/coverage.{info,txt} $base/*.gcda $base/*.gcno
-
-	git submodule update --init
-
-	if [[ "$build_rust" != "0" ]] ; then
-		cargo build -vv --release
-		cargo test -vv --release
-		# cargo cov clean --all-crates
-		# cargo cov build -vv --release
-		# cargo cov test -vv --release
-		# cargo cov report
-		# lcov --capture --directory . --base-directory . -o cov1
-		# lcov --extract cov1 "$base/*" -o coverage.info
-		# rm -f cov1
-	fi
 
 	if [[ "$build_go" != "0" ]] ; then
 		go get -t -v ./...

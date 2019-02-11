@@ -3,10 +3,4 @@ coverage:
 
 ignore:
   - "**/*.pb.go"
-  - "**/Cargo.lock"
-  - "**/Cargo.toml"
   - "build/.*"
-  - "cmd/iodin/src/proto/iodin.rs"
-  - "hardware/pigpio-sys/src/bindings-arm-linux.rs"
-  - "qemu/.*"
-  - "target/.*"

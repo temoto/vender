@@ -12,7 +12,7 @@ Status:
 Required for VMC:
 - Works on RaspberryPI. We study OrangePi-{2,3}G-IOT for mobile cell connectivity. Possibly anything with GPIO that runs Go/Linux.
 - MDB signal level inverter and current limiter - required, see files in `hardware/schematic`
-- MDB adapter, takes care of 9bit and timing, we use ATMega328p with `hardware/mega-firmware` It is not mandatory, software option is available.
+- MDB adapter, takes care of 9bit and timing, we use ATMega328p with `hardware/mega-firmware` It is not mandatory, software option is available: https://github.com/temoto/iodin
 
 Supported peripherals:
 - MDB coin acceptor, bill validator

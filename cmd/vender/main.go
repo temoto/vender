@@ -11,7 +11,7 @@ import (
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
-	iodin "github.com/temoto/vender/hardware/iodin-client"
+	iodin "github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/kitchen"
 	"github.com/temoto/vender/head/money"

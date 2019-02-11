@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/hardware/iodin-client"
+	iodin "github.com/temoto/iodin/client/go-iodin"
 )
 
 type iodinUart struct {

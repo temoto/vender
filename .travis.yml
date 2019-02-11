@@ -1,7 +1,6 @@
 sudo: false
 cache:
   apt: true
-  cargo: true
   ccache: true
   go: true
   directories:
@@ -12,28 +11,12 @@ env:
   global:
   - "PATH=$PATH:$HOME/bin"
   - protoc_version=3.1.0
-  # TODO rust_version=1.31.0
-  - rust_version=beta
 language: go
 go: "1.10"
 matrix:
   include:
-    - language: rust
-      rust: beta
-      env: task=iodin
-      # addons:
-      #   apt:
-      #     packages:
-      #     - clang
-      #     - lcov
-      before_install:
-        - ./script/install-protoc $protoc_version
-        # - rustup component add rustfmt-preview
-        # - cargo install --force cargo-cov
-      script: build_go=0 ./all.bash
-      after_success: bash <(curl -s https://codecov.io/bash)
     - env: task=vender
       before_install: ./script/install-protoc $protoc_version
-      script: build_rust=0 ./all.bash
+      script: ./all.bash
       before_cache: rm -f $HOME/.cache/go-build/log.txt
       after_success: bash <(curl -s https://codecov.io/bash)

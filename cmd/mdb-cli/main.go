@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/hardware/iodin-client"
+	iodin "github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/hardware/mdb"
 	mega "github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/helpers"

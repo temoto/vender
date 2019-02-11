@@ -14,8 +14,6 @@
 /build
 /cmd/display-mt16-test/display-mt16-test
 /cmd/i2c-test/i2c-test
-/cmd/iodin/src/proto/iodin.rs
-/cmd/iodin/target
 /cmd/mdb-cli/mdb-cli
 /cmd/mega-cli/mega-cli
 /cmd/vender/vender
@@ -28,8 +26,6 @@
 /mdb-cli
 /mdbr/target
 /mega-cli
-/qemu
-/target
 /vender
 /vender.sublime-*
 _cgo_defun.c
