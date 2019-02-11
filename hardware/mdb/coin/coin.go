@@ -174,7 +174,7 @@ func (self *CoinAcceptor) newIniter() msync.Doer {
 			return nil
 		}}).
 		Append(msync.DoFunc0{F: self.CommandTubeStatus}).
-		Append(msync.DoSleep{DelayNext}).
+		Append(msync.DoSleep{Duration: DelayNext}).
 		Append(msync.DoFunc{F: func(ctx context.Context) error {
 			config := state.GetConfig(ctx)
 			// TODO read enabled nominals from config
@@ -188,7 +188,7 @@ func (self *CoinAcceptor) Restarter() msync.Doer {
 	tx := msync.NewTransaction("coin-restart")
 	tx.Root.
 		Append(self.doReset).
-		Append(msync.DoSleep{DelayNext}).
+		Append(msync.DoSleep{Duration: DelayNext}).
 		Append(self.newIniter())
 	return tx
 }

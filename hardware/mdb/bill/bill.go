@@ -176,7 +176,7 @@ func (self *BillValidator) newIniter() msync.Doer {
 			return nil
 		}}).
 		Append(&CommandStacker{Dev: &self.dev}).
-		Append(msync.DoSleep{DelayNext}).
+		Append(msync.DoSleep{Duration: DelayNext}).
 		Append(self.DoConfigBills)
 	return tx
 }
@@ -197,7 +197,7 @@ func (self *BillValidator) NewRestarter() msync.Doer {
 	tx := msync.NewTransaction(self.dev.Name + "-restart")
 	tx.Root.
 		Append(msync.DoFunc0{F: self.CommandReset}).
-		Append(msync.DoSleep{DelayNext}).
+		Append(msync.DoSleep{Duration: DelayNext}).
 		Append(self.newIniter())
 	return tx
 }
