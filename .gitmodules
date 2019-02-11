@@ -1,3 +1,0 @@
-[submodule "hardware/pigpio"]
-	path = hardware/pigpio
-	url = https://github.com/joan2937/pigpio
