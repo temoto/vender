@@ -56,9 +56,6 @@ type BillValidator struct {
 }
 
 var (
-	packetReset           = mdb.MustPacketFromHex("30", true)
-	packetSetup           = mdb.MustPacketFromHex("31", true)
-	packetPoll            = mdb.MustPacketFromHex("33", true)
 	packetEscrowAccept    = mdb.MustPacketFromHex("3501", true)
 	packetEscrowReject    = mdb.MustPacketFromHex("3500", true)
 	packetStacker         = mdb.MustPacketFromHex("36", true)
@@ -102,12 +99,9 @@ func (self *CommandStacker) String() string {
 	return fmt.Sprintf("STACKER done=%t full=%t count=%d", self.done, self.full, self.count)
 }
 
-func (self *BillValidator) Init(ctx context.Context, mdber mdb.Mdber) error {
+func (self *BillValidator) Init(ctx context.Context) error {
 	// TODO read config
-	self.dev.Address = 0x30
-	self.dev.Name = "billvalidator"
-	self.dev.ByteOrder = binary.BigEndian
-	self.dev.Mdber = mdber
+	self.dev.Init(ctx, 0x30, "billvalidator", binary.BigEndian)
 
 	// warning: hidden dependencies in order of following calls
 	self.DoConfigBills = self.newConfigBills()
@@ -161,8 +155,8 @@ func (self *BillValidator) ReadyChan() <-chan msync.Nothing {
 func (self *BillValidator) newIniter() msync.Doer {
 	tx := msync.NewTransaction(self.dev.Name + "-init")
 	tx.Root.
-		// TODO maybe execute CommandReset?
-		Append(msync.DoFunc0{F: self.CommandSetup}).
+		// TODO maybe execute Reset?
+		Append(msync.DoFunc{F: self.CommandSetup}).
 		Append(msync.DoFunc0{F: func() error {
 			if err := self.CommandExpansionIdentificationOptions(); err != nil {
 				if _, ok := err.(mdb.FeatureNotSupported); ok {
@@ -196,14 +190,10 @@ func (self *BillValidator) newConfigBills() msync.Doer {
 func (self *BillValidator) NewRestarter() msync.Doer {
 	tx := msync.NewTransaction(self.dev.Name + "-restart")
 	tx.Root.
-		Append(msync.DoFunc0{F: self.CommandReset}).
+		Append(self.dev.NewDoReset()).
 		Append(msync.DoSleep{Duration: DelayNext}).
 		Append(self.newIniter())
 	return tx
-}
-
-func (self *BillValidator) CommandReset() error {
-	return self.dev.Tx(packetReset).E
 }
 
 func (self *BillValidator) CommandBillType(accept, escrow uint16) error {
@@ -216,17 +206,15 @@ func (self *BillValidator) CommandBillType(accept, escrow uint16) error {
 	return err
 }
 
-func (self *BillValidator) CommandSetup() error {
+func (self *BillValidator) CommandSetup(ctx context.Context) error {
 	const expectLength = 27
-	r := self.dev.Tx(packetSetup)
-	if r.E != nil {
-		log.Printf("mdb request=%s err=%v", packetSetup.Format(), r.E)
-		return r.E
+	err := self.dev.DoSetup(ctx)
+	if err != nil {
+		return err
 	}
-	log.Printf("setup response=(%d)%s", r.P.Len(), r.P.Format())
-	bs := r.P.Bytes()
+	bs := self.dev.SetupResponse.Bytes()
 	if len(bs) < expectLength {
-		return fmt.Errorf("bill validator SETUP response=%s expected %d bytes", r.P.Format(), expectLength)
+		return fmt.Errorf("bill validator SETUP response=%s expected %d bytes", self.dev.SetupResponse.Format(), expectLength)
 	}
 
 	self.featureLevel = bs[0]
@@ -265,7 +253,7 @@ type CommandPoll struct {
 
 func (self *CommandPoll) Do(ctx context.Context) error {
 	now := time.Now()
-	r := self.bv.dev.Tx(packetPoll)
+	r := self.bv.dev.DoPollSync(ctx)
 	// TODO avoid allocations
 	self.R = money.PollResult{Time: now}
 	if r.E != nil {

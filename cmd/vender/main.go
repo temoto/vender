@@ -85,7 +85,7 @@ func main() {
 		mdber.SetLog(log.Printf)
 	}
 	mdber.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
-	ctx = context.WithValue(ctx, "run/mdber", mdber)
+	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
 
 	if err := helpers.FoldErrors(lifecycle.OnStart.Do(ctx)); err != nil {
 		log.Fatal(err)

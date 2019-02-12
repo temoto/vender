@@ -18,7 +18,7 @@ import (
 type _PR = money.PollResult
 type _PI = money.PollItem
 
-func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *CoinAcceptor {
+func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t)
 	go func() {
 		defer close(respCh)
@@ -44,28 +44,32 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *CoinAcceptor {
 			replyFunc(t, reqCh, respCh)
 		}
 	}()
-	c := &CoinAcceptor{}
-	ctx := state.ContextWithConfig(
-		context.Background(),
-		state.MustReadConfig(t.Fatal, strings.NewReader("")))
-	err := c.Init(ctx, mdber)
+	ctx := context.Background()
+	ctx = state.ContextWithConfig(ctx, state.MustReadConfig(t.Fatal, strings.NewReader("")))
+	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
+	return ctx
+}
+
+func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
+	ca := &CoinAcceptor{}
+	err := ca.Init(ctx)
 	if err != nil {
-		t.Fatalf("c.Init err=%v", err)
+		t.Fatalf("ca.Init err=%v", err)
 	}
-	c.coinTypeCredit[0] = currency.Nominal(1)
-	c.coinTypeCredit[1] = currency.Nominal(2)
-	c.coinTypeCredit[2] = currency.Nominal(5)
-	c.coinTypeCredit[3] = currency.Nominal(10)
-	return c
+	ca.coinTypeCredit[0] = currency.Nominal(1)
+	ca.coinTypeCredit[1] = currency.Nominal(2)
+	ca.coinTypeCredit[2] = currency.Nominal(5)
+	ca.coinTypeCredit[3] = currency.Nominal(10)
+	return ca
 }
 
 func checkPoll(t testing.TB, input string, expected _PR) {
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "0b", input)
 	}
-	ca := testMake(t, reply)
+	ca := newDevice(t, mockContext(t, reply))
 	pr := money.NewPollResult(mdb.PacketMaxLength)
-	if err := ca.CommandPoll(pr); err != nil {
+	if err := ca.CommandPoll(context.Background(), pr); err != nil {
 		t.Fatalf("CommandPoll() err=%v", err)
 	}
 	pr.TestEqual(t, &expected)
@@ -119,7 +123,7 @@ func checkDiag(t testing.TB, input string, expected DiagResult) {
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "0f05", input)
 	}
-	ca := testMake(t, reply)
+	ca := newDevice(t, mockContext(t, reply))
 	dr := new(DiagResult)
 	err := ca.CommandExpansionSendDiagStatus(dr)
 	if err != nil {
@@ -179,12 +183,12 @@ func BenchmarkCoinPoll(b *testing.B) {
 					mdb.TestChanTx(t, reqCh, respCh, "0b", c.input)
 				}
 			}
-			ca := testMake(b, reply)
+			ca := newDevice(b, mockContext(b, reply))
 			b.SetBytes(int64(len(c.input) / 2))
 			b.ResetTimer()
 			pr := money.NewPollResult(mdb.PacketMaxLength)
 			for i := 1; i <= b.N; i++ {
-				ca.CommandPoll(pr)
+				ca.CommandPoll(context.Background(), pr)
 			}
 		})
 	}

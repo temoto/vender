@@ -65,10 +65,7 @@ type CoinAcceptor struct {
 }
 
 var (
-	packetReset      = mdb.MustPacketFromHex("08", true)
-	packetSetup      = mdb.MustPacketFromHex("09", true)
 	packetTubeStatus = mdb.MustPacketFromHex("0a", true)
-	packetPoll       = mdb.MustPacketFromHex("0b", true)
 	packetExpIdent   = mdb.MustPacketFromHex("0f00", true)
 	packetDiagStatus = mdb.MustPacketFromHex("0f05", true)
 )
@@ -81,14 +78,11 @@ var (
 	ErrSlugs         = fmt.Errorf("Slugs")
 )
 
-func (self *CoinAcceptor) Init(ctx context.Context, mdber mdb.Mdber) error {
+func (self *CoinAcceptor) Init(ctx context.Context) error {
 	// TODO read config
-	self.dev.Address = 0x08
-	self.dev.Name = "coinacceptor"
-	self.dev.ByteOrder = binary.BigEndian
-	self.dev.Mdber = mdber
+	self.dev.Init(ctx, 0x08, "coinacceptor", binary.BigEndian)
 
-	self.doReset = self.dev.NewDoTxNR(packetReset)
+	self.doReset = self.dev.NewDoReset()
 	self.doSetup = self.newSetuper()
 
 	self.coinTypeCredit = make([]currency.Nominal, coinTypeCount)
@@ -120,7 +114,7 @@ func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- mon
 		delay := DelayNext
 		// TODO to reuse single PollResult safely, must clone .Items before sending to chan
 		pr := money.NewPollResult(mdb.PacketMaxLength)
-		if err := self.CommandPoll(pr); err != nil {
+		if err := self.CommandPoll(ctx, pr); err != nil {
 			log.Printf("coin.Run CommandPoll err=%v", err)
 			delay = DelayErr
 		} else {
@@ -194,16 +188,15 @@ func (self *CoinAcceptor) Restarter() msync.Doer {
 }
 
 func (self *CoinAcceptor) newSetuper() msync.Doer {
-	return msync.DoFunc0{F: func() error {
+	return msync.DoFunc{F: func(ctx context.Context) error {
 		const expectLengthMin = 7
-		r := self.dev.Tx(packetSetup)
-		if r.E != nil {
-			return errors.Annotate(r.E, "hardware/mdb/coin SETUP")
+		err := self.dev.DoSetup(ctx)
+		if err != nil {
+			return errors.Annotate(err, "hardware/mdb/coin SETUP")
 		}
-		log.Printf("setup response=(%d)%s", r.P.Len(), r.P.Format())
-		bs := r.P.Bytes()
+		bs := self.dev.SetupResponse.Bytes()
 		if len(bs) < expectLengthMin {
-			return fmt.Errorf("hardware/mdb/coin SETUP response=%s expected >= %d bytes", r.P.Format(), expectLengthMin)
+			return fmt.Errorf("hardware/mdb/coin SETUP response=%s expected >= %d bytes", self.dev.SetupResponse.Format(), expectLengthMin)
 		}
 		self.featureLevel = bs[0]
 		scalingFactor := bs[3]
@@ -244,11 +237,11 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 	return nil
 }
 
-func (self *CoinAcceptor) CommandPoll(result *money.PollResult) error {
+func (self *CoinAcceptor) CommandPoll(ctx context.Context, result *money.PollResult) error {
 	result.Error = nil
 	result.Items = result.Items[:0]
 	result.Time = time.Now()
-	r := self.dev.Tx(packetPoll)
+	r := self.dev.DoPollSync(ctx)
 	if r.E != nil {
 		result.Error = r.E
 		return errors.Annotate(r.E, "hardware/mdb/coin POLL")

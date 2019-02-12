@@ -6,7 +6,6 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
-	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/mdb/bill"
 	"github.com/temoto/vender/hardware/money"
 )
@@ -18,9 +17,9 @@ type BillState struct {
 	state string
 }
 
-func (self *BillState) Init(ctx context.Context, parent *MoneySystem, m mdb.Mdber) error {
+func (self *BillState) Init(ctx context.Context, parent *MoneySystem) error {
 	log.Printf("head/money/bill init")
-	if err := self.hw.Init(ctx, m); err != nil {
+	if err := self.hw.Init(ctx); err != nil {
 		return err
 	}
 	self.Start(ctx, parent)

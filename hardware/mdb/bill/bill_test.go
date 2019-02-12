@@ -15,7 +15,7 @@ import (
 type _PR = money.PollResult
 type _PI = money.PollItem
 
-func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *BillValidator {
+func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t)
 	go func() {
 		defer close(respCh)
@@ -37,19 +37,19 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) *BillValidator {
 			replyFunc(t, reqCh, respCh)
 		}
 	}()
-	bv := &BillValidator{dev: mdb.Device{Mdber: mdber}}
-	return bv
+	ctx := context.Background()
+	ctx = state.ContextWithConfig(ctx, state.MustReadConfig(t.Fatal, strings.NewReader("")))
+	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
+	return ctx
 }
 
 func checkPoll(t *testing.T, input string, expected _PR) {
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "33", input)
 	}
-	bv := testMake(t, reply)
-	ctx := state.ContextWithConfig(
-		context.Background(),
-		state.MustReadConfig(t.Fatal, strings.NewReader("")))
-	err := bv.Init(ctx, bv.dev.Mdber)
+	ctx := testMake(t, reply)
+	bv := new(BillValidator)
+	err := bv.Init(ctx)
 	if err != nil {
 		t.Fatalf("bv.Init err=%v", err)
 	}

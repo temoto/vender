@@ -11,6 +11,8 @@ import (
 	"github.com/temoto/vender/helpers"
 )
 
+const ContextKey = "run/mdber"
+
 type Uarter interface {
 	Break(d time.Duration) error
 	Close() error

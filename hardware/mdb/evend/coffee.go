@@ -3,7 +3,6 @@ package evend
 import (
 	"context"
 
-	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers/msync"
 )
 
@@ -11,10 +10,10 @@ type DeviceCoffee struct {
 	g DeviceGeneric
 }
 
-func (self *DeviceCoffee) Init(ctx context.Context, mdber mdb.Mdber) error {
+func (self *DeviceCoffee) Init(ctx context.Context) error {
 	// TODO read config
 	self.g = DeviceGeneric{}
-	return self.g.Init(ctx, mdber, 0xe8, "coffee")
+	return self.g.Init(ctx, 0xe8, "coffee")
 }
 
 func (self *DeviceCoffee) ReadyChan() <-chan msync.Nothing {

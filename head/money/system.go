@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/hardware/mdb"
 )
 
 type MoneySystem struct {
@@ -26,10 +25,9 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 		panic("double Start()")
 	}
 
-	m := mdb.ContextValueMdber(ctx, "run/mdber")
 	self.events = make(chan Event, 2)
 	// TODO determine if combination of errors is fatal for money subsystem
-	if err := self.bs.Init(ctx, self, m); err != nil {
+	if err := self.bs.Init(ctx, self); err != nil {
 		log.Printf("head/money Start bill error=%v", errors.ErrorStack(err))
 	}
 	// if err := self.cs.Init(ctx, self, m); err != nil {

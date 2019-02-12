@@ -7,7 +7,6 @@ import (
 
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
-	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/mdb/coin"
 	"github.com/temoto/vender/hardware/money"
 )
@@ -18,10 +17,10 @@ type CoinState struct {
 	credit currency.NominalGroup
 }
 
-func (self *CoinState) Init(ctx context.Context, parent *MoneySystem, mdber mdb.Mdber) error {
+func (self *CoinState) Init(ctx context.Context, parent *MoneySystem) error {
 	log.Printf("head/money/coin/Init begin")
 	self.alive = alive.NewAlive()
-	if err := self.hw.Init(ctx, mdber); err != nil {
+	if err := self.hw.Init(ctx); err != nil {
 		return err
 	}
 	self.credit.SetValid(self.hw.SupportedNominals())
