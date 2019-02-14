@@ -5,8 +5,17 @@ import (
 	"encoding/binary"
 	"log"
 	"sync"
+	"time"
 
+	"github.com/temoto/alive"
 	"github.com/temoto/vender/helpers/msync"
+)
+
+const (
+	DefaultDelayErr      = 500 * time.Millisecond
+	DefaultDelayNext     = 200 * time.Millisecond
+	DefaultDelayIdle     = 700 * time.Millisecond
+	DefaultIdleThreshold = 30 * time.Second
 )
 
 type Device struct {
@@ -14,12 +23,16 @@ type Device struct {
 	mdber  Mdber
 	pollCh chan Packet
 
-	Address     uint8
-	Name        string
-	ByteOrder   binary.ByteOrder
-	PacketReset Packet
-	PacketSetup Packet
-	PacketPoll  Packet
+	Address       uint8
+	Name          string
+	ByteOrder     binary.ByteOrder
+	DelayNext     time.Duration
+	DelayErr      time.Duration
+	DelayIdle     time.Duration
+	IdleThreshold time.Duration
+	PacketReset   Packet
+	PacketSetup   Packet
+	PacketPoll    Packet
 
 	SetupResponse Packet
 }
@@ -35,6 +48,10 @@ func (self *Device) Init(ctx context.Context, addr uint8, name string, byteOrder
 	self.Address = addr
 	self.Name = name
 	self.ByteOrder = byteOrder
+	self.DelayNext = DefaultDelayNext
+	self.DelayErr = DefaultDelayErr
+	self.DelayIdle = DefaultDelayIdle
+	self.IdleThreshold = DefaultIdleThreshold
 	self.SetupResponse = Packet{}
 	self.PacketReset = MustPacketFromBytes([]byte{self.Address + 0}, true)
 	self.PacketSetup = MustPacketFromBytes([]byte{self.Address + 1}, true)
@@ -74,34 +91,57 @@ func (self *Device) DoSetup(ctx context.Context) error {
 	return nil
 }
 
+type PollParseFunc func(PacketError)
+
+func (self *Device) PollLoop(ctx context.Context, a *alive.Alive, fun PollParseFunc) {
+	lastActive := time.Now()
+	stopch := a.StopChan()
+	delay := self.DelayNext
+	delayTimer := time.NewTimer(delay)
+	delayTimer.Stop()
+	r := PacketError{}
+
+	for a.IsRunning() {
+		r = self.DoPollSync(ctx)
+		fun(r)
+		if r.E != nil {
+			delay = self.DelayErr
+		}
+
+		now := time.Now()
+		// FIXME implicitly encodes "empty POLL result = inactive"
+		// which may not be true for some devices
+		// TODO better way to learn active/idle from parser func
+		if r.P.Len() > 0 {
+			lastActive = now
+		} else {
+			if r.E == nil && now.Sub(lastActive) > self.IdleThreshold {
+				delay = self.DelayIdle
+			}
+		}
+		if !delayTimer.Stop() {
+			<-delayTimer.C
+		}
+		delayTimer.Reset(delay)
+		select {
+		case <-delayTimer.C:
+		case <-stopch:
+			return
+		}
+	}
+}
+
 func (self *Device) DoPollSync(ctx context.Context) PacketError {
 	// self.lk.Lock()
 	// defer self.lk.Unlock()
 	r := self.Tx(self.PacketPoll)
+	if r.E != nil {
+		log.Printf("device=%s POLL err=%v", self.Name, r.E)
+	} else {
+		log.Printf("device=%s POLL=(%d)%s", self.Name, r.P.Len(), r.P.Format())
+	}
 	return r
 }
-
-// Iff DoPoll() returns nil then you can read result from self.PollChan()
-func (self *Device) DoPoll(ctx context.Context) error {
-	r := self.DoPollSync(ctx)
-	if r.E != nil {
-		// TODO
-		return r.E
-	}
-	select {
-	case self.pollCh <- r.P:
-	default:
-		log.Printf("CRITICAL mdb.DoPoll chan overflow, read old value first, response=%s", r.P.Format())
-	}
-	return nil
-}
-func (self *Device) PollChan() <-chan Packet { return self.pollCh }
-
-// func (self *Device) DebugDo(parent *msync.Node, request Packet) PacketError {
-// 	d, rch := self.NewDoTx(request)
-// 	parent.Append(d)
-// 	return <-rch
-// }
 
 type PacketError struct {
 	E error

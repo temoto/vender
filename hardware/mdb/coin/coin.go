@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
@@ -18,11 +17,6 @@ import (
 
 const (
 	coinTypeCount = 16
-
-	DelayErr      = 500 * time.Millisecond
-	DelayNext     = 200 * time.Millisecond
-	DelayIdle     = 700 * time.Millisecond
-	IdleThreshold = 30 * time.Second
 )
 
 //go:generate stringer -type=CoinRouting -trimprefix=Routing
@@ -103,43 +97,35 @@ func (self *CoinAcceptor) SupportedNominals() []currency.Nominal {
 	return ns
 }
 
-func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
-	defer a.Done()
+func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, fun func(money.PollItem)) {
+	self.dev.PollLoop(ctx, a, self.newPoller(fun))
+}
 
-	lastActive := time.Now()
-	stopch := a.StopChan()
-	delayTimer := time.NewTimer(DelayNext)
-	delayTimer.Stop()
-	for a.IsRunning() {
-		delay := DelayNext
-		// TODO to reuse single PollResult safely, must clone .Items before sending to chan
-		pr := money.NewPollResult(mdb.PacketMaxLength)
-		if err := self.CommandPoll(ctx, pr); err != nil {
-			log.Printf("coin.Run CommandPoll err=%v", err)
-			delay = DelayErr
-		} else {
-			select {
-			case ch <- *pr:
-			case <-stopch:
-				return
-			}
-		}
-		now := time.Now()
-		if len(pr.Items) > 0 {
-			lastActive = now
-		} else {
-			if delay == DelayNext && now.Sub(lastActive) > IdleThreshold {
-				delay = DelayIdle
-			}
-		}
-		if !delayTimer.Stop() {
-			<-delayTimer.C
-		}
-		delayTimer.Reset(delay)
-		select {
-		case <-delayTimer.C:
-		case <-stopch:
+func (self *CoinAcceptor) newPoller(fun func(money.PollItem)) mdb.PollParseFunc {
+	return func(r mdb.PacketError) {
+		if r.E != nil {
 			return
+		}
+
+		bs := r.P.Bytes()
+		if len(bs) == 0 {
+			self.ready.Set()
+			return
+		}
+
+		pi := money.PollItem{}
+		skip := false
+		for i, b := range bs {
+			if skip {
+				skip = false
+				continue
+			}
+			b2 := byte(0)
+			if i+1 < len(bs) {
+				b2 = bs[i+1]
+			}
+			pi, skip = self.parsePollItem(b, b2)
+			fun(pi)
 		}
 	}
 }
@@ -168,7 +154,7 @@ func (self *CoinAcceptor) newIniter() msync.Doer {
 			return nil
 		}}).
 		Append(msync.DoFunc0{F: self.CommandTubeStatus}).
-		Append(msync.DoSleep{Duration: DelayNext}).
+		Append(msync.DoSleep{Duration: self.dev.DelayNext}).
 		Append(msync.DoFunc{F: func(ctx context.Context) error {
 			config := state.GetConfig(ctx)
 			// TODO read enabled nominals from config
@@ -182,7 +168,7 @@ func (self *CoinAcceptor) Restarter() msync.Doer {
 	tx := msync.NewTransaction("coin-restart")
 	tx.Root.
 		Append(self.doReset).
-		Append(msync.DoSleep{Duration: DelayNext}).
+		Append(msync.DoSleep{Duration: self.dev.DelayNext}).
 		Append(self.newIniter())
 	return tx
 }
@@ -234,41 +220,6 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 	// TODO use full,counts
 	_ = full
 	_ = counts
-	return nil
-}
-
-func (self *CoinAcceptor) CommandPoll(ctx context.Context, result *money.PollResult) error {
-	result.Error = nil
-	result.Items = result.Items[:0]
-	result.Time = time.Now()
-	r := self.dev.DoPollSync(ctx)
-	if r.E != nil {
-		result.Error = r.E
-		return errors.Annotate(r.E, "hardware/mdb/coin POLL")
-	}
-	bs := r.P.Bytes()
-	if len(bs) == 0 {
-		self.ready.Set()
-		return nil
-	}
-	log.Printf("poll response=%s", r.P.Format())
-	pi := money.PollItem{}
-	skip := false
-	for i, b := range bs {
-		if skip {
-			skip = false
-			continue
-		}
-		b2 := byte(0)
-		if i+1 < len(bs) {
-			b2 = bs[i+1]
-		}
-		pi, skip = self.parsePollItem(b, b2)
-		result.Items = append(result.Items, pi)
-	}
-	if result.Ready() {
-		self.ready.Set()
-	}
 	return nil
 }
 

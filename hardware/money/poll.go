@@ -3,48 +3,9 @@ package money
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/temoto/vender/currency"
 )
-
-type PollResult struct {
-	Time  time.Time
-	Error error
-	Items []PollItem
-}
-
-func NewPollResult(itemsCap uint) *PollResult {
-	return &PollResult{
-		Items: make([]PollItem, 0, itemsCap),
-	}
-}
-
-func (self *PollResult) Ready() bool {
-	if self.Error != nil {
-		return false
-	}
-	return !self.HasStatus(StatusBusy)
-}
-
-func (self *PollResult) HasStatus(s PollItemStatus) bool {
-	if len(self.Items) == 0 {
-		return false
-	}
-	for _, i := range self.Items {
-		if i.Status == s {
-			return true
-		}
-	}
-	return false
-}
-
-func (self *PollResult) SingleStatus() PollItemStatus {
-	if len(self.Items) != 1 {
-		return statusZero
-	}
-	return self.Items[0].Status
-}
 
 //go:generate stringer -type=PollItemStatus -trimprefix=Status
 type PollItemStatus byte
@@ -65,6 +26,8 @@ const (
 )
 
 type PollItem struct {
+	// TODO avoid time.Time for easy GC (contains pointer)
+	// Time        time.Time
 	Status      PollItemStatus
 	Error       error
 	DataNominal currency.Nominal
@@ -91,41 +54,38 @@ func (self *PollItem) Amount() currency.Amount {
 }
 
 // TODO generate this code
-func (a *PollResult) TestEqual(t testing.TB, b *PollResult) {
-	if a.Error != b.Error {
-		t.Errorf("PoolResult.Error a=%v b=%v", a.Error, b.Error)
+func TestPollItemsEqual(t testing.TB, as, bs []PollItem) {
+	longest := len(as)
+	if len(bs) > longest {
+		longest = len(bs)
 	}
-	if !a.Time.IsZero() && !b.Time.IsZero() && !a.Time.Equal(b.Time) {
-		t.Errorf("PoolResult.Time a=%v b=%v", a.Time, b.Time)
-	}
-	longest := len(a.Items)
-	if len(b.Items) > longest {
-		longest = len(b.Items)
-	}
-	if len(a.Items) != len(b.Items) {
-		t.Errorf("PoolResult.Items len a=%d b=%d", len(a.Items), len(b.Items))
+	if len(as) != len(bs) {
+		t.Errorf("PollItems len a=%d b=%d", len(as), len(bs))
 	}
 	for i := 0; i < longest; i++ {
 		var ia *PollItem
 		var ib *PollItem
-		ias, ibs := "-", "-"
-		if i < len(a.Items) {
-			ia = &a.Items[i]
-			ias = fmt.Sprintf("%s", ia)
+		if i < len(as) {
+			ia = &as[i]
 		}
-		if i < len(b.Items) {
-			ib = &b.Items[i]
-			ibs = fmt.Sprintf("%s", ib)
+		if i < len(bs) {
+			ib = &bs[i]
 		}
-		switch {
-		case ia == nil && ib == nil: // OK
-		case ia != nil && ib != nil && *ia == *ib: // OK
-		case ia != ib: // one side nil
-			fallthrough
-		case ia != nil && ib != nil && *ia != *ib: // both not nil, different values
-			t.Errorf("PoolResult.Items[%d] a=%s b=%s", i, ias, ibs)
-		default:
-			t.Fatalf("Code error, invalid condition check: PoolResult.Items[%d] a=%s b=%s", i, ias, ibs)
-		}
+		ia.TestEqual(t, ib)
+	}
+}
+func (a *PollItem) TestEqual(t testing.TB, b *PollItem) {
+	if a.Error != b.Error {
+		t.Errorf("PollItem.Error a=%v b=%v", a.Error, b.Error)
+	}
+	switch {
+	case a == nil && b == nil: // OK
+	case a != nil && b != nil && *a == *b: // OK
+	case a != b: // one side nil
+		fallthrough
+	case a != nil && b != nil && *a != *b: // both not nil, different values
+		t.Errorf("PollItem a=%s b=%s", a, b)
+	default:
+		t.Fatalf("code error, invalid condition check: PoolItem a=%s b=%s", a, b)
 	}
 }

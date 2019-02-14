@@ -12,7 +12,6 @@ import (
 	"github.com/temoto/vender/helpers"
 )
 
-type _PR = money.PollResult
 type _PI = money.PollItem
 
 func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
@@ -43,7 +42,7 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 	return ctx
 }
 
-func checkPoll(t *testing.T, input string, expected _PR) {
+func checkPoll(t *testing.T, input string, expected []_PI) {
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "33", input)
 	}
@@ -51,17 +50,19 @@ func checkPoll(t *testing.T, input string, expected _PR) {
 	bv := new(BillValidator)
 	err := bv.Init(ctx)
 	if err != nil {
-		t.Fatalf("bv.Init err=%v", err)
+		t.Fatalf("POLL err=%v", err)
 	}
 	bv.billNominals[0] = currency.Nominal(5)
 	bv.billNominals[1] = currency.Nominal(10)
 	bv.billNominals[2] = currency.Nominal(20)
 
-	cmd := CommandPoll{bv: bv}
-	if err := cmd.Do(context.Background()); err != nil {
-		t.Fatalf("CommandPoll() err=%v", err)
+	pis := make([]_PI, 0, len(input)/2)
+	r := bv.dev.DoPollSync(ctx)
+	if r.E != nil {
+		t.Fatalf("POLL err=%v", r.E)
 	}
-	cmd.R.TestEqual(t, &expected)
+	bv.newPoller(func(pi money.PollItem) { pis = append(pis, pi) })(r)
+	money.TestPollItemsEqual(t, pis, expected)
 }
 
 func TestBillPoll(t *testing.T) {
@@ -70,29 +71,25 @@ func TestBillPoll(t *testing.T) {
 	type Case struct {
 		name   string
 		input  string
-		expect money.PollResult
+		expect []_PI
 	}
 	cases := []Case{
-		Case{"empty", "", money.PollResult{}},
-		Case{"disabled", "09", money.PollResult{
-			Items: []money.PollItem{money.PollItem{Status: money.StatusDisabled}},
+		Case{"empty", "", []_PI{}},
+		Case{"disabled", "09", []_PI{
+			_PI{Status: money.StatusDisabled},
 		}},
-		Case{"reset,disabled", "0609", money.PollResult{
-			Items: []money.PollItem{
-				money.PollItem{Status: money.StatusWasReset},
-				money.PollItem{Status: money.StatusDisabled},
-			},
+		Case{"reset,disabled", "0609", []_PI{
+			_PI{Status: money.StatusWasReset},
+			_PI{Status: money.StatusDisabled},
 		}},
-		Case{"escrow", "9209", money.PollResult{
-			Items: []money.PollItem{
-				money.PollItem{Status: money.StatusEscrow, DataNominal: 20},
-				money.PollItem{Status: money.StatusDisabled},
-			},
+		Case{"escrow", "9209", []_PI{
+			_PI{Status: money.StatusEscrow, DataNominal: 20},
+			_PI{Status: money.StatusDisabled},
 		}},
 	}
 	helpers.RandUnix().Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
-		// c := c
+		c := c
 		t.Run(c.name, func(t *testing.T) {
 			// t.Parallel()
 			checkPoll(t, c.input, c.expect)

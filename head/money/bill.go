@@ -43,15 +43,8 @@ func (self *BillState) Start(ctx context.Context, parent *MoneySystem) {
 		return
 	}
 
-	pch := make(chan money.PollResult, 2)
 	self.alive = alive.NewAlive()
-	self.alive.Add(1)
-	go self.hw.Run(ctx, self.alive, pch)
-	go self.pollResultLoop(ctx, parent, pch)
-	go func() {
-		<-self.alive.WaitChan()
-		close(pch)
-	}()
+	go self.hw.Run(ctx, self.alive, func(pi money.PollItem) { self.handlePollItem(ctx, parent, pi) })
 	self.state = "running"
 }
 
@@ -71,22 +64,19 @@ func (self *BillState) Stop(ctx context.Context) {
 	self.state = "stopped"
 }
 
-func (self *BillState) pollResultLoop(ctx context.Context, m *MoneySystem, pch <-chan money.PollResult) {
+func (self *BillState) handlePollItem(ctx context.Context, m *MoneySystem, pi money.PollItem) {
 	const logPrefix = "head/money/bill"
-	h := func(m *MoneySystem, pr *money.PollResult, pi money.PollItem) bool {
-		switch pi.Status {
-		case money.StatusRejected:
-		case money.StatusDisabled:
-			// TODO telemetry
-		case money.StatusEscrow:
-			// TODO self.hw.EscrowAccept / Reject
-		case money.StatusWasReset:
-			self.hw.DoIniter.Do(ctx)
-		case money.StatusBusy:
-		default:
-			return false
-		}
-		return true
+
+	switch pi.Status {
+	case money.StatusRejected:
+	case money.StatusDisabled:
+		// TODO telemetry
+	case money.StatusEscrow:
+		// TODO self.hw.EscrowAccept / Reject
+	case money.StatusWasReset:
+		self.hw.DoIniter.Do(ctx)
+	case money.StatusBusy:
+	default:
+		handleGenericPollItem(ctx, pi, logPrefix)
 	}
-	genericPollResultLoop(ctx, m, pch, h, self.hw.NewRestarter(), logPrefix)
 }

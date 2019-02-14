@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
@@ -19,11 +18,6 @@ import (
 
 const (
 	TypeCount = 16
-
-	DelayErr      = 500 * time.Millisecond
-	DelayNext     = 200 * time.Millisecond
-	DelayIdle     = 700 * time.Millisecond
-	IdleThreshold = 30 * time.Second
 )
 
 //go:generate stringer -type=Features -trimprefix=Feature
@@ -112,38 +106,24 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	return err
 }
 
-func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, ch chan<- money.PollResult) {
-	defer a.Done()
-	cmd := &CommandPoll{bv: self}
-	defer func() { cmd.bv = nil; cmd = nil }() // help GC, redundant?
+func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, fun func(money.PollItem)) {
+	self.dev.PollLoop(ctx, a, self.newPoller(fun))
+}
 
-	lastActive := time.Now()
-	stopch := a.StopChan()
-	for a.IsRunning() {
-		// FIXME maybe use cmd.R.Delay
-		delay := DelayNext
-		if err := cmd.Do(ctx); err != nil {
-			delay = DelayErr
-			log.Printf("billvalidator/Run/POLL err=%v", err)
-		} else {
-			select {
-			case ch <- cmd.R:
-			case <-stopch:
-				return
-			}
-		}
-		now := time.Now()
-		if len(cmd.R.Items) > 0 {
-			lastActive = now
-		} else {
-			if delay == DelayNext && now.Sub(lastActive) > IdleThreshold {
-				delay = DelayIdle
-			}
-		}
-		select {
-		case <-time.After(delay):
-		case <-stopch:
+func (self *BillValidator) newPoller(fun func(money.PollItem)) mdb.PollParseFunc {
+	return func(r mdb.PacketError) {
+		if r.E != nil {
 			return
+		}
+
+		bs := r.P.Bytes()
+		if len(bs) == 0 {
+			self.ready.Set()
+			return
+		}
+		for _, b := range bs {
+			pi := self.parsePollItem(b)
+			fun(pi)
 		}
 	}
 }
@@ -170,7 +150,7 @@ func (self *BillValidator) newIniter() msync.Doer {
 			return nil
 		}}).
 		Append(&CommandStacker{Dev: &self.dev}).
-		Append(msync.DoSleep{Duration: DelayNext}).
+		Append(msync.DoSleep{Duration: self.dev.DelayNext}).
 		Append(self.DoConfigBills)
 	return tx
 }
@@ -191,7 +171,7 @@ func (self *BillValidator) NewRestarter() msync.Doer {
 	tx := msync.NewTransaction(self.dev.Name + "-restart")
 	tx.Root.
 		Append(self.dev.NewDoReset()).
-		Append(msync.DoSleep{Duration: DelayNext}).
+		Append(msync.DoSleep{Duration: self.dev.DelayNext}).
 		Append(self.newIniter())
 	return tx
 }
@@ -243,34 +223,6 @@ func (self *BillValidator) CommandSetup(ctx context.Context) error {
 	log.Printf("Bill Security Levels: %016b", billSecurityLevels)
 	log.Printf("Escrow/No Escrow: %t", self.escrowCap)
 	log.Printf("Bill Type Credit: %x %#v", bs[11:], self.billNominals)
-	return nil
-}
-
-type CommandPoll struct {
-	bv *BillValidator
-	R  money.PollResult
-}
-
-func (self *CommandPoll) Do(ctx context.Context) error {
-	now := time.Now()
-	r := self.bv.dev.DoPollSync(ctx)
-	// TODO avoid allocations
-	self.R = money.PollResult{Time: now}
-	if r.E != nil {
-		self.R.Error = r.E
-		return r.E
-	}
-	bs := r.P.Bytes()
-	if len(bs) == 0 {
-		// FIXME self.ready.Set()
-		return nil
-	}
-	// TODO avoid allocations
-	self.R.Items = make([]money.PollItem, len(bs))
-	// log.Printf("poll response=%s", response.Format())
-	for i, b := range bs {
-		self.R.Items[i] = self.bv.parsePollItem(b)
-	}
 	return nil
 }
 

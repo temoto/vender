@@ -15,7 +15,6 @@ import (
 	"github.com/temoto/vender/helpers"
 )
 
-type _PR = money.PollResult
 type _PI = money.PollItem
 
 func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
@@ -63,16 +62,18 @@ func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
 	return ca
 }
 
-func checkPoll(t testing.TB, input string, expected _PR) {
+func checkPoll(t testing.TB, input string, expected []_PI) {
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "0b", input)
 	}
 	ca := newDevice(t, mockContext(t, reply))
-	pr := money.NewPollResult(mdb.PacketMaxLength)
-	if err := ca.CommandPoll(context.Background(), pr); err != nil {
-		t.Fatalf("CommandPoll() err=%v", err)
+	r := ca.dev.DoPollSync(context.Background())
+	if r.E != nil {
+		t.Fatalf("POLL err=%v", r.E)
 	}
-	pr.TestEqual(t, &expected)
+	pis := make([]_PI, 0, len(input)/2)
+	ca.newPoller(func(pi money.PollItem) { pis = append(pis, pi) })(r)
+	money.TestPollItemsEqual(t, pis, expected)
 }
 
 func TestCoinPoll(t *testing.T) {
@@ -81,33 +82,21 @@ func TestCoinPoll(t *testing.T) {
 	type Case struct {
 		name   string
 		input  string
-		expect _PR
+		expect []_PI
 	}
 	cases := []Case{
-		Case{"empty", "", _PR{}},
-		Case{"reset", "0b", _PR{
-			Items: []_PI{_PI{Status: money.StatusWasReset}},
-		}},
-		Case{"slugs", "21", _PR{
-			Items: []_PI{_PI{Status: money.StatusInfo, Error: ErrSlugs, DataCount: 1}},
-		}},
-		Case{"deposited-cashbox", "4109", _PR{
-			Items: []_PI{_PI{
-				Status:      money.StatusCredit,
-				DataNominal: currency.Nominal(2),
-				DataCount:   1,
-				DataCashbox: true,
-			}},
-		}},
-		Case{"deposited-tube", "521e", _PR{
-			Items: []_PI{_PI{Status: money.StatusCredit, DataNominal: currency.Nominal(5), DataCount: 1}},
-		}},
-		Case{"deposited-reject", "7300", _PR{
-			Items: []_PI{_PI{Status: money.StatusRejected, DataNominal: currency.Nominal(10), DataCount: 1}},
-		}},
-		Case{"dispensed", "9251", _PR{
-			Items: []_PI{_PI{Status: money.StatusDispensed, DataNominal: currency.Nominal(5), DataCount: 1}},
-		}},
+		Case{"empty", "", []_PI{}},
+		Case{"reset", "0b", []_PI{_PI{Status: money.StatusWasReset}}},
+		Case{"slugs", "21", []_PI{_PI{Status: money.StatusInfo, Error: ErrSlugs, DataCount: 1}}},
+		Case{"deposited-cashbox", "4109", []_PI{_PI{
+			Status:      money.StatusCredit,
+			DataNominal: currency.Nominal(2),
+			DataCount:   1,
+			DataCashbox: true,
+		}}},
+		Case{"deposited-tube", "521e", []_PI{_PI{Status: money.StatusCredit, DataNominal: currency.Nominal(5), DataCount: 1}}},
+		Case{"deposited-reject", "7300", []_PI{_PI{Status: money.StatusRejected, DataNominal: currency.Nominal(10), DataCount: 1}}},
+		Case{"dispensed", "9251", []_PI{_PI{Status: money.StatusDispensed, DataNominal: currency.Nominal(5), DataCount: 1}}},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
@@ -184,11 +173,11 @@ func BenchmarkCoinPoll(b *testing.B) {
 				}
 			}
 			ca := newDevice(b, mockContext(b, reply))
+			poller := ca.newPoller(func(money.PollItem) {})
 			b.SetBytes(int64(len(c.input) / 2))
 			b.ResetTimer()
-			pr := money.NewPollResult(mdb.PacketMaxLength)
 			for i := 1; i <= b.N; i++ {
-				ca.CommandPoll(context.Background(), pr)
+				poller(ca.dev.DoPollSync(context.Background()))
 			}
 		})
 	}
