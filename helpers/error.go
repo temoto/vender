@@ -13,7 +13,7 @@ func FoldErrors(errs []error) error {
 	ss := make([]string, 0, len(errs))
 	for _, e := range errs {
 		if e != nil {
-			ss = append(ss, errors.ErrorStack(e))
+			ss = append(ss, e.Error())
 		}
 	}
 	if len(ss) == 0 {

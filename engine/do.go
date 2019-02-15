@@ -1,4 +1,4 @@
-package msync
+package engine
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/helpers/msync"
 )
 
 type Doer interface {
@@ -24,14 +25,14 @@ type Transaction struct {
 
 func NewTransaction(name string) *Transaction {
 	return &Transaction{
-		Root: Node{Doer: DoNothing{name}},
+		Root: Node{Doer: Nothing{name}},
 	}
 }
 
-type DoNothing struct{ string }
+type Nothing struct{ Name string }
 
-func (self DoNothing) Do(ctx context.Context) error { return nil }
-func (self DoNothing) String() string               { return self.string }
+func (self Nothing) Do(ctx context.Context) error { return nil }
+func (self Nothing) String() string               { return self.Name }
 
 type execState struct {
 	errch  chan error
@@ -41,15 +42,16 @@ type execState struct {
 
 func (self *Transaction) Do(ctx context.Context) error {
 	items := make([]*Node, 0, 32)
-	self.Root.collect(&items)
+	self.Root.Collect(&items)
 	state := execState{
 		errch:  make(chan error, len(items)),
 		failed: 0,
 	}
 
-	self.Root.done = NewSignal()
+	self.Root.done = msync.NewSignal()
 	for _, n := range items {
 		n.callers = 0
+		n.done = msync.NewSignal()
 	}
 	state.wg.Add(1)
 	walkExec(ctx, &self.Root, &state)
@@ -89,8 +91,11 @@ func walkExec(ctx context.Context, node *Node, state *execState) {
 	if atomic.LoadUint32(&state.failed) == 0 {
 		// TODO concurrency limit _after_ wait
 		// tbegin := time.Now()
-		// log.Printf("exec %v", node)
-		err := node.Do(ctx)
+		// log.Printf("exec %#v", node)
+		var err error
+		if _, ok := node.Doer.(Nothing); !ok {
+			err = node.Do(ctx)
+		}
 		// texec := time.Now().Sub(tbegin)
 		// log texec
 		if err != nil {
@@ -106,33 +111,33 @@ func walkExec(ctx context.Context, node *Node, state *execState) {
 	}
 }
 
-type DoFunc struct {
+type Func struct {
 	Name string
 	F    func(context.Context) error
 }
 
-func (self DoFunc) Do(ctx context.Context) error { return self.F(ctx) }
+func (self Func) Do(ctx context.Context) error { return self.F(ctx) }
 
 // reflect.ValueOf()+runtime.FuncForPC().Name()
-func (self DoFunc) String() string { return "Func=" + self.Name }
+func (self Func) String() string { return "Func=" + self.Name }
 
-type DoFunc0 struct {
+type Func0 struct {
 	Name string
 	F    func() error
 }
 
-func (self DoFunc0) Do(ctx context.Context) error { return self.F() }
+func (self Func0) Do(ctx context.Context) error { return self.F() }
 
 // reflect.ValueOf()+runtime.FuncForPC().Name()
-func (self DoFunc0) String() string { return "Func=" + self.Name }
+func (self Func0) String() string { return "Func=" + self.Name }
 
-type DoSleep struct{ time.Duration }
+type Sleep struct{ time.Duration }
 
-func (self DoSleep) Do(ctx context.Context) error {
+func (self Sleep) Do(ctx context.Context) error {
 	time.Sleep(self.Duration)
 	return nil
 }
-func (self DoSleep) String() string { return fmt.Sprintf("Sleep(%v)", self.Duration) }
+func (self Sleep) String() string { return fmt.Sprintf("Sleep(%v)", self.Duration) }
 
 type mockdo struct {
 	name   string

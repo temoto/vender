@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/temoto/alive"
-	"github.com/temoto/vender/helpers/msync"
+	"github.com/temoto/vender/engine"
 )
 
 const (
@@ -76,7 +76,7 @@ func (self *Device) NewDoTxNR(request Packet) *DoRequest {
 	return d
 }
 
-func (self *Device) NewDoReset() msync.Doer { return self.NewDoTxNR(self.PacketReset) }
+func (self *Device) NewDoReset() engine.Doer { return self.NewDoTxNR(self.PacketReset) }
 func (self *Device) DoSetup(ctx context.Context) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()

@@ -1,4 +1,4 @@
-package msync
+package engine
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 func TestTransactionConcurrent(t *testing.T) {
 	t.Parallel()
 	tx := NewTransaction("tx1")
-	do1 := &DoSleep{10 * time.Millisecond}
-	do2 := &DoSleep{50 * time.Millisecond}
+	do1 := &Sleep{10 * time.Millisecond}
+	do2 := &Sleep{50 * time.Millisecond}
 	n11 := NewNode(do1, &tx.Root)
 	n12 := NewNode(do1, &tx.Root)
 	n13 := NewNode(do1, &tx.Root)
@@ -70,7 +70,7 @@ func TestTransactionWide(t *testing.T) {
 func TestTransactionFail(t *testing.T) {
 	t.Parallel()
 	tx := NewTransaction("fail")
-	doErr := &DoFunc{F: func(ctx context.Context) error {
+	doErr := &Func{F: func(ctx context.Context) error {
 		return errors.Errorf("intentional-error")
 	}}
 	doCheck := &mockdo{name: "check"}
@@ -78,8 +78,35 @@ func TestTransactionFail(t *testing.T) {
 	// dots := tx.Root.Dot("UD")
 	// t.Logf("%s", dots)
 	err := tx.Do(context.Background())
+	if err == nil {
+		t.Fatalf("tx.Do() unexpected err=nil")
+	}
 	if !strings.Contains(err.Error(), "intentional-error") {
 		t.Fatalf("expected tx.Do() error, err=%v", err)
 	}
 	helpers.AssertEqual(t, doCheck.called, int32(0))
+}
+
+func TestTransactionRestart(t *testing.T) {
+	t.Parallel()
+	tx := NewTransaction("restart")
+	doErr := &Func{F: func(ctx context.Context) error {
+		return errors.Errorf("intentional-error")
+	}}
+	doCheck := &mockdo{name: "check"}
+	tx.Root.Append(&Nothing{"success"}).Append(doErr).Append(doCheck)
+
+	check := func() {
+		err := tx.Do(context.Background())
+		if err == nil {
+			t.Fatalf("tx.Do() unexpected err=nil")
+		}
+		if !strings.Contains(err.Error(), "intentional-error") {
+			t.Fatalf("expected tx.Do() error, err=%v", err)
+		}
+		helpers.AssertEqual(t, doCheck.called, int32(0))
+	}
+
+	check()
+	check()
 }

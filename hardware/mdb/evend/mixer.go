@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/temoto/vender/helpers/msync"
+	"github.com/temoto/vender/engine"
 )
 
 type DeviceMixer struct {
@@ -21,16 +22,16 @@ func (self *DeviceMixer) ReadyChan() <-chan msync.Nothing {
 	return self.g.ready
 }
 
-func (self *DeviceMixer) NewShake(d time.Duration, speed uint8) msync.Doer {
-	return msync.DoFunc{F: func(ctx context.Context) error {
+func (self *DeviceMixer) NewShake(d time.Duration, speed uint8) engine.Doer {
+	return engine.Func{F: func(ctx context.Context) error {
 		argDuration := uint8(d / time.Millisecond / 100)
 		arg := []byte{0x01, argDuration, speed}
 		return self.g.CommandAction(ctx, arg)
 	}}
 }
 
-func (self *DeviceMixer) NewFan(on bool) msync.Doer {
-	return msync.DoFunc{F: func(ctx context.Context) error {
+func (self *DeviceMixer) NewFan(on bool) engine.Doer {
+	return engine.Func{F: func(ctx context.Context) error {
 		argOn := uint8(0)
 		if on {
 			argOn = 1
@@ -40,8 +41,8 @@ func (self *DeviceMixer) NewFan(on bool) msync.Doer {
 	}}
 }
 
-func (self *DeviceMixer) NewMove(position uint8) msync.Doer {
-	return msync.DoFunc{F: func(ctx context.Context) error {
+func (self *DeviceMixer) NewMove(position uint8) engine.Doer {
+	return engine.Func{F: func(ctx context.Context) error {
 		arg := []byte{0x03, position, 0x64}
 		return self.g.CommandAction(ctx, arg)
 	}}

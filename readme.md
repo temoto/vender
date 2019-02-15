@@ -25,6 +25,6 @@ Supported peripherals:
 # Design
 
 VMC overall structure:
-- engine (see msync package) executes actions, handles concurrency and errors
+- engine (see engine packages) executes actions, handles concurrency and errors
 - device/feature drivers provide actions to engine
 - configuration scenario specifies action groups and when to execute them

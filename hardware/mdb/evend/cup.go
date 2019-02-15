@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/temoto/vender/helpers/msync"
+	"github.com/temoto/vender/engine"
 )
 
 type DeviceCup struct {
@@ -20,15 +21,15 @@ func (self *DeviceCup) ReadyChan() <-chan msync.Nothing {
 	return self.g.ready
 }
 
-func (self *DeviceCup) NewDispense() msync.Doer {
-	return msync.DoFunc{F: func(ctx context.Context) error {
+func (self *DeviceCup) NewDispense() engine.Doer {
+	return engine.Func{F: func(ctx context.Context) error {
 		arg := []byte{0x01}
 		return self.g.CommandAction(ctx, arg)
 	}}
 }
 
-func (self *DeviceCup) NewTODO_04() msync.Doer {
-	return msync.DoFunc{F: func(ctx context.Context) error {
+func (self *DeviceCup) NewTODO_04() engine.Doer {
+	return engine.Func{F: func(ctx context.Context) error {
 		arg := []byte{0x04}
 		return self.g.CommandAction(ctx, arg)
 	}}

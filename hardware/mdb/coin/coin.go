@@ -9,6 +9,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
+	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/head/state"
@@ -54,8 +55,8 @@ type CoinAcceptor struct {
 	internalScalingFactor int
 	ready                 msync.Signal
 
-	doReset msync.Doer
-	doSetup msync.Doer
+	doReset engine.Doer
+	doSetup engine.Doer
 }
 
 var (
@@ -134,11 +135,11 @@ func (self *CoinAcceptor) ReadyChan() <-chan msync.Nothing {
 	return self.ready
 }
 
-func (self *CoinAcceptor) newIniter() msync.Doer {
-	tx := msync.NewTransaction("coin-init")
+func (self *CoinAcceptor) newIniter() engine.Doer {
+	tx := engine.NewTransaction("coin-init")
 	tx.Root.
 		Append(self.doSetup).
-		Append(msync.DoFunc0{F: func() error {
+		Append(engine.Func0{F: func() error {
 			var err error
 			// timeout is unfortunately common "response" for unsupported commands
 			if err = self.CommandExpansionIdentification(); err != nil && !errors.IsTimeout(err) {
@@ -153,9 +154,9 @@ func (self *CoinAcceptor) newIniter() msync.Doer {
 			}
 			return nil
 		}}).
-		Append(msync.DoFunc0{F: self.CommandTubeStatus}).
-		Append(msync.DoSleep{Duration: self.dev.DelayNext}).
-		Append(msync.DoFunc{F: func(ctx context.Context) error {
+		Append(engine.Func0{F: self.CommandTubeStatus}).
+		Append(engine.Sleep{Duration: self.dev.DelayNext}).
+		Append(engine.Func{F: func(ctx context.Context) error {
 			config := state.GetConfig(ctx)
 			// TODO read enabled nominals from config
 			_ = config
@@ -164,17 +165,17 @@ func (self *CoinAcceptor) newIniter() msync.Doer {
 	return tx
 }
 
-func (self *CoinAcceptor) Restarter() msync.Doer {
-	tx := msync.NewTransaction("coin-restart")
+func (self *CoinAcceptor) Restarter() engine.Doer {
+	tx := engine.NewTransaction("coin-restart")
 	tx.Root.
 		Append(self.doReset).
-		Append(msync.DoSleep{Duration: self.dev.DelayNext}).
+		Append(engine.Sleep{Duration: self.dev.DelayNext}).
 		Append(self.newIniter())
 	return tx
 }
 
-func (self *CoinAcceptor) newSetuper() msync.Doer {
-	return msync.DoFunc{F: func(ctx context.Context) error {
+func (self *CoinAcceptor) newSetuper() engine.Doer {
+	return engine.Func{F: func(ctx context.Context) error {
 		const expectLengthMin = 7
 		err := self.dev.DoSetup(ctx)
 		if err != nil {
@@ -223,7 +224,7 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 	return nil
 }
 
-func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) msync.Doer {
+func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) engine.Doer {
 	buf := [5]byte{0x0c}
 	self.dev.ByteOrder.PutUint16(buf[1:], accept)
 	self.dev.ByteOrder.PutUint16(buf[3:], dispense)

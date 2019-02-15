@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/temoto/vender/helpers/msync"
+	"github.com/temoto/vender/engine"
 )
 
 type DeviceElevator struct {
@@ -20,8 +21,8 @@ func (self *DeviceElevator) ReadyChan() <-chan msync.Nothing {
 	return self.g.ready
 }
 
-func (self *DeviceElevator) NewMove(position uint8) msync.Doer {
-	return msync.DoFunc{F: func(ctx context.Context) error {
+func (self *DeviceElevator) NewMove(position uint8) engine.Doer {
+	return engine.Func{F: func(ctx context.Context) error {
 		arg := []byte{0x03, position, 0}
 		return self.g.CommandAction(ctx, arg)
 	}}

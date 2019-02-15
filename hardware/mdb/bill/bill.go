@@ -10,6 +10,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
+	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/head/state"
@@ -45,8 +46,8 @@ type BillValidator struct {
 
 	ready msync.Signal
 
-	DoIniter      msync.Doer
-	DoConfigBills msync.Doer
+	DoIniter      engine.Doer
+	DoConfigBills engine.Doer
 }
 
 var (
@@ -132,12 +133,12 @@ func (self *BillValidator) ReadyChan() <-chan msync.Nothing {
 	return self.ready
 }
 
-func (self *BillValidator) newIniter() msync.Doer {
-	tx := msync.NewTransaction(self.dev.Name + "-init")
+func (self *BillValidator) newIniter() engine.Doer {
+	tx := engine.NewTransaction(self.dev.Name + "-init")
 	tx.Root.
 		// TODO maybe execute Reset?
-		Append(msync.DoFunc{F: self.CommandSetup}).
-		Append(msync.DoFunc0{F: func() error {
+		Append(engine.Func{F: self.CommandSetup}).
+		Append(engine.Func0{F: func() error {
 			if err := self.CommandExpansionIdentificationOptions(); err != nil {
 				if _, ok := err.(mdb.FeatureNotSupported); ok {
 					if err = self.CommandExpansionIdentification(); err != nil {
@@ -150,13 +151,13 @@ func (self *BillValidator) newIniter() msync.Doer {
 			return nil
 		}}).
 		Append(&CommandStacker{Dev: &self.dev}).
-		Append(msync.DoSleep{Duration: self.dev.DelayNext}).
+		Append(engine.Sleep{Duration: self.dev.DelayNext}).
 		Append(self.DoConfigBills)
 	return tx
 }
 
-func (self *BillValidator) newConfigBills() msync.Doer {
-	return msync.DoFunc{
+func (self *BillValidator) newConfigBills() engine.Doer {
+	return engine.Func{
 		Name: "enable-bills-config",
 		F: func(ctx context.Context) error {
 			config := state.GetConfig(ctx)
@@ -167,11 +168,11 @@ func (self *BillValidator) newConfigBills() msync.Doer {
 	}
 }
 
-func (self *BillValidator) NewRestarter() msync.Doer {
-	tx := msync.NewTransaction(self.dev.Name + "-restart")
+func (self *BillValidator) NewRestarter() engine.Doer {
+	tx := engine.NewTransaction(self.dev.Name + "-restart")
 	tx.Root.
 		Append(self.dev.NewDoReset()).
-		Append(msync.DoSleep{Duration: self.dev.DelayNext}).
+		Append(engine.Sleep{Duration: self.dev.DelayNext}).
 		Append(self.newIniter())
 	return tx
 }
