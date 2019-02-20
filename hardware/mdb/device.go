@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
 )
@@ -91,9 +92,11 @@ func (self *Device) DoSetup(ctx context.Context) error {
 	return nil
 }
 
-type PollParseFunc func(PacketError)
+type PollParseFunc func(PacketError) bool
 
-func (self *Device) PollLoop(ctx context.Context, a *alive.Alive, fun PollParseFunc) {
+// "idle mode" checking, wants to run forever
+// used by coin/bill devices
+func (self *Device) PollLoopPassive(ctx context.Context, a *alive.Alive, fun PollParseFunc) {
 	lastActive := time.Now()
 	stopch := a.StopChan()
 	delay := self.DelayNext
@@ -103,20 +106,18 @@ func (self *Device) PollLoop(ctx context.Context, a *alive.Alive, fun PollParseF
 
 	for a.IsRunning() {
 		r = self.DoPollSync(ctx)
-		fun(r)
+		parsedActive := fun(r)
 		if r.E != nil {
 			delay = self.DelayErr
-		}
-
-		now := time.Now()
-		// FIXME implicitly encodes "empty POLL result = inactive"
-		// which may not be true for some devices
-		// TODO better way to learn active/idle from parser func
-		if r.P.Len() > 0 {
-			lastActive = now
+			lastActive = time.Now()
 		} else {
-			if r.E == nil && now.Sub(lastActive) > self.IdleThreshold {
-				delay = self.DelayIdle
+			if parsedActive {
+				delay = self.DelayNext
+				lastActive = time.Now()
+			} else if delay != self.DelayIdle {
+				if time.Now().Sub(lastActive) > self.IdleThreshold {
+					delay = self.DelayIdle
+				}
 			}
 		}
 		if !delayTimer.Stop() {
@@ -129,6 +130,48 @@ func (self *Device) PollLoop(ctx context.Context, a *alive.Alive, fun PollParseF
 			return
 		}
 	}
+}
+
+type PollActiveFunc func(PacketError) (bool, error)
+
+func (self *Device) NewPollLoopActive(tag string, timeout time.Duration, fun PollActiveFunc) engine.Doer {
+	return engine.Func{Name: tag + "-active-poll", F: func(ctx context.Context) error {
+		r := PacketError{}
+		deadline := time.Now().Add(timeout)
+
+		for {
+			r = self.DoPollSync(ctx)
+			stop, err := fun(r)
+			if err != nil {
+				return err
+			}
+			if stop {
+				return nil
+			}
+			time.Sleep(self.DelayNext)
+			if time.Now().After(deadline) {
+				return errors.Timeoutf(tag)
+			}
+		}
+	}}
+}
+
+func (self *Device) NewPollUntilEmpty(tag string, timeout time.Duration, ignore []Packet) engine.Doer {
+	fun := func(r PacketError) (bool, error) {
+		if r.E != nil {
+			return false, r.E
+		}
+		if r.P.Len() == 0 {
+			return true, nil
+		}
+		for _, x := range ignore {
+			if r.P.Equal(&x) {
+				return false, nil
+			}
+		}
+		return false, errors.Errorf("%s poll-until unexpected response=%02x", tag, r.P.Bytes())
+	}
+	return self.NewPollLoopActive(tag, timeout, fun)
 }
 
 func (self *Device) DoPollSync(ctx context.Context) PacketError {

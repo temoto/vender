@@ -10,21 +10,18 @@ import (
 	"time"
 
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/helpers/msync"
 )
 
-type DeviceGeneric struct {
-	dev   mdb.Device
-	ready msync.Signal
+type Generic struct {
+	dev mdb.Device
 }
 
 var (
 	ErrTODO = fmt.Errorf("TODO")
 )
 
-func (self *DeviceGeneric) Init(ctx context.Context, address uint8, name string) error {
+func (self *Generic) Init(ctx context.Context, address uint8, name string) error {
 	self.dev.Init(ctx, address, name, binary.BigEndian)
-	self.ready = msync.NewSignal()
 
 	if err := self.CommandReset(ctx); err != nil {
 		return err
@@ -34,20 +31,16 @@ func (self *DeviceGeneric) Init(ctx context.Context, address uint8, name string)
 	return err
 }
 
-func (self *DeviceGeneric) ReadyChan() <-chan msync.Nothing {
-	return self.ready
-}
-
-func (self *DeviceGeneric) CommandReset(ctx context.Context) error {
+func (self *Generic) CommandReset(ctx context.Context) error {
 	return self.dev.NewDoReset().Do(ctx)
 }
 
-func (self *DeviceGeneric) CommandSetup(ctx context.Context) ([]byte, error) {
+func (self *Generic) CommandSetup(ctx context.Context) ([]byte, error) {
 	err := self.dev.DoSetup(ctx)
 	return self.dev.SetupResponse.Bytes(), err
 }
 
-func (self *DeviceGeneric) CommandAction(ctx context.Context, args []byte) error {
+func (self *Generic) CommandAction(ctx context.Context, args []byte) error {
 	bs := make([]byte, len(args)+1)
 	bs[0] = self.dev.Address + 2
 	copy(bs[1:], args)
@@ -57,6 +50,6 @@ func (self *DeviceGeneric) CommandAction(ctx context.Context, args []byte) error
 		log.Printf("device=%s mdb request=%s err=%v", self.dev.Name, request.Format(), r.E)
 		return r.E
 	}
-	log.Printf("device=%s setup response=(%d)%s", self.dev.Name, r.P.Len(), r.P.Format())
+	log.Printf("device=%s action=%02x response=(%d)%s", self.dev.Name, args, r.P.Len(), r.P.Format())
 	return nil
 }

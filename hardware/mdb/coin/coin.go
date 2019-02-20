@@ -3,8 +3,8 @@ package coin
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"log"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
@@ -13,7 +13,6 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/head/state"
-	"github.com/temoto/vender/helpers/msync"
 )
 
 const (
@@ -41,7 +40,8 @@ const (
 )
 
 type CoinAcceptor struct {
-	dev mdb.Device
+	dev             mdb.Device
+	dispenseTimeout time.Duration
 
 	// Indicates the value of the bill types 0 to 15.
 	// These are final values including all scaling factors.
@@ -53,7 +53,6 @@ type CoinAcceptor struct {
 	supportedFeatures Features
 
 	internalScalingFactor int
-	ready                 msync.Signal
 
 	doReset engine.Doer
 	doSetup engine.Doer
@@ -63,26 +62,31 @@ var (
 	packetTubeStatus = mdb.MustPacketFromHex("0a", true)
 	packetExpIdent   = mdb.MustPacketFromHex("0f00", true)
 	packetDiagStatus = mdb.MustPacketFromHex("0f05", true)
+
+	dispenseBusyPs = []mdb.Packet{
+		mdb.MustPacketFromHex("02", true),
+		mdb.MustPacketFromHex("0f", true),
+	}
 )
 
 var (
-	ErrNoCredit      = fmt.Errorf("No Credit")
-	ErrDoubleArrival = fmt.Errorf("Double Arrival")
-	ErrCoinRouting   = fmt.Errorf("Coin Routing")
-	ErrCoinJam       = fmt.Errorf("Coin Jam")
-	ErrSlugs         = fmt.Errorf("Slugs")
+	ErrNoCredit      = errors.Errorf("No Credit")
+	ErrDoubleArrival = errors.Errorf("Double Arrival")
+	ErrCoinRouting   = errors.Errorf("Coin Routing")
+	ErrCoinJam       = errors.Errorf("Coin Jam")
+	ErrSlugs         = errors.Errorf("Slugs")
 )
 
 func (self *CoinAcceptor) Init(ctx context.Context) error {
 	// TODO read config
 	self.dev.Init(ctx, 0x08, "coinacceptor", binary.BigEndian)
+	self.dispenseTimeout = 10 * time.Second
 
 	self.doReset = self.dev.NewDoReset()
 	self.doSetup = self.newSetuper()
 
 	self.coinTypeCredit = make([]currency.Nominal, coinTypeCount)
 	self.internalScalingFactor = 1 // FIXME
-	self.ready = msync.NewSignal()
 	// TODO maybe execute CommandReset then wait for StatusWasReset
 	err := self.newIniter().Do(ctx)
 	return errors.Annotate(err, "hardware/mdb/coin/Init")
@@ -99,19 +103,18 @@ func (self *CoinAcceptor) SupportedNominals() []currency.Nominal {
 }
 
 func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, fun func(money.PollItem)) {
-	self.dev.PollLoop(ctx, a, self.newPoller(fun))
+	self.dev.PollLoopPassive(ctx, a, self.newPoller(fun))
 }
 
 func (self *CoinAcceptor) newPoller(fun func(money.PollItem)) mdb.PollParseFunc {
-	return func(r mdb.PacketError) {
+	return func(r mdb.PacketError) bool {
 		if r.E != nil {
-			return
+			return true
 		}
 
 		bs := r.P.Bytes()
 		if len(bs) == 0 {
-			self.ready.Set()
-			return
+			return false
 		}
 
 		pi := money.PollItem{}
@@ -128,11 +131,8 @@ func (self *CoinAcceptor) newPoller(fun func(money.PollItem)) mdb.PollParseFunc 
 			pi, skip = self.parsePollItem(b, b2)
 			fun(pi)
 		}
+		return true
 	}
-}
-
-func (self *CoinAcceptor) ReadyChan() <-chan msync.Nothing {
-	return self.ready
 }
 
 func (self *CoinAcceptor) newIniter() engine.Doer {
@@ -183,7 +183,7 @@ func (self *CoinAcceptor) newSetuper() engine.Doer {
 		}
 		bs := self.dev.SetupResponse.Bytes()
 		if len(bs) < expectLengthMin {
-			return fmt.Errorf("hardware/mdb/coin SETUP response=%s expected >= %d bytes", self.dev.SetupResponse.Format(), expectLengthMin)
+			return errors.Errorf("hardware/mdb/coin SETUP response=%s expected >= %d bytes", self.dev.SetupResponse.Format(), expectLengthMin)
 		}
 		self.featureLevel = bs[0]
 		scalingFactor := bs[3]
@@ -213,7 +213,7 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 	log.Printf("tubestatus response=(%d)%s", r.P.Len(), r.P.Format())
 	bs := r.P.Bytes()
 	if len(bs) < expectLengthMin {
-		return fmt.Errorf("hardware/mdb/coin TUBE money.Status response=%s expected >= %d bytes", r.P.Format(), expectLengthMin)
+		return errors.Errorf("hardware/mdb/coin TUBE money.Status response=%s expected >= %d bytes", r.P.Format(), expectLengthMin)
 	}
 	full := self.dev.ByteOrder.Uint16(bs[0:2])
 	counts := bs[2:18]
@@ -232,27 +232,41 @@ func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) engine.Doer {
 	return self.dev.NewDoTxNR(request)
 }
 
-func (self *CoinAcceptor) CommandDispense(nominal currency.Nominal, count uint8) error {
-	if count >= 16 {
-		return fmt.Errorf("CommandDispense count=%d overflow >=16", count)
-	}
-	coinType := self.nominalCoinType(nominal)
-	if coinType < 0 {
-		return fmt.Errorf("dispense not supported for nominal=%v", currency.Amount(nominal).Format100I())
-	}
+func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) engine.Doer {
+	tag := "coin/dispense"
 
-	request := mdb.MustPacketFromBytes([]byte{0x0d, (count << 4) + uint8(coinType)}, true)
-	<-self.ReadyChan()
-	err := self.dev.Tx(request).E
-	return errors.Annotate(err, "hardware/mdb/coin DISPENSE")
+	doDispense := engine.Func{Name: tag, F: func(ctx context.Context) error {
+		if count >= 16 {
+			return errors.Errorf("%s count=%d overflow >=16", tag, count)
+		}
+		coinType := self.nominalCoinType(nominal)
+		if coinType < 0 {
+			return errors.Errorf("%s not supported for nominal=%v", tag, currency.Amount(nominal).Format100I())
+		}
+
+		request := mdb.MustPacketFromBytes([]byte{0x0d, (count << 4) + uint8(coinType)}, true)
+		err := self.dev.Tx(request).E
+		return errors.Annotate(err, tag)
+	}}
+
+	tx := engine.NewTransaction(tag)
+	tx.Root.Append(doDispense).Append(self.dev.NewPollUntilEmpty(tag, self.dispenseTimeout, dispenseBusyPs))
+	return tx
 }
 
-func (self *CoinAcceptor) CommandPayout(amount currency.Amount) error {
-	// FIXME 100 magic number
-	request := mdb.MustPacketFromBytes([]byte{0x0f, 0x02, byte(int(amount) / 100 / self.internalScalingFactor)}, true)
-	<-self.ReadyChan()
-	err := self.dev.Tx(request).E
-	return errors.Annotate(err, "hardware/mdb/coin PAYOUT")
+func (self *CoinAcceptor) NewPayout(amount currency.Amount) engine.Doer {
+	tag := "coin/payout"
+
+	doPayout := engine.Func{Name: tag, F: func(ctx context.Context) error {
+		// FIXME 100 magic number
+		request := mdb.MustPacketFromBytes([]byte{0x0f, 0x02, byte(int(amount) / 100 / self.internalScalingFactor)}, true)
+		err := self.dev.Tx(request).E
+		return errors.Annotate(err, tag)
+	}}
+
+	tx := engine.NewTransaction(tag)
+	tx.Root.Append(doPayout).Append(self.dev.NewPollUntilEmpty(tag, self.dispenseTimeout*4, dispenseBusyPs))
+	return tx
 }
 
 func (self *CoinAcceptor) CommandExpansionIdentification() error {
@@ -265,7 +279,7 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 	log.Printf("EXPANSION IDENTIFICATION response=(%d)%s", r.P.Len(), r.P.Format())
 	bs := r.P.Bytes()
 	if len(bs) < expectLength {
-		return fmt.Errorf("hardware/mdb/coin EXPANSION IDENTIFICATION response=%s expected %d bytes", r.P.Format(), expectLength)
+		return errors.Errorf("hardware/mdb/coin EXPANSION IDENTIFICATION response=%s expected %d bytes", r.P.Format(), expectLength)
 	}
 	self.supportedFeatures = Features(self.dev.ByteOrder.Uint32(bs[29 : 29+4]))
 	log.Printf("Manufacturer Code: %x", bs[0:0+3])
@@ -382,12 +396,12 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 			pi.Status = money.StatusCredit
 		case RoutingNotUsed:
 			pi.Status = money.StatusError
-			pi.Error = fmt.Errorf("routing=notused b=%x pi=%s", b, pi.String())
+			pi.Error = errors.Errorf("routing=notused b=%x pi=%s", b, pi.String())
 		case RoutingReject:
 			pi.Status = money.StatusRejected
 		default:
 			// pi.Status = money.StatusFatal
-			panic(fmt.Errorf("code error b=%x routing=%b", b, routing))
+			panic(errors.Errorf("code error b=%x routing=%b", b, routing))
 		}
 		log.Printf("deposited coinType=%d routing=%s pi=%s", coinType, routing.String(), pi.String())
 		return pi, true
@@ -401,6 +415,6 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 		return money.PollItem{Status: money.StatusDispensed, DataNominal: nominal, DataCount: count}, true
 	}
 
-	err := fmt.Errorf("parsePollItem unknown=%x", b)
+	err := errors.Errorf("parsePollItem unknown=%x", b)
 	return money.PollItem{Status: money.StatusFatal, Error: err}, false
 }

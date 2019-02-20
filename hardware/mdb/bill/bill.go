@@ -102,35 +102,30 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	self.DoConfigBills = self.newConfigBills()
 	self.DoIniter = self.newIniter()
 
-	self.ready = msync.NewSignal()
 	err := self.DoIniter.Do(ctx)
 	return err
 }
 
 func (self *BillValidator) Run(ctx context.Context, a *alive.Alive, fun func(money.PollItem)) {
-	self.dev.PollLoop(ctx, a, self.newPoller(fun))
+	self.dev.PollLoopPassive(ctx, a, self.newPoller(fun))
 }
 
 func (self *BillValidator) newPoller(fun func(money.PollItem)) mdb.PollParseFunc {
-	return func(r mdb.PacketError) {
+	return func(r mdb.PacketError) bool {
 		if r.E != nil {
-			return
+			return true
 		}
 
 		bs := r.P.Bytes()
 		if len(bs) == 0 {
-			self.ready.Set()
-			return
+			return false
 		}
 		for _, b := range bs {
 			pi := self.parsePollItem(b)
 			fun(pi)
 		}
+		return true
 	}
-}
-
-func (self *BillValidator) ReadyChan() <-chan msync.Nothing {
-	return self.ready
 }
 
 func (self *BillValidator) newIniter() engine.Doer {

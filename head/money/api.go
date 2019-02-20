@@ -105,7 +105,7 @@ func (self *MoneySystem) Abort(ctx context.Context) error {
 
 	// TODO read change strategy from config
 	var coinsReturned currency.Amount
-	if coinsReturned, err = self.cs.Dispense(&self.cs.credit); err != nil {
+	if coinsReturned, err = self.cs.Dispense(ctx, &self.cs.credit); err != nil {
 		// TODO telemetry high priority error
 		log.Printf("MoneySystem.Abort err=%v", err)
 		return err

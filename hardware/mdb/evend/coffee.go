@@ -2,25 +2,18 @@ package evend
 
 import (
 	"context"
-
-	"github.com/temoto/vender/helpers/msync"
 )
 
 type DeviceCoffee struct {
-	g DeviceGeneric
+	Generic
 }
 
 func (self *DeviceCoffee) Init(ctx context.Context) error {
 	// TODO read config
-	self.g = DeviceGeneric{}
-	return self.g.Init(ctx, 0xe8, "coffee")
-}
-
-func (self *DeviceCoffee) ReadyChan() <-chan msync.Nothing {
-	return self.g.ready
+	return self.Generic.Init(ctx, 0xe8, "coffee")
 }
 
 func (self *DeviceCoffee) CommandMove(position uint8) error {
 	panic("TODO")
-	// return self.g.CommandAction([]byte{0x03, position, 0x00})
+	// return self.Generic.CommandAction([]byte{0x03, position, 0x00})
 }

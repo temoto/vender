@@ -36,7 +36,7 @@ func (self *CoinState) Stop(ctx context.Context) {
 	self.alive.Wait()
 }
 
-func (self *CoinState) Dispense(ng *currency.NominalGroup) (currency.Amount, error) {
+func (self *CoinState) Dispense(ctx context.Context, ng *currency.NominalGroup) (currency.Amount, error) {
 	self.alive.Add(1)
 	defer self.alive.Done()
 
@@ -47,13 +47,12 @@ func (self *CoinState) Dispense(ng *currency.NominalGroup) (currency.Amount, err
 		if count == 0 {
 			return nil
 		}
-		err := self.hw.CommandDispense(nominal, uint8(count))
+		err := self.hw.NewDispense(nominal, uint8(count)).Do(ctx)
 		// err := self.hw.CommandPayout(currency.Amount(nominal) * currency.Amount(count))
 		log.Printf("dispense err=%v", err)
 		if err == nil {
 			sum += currency.Amount(nominal) * currency.Amount(count)
 		}
-		<-self.hw.ReadyChan()
 		self.hw.CommandTubeStatus()
 		self.hw.CommandExpansionSendDiagStatus(nil)
 		log.Printf("Dispense end n=%v c=%d", nominal, count)
