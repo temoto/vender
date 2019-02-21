@@ -1,7 +1,7 @@
 module github.com/temoto/vender
 
 require (
-	github.com/awalterschulze/gographviz v0.0.0-20181013152038-b2885df04310
+	github.com/awalterschulze/gographviz v0.0.0-20190221210632-1e9ccb565bca
 	github.com/brian-armstrong/gpio v0.0.0-20181227042754-72b0058bbbcb
 	github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
 	github.com/golang/protobuf v1.2.0

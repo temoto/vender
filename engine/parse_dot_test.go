@@ -79,8 +79,7 @@ subgraph cluster_s2 {
 	for _, c := range cases {
 		c := c
 		t.Run(c.name, func(t *testing.T) {
-			// FIXME data race https://github.com/awalterschulze/gographviz/issues/46
-			// t.Parallel()
+			t.Parallel()
 			expect := NewScenario("")
 			expectErrContain := c.expectFun(expect)
 			s, err := ParseDot([]byte(c.input))
