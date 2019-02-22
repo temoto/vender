@@ -1,0 +1,60 @@
+eVend
+
+Устройства на шине
+
+Бункер 
+управление может быть отдельной платой на моторе, а может быть одна плата на 8 бункеров (каретка)
+бункер / адрес
+1 / 0x40 
+2 / 0x48 
+3 / 0x50
+4 / 0x58
+5 / 0x60
+6 / 0x68
+7 / 0x78
+8 / 0x70
+
+команды 
+40 - reset (return ACK)     
+41 - Setup (return 16 byte)
+42 XX - run motor for XX units (unit = 0.1 sec)
+43 - pull (return 1 byte)
+
+pulls returns
+100 - ACK
+04  - меня редко опрашивают
+50  - in process
+08  - error
+
+Адрес каретки
+0xB8
+
+блок соленоидов (адрес 0xC0)
+C0 - reset
+C1 - Setup (return 16 byte)
+C2 XX YY - send command XX - device. YY value
+C3 - pull
+C4 02 - get error code (return 1 byte)
+C4 11 - get temperature (return 1 byte)
+C5 10 XX - set temp. xx degrees Celsius
+
+Devices 
+0x01 YY - pour hot water for YY units (unit = 1.538462 cl)
+0x02 YY - pour cold water for YY units (unit = 1.538462 cl)
+0x10 YY - cold valve (YY = 1 open/ YY = 2 close)
+0x11 YY - hot valve (YY = 1 open/ YY = 2 close)
+0x12 YY - boiler valve (YY = 1 open/ YY = 2 close)
+0x14 YY - pump (YY = 1 start / YY = 0 stop)
+
+poll response 1 byte (bit coded)
+(0x04) - меня редко опрашивают
+(0x08) - error 
+(0x10) - наливаю
+(0x40) - hot temp not in range
+
+example
+c4 11 -> 17 -> ACK 
+c5 10 16 -> ACK 
+
+
+
