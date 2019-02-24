@@ -2,7 +2,7 @@ eVend
 
 Устройства на шине
 
-Бункер 
+============= Бункер =================================================================  
 управление может быть отдельной платой на моторе, а может быть одна плата на 8 бункеров (каретка)
 бункер / адрес
 1 / 0x40 
@@ -11,8 +11,8 @@ eVend
 4 / 0x58
 5 / 0x60
 6 / 0x68
-7 / 0x78
-8 / 0x70
+7 / 0x70
+8 / 0x78
 
 команды 
 40 - reset (return ACK)     
@@ -26,10 +26,10 @@ pulls returns
 50  - in process
 08  - error
 
-Адрес каретки
+============= Адрес каретки
 0xB8
 
-блок соленоидов (адрес 0xC0)
+============= блок соленоидов (адрес 0xC0) ====================================================
 C0 - reset
 C1 - Setup (return 16 byte)
 C2 XX YY - send command XX - device. YY value
@@ -41,9 +41,11 @@ C5 10 XX - set temp. xx degrees Celsius
 Devices 
 0x01 YY - pour hot water for YY units (unit = 1.538462 cl)
 0x02 YY - pour cold water for YY units (unit = 1.538462 cl)
+0x03 YY - pour espresso water for YY units (unit = 1.538462 cl) 
 0x10 YY - cold valve (YY = 1 open/ YY = 2 close)
 0x11 YY - hot valve (YY = 1 open/ YY = 2 close)
 0x12 YY - boiler valve (YY = 1 open/ YY = 2 close)
+0x13 YY - espresso pump (YY = 1 start / YY = 0 stop )
 0x14 YY - pump (YY = 1 start / YY = 0 stop)
 
 poll response 1 byte (bit coded)
@@ -55,6 +57,87 @@ poll response 1 byte (bit coded)
 example
 c4 11 -> 17 -> ACK 
 c5 10 16 -> ACK 
+
+============= Миксер / Подъемник (0xC8 / 0xD0) ====================================================
+(платы одинаковые. адрес устройства выбирается 4 dip переключателем. on=lift off=miher)
+0xC8 - reset
+0xC9 - Setup (return 16 byte)
+0xCA XX YY ZZ - XX command. YY ZZ values
+0xCB - pull
+
+commands
+01 YY ZZ - shaker (YY run motor for YY units (unit = 0.1 sec) ZZ = speed (0-100 0x00-0x64)
+02 YY ZZ - fun (YY = 1 ON YY = 0 OFF ZZ = 0)
+03 YY ZZ - reverse (YY value 0-100 ZZ = 0x64)
+
+poll response 2 byte
+ACK - return always
+0D 00 - return if command success
+04 XX - error. XX=error code
+
+============= конвейер (0xD8) ==============================================================================
+0xD8 - reset
+0xD9 - Setup (return 16 byte)
+0xDA XX YY YY - XX command. YY YY values
+0xDB - pull
+0xDD XX XX - config
+0xDC 02 - get error code (return 1 byte)
+
+commands
+01 YY YY - move to position YY YY ( before use. move to position 0 = init device)
+03 YY 00 - встряхнуть стакан YY раз
+
+poll response (bit coded)
+ACK
+0x04 - меня редко опрашивают
+0x08 - error 
+0x50 - moving to position (not complete)
+
+============= стаканы (0xE0) =========================================================================
+0xE0 - reset
+0xE1 - Setup (return 16 byte)
+0xE2 XX - command 
+0xE3 pull
+0xE4 02 - get error code (return 1 byte)
+
+commands
+0x01 - get cup 
+0x02 - turn on leds
+0x03 - turn off leds
+0x04 - check cup
+
+poll response (bit coded)
+ACK
+0x04 - меня редко опрашивают
+0x08 - error 
+0x50 - работаю
+
+ВСЕГДА после выдачи стакана, на пуле, должно 0x50 (время на выдачу не нулевое) иначе проблема с мигриком
+
+============= эспрессо (0xE8) ==============================================================================
+0xE8 - reset
+0xE9 - Setup (return 16 byte)
+0xEA XX - command 
+0xEB pull
+0xEС 02 - get error code (return 1 byte)
+
+commands
+0x01 - размолоть кофе
+0x02 - приготовить таблетку ( 
+0x03 - выбросить таблетку ( крутит пока не разомкнется сенсор верхнего положения )
+0x05 - наверное включить подогрев таблетки
+0x06 - наверное выключить подогрев таблетки
+
+poll response (bit coded)
+ACK
+0x04 - меня редко опрашивают
+0x08 - error 
+0x50 - работаю
+
+ВАЖНО
+команда выбросить эмитирует деятельность. и при отключенном моторе, выдает 0x50 2.18с потом говорит ACK .
+нижний сенсор, так же игнорируется. через какое то время говорит что сделал.
+заклиненная мололка дает "просадку" по питанию.
 
 
 
