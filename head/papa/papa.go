@@ -2,7 +2,6 @@ package papa
 
 import (
 	"context"
-	"log"
 	"net"
 	"time"
 
@@ -16,18 +15,18 @@ import (
 func (self *PapaSystem) netLoop(ctx context.Context) {
 	// TODO alive
 	for self.alive.IsRunning() {
-		client, err := dial(ctx)
+		client, err := self.dial(ctx)
 		if err == nil {
-			err = network(ctx, client)
+			err = self.network(ctx, client)
 		}
 		if err != nil {
-			log.Print(err)
+			self.Log.Errorf(err.Error())
 			time.Sleep(1 * time.Second)
 			if neterr, ok := err.(net.Error); ok {
 				if neterr.Temporary() {
 					continue
 				} else {
-					log.Fatal("network error is permanent")
+					self.Log.Errorf("network error is permanent")
 					return
 				}
 			}
@@ -35,7 +34,7 @@ func (self *PapaSystem) netLoop(ctx context.Context) {
 	}
 }
 
-func network(ctx context.Context, client PapaClient) error {
+func (self *PapaSystem) network(ctx context.Context, client PapaClient) error {
 	pull, err := client.Pull(ctx)
 	if err != nil {
 		return err
@@ -43,7 +42,7 @@ func network(ctx context.Context, client PapaClient) error {
 	for {
 		task, err := pull.Recv()
 		if err != nil {
-			log.Print(err)
+			self.Log.Errorf(err.Error())
 			// TODO handle error
 			time.Sleep(1 * time.Second)
 			continue
@@ -65,14 +64,14 @@ func network(ctx context.Context, client PapaClient) error {
 	}
 }
 
-func dial(ctx context.Context) (PapaClient, error) {
+func (self *PapaSystem) dial(ctx context.Context) (PapaClient, error) {
 	config := state.GetConfig(ctx)
 
 	optSecurity := grpc.WithInsecure()
 	if config.Papa.CertFile != "" {
 		creds, err := credentials.NewClientTLSFromFile(config.Papa.CertFile, "")
 		if err != nil {
-			log.Print(err)
+			self.Log.Errorf(err.Error())
 			return nil, err
 		}
 		optSecurity = grpc.WithTransportCredentials(creds)
@@ -80,7 +79,7 @@ func dial(ctx context.Context) (PapaClient, error) {
 
 	conn, err := grpc.Dial(config.Papa.Address, optSecurity)
 	if err != nil {
-		log.Print(err)
+		self.Log.Errorf(err.Error())
 		return nil, err
 	}
 

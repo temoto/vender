@@ -1,11 +1,7 @@
 package ui
 
-import (
-	"log"
-)
-
 func (self *UISystem) displayInit() (err error) {
-	log.Println("display-init")
+	self.Log.Debugf("display-init")
 	if err := self.display.Init(); err != nil {
 		return err
 	}

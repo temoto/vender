@@ -2,7 +2,6 @@ package money
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/temoto/alive"
@@ -10,23 +9,26 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/mdb/coin"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/log2"
 )
 
 type CoinState struct {
+	Log    *log2.Log
 	alive  *alive.Alive
 	hw     coin.CoinAcceptor
 	credit currency.NominalGroup
 }
 
 func (self *CoinState) Init(ctx context.Context, parent *MoneySystem) error {
-	log.Printf("head/money/coin/Init begin")
+	self.Log = parent.Log
+	self.Log.Debugf("head/money/coin/Init begin")
 	self.alive = alive.NewAlive()
 	if err := self.hw.Init(ctx); err != nil {
 		return err
 	}
 	self.credit.SetValid(self.hw.SupportedNominals())
 	time.Sleep(mdb.DefaultDelayNext)
-	log.Printf("head/money/coin/Init end, running")
+	self.Log.Debugf("head/money/coin/Init end, running")
 	go self.hw.Run(ctx, self.alive, func(pi money.PollItem) { self.handlePollItem(ctx, parent, pi) })
 	return nil
 }
@@ -42,20 +44,20 @@ func (self *CoinState) Dispense(ctx context.Context, ng *currency.NominalGroup) 
 
 	sum := currency.Amount(0)
 	err := ng.Iter(func(nominal currency.Nominal, count uint) error {
-		log.Printf("Dispense n=%v c=%d", nominal, count)
+		self.Log.Debugf("Dispense n=%v c=%d", nominal, count)
 		self.hw.CommandTubeStatus()
 		if count == 0 {
 			return nil
 		}
 		err := self.hw.NewDispense(nominal, uint8(count)).Do(ctx)
 		// err := self.hw.CommandPayout(currency.Amount(nominal) * currency.Amount(count))
-		log.Printf("dispense err=%v", err)
+		self.Log.Debugf("dispense err=%v", err)
 		if err == nil {
 			sum += currency.Amount(nominal) * currency.Amount(count)
 		}
 		self.hw.CommandTubeStatus()
 		self.hw.CommandExpansionSendDiagStatus(nil)
-		log.Printf("Dispense end n=%v c=%d", nominal, count)
+		self.Log.Debugf("Dispense end n=%v c=%d", nominal, count)
 		return err
 	})
 	return sum, err
@@ -67,7 +69,7 @@ func (self *CoinState) handlePollItem(ctx context.Context, m *MoneySystem, pi mo
 
 	switch pi.Status {
 	case money.StatusDispensed:
-		log.Printf("manual dispense: %s", pi.String())
+		self.Log.Debugf("manual dispense: %s", pi.String())
 		self.hw.CommandTubeStatus()
 		self.hw.CommandExpansionSendDiagStatus(nil)
 		// TODO telemetry
@@ -76,17 +78,17 @@ func (self *CoinState) handlePollItem(ctx context.Context, m *MoneySystem, pi mo
 	case money.StatusRejected:
 		// TODO telemetry
 	case money.StatusWasReset:
-		log.Printf("coin was reset")
+		self.Log.Debugf("coin was reset")
 		// TODO telemetry
 	case money.StatusCredit:
 		err := self.credit.Add(pi.DataNominal, uint(pi.DataCount))
 		if err != nil {
-			log.Printf("coin credit.Add n=%v c=%d err=%v", pi.DataNominal, pi.DataCount, err)
+			self.Log.Debugf("coin credit.Add n=%v c=%d err=%v", pi.DataNominal, pi.DataCount, err)
 		}
 		self.hw.CommandTubeStatus()
 		self.hw.CommandExpansionSendDiagStatus(nil)
 		m.events <- Event{created: itemTime, name: EventCredit, amount: pi.Amount()}
 	default:
-		handleGenericPollItem(ctx, pi, logPrefix)
+		m.handleGenericPollItem(ctx, pi, logPrefix)
 	}
 }

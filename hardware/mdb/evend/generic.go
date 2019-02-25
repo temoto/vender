@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/temoto/vender/hardware/mdb"
@@ -47,9 +46,9 @@ func (self *Generic) CommandAction(ctx context.Context, args []byte) error {
 	request := mdb.MustPacketFromBytes(bs, true)
 	r := self.dev.Tx(request)
 	if r.E != nil {
-		log.Printf("device=%s mdb request=%s err=%v", self.dev.Name, request.Format(), r.E)
+		self.dev.Log.Errorf("device=%s mdb request=%s err=%v", self.dev.Name, request.Format(), r.E)
 		return r.E
 	}
-	log.Printf("device=%s action=%02x response=(%d)%s", self.dev.Name, args, r.P.Len(), r.P.Format())
+	self.dev.Log.Debugf("device=%s action=%02x response=(%d)%s", self.dev.Name, args, r.P.Len(), r.P.Format())
 	return nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"strings"
 	"testing"
 	"time"
 
@@ -12,12 +11,14 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/head/state"
-	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/log2"
 )
 
 type _PI = money.PollItem
 
-func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
+func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level) context.Context {
+	ctx := state.NewTestContext(t, "", logLevel)
+
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t)
 	go func() {
 		defer close(respCh)
@@ -43,14 +44,16 @@ func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 			replyFunc(t, reqCh, respCh)
 		}
 	}()
-	ctx := context.Background()
-	ctx = state.ContextWithConfig(ctx, state.MustReadConfig(t.Fatal, strings.NewReader("")))
+
 	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
 	return ctx
 }
 
 func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
 	ca := &CoinAcceptor{}
+	ca.dev.DelayErr = 0 * time.Millisecond
+	ca.dev.DelayIdle = 0 * time.Millisecond
+	ca.dev.DelayNext = 0 * time.Millisecond
 	err := ca.Init(ctx)
 	if err != nil {
 		t.Fatalf("ca.Init err=%v", err)
@@ -66,7 +69,7 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "0b", input)
 	}
-	ca := newDevice(t, mockContext(t, reply))
+	ca := newDevice(t, mockContext(t, reply, log2.LDebug))
 	r := ca.dev.DoPollSync(context.Background())
 	if r.E != nil {
 		t.Fatalf("POLL err=%v", r.E)
@@ -77,8 +80,7 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 }
 
 func TestCoinPoll(t *testing.T) {
-	helpers.LogToTest(t)
-	// t.Parallel() incompatible with LogToTest
+	t.Parallel()
 	type Case struct {
 		name   string
 		input  string
@@ -112,7 +114,7 @@ func checkDiag(t testing.TB, input string, expected DiagResult) {
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "0f05", input)
 	}
-	ca := newDevice(t, mockContext(t, reply))
+	ca := newDevice(t, mockContext(t, reply, log2.LDebug))
 	dr := new(DiagResult)
 	err := ca.CommandExpansionSendDiagStatus(dr)
 	if err != nil {
@@ -130,9 +132,7 @@ func checkDiag(t testing.TB, input string, expected DiagResult) {
 }
 
 func TestCoinDiag(t *testing.T) {
-	helpers.LogToTest(t)
-	// FIXME race
-	// t.Parallel()
+	t.Parallel()
 	type Case struct {
 		name   string
 		input  string
@@ -147,14 +147,15 @@ func TestCoinDiag(t *testing.T) {
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
+		c := c
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			checkDiag(t, c.input, c.expect)
 		})
 	}
 }
 
 func BenchmarkCoinPoll(b *testing.B) {
-	helpers.LogDiscard()
 	type Case struct {
 		name  string
 		input string
@@ -172,7 +173,7 @@ func BenchmarkCoinPoll(b *testing.B) {
 					mdb.TestChanTx(t, reqCh, respCh, "0b", c.input)
 				}
 			}
-			ca := newDevice(b, mockContext(b, reply))
+			ca := newDevice(b, mockContext(b, reply, log2.LError))
 			poller := ca.newPoller(func(money.PollItem) {})
 			b.SetBytes(int64(len(c.input) / 2))
 			b.ResetTimer()

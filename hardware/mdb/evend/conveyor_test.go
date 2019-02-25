@@ -2,16 +2,18 @@ package evend
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/log2"
 )
 
 func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
+	ctx := state.NewTestContext(t, "", log2.LDebug)
+
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t)
 	go func() {
 		defer close(respCh)
@@ -23,10 +25,8 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 			replyFunc(t, reqCh, respCh)
 		}
 	}()
-	ctx := context.Background()
-	ctx = state.ContextWithConfig(ctx, state.MustReadConfig(t.Fatal, strings.NewReader("")))
+
 	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
-	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine())
 	return ctx
 }
 

@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/hex"
 	"io"
-	"log"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/log2"
 )
 
 type mockReadEffect struct {
@@ -20,6 +20,7 @@ type mockReadEffect struct {
 }
 
 type mockReader struct {
+	Log *log2.Log
 	pos uint
 	vs  []mockReadEffect
 }
@@ -34,12 +35,12 @@ func (self *mockReader) Read(p []byte) (int, error) {
 		self.pos++
 		time.Sleep(mre.delay)
 		if mre.err != nil {
-			log.Printf("mr.Read ret=err mre=%+v", mre)
+			self.Log.Errorf("mr.Read ret=err mre=%+v", mre)
 			return 0, mre.err
 		}
 		if mre.b != nil {
 			n := copy(p, mre.b)
-			log.Printf("mr.Read ret=%d,%x mre=%+v", n, p[:n], mre)
+			self.Log.Debugf("mr.Read ret=%d,%x mre=%+v", n, p[:n], mre)
 			return n, nil
 		}
 	}
@@ -75,15 +76,14 @@ func parseMockReader(s string) *mockReader {
 	return mr
 }
 
-func testFileUart(r io.Reader, w io.Writer) Uarter {
-	u := NewFileUart()
+func testFileUart(t testing.TB, r io.Reader, w io.Writer) *fileUart {
+	u := NewFileUart(log2.NewTest(t, log2.LDebug))
 	u.r = r
 	u.w = w
 	return u
 }
 
 func checkUarterTx(t testing.TB, u Uarter, send string, bw *bytes.Buffer, expectOk string, expectErr error) {
-	helpers.LogToTest(t)
 	request, err := hex.DecodeString(send)
 	if err != nil {
 		panic(errors.Errorf("code error send=%s err=%v", send, err))
@@ -104,6 +104,7 @@ func checkUarterTx(t testing.TB, u Uarter, send string, bw *bytes.Buffer, expect
 }
 
 func TestUarterTx(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name      string
 		send      string
@@ -122,11 +123,14 @@ func TestUarterTx(t *testing.T) {
 	}
 	helpers.RandUnix().Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
-		mr := parseMockReader(c.rmock)
-		mw := bytes.NewBuffer(nil)
+		c := c
 		// for u in all kinds of Uarter
-		u := testFileUart(mr, mw)
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			mr := parseMockReader(c.rmock)
+			mr.Log = log2.NewTest(t, log2.LDebug)
+			mw := bytes.NewBuffer(nil)
+			u := testFileUart(t, mr, mw)
 			checkUarterTx(t, u, c.send, mw, c.expectOk, c.expectErr)
 		})
 	}
@@ -134,8 +138,8 @@ func TestUarterTx(t *testing.T) {
 
 func BenchmarkFileUartTx(b *testing.B) {
 	b.ReportAllocs()
-	u := testFileUart(bytes.NewBufferString(""), bytes.NewBuffer(nil))
-	helpers.LogDiscard()
+	u := testFileUart(b, bytes.NewBufferString(""), bytes.NewBuffer(nil))
+	u.Log = nil
 	response := [PacketMaxLength]byte{}
 	b.ResetTimer()
 	for i := 1; i <= b.N; i++ {

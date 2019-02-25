@@ -5,16 +5,18 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
+	"strings"
+	"testing"
 
 	"github.com/hashicorp/hcl"
 	"github.com/juju/errors"
 	iodin "github.com/temoto/iodin/client/go-iodin"
+	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	mega "github.com/temoto/vender/hardware/mega-client"
-	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/log2"
 )
 
 type Config struct {
@@ -55,7 +57,7 @@ func ContextWithConfig(ctx context.Context, config *Config) context.Context {
 	return context.WithValue(ctx, "config", config)
 }
 
-func ReadConfig(r io.Reader) (*Config, error) {
+func ReadConfig(r io.Reader, log *log2.Log) (*Config, error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -65,9 +67,9 @@ func ReadConfig(r io.Reader) (*Config, error) {
 
 	switch c.Hardware.Mdb.UartDriver {
 	case "", "file":
-		c.Hardware.Mdb.Uarter = mdb.NewFileUart()
+		c.Hardware.Mdb.Uarter = mdb.NewFileUart(log)
 	case "mega":
-		mega, err := mega.NewClient(byte(c.Hardware.Mega.I2CBus), byte(c.Hardware.Mega.I2CAddr), uint(c.Hardware.Mega.Pin))
+		mega, err := mega.NewClient(byte(c.Hardware.Mega.I2CBus), byte(c.Hardware.Mega.I2CAddr), uint(c.Hardware.Mega.Pin), log)
 		if err != nil {
 			return nil, errors.Annotatef(err, "config: mdb.uart_driver=%s mega=%#v", c.Hardware.Mdb.UartDriver, c.Hardware.Mega)
 		}
@@ -85,34 +87,43 @@ func ReadConfig(r io.Reader) (*Config, error) {
 	return c, err
 }
 
-func ReadConfigFile(path string) (*Config, error) {
+func ReadConfigFile(path string, log *log2.Log) (*Config, error) {
 	if pathAbs, err := filepath.Abs(path); err != nil {
-		log.Printf("filepath.Abs(%s) error=%v", path, err)
+		log.Errorf("filepath.Abs(%s) error=%v", path, err)
 	} else {
 		path = pathAbs
 	}
-	log.Printf("reading config file %s", path)
+	log.Debugf("reading config file %s", path)
 
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return ReadConfig(f)
+	return ReadConfig(f, log)
 }
 
-func MustReadConfig(fatal helpers.FatalFunc, r io.Reader) *Config {
-	c, err := ReadConfig(r)
+func MustReadConfig(r io.Reader, log *log2.Log) *Config {
+	c, err := ReadConfig(r, log)
 	if err != nil {
-		fatal(err)
+		log.Fatal(err)
 	}
 	return c
 }
 
-func MustReadConfigFile(fatal helpers.FatalFunc, path string) *Config {
-	c, err := ReadConfigFile(path)
+func MustReadConfigFile(path string, log *log2.Log) *Config {
+	c, err := ReadConfigFile(path, log)
 	if err != nil {
-		fatal(err)
+		log.Fatal(err)
 	}
 	return c
+}
+
+func NewTestContext(t testing.TB, config string, logLevel log2.Level) context.Context {
+	ctx := context.Background()
+	log := log2.NewTest(t, logLevel)
+	ctx = context.WithValue(ctx, log2.ContextKey, log)
+	ctx = ContextWithConfig(ctx, MustReadConfig(strings.NewReader(config), log))
+	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine())
+	return ctx
 }

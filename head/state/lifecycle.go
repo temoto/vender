@@ -4,9 +4,9 @@ package state
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/temoto/vender/helpers/actionlist"
+	"github.com/temoto/vender/log2"
 )
 
 // Implemented by subsystems
@@ -18,9 +18,17 @@ type Systemer interface {
 }
 
 type Lifecycle struct {
+	Log        *log2.Log
 	OnValidate actionlist.List
 	OnStart    actionlist.List
 	OnStop     actionlist.List
+}
+
+func NewLifecycle(log *log2.Log) *Lifecycle {
+	self := &Lifecycle{
+		Log: log,
+	}
+	return self
 }
 
 func (self *Lifecycle) RegisterValidate(fun actionlist.Func, tag string) {
@@ -39,6 +47,6 @@ func (self *Lifecycle) RegisterSystem(s Systemer) {
 }
 
 func (self *Lifecycle) Restart(ctx context.Context) {
-	log.Println("restart requested")
+	self.Log.Debugf("restart requested")
 	self.OnStop.Do(ctx)
 }

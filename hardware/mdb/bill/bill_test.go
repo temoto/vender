@@ -2,7 +2,6 @@ package bill
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/temoto/vender/currency"
@@ -10,11 +9,14 @@ import (
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/log2"
 )
 
 type _PI = money.PollItem
 
 func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
+	ctx := state.NewTestContext(t, "", log2.LDebug)
+
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t)
 	go func() {
 		defer close(respCh)
@@ -36,8 +38,7 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 			replyFunc(t, reqCh, respCh)
 		}
 	}()
-	ctx := context.Background()
-	ctx = state.ContextWithConfig(ctx, state.MustReadConfig(t.Fatal, strings.NewReader("")))
+
 	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
 	return ctx
 }
@@ -66,8 +67,7 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 }
 
 func TestBillPoll(t *testing.T) {
-	helpers.LogToTest(t)
-	// t.Parallel() incompatible with LogToTest
+	t.Parallel()
 	type Case struct {
 		name   string
 		input  string
@@ -91,7 +91,7 @@ func TestBillPoll(t *testing.T) {
 	for _, c := range cases {
 		c := c
 		t.Run(c.name, func(t *testing.T) {
-			// t.Parallel()
+			t.Parallel()
 			checkPoll(t, c.input, c.expect)
 		})
 	}
@@ -100,8 +100,10 @@ func TestBillPoll(t *testing.T) {
 // measure allocations by real Doer graph
 func BenchmarkNewIniter(b *testing.B) {
 	b.ReportAllocs()
-	helpers.LogDiscard()
+	ctx := state.NewTestContext(b, "", log2.LError)
 	bv := &BillValidator{}
+	bv.dev.Log = log2.ContextValueLogger(ctx, log2.ContextKey)
+
 	b.ResetTimer()
 	for i := 1; i <= b.N; i++ {
 		bv.newIniter()

@@ -5,7 +5,6 @@ package i2c
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"syscall"
@@ -78,7 +77,6 @@ func (b *i2cBus) init() error {
 	if b.file, err = os.OpenFile(fmt.Sprintf("/dev/i2c-%d", b.busNo), os.O_RDWR, os.ModeExclusive); err != nil {
 		return err
 	}
-	log.Printf("i2c: bus %v initialized", b.busNo)
 	b.initialized = true
 
 	return nil
@@ -86,7 +84,6 @@ func (b *i2cBus) init() error {
 
 func (b *i2cBus) setAddress(addr byte) error {
 	if addr != b.addr {
-		log.Printf("i2c: setting bus %v address to %#02x", b.busNo, addr)
 		if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, b.file.Fd(), I2C_SLAVE, uintptr(addr)); errno != 0 {
 			return syscall.Errno(errno)
 		}

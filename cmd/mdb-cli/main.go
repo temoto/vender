@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -15,7 +14,7 @@ import (
 	iodin "github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/hardware/mdb"
 	mega "github.com/temoto/vender/hardware/mega-client"
-	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/log2"
 )
 
 func main() {
@@ -28,10 +27,12 @@ func main() {
 	uarterName := cmdline.String("io", "file", "file|iodin|mega")
 	cmdline.Parse(os.Args[1:])
 
+	log := log2.NewStderr(log2.LDebug)
+
 	var uarter mdb.Uarter
 	switch *uarterName {
 	case "file":
-		uarter = mdb.NewFileUart()
+		uarter = mdb.NewFileUart(log)
 	case "iodin":
 		iodin, err := iodin.NewClient(*iodinPath)
 		if err != nil {
@@ -39,7 +40,7 @@ func main() {
 		}
 		uarter = mdb.NewIodinUart(iodin)
 	case "mega":
-		mega, err := mega.NewClient(byte(*megaI2CBus), byte(*megaI2CAddr), *megaPin)
+		mega, err := mega.NewClient(byte(*megaI2CBus), byte(*megaI2CAddr), *megaPin, log)
 		if err != nil {
 			log.Fatal(errors.Trace(err))
 		}
@@ -49,11 +50,10 @@ func main() {
 	}
 	defer uarter.Close()
 
-	m, err := mdb.NewMDB(uarter, *devicePath)
+	m, err := mdb.NewMDB(uarter, *devicePath, log)
 	if err != nil {
 		log.Fatalf("mdb open: %v", errors.ErrorStack(err))
 	}
-	m.SetLog(log.Printf)
 	stdin := bufio.NewReader(os.Stdin)
 	defer os.Stdout.WriteString("\n")
 	for {
@@ -74,10 +74,10 @@ func main() {
 		iteration := uint64(1)
 	wordLoop:
 		for _, word := range words {
-			log.Printf("(%d)%s", iteration, word)
+			log.Debugf("(%d)%s", iteration, word)
 			switch {
 			case word == "help":
-				log.Printf(`syntax: commands separated by whitespace
+				log.Infof(`syntax: commands separated by whitespace
 - break    MDB bus reset (TX high for 200ms, wait for 500ms)
 - log=yes  enable debug logging
 - log=no   disable debug logging
@@ -88,9 +88,9 @@ func main() {
 			case word == "break":
 				m.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
 			case word == "log=yes":
-				m.SetLog(log.Printf)
+				m.Log.SetLevel(log2.LDebug)
 			case word == "log=no":
-				m.SetLog(helpers.Discardf)
+				m.Log.SetLevel(log2.LError)
 			case word[0] == 'l':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
 					log.Fatal(errors.ErrorStack(err))
@@ -111,16 +111,16 @@ func main() {
 				request, err := mdb.PacketFromHex(word[1:], true)
 				if err == nil {
 					err = m.Tx(request, response)
-					response.Logf("< %s")
+					log.Debugf("< %s", response.Format())
 				}
 				if err != nil {
-					log.Printf(errors.ErrorStack(err))
+					log.Errorf(errors.ErrorStack(err))
 					if !errors.IsTimeout(err) {
 						break wordLoop
 					}
 				}
 			default:
-				log.Printf("error: invalid command: '%s'", word)
+				log.Errorf("error: invalid command: '%s'", word)
 				break wordLoop
 			}
 		}

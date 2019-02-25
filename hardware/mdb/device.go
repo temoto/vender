@@ -3,13 +3,13 @@ package mdb
 import (
 	"context"
 	"encoding/binary"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/log2"
 )
 
 const (
@@ -21,9 +21,10 @@ const (
 
 type Device struct {
 	lk     sync.Mutex
-	mdber  Mdber
+	mdber  *mdb
 	pollCh chan Packet
 
+	Log           *log2.Log
 	Address       uint8
 	Name          string
 	ByteOrder     binary.ByteOrder
@@ -42,6 +43,7 @@ func (self *Device) Init(ctx context.Context, addr uint8, name string, byteOrder
 	self.lk.Lock()
 	defer self.lk.Unlock()
 
+	self.Log = log2.ContextValueLogger(ctx, log2.ContextKey)
 	mdber := ContextValueMdber(ctx, ContextKey)
 	self.mdber = mdber
 	self.pollCh = make(chan Packet, 1)
@@ -84,11 +86,11 @@ func (self *Device) DoSetup(ctx context.Context) error {
 
 	r := self.Tx(self.PacketSetup)
 	if r.E != nil {
-		log.Printf("device=%s mdb request=%s err=%v", self.Name, self.PacketSetup.Format(), r.E)
+		self.Log.Errorf("device=%s mdb request=%s err=%v", self.Name, self.PacketSetup.Format(), r.E)
 		return r.E
 	}
 	self.SetupResponse = r.P
-	log.Printf("device=%s SetupResponse=(%d)%s", self.Name, self.SetupResponse.Len(), self.SetupResponse.Format())
+	self.Log.Debugf("device=%s SetupResponse=(%d)%s", self.Name, self.SetupResponse.Len(), self.SetupResponse.Format())
 	return nil
 }
 
@@ -179,9 +181,9 @@ func (self *Device) DoPollSync(ctx context.Context) PacketError {
 	// defer self.lk.Unlock()
 	r := self.Tx(self.PacketPoll)
 	if r.E != nil {
-		log.Printf("device=%s POLL err=%v", self.Name, r.E)
+		self.Log.Errorf("device=%s POLL err=%v", self.Name, r.E)
 	} else {
-		log.Printf("device=%s POLL=(%d)%s", self.Name, r.P.Len(), r.P.Format())
+		self.Log.Debugf("device=%s POLL=(%d)%s", self.Name, r.P.Len(), r.P.Format())
 	}
 	return r
 }

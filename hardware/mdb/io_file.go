@@ -3,7 +3,6 @@ package mdb
 import (
 	"bufio"
 	"io"
-	"log"
 	"os"
 	"runtime/debug"
 	"syscall"
@@ -11,21 +10,24 @@ import (
 	"unsafe"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/log2"
 	"golang.org/x/sys/unix"
 )
 
 type fileUart struct {
-	f  *os.File // set nil in test
-	fd uintptr
-	r  io.Reader // override in test
-	w  io.Writer // override in test
-	br *bufio.Reader
-	t2 termios2
+	Log *log2.Log
+	f   *os.File // set nil in test
+	fd  uintptr
+	r   io.Reader // override in test
+	w   io.Writer // override in test
+	br  *bufio.Reader
+	t2  termios2
 }
 
-func NewFileUart() *fileUart {
+func NewFileUart(l *log2.Log) *fileUart {
 	return &fileUart{
-		br: bufio.NewReader(nil),
+		Log: l,
+		br:  bufio.NewReader(nil),
 	}
 }
 
@@ -49,7 +51,7 @@ func (self *fileUart) set9(b bool) error {
 }
 
 func (self *fileUart) write9(p []byte, start9 bool) (n int, err error) {
-	// log.Printf("debug: mdb.write9 p=%x start9=%t", p, start9)
+	// self.Log.Debugf("mdb.write9 p=%x start9=%t", p, start9)
 	var n2 int
 	switch len(p) {
 	case 0:
@@ -117,12 +119,12 @@ func (self *fileUart) Open(path string) (err error) {
 	var ser serial_info
 	err = ioctl(self.fd, uintptr(cTIOCGSERIAL), uintptr(unsafe.Pointer(&ser)))
 	if err != nil {
-		log.Printf("get serial fail err=%v", err)
+		self.Log.Errorf("get serial fail err=%v", err)
 	} else {
 		ser.flags |= cASYNC_LOW_LATENCY
 		err = ioctl(self.fd, uintptr(cTIOCSSERIAL), uintptr(unsafe.Pointer(&ser)))
 		if err != nil {
-			log.Printf("set serial fail err=%v", err)
+			self.Log.Errorf("set serial fail err=%v", err)
 		}
 	}
 	return nil
@@ -163,7 +165,7 @@ func (self *fileUart) Tx(request, response []byte) (n int, err error) {
 	n--
 	chkcomp := checksum(response[:n])
 	if chkin != chkcomp {
-		// log.Printf("debug: mdb.fileUart.Tx InvalidChecksum frompacket=%x actual=%x", chkin, chkcomp)
+		// self.Log.Debugf("mdb.fileUart.Tx InvalidChecksum frompacket=%x actual=%x", chkin, chkcomp)
 		return n, errors.Trace(InvalidChecksum{Received: chkin, Actual: chkcomp})
 	}
 	if n > 0 {
@@ -181,29 +183,29 @@ func bufferReadPacket(src *bufio.Reader, dst []byte) (n int, err error) {
 		if part, err = src.ReadSlice(0xff); err != nil {
 			return n, errors.Trace(err)
 		}
-		// log.Printf("bufferReadPacket readFF=%x", part)
+		// self.Log.Debugf("bufferReadPacket readFF=%x", part)
 		pl := len(part)
 		// TODO check n+pl overflow
 		n += copy(dst[n:], part[:pl-1])
-		// log.Printf("bufferReadPacket append %02d dst=%x", pl-1, dst[:n])
+		// self.Log.Debugf("bufferReadPacket append %02d dst=%x", pl-1, dst[:n])
 		if b, err = src.ReadByte(); err != nil {
 			return n, errors.Trace(err)
 		}
-		// log.Printf("bufferReadPacket readByte=%02x", b)
+		// self.Log.Debugf("bufferReadPacket readByte=%02x", b)
 		switch b {
 		case 0x00:
 			if b, err = src.ReadByte(); err != nil {
 				return n, errors.Trace(err)
 			}
-			// log.Printf("bufferReadPacket seq=ff00 chk=%02x", b)
+			// self.Log.Debugf("bufferReadPacket seq=ff00 chk=%02x", b)
 			dst[n] = b
 			n++
-			// log.Printf("bufferReadPacket dst=%x next=copy,return", dst[:n])
+			// self.Log.Debugf("bufferReadPacket dst=%x next=copy,return", dst[:n])
 			return n, nil
 		case 0xff:
 			dst[n] = b
 			n++
-			// log.Printf("bufferReadPacket seq=ffff dst=%x", dst[:n])
+			// self.Log.Debugf("bufferReadPacket seq=ffff dst=%x", dst[:n])
 		default:
 			err = errors.NotValidf("bufferReadPacket unknown sequence ff %x", b)
 			return n, err
@@ -281,7 +283,7 @@ func ioctl(fd uintptr, op, arg uintptr) (err error) {
 		err = errors.New("unknown error from SYS_IOCTL")
 	}
 	if err != nil {
-		// log.Printf("debug: mdb.ioctl op=%x arg=%x err=%s", op, arg, err)
+		// self.Log.Debugf("mdb.ioctl op=%x arg=%x err=%s", op, arg, err)
 	}
 	return errors.Annotate(err, "ioctl")
 }

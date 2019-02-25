@@ -3,7 +3,6 @@ package coin
 import (
 	"context"
 	"encoding/binary"
-	"log"
 	"time"
 
 	"github.com/juju/errors"
@@ -190,15 +189,15 @@ func (self *CoinAcceptor) newSetuper() engine.Doer {
 		self.coinTypeRouting = self.dev.ByteOrder.Uint16(bs[5 : 5+2])
 		for i, sf := range bs[7 : 7+16] {
 			n := currency.Nominal(sf) * currency.Nominal(scalingFactor) * currency.Nominal(self.internalScalingFactor)
-			log.Printf("i=%d sf=%d nominal=%s", i, sf, currency.Amount(n).Format100I())
+			self.dev.Log.Debugf("i=%d sf=%d nominal=%s", i, sf, currency.Amount(n).Format100I())
 			self.coinTypeCredit[i] = n
 		}
-		log.Printf("Changer Feature Level: %d", self.featureLevel)
-		log.Printf("Country / Currency Code: %x", bs[1:1+2])
-		log.Printf("Coin Scaling Factor: %d", scalingFactor)
-		log.Printf("Decimal Places: %d", bs[4])
-		log.Printf("Coin Type Routing: %b", self.coinTypeRouting)
-		log.Printf("Coin Type Credit: %x %#v", bs[7:], self.coinTypeCredit)
+		self.dev.Log.Debugf("Changer Feature Level: %d", self.featureLevel)
+		self.dev.Log.Debugf("Country / Currency Code: %x", bs[1:1+2])
+		self.dev.Log.Debugf("Coin Scaling Factor: %d", scalingFactor)
+		self.dev.Log.Debugf("Decimal Places: %d", bs[4])
+		self.dev.Log.Debugf("Coin Type Routing: %b", self.coinTypeRouting)
+		self.dev.Log.Debugf("Coin Type Credit: %x %#v", bs[7:], self.coinTypeCredit)
 		return nil
 	}}
 }
@@ -210,14 +209,14 @@ func (self *CoinAcceptor) CommandTubeStatus() error {
 	if r.E != nil {
 		return errors.Annotate(r.E, "hardware/mdb/coin TUBE STATUS")
 	}
-	log.Printf("tubestatus response=(%d)%s", r.P.Len(), r.P.Format())
+	self.dev.Log.Debugf("tubestatus response=(%d)%s", r.P.Len(), r.P.Format())
 	bs := r.P.Bytes()
 	if len(bs) < expectLengthMin {
 		return errors.Errorf("hardware/mdb/coin TUBE money.Status response=%s expected >= %d bytes", r.P.Format(), expectLengthMin)
 	}
 	full := self.dev.ByteOrder.Uint16(bs[0:2])
 	counts := bs[2:18]
-	log.Printf("tubestatus full=%b counts=%v", full, counts)
+	self.dev.Log.Debugf("tubestatus full=%b counts=%v", full, counts)
 	// TODO use full,counts
 	_ = full
 	_ = counts
@@ -276,17 +275,17 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 	if r.E != nil {
 		return errors.Annotate(r.E, "hardware/mdb/coin/CommandExpansionIdentification")
 	}
-	log.Printf("EXPANSION IDENTIFICATION response=(%d)%s", r.P.Len(), r.P.Format())
+	self.dev.Log.Debugf("EXPANSION IDENTIFICATION response=(%d)%s", r.P.Len(), r.P.Format())
 	bs := r.P.Bytes()
 	if len(bs) < expectLength {
 		return errors.Errorf("hardware/mdb/coin EXPANSION IDENTIFICATION response=%s expected %d bytes", r.P.Format(), expectLength)
 	}
 	self.supportedFeatures = Features(self.dev.ByteOrder.Uint32(bs[29 : 29+4]))
-	log.Printf("Manufacturer Code: %x", bs[0:0+3])
-	log.Printf("Serial Number: '%s'", string(bs[3:3+12]))
-	log.Printf("Model #/Tuning Revision: '%s'", string(bs[15:15+12]))
-	log.Printf("Software Version: %x", bs[27:27+2])
-	log.Printf("Optional Features: %b", self.supportedFeatures)
+	self.dev.Log.Debugf("Manufacturer Code: %x", bs[0:0+3])
+	self.dev.Log.Debugf("Serial Number: '%s'", string(bs[3:3+12]))
+	self.dev.Log.Debugf("Model #/Tuning Revision: '%s'", string(bs[15:15+12]))
+	self.dev.Log.Debugf("Software Version: %x", bs[27:27+2])
+	self.dev.Log.Debugf("Optional Features: %b", self.supportedFeatures)
 	return nil
 }
 
@@ -295,7 +294,7 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 // - otherwise returns nil or MDB/parse error, result set to valid DiagResult
 func (self *CoinAcceptor) CommandExpansionSendDiagStatus(result *DiagResult) error {
 	if self.supportedFeatures&FeatureExtendedDiagnostic == 0 {
-		log.Printf("CommandExpansionSendDiagStatus feature is not supported")
+		self.dev.Log.Debugf("CommandExpansionSendDiagStatus feature is not supported")
 		return nil
 	}
 	r := self.dev.Tx(packetDiagStatus)
@@ -303,7 +302,7 @@ func (self *CoinAcceptor) CommandExpansionSendDiagStatus(result *DiagResult) err
 		return errors.Annotate(r.E, "hardware/mdb/coin/CommandExpansionSendDiagStatus")
 	}
 	dr, err := parseDiagResult(r.P.Bytes(), self.dev.ByteOrder)
-	log.Printf("DiagStatus=%s", dr.Error())
+	self.dev.Log.Debugf("DiagStatus=%s", dr.Error())
 	if result != nil {
 		*result = dr
 	}
@@ -321,7 +320,7 @@ func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
 
 func (self *CoinAcceptor) coinTypeNominal(b byte) currency.Nominal {
 	if b >= coinTypeCount {
-		log.Printf("invalid coin type: %d", b)
+		self.dev.Log.Errorf("invalid coin type: %d", b)
 		return 0
 	}
 	return self.coinTypeCredit[b]
@@ -375,7 +374,7 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 
 	if b>>5 == 1 { // Slug count 001xxxxx
 		slugs := b & 0x1f
-		log.Printf("Number of slugs: %d", slugs)
+		self.dev.Log.Debugf("Number of slugs: %d", slugs)
 		return money.PollItem{Status: money.StatusInfo, Error: ErrSlugs, DataCount: slugs}, false
 	}
 	if b>>6 == 1 { // Coins Deposited
@@ -403,7 +402,7 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 			// pi.Status = money.StatusFatal
 			panic(errors.Errorf("code error b=%x routing=%b", b, routing))
 		}
-		log.Printf("deposited coinType=%d routing=%s pi=%s", coinType, routing.String(), pi.String())
+		self.dev.Log.Debugf("deposited coinType=%d routing=%s pi=%s", coinType, routing.String(), pi.String())
 		return pi, true
 	}
 	if b&0x80 != 0 { // Coins Dispensed Manually

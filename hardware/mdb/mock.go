@@ -5,22 +5,24 @@ import (
 	"bufio"
 	"bytes"
 	"io"
-	"log"
 	"testing"
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/log2"
 )
 
 // Mock Uarter for tests
 type nullUart struct {
+	Log *log2.Log
 	src io.Reader
 	br  *bufio.Reader
 	w   io.Writer
 }
 
-func NewNullUart(r io.Reader, w io.Writer) *nullUart {
+func NewNullUart(r io.Reader, w io.Writer, log *log2.Log) *nullUart {
 	return &nullUart{
+		Log: log,
 		src: r,
 		br:  bufio.NewReader(r),
 		w:   w,
@@ -56,7 +58,7 @@ func (self *nullUart) Tx(request, response []byte) (n int, err error) {
 	n--
 	chkcomp := checksum(response)
 	if chkin != chkcomp {
-		log.Printf("debug: mdb.fileUart.Tx InvalidChecksum frompacket=%x actual=%x", chkin, chkcomp)
+		self.Log.Debugf("mdb.fileUart.Tx InvalidChecksum frompacket=%x actual=%x", chkin, chkcomp)
 		return n, errors.Trace(InvalidChecksum{Received: chkin, Actual: chkcomp})
 	}
 	n = copy(response, buf[:n])
@@ -111,11 +113,12 @@ func (self *nullUart) resetRead() error {
 	return nil
 }
 
-func NewTestMDBRaw(t testing.TB) (Mdber, func([]byte), *bytes.Buffer) {
+func NewTestMDBRaw(t testing.TB) (*mdb, func([]byte), *bytes.Buffer) {
 	r := bytes.NewBuffer(nil)
 	w := bytes.NewBuffer(nil)
-	uarter := NewNullUart(r, w)
-	m, err := NewMDB(uarter, "")
+	log := log2.NewTest(t, log2.LDebug)
+	uarter := NewNullUart(r, w, log)
+	m, err := NewMDB(uarter, "", log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +157,6 @@ func (self *ChanIO) Read(p []byte) (int, error) {
 }
 
 func (self *ChanIO) Write(p []byte) (int, error) {
-	// log.Printf("cio.Write %x", p)
 	if !self.wtmr.Stop() {
 		<-self.wtmr.C
 	}
@@ -178,10 +180,11 @@ func NewChanIO(timeout time.Duration) *ChanIO {
 	return c
 }
 
-func NewTestMDBChan(t testing.TB) (Mdber, <-chan Packet, chan<- Packet) {
+func NewTestMDBChan(t testing.TB) (*mdb, <-chan Packet, chan<- Packet) {
 	cio := NewChanIO(5 * time.Second)
-	uarter := NewNullUart(cio, cio)
-	m, err := NewMDB(uarter, "")
+	log := log2.NewTest(t, log2.LDebug)
+	uarter := NewNullUart(cio, cio, log)
+	m, err := NewMDB(uarter, "", log)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/temoto/vender/currency"
@@ -107,10 +106,10 @@ func (self *MoneySystem) Abort(ctx context.Context) error {
 	var coinsReturned currency.Amount
 	if coinsReturned, err = self.cs.Dispense(ctx, &self.cs.credit); err != nil {
 		// TODO telemetry high priority error
-		log.Printf("MoneySystem.Abort err=%v", err)
+		self.Log.Errorf("MoneySystem.Abort err=%v", err)
 		return err
 	}
-	log.Printf("MoneySystem.Abort coinsreturned=%v", coinsReturned.Format100I())
+	self.Log.Debugf("MoneySystem.Abort coinsreturned=%v", coinsReturned.Format100I())
 	self.cs.credit.Clear()
 	total -= coinsReturned
 

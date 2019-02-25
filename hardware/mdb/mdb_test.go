@@ -8,19 +8,19 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/log2"
 )
 
-func testMdberStrings(t testing.TB, r io.Reader, w io.Writer) Mdber {
-	m, err := NewMDB(NewNullUart(r, w), "")
+func testMdberStrings(t testing.TB, r io.Reader, w io.Writer) *mdb {
+	log := log2.NewTest(t, log2.LDebug)
+	m, err := NewMDB(NewNullUart(r, w, log), "", log)
 	if err != nil {
 		t.Fatal(errors.ErrorStack(err))
 	}
-	m.SetLog(t.Logf)
 	return m
 }
 
 func checkTx(t testing.TB, send, recv Packet, wexpects, rexpects string) {
-	helpers.LogToTest(t)
 	t.Logf("send=%s wexp=%x recv=%s rexp=%x", send.Format(), wexpects, recv.Format(), rexpects)
 	r := bytes.NewReader(recv.Bytes())
 	w := bytes.NewBuffer(nil)

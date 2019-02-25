@@ -3,6 +3,8 @@ package state
 import (
 	"strings"
 	"testing"
+
+	"github.com/temoto/vender/log2"
 )
 
 func TestReadConfig(t *testing.T) {
@@ -22,8 +24,9 @@ func TestReadConfig(t *testing.T) {
 	}
 	mkCheck := func(c Case) func(*testing.T) {
 		return func(t *testing.T) {
+			log := log2.NewTest(t, log2.LDebug)
 			r := strings.NewReader(c.input)
-			cfg, err := ReadConfig(r)
+			cfg, err := ReadConfig(r, log)
 			if err != nil {
 				t.Fatal(err)
 			}

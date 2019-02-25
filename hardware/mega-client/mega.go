@@ -3,7 +3,6 @@ package mega
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -15,12 +14,14 @@ import (
 	"github.com/temoto/vender/hardware/i2c"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/helpers/msync"
+	"github.com/temoto/vender/log2"
 )
 
 const modName string = "mega-client"
 const DefaultTimeout = 500 * time.Millisecond
 
 type Client struct {
+	Log        *log2.Log
 	bus        i2c.I2CBus
 	addr       byte
 	pin        uint
@@ -43,8 +44,9 @@ type Stat struct {
 	Stray         uint
 }
 
-func NewClient(busNo byte, addr byte, pin uint) (*Client, error) {
+func NewClient(busNo byte, addr byte, pin uint, log *log2.Log) (*Client, error) {
 	self := &Client{
+		Log:        log,
 		addr:       addr,
 		bus:        i2c.NewI2CBus(busNo),
 		pin:        pin,
@@ -69,11 +71,11 @@ func (self *Client) Close() error {
 }
 
 func (self *Client) IncRef(debug string) {
-	log.Printf("%s incref by %s", modName, debug)
+	self.Log.Debugf("%s incref by %s", modName, debug)
 	atomic.AddInt32(&self.refcount, 1)
 }
 func (self *Client) DecRef(debug string) error {
-	log.Printf("%s decref by %s", modName, debug)
+	self.Log.Debugf("%s decref by %s", modName, debug)
 	new := atomic.AddInt32(&self.refcount, -1)
 	switch {
 	case new > 0:
@@ -89,10 +91,10 @@ func (self *Client) RawRead(b []byte) error {
 	_, err := self.bus.ReadBytesAt(self.addr, b)
 	if err != nil {
 		self.stat.Error++
-		// log.Printf("%s RawRead addr=%02x error=%v", modName, self.addr, err)
+		// self.Log.Debugf("%s RawRead addr=%02x error=%v", modName, self.addr, err)
 		return err
 	}
-	// log.Printf("%s RawRead addr=%02x buf=%02x", modName, self.addr, b)
+	// self.Log.Debugf("%s RawRead addr=%02x buf=%02x", modName, self.addr, b)
 	return nil
 }
 
@@ -102,7 +104,7 @@ func (self *Client) RawWrite(b []byte) error {
 	if err != nil {
 		self.stat.Error++
 	}
-	// log.Printf("%s RawWrite addr=%02x buf=%02x err=%v", modName, self.addr, b, err)
+	// self.Log.Debugf("%s RawWrite addr=%02x buf=%02x err=%v", modName, self.addr, b, err)
 	return err
 }
 
@@ -148,7 +150,7 @@ func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration)
 			if resPacket.Id != 0 {
 				if resPacket.Id != cmdPacket.Id {
 					self.stat.Stray++
-					log.Printf("CRITICAL stray command=%02x response=%s", cmdPacket.Bytes(), resPacket.String())
+					self.Log.Errorf("CRITICAL stray command=%02x response=%s", cmdPacket.Bytes(), resPacket.String())
 					// self.strayCh <- resPacket
 					break
 				}
@@ -194,18 +196,18 @@ func (self *Client) read(buf []byte) {
 	err := self.RawRead(buf)
 	if err != nil {
 		self.stat.Error++
-		log.Printf("%s pin read=%02x error=%v", modName, self.addr, err)
+		self.Log.Errorf("%s pin read=%02x error=%v", modName, self.addr, err)
 		return
 	}
 	err = ParseResponse(buf, func(p Packet) {
-		// log.Printf("debug pin parsed packet=%02x %s", p.Bytes(), p.String())
+		// self.Log.Debugf("pin parsed packet=%02x %s", p.Bytes(), p.String())
 		switch Response_t(p.Header) {
 		case RESPONSE_TWI:
 			self.stat.Twi++
 			self.twiCh <- p
 		default:
 			if p.Id == 0 {
-				log.Printf("INFO non-response=%s", p.String())
+				self.Log.Infof("non-response=%s", p.String())
 				// self.strayCh <- p
 			} else {
 				self.stat.ResponseAll++
@@ -215,6 +217,6 @@ func (self *Client) read(buf []byte) {
 	})
 	if err != nil {
 		self.stat.Error++
-		log.Printf("pin read=%02x parse error=%v", buf, err)
+		self.Log.Errorf("pin read=%02x parse error=%v", buf, err)
 	}
 }

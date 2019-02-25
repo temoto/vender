@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
-	"log"
 	"strings"
 	"testing"
 )
@@ -88,10 +87,6 @@ func (self *Packet) Write(p []byte) (n int, err error) {
 }
 
 func (self *Packet) Len() int { return self.l }
-
-func (self *Packet) Logf(format string) {
-	log.Printf(format, self.Format())
-}
 
 func (self *Packet) Format() string {
 	b := self.Bytes()

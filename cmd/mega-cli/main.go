@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/juju/errors"
 	mega "github.com/temoto/vender/hardware/mega-client"
+	"github.com/temoto/vender/log2"
 )
 
 func main() {
@@ -23,9 +23,10 @@ func main() {
 	pin := cmdline.Uint("pin", 23, "")
 	cmdline.Parse(os.Args[1:])
 
-	log.SetFlags(log.Lshortfile | log.Ltime | log.Lmicroseconds)
+	log := log2.NewStderr(log2.LDebug)
+	log.SetFlags(log2.LInteractiveFlags)
 
-	client, err := mega.NewClient(byte(*i2cBusNo), byte(*addr), *pin)
+	client, err := mega.NewClient(byte(*i2cBusNo), byte(*addr), *pin, log)
 	if err != nil {
 		log.Fatal(errors.Trace(err))
 	}
@@ -49,10 +50,10 @@ func main() {
 		iteration := uint64(1)
 	wordLoop:
 		for _, word := range words {
-			log.Printf("(%d)%s", iteration, word)
+			log.Debugf("(%d)%s", iteration, word)
 			switch {
 			case word == "help":
-				log.Printf(`syntax: commands separated by whitespace
+				log.Infof(`syntax: commands separated by whitespace
 - tick=yes|no  enable|disable backup reading every second
 - pin=yes|no  enable|disable reading when pin signal is detected
 - pXX...   send proper packet from hex XX... and receive response
@@ -67,7 +68,7 @@ func main() {
 			case word == "pin=yes":
 				fallthrough
 			case word == "pin=no":
-				log.Printf("TODO token=%s not implemented", word)
+				log.Errorf("TODO token=%s not implemented", word)
 			case word[0] == 'l':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
 					log.Fatal(errors.ErrorStack(err))
@@ -82,15 +83,15 @@ func main() {
 					log.Fatalf("token=%s error=%v", word, errors.ErrorStack(err))
 				} else {
 					if len(bs) < 1 {
-						log.Printf("pXX... requires at least 1 byte for command")
+						log.Errorf("pXX... requires at least 1 byte for command")
 						break
 					}
 					p, err := client.DoTimeout(mega.Command_t(bs[0]), bs[1:], mega.DefaultTimeout)
 					if err != nil {
-						log.Printf("p rq=%02x rs=%s error=%v", bs, p.String(), err)
+						log.Errorf("p rq=%02x rs=%s error=%v", bs, p.String(), err)
 						break
 					}
-					log.Printf("response=%02x %s", p.Bytes(), p.String())
+					log.Debugf("response=%02x %s", p.Bytes(), p.String())
 				}
 			case word[0] == 'r':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
@@ -99,15 +100,15 @@ func main() {
 					buf := make([]byte, i)
 					err = client.RawRead(buf)
 					if err != nil {
-						log.Printf("read error=%v", err)
+						log.Errorf("read error=%v", err)
 						break
 					}
 					// FIXME duplicate code
 					err = mega.ParseResponse(buf, func(p mega.Packet) {
-						log.Printf("- packet=%s %s", p.SimpleHex(), p.String())
+						log.Debugf("- packet=%s %s", p.SimpleHex(), p.String())
 					})
 					if err != nil {
-						log.Printf("rs=%02x parse error=%v", buf, err)
+						log.Errorf("rs=%02x parse error=%v", buf, err)
 						break
 					}
 				}
@@ -122,7 +123,7 @@ func main() {
 					log.Fatalf("token=%s error=%v", word, errors.ErrorStack(err))
 				} else {
 					err = client.RawWrite(bs)
-					log.Printf("send error=%v", err)
+					log.Errorf("send error=%v", err)
 				}
 			}
 		}

@@ -2,15 +2,16 @@ package money
 
 import (
 	"context"
-	"log"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/hardware/mdb/bill"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/log2"
 )
 
 type BillState struct {
+	Log   *log2.Log
 	alive *alive.Alive
 	// TODO escrow currency.NominalGroup
 	hw    bill.BillValidator
@@ -18,7 +19,8 @@ type BillState struct {
 }
 
 func (self *BillState) Init(ctx context.Context, parent *MoneySystem) error {
-	log.Printf("head/money/bill init")
+	self.Log = parent.Log
+	self.Log.Debugf("head/money/bill init")
 	if err := self.hw.Init(ctx); err != nil {
 		return err
 	}
@@ -30,7 +32,7 @@ func (self *BillState) Start(ctx context.Context, parent *MoneySystem) {
 	switch self.state {
 	case "", "stopped": // OK
 	case "starting", "running":
-		log.Printf("double start, not a biggie")
+		self.Log.Debugf("double start, not a biggie")
 		return
 	default:
 		panic("invalid state transition")
@@ -38,7 +40,7 @@ func (self *BillState) Start(ctx context.Context, parent *MoneySystem) {
 	self.state = "starting"
 
 	if err := self.hw.DoConfigBills.Do(ctx); err != nil {
-		log.Printf("err=%v", errors.ErrorStack(err))
+		self.Log.Errorf("err=%v", errors.ErrorStack(err))
 		self.state = "err"
 		return
 	}
@@ -52,7 +54,7 @@ func (self *BillState) Stop(ctx context.Context) {
 	switch self.state {
 	case "running": // OK
 	case "", "stopped":
-		log.Printf("double stop, not a biggie")
+		self.Log.Debugf("double stop, not a biggie")
 		return
 	default:
 		panic("invalid state transition")
@@ -77,6 +79,6 @@ func (self *BillState) handlePollItem(ctx context.Context, m *MoneySystem, pi mo
 		self.hw.DoIniter.Do(ctx)
 	case money.StatusBusy:
 	default:
-		handleGenericPollItem(ctx, pi, logPrefix)
+		m.handleGenericPollItem(ctx, pi, logPrefix)
 	}
 }

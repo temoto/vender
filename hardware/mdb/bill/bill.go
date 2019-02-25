@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"log"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
@@ -76,7 +75,7 @@ func (self *CommandStacker) Do(ctx context.Context) error {
 	request := packetStacker
 	r := self.Dev.Tx(request)
 	if r.E != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), r.E)
+		self.Dev.Log.Errorf("mdb request=%s err=%v", request.Format(), r.E)
 		return r.E
 	}
 	rb := r.P.Bytes()
@@ -87,7 +86,7 @@ func (self *CommandStacker) Do(ctx context.Context) error {
 	self.full = (x & 0x8000) != 0
 	self.count = x & 0x7fff
 	self.done = true
-	log.Printf(self.String())
+	self.Dev.Log.Debugf(self.String())
 	return nil
 }
 func (self *CommandStacker) String() string {
@@ -178,7 +177,7 @@ func (self *BillValidator) CommandBillType(accept, escrow uint16) error {
 	self.dev.ByteOrder.PutUint16(buf[3:], escrow)
 	request := mdb.MustPacketFromBytes(buf[:], true)
 	err := self.dev.Tx(request).E
-	log.Printf("CommandBillType request=%s err=%v", request.Format(), err)
+	self.dev.Log.Debugf("CommandBillType request=%s err=%v", request.Format(), err)
 	return err
 }
 
@@ -200,25 +199,25 @@ func (self *BillValidator) CommandSetup(ctx context.Context) error {
 	billSecurityLevels := self.dev.ByteOrder.Uint16(bs[8:10])
 	self.escrowCap = bs[10] == 0xff
 
-	log.Printf("Bill Type Scaling Factors: %3v", bs[11:])
+	self.dev.Log.Debugf("Bill Type Scaling Factors: %3v", bs[11:])
 	for i, sf := range bs[11:] {
 		if i >= TypeCount {
-			log.Printf("ERROR bill SETUP type factors count=%d more than expected=%d", len(bs[11:]), TypeCount)
+			self.dev.Log.Debugf("ERROR bill SETUP type factors count=%d more than expected=%d", len(bs[11:]), TypeCount)
 			break
 		}
 		self.billFactors[i] = sf
 		self.billNominals[i] = currency.Nominal(sf) * currency.Nominal(self.scalingFactor)
 	}
-	log.Printf("Bill Type calc. nominals:  %3v", self.billNominals)
+	self.dev.Log.Debugf("Bill Type calc. nominals:  %3v", self.billNominals)
 
-	log.Printf("Bill Validator Feature Level: %d", self.featureLevel)
-	log.Printf("Country / Currency Code: %x", currencyCode)
-	log.Printf("Bill Scaling Factor: %d", self.scalingFactor)
-	log.Printf("Decimal Places: %d", bs[5])
-	log.Printf("Stacker Capacity: %d", stackerCap)
-	log.Printf("Bill Security Levels: %016b", billSecurityLevels)
-	log.Printf("Escrow/No Escrow: %t", self.escrowCap)
-	log.Printf("Bill Type Credit: %x %#v", bs[11:], self.billNominals)
+	self.dev.Log.Debugf("Bill Validator Feature Level: %d", self.featureLevel)
+	self.dev.Log.Debugf("Country / Currency Code: %x", currencyCode)
+	self.dev.Log.Debugf("Bill Scaling Factor: %d", self.scalingFactor)
+	self.dev.Log.Debugf("Decimal Places: %d", bs[5])
+	self.dev.Log.Debugf("Stacker Capacity: %d", stackerCap)
+	self.dev.Log.Debugf("Bill Security Levels: %016b", billSecurityLevels)
+	self.dev.Log.Debugf("Escrow/No Escrow: %t", self.escrowCap)
+	self.dev.Log.Debugf("Bill Type Credit: %x %#v", bs[11:], self.billNominals)
 	return nil
 }
 
@@ -227,18 +226,18 @@ func (self *BillValidator) CommandExpansionIdentification() error {
 	request := packetExpIdent
 	r := self.dev.Tx(request)
 	if r.E != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), r.E)
+		self.dev.Log.Errorf("mdb request=%s err=%v", request.Format(), r.E)
 		return r.E
 	}
-	log.Printf("EXPANSION IDENTIFICATION response=(%d)%s", r.P.Len(), r.P.Format())
+	self.dev.Log.Debugf("EXPANSION IDENTIFICATION response=(%d)%s", r.P.Len(), r.P.Format())
 	bs := r.P.Bytes()
 	if len(bs) < expectLength {
 		return fmt.Errorf("hardware/mdb/bill EXPANSION IDENTIFICATION response=%s expected %d bytes", r.P.Format(), expectLength)
 	}
-	log.Printf("Manufacturer Code: %x", bs[0:0+3])
-	log.Printf("Serial Number: '%s'", string(bs[3:3+12]))
-	log.Printf("Model #/Tuning Revision: '%s'", string(bs[15:15+12]))
-	log.Printf("Software Version: %x", bs[27:27+2])
+	self.dev.Log.Debugf("Manufacturer Code: %x", bs[0:0+3])
+	self.dev.Log.Debugf("Serial Number: '%s'", string(bs[3:3+12]))
+	self.dev.Log.Debugf("Model #/Tuning Revision: '%s'", string(bs[15:15+12]))
+	self.dev.Log.Debugf("Software Version: %x", bs[27:27+2])
 	return nil
 }
 
@@ -249,7 +248,7 @@ func (self *BillValidator) CommandFeatureEnable(requested Features) error {
 	request := mdb.MustPacketFromBytes(buf[:], true)
 	err := self.dev.Tx(request).E
 	if err != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), err)
+		self.dev.Log.Errorf("mdb request=%s err=%v", request.Format(), err)
 	}
 	return err
 }
@@ -262,26 +261,26 @@ func (self *BillValidator) CommandExpansionIdentificationOptions() error {
 	request := packetExpIdentOptions
 	r := self.dev.Tx(request)
 	if r.E != nil {
-		log.Printf("mdb request=%s err=%v", request.Format(), r.E)
+		self.dev.Log.Errorf("mdb request=%s err=%v", request.Format(), r.E)
 		return r.E
 	}
-	log.Printf("EXPANSION IDENTIFICATION WITH OPTION BITS response=(%d)%s", r.P.Len(), r.P.Format())
+	self.dev.Log.Debugf("EXPANSION IDENTIFICATION WITH OPTION BITS response=(%d)%s", r.P.Len(), r.P.Format())
 	bs := r.P.Bytes()
 	if len(bs) < expectLength {
 		return fmt.Errorf("hardware/mdb/bill EXPANSION IDENTIFICATION WITH OPTION BITS response=%s expected %d bytes", r.P.Format(), expectLength)
 	}
 	self.supportedFeatures = Features(self.dev.ByteOrder.Uint32(bs[29 : 29+4]))
-	log.Printf("Manufacturer Code: %x", bs[0:0+3])
-	log.Printf("Serial Number: '%s'", string(bs[3:3+12]))
-	log.Printf("Model #/Tuning Revision: '%s'", string(bs[15:15+12]))
-	log.Printf("Software Version: %x", bs[27:27+2])
-	log.Printf("Optional Features: %b", self.supportedFeatures)
+	self.dev.Log.Debugf("Manufacturer Code: %x", bs[0:0+3])
+	self.dev.Log.Debugf("Serial Number: '%s'", string(bs[3:3+12]))
+	self.dev.Log.Debugf("Model #/Tuning Revision: '%s'", string(bs[15:15+12]))
+	self.dev.Log.Debugf("Software Version: %x", bs[27:27+2])
+	self.dev.Log.Debugf("Optional Features: %b", self.supportedFeatures)
 	return nil
 }
 
 func (self *BillValidator) billNominal(b byte) currency.Nominal {
 	if b >= TypeCount {
-		log.Printf("invalid bill type: %d", b)
+		self.dev.Log.Errorf("invalid bill type: %d", b)
 		return 0
 	}
 	return self.billNominals[b]
@@ -321,16 +320,16 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 	}
 	if b&0x9f == b { // Escrow Position
 		amount := self.billNominal(b & 0xf)
-		log.Printf("bill escrow TODO packetEscrowAccept")
+		self.dev.Log.Debugf("bill escrow TODO packetEscrowAccept")
 		return money.PollItem{Status: money.StatusEscrow, DataNominal: amount}
 	}
 	if b&0x5f == b { // Number of attempts to input a bill while validator is disabled.
 		attempts := b & 0x1f
-		log.Printf("Number of attempts to input a bill while validator is disabled: %d", attempts)
+		self.dev.Log.Debugf("Number of attempts to input a bill while validator is disabled: %d", attempts)
 		return money.PollItem{Status: money.StatusInfo, Error: ErrAttempts, DataCount: attempts}
 	}
 
-	err := fmt.Errorf("parsePollItem unknown=%x", b)
-	log.Print(err)
+	err := errors.Errorf("parsePollItem unknown=%x", b)
+	self.dev.Log.Errorf(err.Error())
 	return money.PollItem{Status: money.StatusFatal, Error: err}
 }

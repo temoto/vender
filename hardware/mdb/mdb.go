@@ -3,12 +3,11 @@ package mdb
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/log2"
 )
 
 const ContextKey = "run/mdber"
@@ -20,27 +19,20 @@ type Uarter interface {
 	Tx(request, response []byte) (int, error)
 }
 
-type Mdber interface {
-	BreakCustom(keep, sleep time.Duration) error
-	Tx(request Packet, response *Packet) error
-	TxRetry(request Packet, response *Packet) error
-	SetLog(logf helpers.LogFunc) helpers.LogFunc
-}
-
 // Context[key] -> Mdber or panic
-func ContextValueMdber(ctx context.Context, key interface{}) Mdber {
+func ContextValueMdber(ctx context.Context, key interface{}) *mdb {
 	v := ctx.Value(key)
 	if v == nil {
 		panic(fmt.Errorf("context['%v'] is nil", key))
 	}
-	if cfg, ok := v.(Mdber); ok {
-		return cfg
+	if m, ok := v.(*mdb); ok {
+		return m
 	}
-	panic(fmt.Errorf("context['%v'] expected type Mdber", key))
+	panic(fmt.Errorf("context['%v'] expected type *mdb", key))
 }
 
 type mdb struct {
-	log     helpers.LogFunc
+	Log     *log2.Log
 	recvBuf []byte
 	io      Uarter
 	lk      sync.Mutex
@@ -67,23 +59,21 @@ func checksum(bs []byte) byte {
 	return chk
 }
 
-func NewMDB(u Uarter, path string) (*mdb, error) {
+func NewMDB(u Uarter, options string, log *log2.Log) (*mdb, error) {
 	self := &mdb{
+		Log:     log,
 		io:      u,
-		log:     helpers.Discardf,
 		recvBuf: make([]byte, 0, PacketMaxLength),
 	}
-	err := self.io.Open(path)
-	return self, errors.Annotate(err, "NewMDB")
-}
-
-func (self *mdb) SetLog(logf helpers.LogFunc) (previous helpers.LogFunc) {
-	previous, self.log = self.log, logf
-	return previous
+	err := self.io.Open(options)
+	if err != nil {
+		return nil, errors.Annotatef(err, "mdb.NewMDB Uarter=%s Open(%s)", u, options)
+	}
+	return self, nil
 }
 
 func (self *mdb) BreakCustom(keep, sleep time.Duration) error {
-	self.log("debug: mdb.BreakCustom keep=%v sleep=%v", keep, sleep)
+	self.Log.Debugf("mdb.BreakCustom keep=%v sleep=%v", keep, sleep)
 	err := self.io.Break(keep)
 	if err == nil {
 		time.Sleep(sleep)
@@ -109,26 +99,10 @@ func (self *mdb) Tx(request Packet, response *Packet) error {
 	response.l = n
 
 	// TODO construct arguments only when logging is enabled
-	self.log("debug: mdb.Tx (multi-line)\n  ...send: (%02d) %s\n  ...recv: (%02d) %s\n  ...err=%v",
+	self.Log.Debugf("mdb.Tx (multi-line)\n  ...send: (%02d) %s\n  ...recv: (%02d) %s\n  ...err=%v",
 		request.l, request.Format(), response.l, response.Format(), err)
 	if err != nil {
 		return errors.Annotatef(err, "Tx send=%s recv=%s", request.Format(), response.Format())
 	}
 	return nil
-}
-
-func (self *mdb) TxRetry(request Packet, response *Packet) error {
-	const retries = 5
-	delay := 100 * time.Millisecond
-	var err error
-	for i := 1; i <= retries; i++ {
-		err = self.Tx(request, response)
-		if errors.IsTimeout(err) {
-			log.Printf("mdb request=%s err=%v timeout, retry in %v", request.Format(), err, delay)
-			delay *= 2
-			continue
-		}
-		break
-	}
-	return errors.Trace(err)
 }
