@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/temoto/vender/engine"
-	"github.com/temoto/vender/hardware/mdb"
 )
 
 type DeviceConveyor struct {
@@ -16,11 +15,6 @@ type DeviceConveyor struct {
 	posCup      uint16
 	posHoppers  [16]uint16
 	posElevator uint16
-}
-
-var busyResponses = []mdb.Packet{
-	mdb.MustPacketFromHex("50", true),
-	mdb.MustPacketFromHex("54", true),
 }
 
 func (self *DeviceConveyor) Init(ctx context.Context) error {
@@ -47,8 +41,9 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 
 func (self *DeviceConveyor) NewMove(position uint16) engine.Doer {
 	return engine.Func{Name: "move", F: func(ctx context.Context) error {
-		arg := []byte{0x01, byte(position >> 8), byte(position & 0xff)}
-		return self.Generic.CommandAction(ctx, arg)
+		// exception byte order
+		arg := []byte{0x01, byte(position & 0xff), byte(position >> 8)}
+		return self.CommandAction(ctx, arg)
 	}}
 }
 
@@ -57,6 +52,6 @@ func (self *DeviceConveyor) NewMoveSync(position uint16) engine.Doer {
 	tx := engine.NewTransaction(tag)
 	tx.Root.
 		Append(self.NewMove(position)).
-		Append(self.Generic.dev.NewPollUntilEmpty(tag, self.moveTimeout, busyResponses))
+		Append(self.NewWait(tag, self.moveTimeout, 0x57))
 	return tx
 }

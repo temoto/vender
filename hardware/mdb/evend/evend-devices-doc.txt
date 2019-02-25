@@ -1,143 +1,124 @@
-eVend
+=== eVend devices ===
 
-Устройства на шине
+All eVend devices (more or less) respect following command addressing scheme.
+Like "standard" MDB devices:
+- base+0 (example: 40,B8) - RESET
+- base+1 (41,B9) - SETUP (long response with firmware version, etc)
+- base+3 (43,BB) - POLL (often returns 1 byte)
+eVend specific:
+- base+2 (42,BA) XX... - device specific commands
+- base+4 (44,BC) 02 - get error code, call this when POLL returns byte with 08 bit mask set (08, 0c, 48, etc)
+- base+5 (C5,DD) XX... - device specific configuration
 
-============= Бункер =================================================================  
-управление может быть отдельной платой на моторе, а может быть одна плата на 8 бункеров (каретка)
-бункер / адрес
-1 / 0x40 
-2 / 0x48 
-3 / 0x50
-4 / 0x58
-5 / 0x60
-6 / 0x68
-7 / 0x70
-8 / 0x78
+In device sections below, only unique commands are listed.
 
-команды 
-40 - reset (return ACK)     
-41 - Setup (return 16 byte)
-42 XX - run motor for XX units (unit = 0.1 sec)
-43 - pull (return 1 byte)
+POLL response is often single byte with following bit mask values:
+- 04 - soft-timeout? Sending POLL more often makes this disappear.
+- 08 - error, must call base+4 02 to get documented error code
+- 50 - busy
 
-pulls returns
-100 - ACK
-04  - меня редко опрашивают
-50  - in process
-08  - error
+In device sections below, only unique POLL responses are listed.
 
-============= Адрес каретки
-0xB8
 
-============= блок соленоидов (адрес 0xC0) ====================================================
-C0 - reset
-C1 - Setup (return 16 byte)
-C2 XX YY - send command XX - device. YY value
-C3 - pull
-C4 02 - get error code (return 1 byte)
-C4 11 - get temperature (return 1 byte)
-C5 10 XX - set temp. xx degrees Celsius
+=== Hoppers ===
 
-Devices 
-0x01 YY - pour hot water for YY units (unit = 1.538462 cl)
-0x02 YY - pour cold water for YY units (unit = 1.538462 cl)
-0x03 YY - pour espresso water for YY units (unit = 1.538462 cl) 
-0x10 YY - cold valve (YY = 1 open/ YY = 2 close)
-0x11 YY - hot valve (YY = 1 open/ YY = 2 close)
-0x12 YY - boiler valve (YY = 1 open/ YY = 2 close)
-0x13 YY - espresso pump (YY = 1 start / YY = 0 stop )
-0x14 YY - pump (YY = 1 start / YY = 0 stop)
+May have separate address per hopper or multiplexer board (каретка) with a single address.
+Base addresses of hopper boards:
+- 1 - 40
+- 2 - 48
+- 3 - 50
+- 4 - 58
+- 5 - 60
+- 6 - 68
+- 7 - 70
+- 8 - 78
+- multiplexer - B8
 
-poll response 1 byte (bit coded)
-(0x04) - меня редко опрашивают
-(0x08) - error 
-(0x10) - наливаю
-(0x40) - hot temp not in range
+Commands:
+base+2 (42,5A,etc) XX - run motor for XX * 0.1s
 
-example
-c4 11 -> 17 -> ACK 
-c5 10 16 -> ACK 
+BA TODO
 
-============= Миксер / Подъемник (0xC8 / 0xD0) ====================================================
-(платы одинаковые. адрес устройства выбирается 4 dip переключателем. on=lift off=miher)
-0xC8 - reset
-0xC9 - Setup (return 16 byte)
-0xCA XX YY ZZ - XX command. YY ZZ values
-0xCB - pull
 
-commands
-01 YY ZZ - shaker (YY run motor for YY units (unit = 0.1 sec) ZZ = speed (0-100 0x00-0x64)
-02 YY ZZ - fun (YY = 1 ON YY = 0 OFF ZZ = 0)
-03 YY ZZ - reverse (YY value 0-100 ZZ = 0x64)
+=== Valve block (C0) ===
 
-poll response 2 byte
-ACK - return always
-0D 00 - return if command success
-04 XX - error. XX=error code
+Commands:
+C4 11 - get hot water temperature (1 byte)
+C5 10 YY - set temperature YY degrees Celsius
 
-============= конвейер (0xD8) ==============================================================================
-0xD8 - reset
-0xD9 - Setup (return 16 byte)
-0xDA XX YY YY - XX command. YY YY values
-0xDB - pull
-0xDD XX XX - config
-0xDC 02 - get error code (return 1 byte)
+C2 01 YY - pour hot water for YY units (1.538462 ml)
+C2 02 YY - pour cold water for YY units (1.538462 ml)
+C2 03 YY - pour espresso water for YY units (1.538462 ml)
+C2 10 YY - cold valve (YY: 1=open / 2=close)
+C2 11 YY - hot valve (YY: 1=open / 2=close)
+C2 12 YY - boiler valve (YY: 1=open / 2=close)
+C2 13 YY - espresso pump (YY: 1=start / 0=stop)
+C2 14 YY - pump (YY: 1=start / 0=stop)
 
-commands
-01 YY YY - move to position YY YY ( before use. move to position 0 = init device)
-03 YY 00 - встряхнуть стакан YY раз
+POLL response common bits:
+04 - soft-timeout? Sending POLL more often makes this disappear.
+08 - error, call C4 02 to get documented error code
+POLL response unique bits:
+10 - busy pouring water
+40 - hot temperature not in range
 
-poll response (bit coded)
-ACK
-0x04 - меня редко опрашивают
-0x08 - error 
-0x50 - moving to position (not complete)
+Examples:
+C4 11 -> 17 -- what is hot water temp? 22C
+C5 10 55 -- make it 85C
+C3 -> 44 -- hot temp. not in range and should repeat POLL
+C2 01 4E -- pour 120ml of hot water
+C3 -> 50 -- hot temp. not in range and busy pouring water
 
-============= стаканы (0xE0) =========================================================================
-0xE0 - reset
-0xE1 - Setup (return 16 byte)
-0xE2 XX - command 
-0xE3 pull
-0xE4 02 - get error code (return 1 byte)
 
-commands
-0x01 - get cup 
-0x02 - turn on leds
-0x03 - turn off leds
-0x04 - check cup
+=== Mixer (C8) / Elevator (D0) ===
 
-poll response (bit coded)
-ACK
-0x04 - меня редко опрашивают
-0x08 - error 
-0x50 - работаю
+Same PCB, device address is chosen with 4th DIP switch: on=elevator (lift), off=mixer.
 
-ВСЕГДА после выдачи стакана, на пуле, должно 0x50 (время на выдачу не нулевое) иначе проблема с мигриком
+Mixer:
+CA 01 YY ZZ - shake (run motor for YY * 0.1s, ZZ: speed 0-100%, 00-64 hex)
+CA 02 YY 00 - fan (YY: 01=on / 00=off)
+CA 03 YY 64 - move mixer up/down (YY: 0-100%, 00-64 hex) (this command is called "reverse")
 
-============= эспрессо (0xE8) ==============================================================================
-0xE8 - reset
-0xE9 - Setup (return 16 byte)
-0xEA XX - command 
-0xEB pull
-0xEС 02 - get error code (return 1 byte)
+Elevator:
+D2 03 ?? ?? - move
 
-commands
-0x01 - размолоть кофе
-0x02 - приготовить таблетку ( 
-0x03 - выбросить таблетку ( крутит пока не разомкнется сенсор верхнего положения )
-0x05 - наверное включить подогрев таблетки
-0x06 - наверное выключить подогрев таблетки
+POLL response:
+04 XX - error, XX=code
+0D 00 - success
 
-poll response (bit coded)
-ACK
-0x04 - меня редко опрашивают
-0x08 - error 
-0x50 - работаю
+
+=== Conveyor (D8) ===
+
+Commands:
+DD XX XX - config
+
+DA 01 HI LO - move to position (HI>>8)+LO
+DA 03 YY 00 - shake YY times - rapid forward-backward movement
+
+Before using Move command, must move to 0 = init device.
+
+
+=== Cup dispenser (E0) ===
+
+Commands:
+E2 01 - get cup
+E2 02 - turn on leds
+E2 03 - turn off leds
+E2 04 - check cup
+
+ВСЕГДА после выдачи стакана POLL должен ответить 50 (время на выдачу не нулевое) иначе проблема с мигриком.
+
+
+=== Espresso (E8) ===
+
+Commands:
+EA 01 - grind
+EA 02 - press grounds into tablet
+EA 03 - dispose tablet (motor runs until top position sensor opens circuit)
+EA 05 - TODO (seemingly) turn on tablet heating
+EA 06 - TODO (seemingly) turn off tablet heating
 
 ВАЖНО
-команда выбросить эмитирует деятельность. и при отключенном моторе, выдает 0x50 2.18с потом говорит ACK .
-нижний сенсор, так же игнорируется. через какое то время говорит что сделал.
-заклиненная мололка дает "просадку" по питанию.
-
-
-
+Команда выбросить таблетку имитирует деятельность и при отключенном моторе: POLL отвечает 50 в течение 2.18с, потом пусто (ACK).
+Нижний сенсор также игнорируется. Через какое-то время говорит что сделал.
+Заклиненная мололка дает "просадку" по питанию.

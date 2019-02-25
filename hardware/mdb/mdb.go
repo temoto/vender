@@ -99,7 +99,7 @@ func (self *mdb) Tx(request Packet, response *Packet) error {
 	response.l = n
 
 	// TODO construct arguments only when logging is enabled
-	self.Log.Debugf("mdb.Tx (multi-line)\n  ...send: (%02d) %s\n  ...recv: (%02d) %s\n  ...err=%v",
+	self.Log.Debugf("mdb.Tx (%02d) %s -> (%02d) %s err=%v",
 		request.l, request.Format(), response.l, response.Format(), err)
 	if err != nil {
 		return errors.Annotatef(err, "Tx send=%s recv=%s", request.Format(), response.Format())
