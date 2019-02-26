@@ -90,7 +90,7 @@ POLL response:
 === Conveyor (D8) ===
 
 Commands:
-DD XX XX - config
+DD 10 XX - set speed. speed range 500 - 200 steps/minute. 1C=500 3C=200. unit=15steps
 
 DA 01 HI LO - move to position (HI>>8)+LO
 DA 03 YY 00 - shake YY times - rapid forward-backward movement
