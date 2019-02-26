@@ -25,6 +25,7 @@ BEGIN {
   devName[0xd0] = "elevatr";
   devName[0xd8] = "conveyr";
   devName[0xe0] = "cup";
+  devName[0xe8] = "coffee";
   cmdBitName[0] = "reset";
   cmdBitName[1] = "setup";
   cmdBitName[3] = "poll";
@@ -53,8 +54,21 @@ BEGIN {
   cmdName["e203"] = "lightof";
   cmdName["e204"] = "check";
   cmdName["e402"] = "errcode";
+  cmdName["ea01"] = "grind";
+  cmdName["ea02"] = "press";
+  cmdName["ea03"] = "dispose";
+  cmdName["ea05"] = "heat-on";
+  cmdName["ea06"] = "heat-st";
 }
 
+function parseTime(s) {
+  isms = sub("ms", "", s) > 0;
+  isrel = sub("+", "", s) > 0;
+  v = strtonum(s);
+  if (isms) { v /= 1000 }
+  if (isrel) { v += lastTime }
+  return v
+}
 function parseAddr(di) { return and(di, 0xf8) }
 function low(a) { return and(a, 0xff) }
 function printLine() {
@@ -87,7 +101,7 @@ function commandName() {
 {
 lastBus = bus;
 lastByte = byte;
-time = $1;
+time = parseTime($1);
 bus = $2;
 data = $4;
 byte = strtonum("0x"data);
@@ -109,7 +123,7 @@ if (bus == "MT") {
     sdesc = byteLoHex;
 
     offset = (time - lastTime) * 1000;
-    line = sprintf("%d\t%.1f\t%d\t%s\t",
+    line = sprintf("%d\t%.1f\t%d\t%s",
       time*1000, offset, sid, deviceName(addr))
   } else {
     if (lastBus == "MR") {

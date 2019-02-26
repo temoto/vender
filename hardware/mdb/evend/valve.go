@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/temoto/vender/engine"
-	"github.com/temoto/vender/hardware/mdb"
 )
 
 const VolUnitMl float32 = 1.538462
@@ -19,9 +18,7 @@ const (
 type DeviceValve struct {
 	Generic
 
-	lastPoll      byte
-	busyResponses []mdb.Packet
-	pourTimeout   time.Duration
+	pourTimeout time.Duration
 }
 
 func (self *DeviceValve) Init(ctx context.Context) error {
@@ -30,7 +27,9 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	err := self.Generic.Init(ctx, 0xc0, "valve")
 
 	engine := engine.ContextValueEngine(ctx, engine.ContextKey)
-	engine.Register("mdb.evend.valve_pour_hot[120]", self.NewPourHotSync(120))
+	engine.Register("mdb.evend.valve_pour_coffee(120)", self.NewPourCoffeeSync(120))
+	engine.Register("mdb.evend.valve_pour_cold(120)", self.NewPourColdSync(120))
+	engine.Register("mdb.evend.valve_pour_hot(120)", self.NewPourHotSync(120))
 
 	return err
 }
@@ -51,9 +50,11 @@ func (self *DeviceValve) NewPourHotSync(ml uint16) engine.Doer {
 	tag := "tx_valve_pour_hot"
 	tx := engine.NewTransaction(tag)
 	tx.Root.
-		Append(self.NewWait(tag, self.pourTimeout, valvePollBusy)).
+		// FIXME don't ignore genericPollMiss
+		Append(self.NewPollWait(tag, self.pourTimeout, valvePollBusy|valvePollNotHot|genericPollMiss)).
 		Append(self.NewPourHot(ml)).
-		Append(self.NewWait(tag, self.pourTimeout, valvePollNotHot))
+		// FIXME don't ignore genericPollMiss
+		Append(self.NewPollWait(tag, self.pourTimeout, valvePollNotHot|genericPollMiss))
 	return tx
 }
 
@@ -67,9 +68,9 @@ func (self *DeviceValve) NewPourColdSync(ml uint16) engine.Doer {
 	tag := "tx_valve_pour_cold"
 	tx := engine.NewTransaction(tag)
 	tx.Root.
-		Append(self.NewWait(tag, self.pourTimeout, valvePollNotHot, valvePollBusy)).
+		Append(self.NewPollWait(tag, self.pourTimeout, valvePollNotHot|valvePollBusy)).
 		Append(self.NewPourCold(ml)).
-		Append(self.NewWait(tag, self.pourTimeout, valvePollNotHot))
+		Append(self.NewPollWait(tag, self.pourTimeout, valvePollNotHot))
 	return tx
 }
 
@@ -83,8 +84,8 @@ func (self *DeviceValve) NewPourCoffeeSync(ml uint16) engine.Doer {
 	tag := "tx_valve_pour_coffee"
 	tx := engine.NewTransaction(tag)
 	tx.Root.
-		Append(self.NewWait(tag, self.pourTimeout, valvePollNotHot, valvePollBusy)).
+		Append(self.NewPollWait(tag, self.pourTimeout, valvePollNotHot|valvePollBusy)).
 		Append(self.NewPourCoffee(ml)).
-		Append(self.NewWait(tag, self.pourTimeout, valvePollNotHot))
+		Append(self.NewPollWait(tag, self.pourTimeout, valvePollNotHot))
 	return tx
 }

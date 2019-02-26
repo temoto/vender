@@ -10,9 +10,8 @@ import (
 )
 
 type KitchenSystem struct {
-	log    *log2.Log
-	lk     sync.Mutex
-	events chan Event
+	log *log2.Log
+	lk  sync.Mutex
 	// TODO interfaces, be ready to swap devices performing same functions
 	devCoffee   *evend.DeviceCoffee
 	devConveyor *evend.DeviceConveyor
@@ -27,13 +26,9 @@ func (self *KitchenSystem) String() string { return "kitchen" }
 func (self *KitchenSystem) Start(ctx context.Context) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
-	if self.events != nil {
-		panic("double Start()")
-	}
 
 	// TODO read config
 	self.log = log2.ContextValueLogger(ctx, log2.ContextKey)
-	self.events = make(chan Event, 2)
 
 	self.devCoffee = new(evend.DeviceCoffee)
 	if err := self.devCoffee.Init(ctx); err != nil {

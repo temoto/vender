@@ -33,7 +33,7 @@ func TestValve(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init err=%v", err)
 	}
-	err = e.Resolve("mdb.evend.valve_pour_hot[120]").Do(ctx)
+	err = e.Resolve("mdb.evend.valve_pour_hot(120)").Do(ctx)
 	if err != nil {
 		t.Fatalf("pour_hot err=%v", err)
 	}

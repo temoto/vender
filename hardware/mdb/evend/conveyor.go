@@ -46,12 +46,12 @@ func (self *DeviceConveyor) NewMove(position uint16) engine.Doer {
 		return self.CommandAction(ctx, arg)
 	}}
 }
-
 func (self *DeviceConveyor) NewMoveSync(position uint16) engine.Doer {
 	tag := "tx_conveyor_move"
 	tx := engine.NewTransaction(tag)
 	tx.Root.
 		Append(self.NewMove(position)).
-		Append(self.NewWait(tag, self.moveTimeout, 0x57))
+		// FIXME dont ignore genericPollMiss
+		Append(self.NewPollWait(tag, self.moveTimeout, genericPollMiss|genericPollBusy))
 	return tx
 }
