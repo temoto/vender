@@ -26,7 +26,7 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 func (self *DeviceElevator) NewMove(position uint8) engine.Doer {
 	return engine.Func{F: func(ctx context.Context) error {
 		arg := []byte{0x03, position, 0}
-		return self.Generic.CommandAction(ctx, arg)
+		return self.CommandAction(ctx, arg)
 	}}
 }
 

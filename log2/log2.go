@@ -26,8 +26,9 @@ const (
 	Lmicroseconds     int = log.Lmicroseconds
 	Lshortfile        int = log.Lshortfile
 	LStdFlags         int = log.Ltime | Lshortfile
-	LInteractiveFlags int = LStdFlags | Lmicroseconds
+	LInteractiveFlags int = log.Ltime | Lshortfile | Lmicroseconds
 	LServiceFlags     int = Lshortfile
+	LTestFlags        int = Lshortfile | Lmicroseconds
 )
 
 func ContextValueLogger(ctx context.Context, key string) *Log {
@@ -89,7 +90,9 @@ func (self *Log) Clone(level Level) *Log {
 	if self == nil {
 		return nil
 	}
-	return NewWriter(self.w, level)
+	l := NewWriter(self.w, level)
+	l.SetFlags(self.l.Flags())
+	return l
 }
 
 func (self *Log) SetLevel(l Level) {
@@ -113,14 +116,17 @@ func (self *Log) SetPrefix(prefix string) {
 	self.l.SetPrefix(prefix)
 }
 
-func (self *Log) Logf(level Level, format string, args ...interface{}) {
+func (self *Log) Enabled(level Level) bool {
 	if self == nil {
-		return
+		return false
 	}
-	if atomic.LoadInt32((*int32)(&self.level)) < int32(level) {
-		return
+	return atomic.LoadInt32((*int32)(&self.level)) >= int32(level)
+}
+
+func (self *Log) Logf(level Level, format string, args ...interface{}) {
+	if self.Enabled(level) {
+		self.l.Output(3, fmt.Sprintf(format, args...))
 	}
-	self.l.Output(3, fmt.Sprintf(format, args...))
 }
 
 func (self *Log) Errorf(format string, args ...interface{}) {

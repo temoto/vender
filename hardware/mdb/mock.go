@@ -4,6 +4,7 @@ package mdb
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"testing"
 	"time"
@@ -180,9 +181,9 @@ func NewChanIO(timeout time.Duration) *ChanIO {
 	return c
 }
 
-func NewTestMDBChan(t testing.TB) (*mdb, <-chan Packet, chan<- Packet) {
+func NewTestMDBChan(t testing.TB, ctx context.Context) (*mdb, <-chan Packet, chan<- Packet) {
 	cio := NewChanIO(5 * time.Second)
-	log := log2.NewTest(t, log2.LDebug)
+	log := log2.ContextValueLogger(ctx, log2.ContextKey)
 	uarter := NewNullUart(cio, cio, log)
 	m, err := NewMDB(uarter, "", log)
 	if err != nil {

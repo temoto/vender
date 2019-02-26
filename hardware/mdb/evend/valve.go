@@ -44,7 +44,7 @@ func (self *DeviceValve) MlToUnit(ml uint16) byte {
 func (self *DeviceValve) NewPourHot(ml uint16) engine.Doer {
 	return engine.Func{Name: "pour_hot", F: func(ctx context.Context) error {
 		arg := []byte{0x01, self.MlToUnit(ml)}
-		return self.Generic.CommandAction(ctx, arg)
+		return self.CommandAction(ctx, arg)
 	}}
 }
 func (self *DeviceValve) NewPourHotSync(ml uint16) engine.Doer {
@@ -60,7 +60,7 @@ func (self *DeviceValve) NewPourHotSync(ml uint16) engine.Doer {
 func (self *DeviceValve) NewPourCold(ml uint16) engine.Doer {
 	return engine.Func{Name: "pour_cold", F: func(ctx context.Context) error {
 		arg := []byte{0x02, self.MlToUnit(ml)}
-		return self.Generic.CommandAction(ctx, arg)
+		return self.CommandAction(ctx, arg)
 	}}
 }
 func (self *DeviceValve) NewPourColdSync(ml uint16) engine.Doer {
@@ -76,7 +76,7 @@ func (self *DeviceValve) NewPourColdSync(ml uint16) engine.Doer {
 func (self *DeviceValve) NewPourCoffee(ml uint16) engine.Doer {
 	return engine.Func{Name: "pour_coffee", F: func(ctx context.Context) error {
 		arg := []byte{0x03, self.MlToUnit(ml)}
-		return self.Generic.CommandAction(ctx, arg)
+		return self.CommandAction(ctx, arg)
 	}}
 }
 func (self *DeviceValve) NewPourCoffeeSync(ml uint16) engine.Doer {

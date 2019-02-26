@@ -17,7 +17,7 @@ type _PI = money.PollItem
 func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 	ctx := state.NewTestContext(t, "", log2.LDebug)
 
-	mdber, reqCh, respCh := mdb.NewTestMDBChan(t)
+	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
 	go func() {
 		defer close(respCh)
 		// InitSequence, SETUP

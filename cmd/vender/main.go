@@ -11,6 +11,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	iodin "github.com/temoto/iodin/client/go-iodin"
+	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/kitchen"
 	"github.com/temoto/vender/head/money"
@@ -60,6 +61,7 @@ func main() {
 	ctx = context.WithValue(ctx, "alive", a)
 	ctx = context.WithValue(ctx, "lifecycle", lifecycle)
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
+	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine())
 
 	config := state.MustReadConfigFile(*flagConfig, log)
 	log.Debugf("config=%+v", config)
@@ -83,7 +85,7 @@ func main() {
 		log.Fatal(errors.ErrorStack(err))
 	}
 	if config.Hardware.Mdb.Log {
-		mdber.Log.SetLevel(log2.LInfo)
+		mdber.Log.SetLevel(log2.LDebug)
 	}
 	mdber.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
 	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)

@@ -35,7 +35,7 @@ func (self *DeviceCup) NewLight(on bool) engine.Doer {
 		if !on {
 			arg = 0x03
 		}
-		return self.Generic.CommandAction(ctx, []byte{arg})
+		return self.CommandAction(ctx, []byte{arg})
 	}}
 }
 

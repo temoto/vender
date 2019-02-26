@@ -41,6 +41,6 @@ func (self *DeviceCup) New_maybe_Heat(on bool) engine.Doer {
 		if !on {
 			arg = 0x06
 		}
-		return self.Generic.CommandAction(ctx, []byte{arg})
+		return self.CommandAction(ctx, []byte{arg})
 	}}
 }

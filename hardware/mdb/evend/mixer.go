@@ -20,7 +20,7 @@ func (self *DeviceMixer) NewShake(d time.Duration, speed uint8) engine.Doer {
 	return engine.Func{F: func(ctx context.Context) error {
 		argDuration := uint8(d / time.Millisecond / 100)
 		arg := []byte{0x01, argDuration, speed}
-		return self.Generic.CommandAction(ctx, arg)
+		return self.CommandAction(ctx, arg)
 	}}
 }
 
@@ -31,13 +31,13 @@ func (self *DeviceMixer) NewFan(on bool) engine.Doer {
 			argOn = 1
 		}
 		arg := []byte{0x02, argOn, 0}
-		return self.Generic.CommandAction(ctx, arg)
+		return self.CommandAction(ctx, arg)
 	}}
 }
 
 func (self *DeviceMixer) NewMove(position uint8) engine.Doer {
 	return engine.Func{F: func(ctx context.Context) error {
 		arg := []byte{0x03, position, 0x64}
-		return self.Generic.CommandAction(ctx, arg)
+		return self.CommandAction(ctx, arg)
 	}}
 }

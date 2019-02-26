@@ -22,7 +22,6 @@ const (
 type Device struct {
 	lk     sync.Mutex
 	mdber  *mdb
-	pollCh chan Packet
 
 	Log           *log2.Log
 	Address       uint8
@@ -90,7 +89,6 @@ func (self *Device) DoSetup(ctx context.Context) error {
 		return r.E
 	}
 	self.SetupResponse = r.P
-	self.Log.Debugf("device=%s SetupResponse=(%d)%s", self.Name, self.SetupResponse.Len(), self.SetupResponse.Format())
 	return nil
 }
 
@@ -107,7 +105,7 @@ func (self *Device) PollLoopPassive(ctx context.Context, a *alive.Alive, fun Pol
 	r := PacketError{}
 
 	for a.IsRunning() {
-		r = self.DoPollSync(ctx)
+		r = self.Tx(self.PacketPoll)
 		parsedActive := fun(r)
 		if r.E != nil {
 			delay = self.DelayErr
@@ -142,7 +140,7 @@ func (self *Device) NewPollLoopActive(tag string, timeout time.Duration, fun Pol
 		deadline := time.Now().Add(timeout)
 
 		for {
-			r = self.DoPollSync(ctx)
+			r = self.Tx(self.PacketPoll)
 			stop, err := fun(r)
 			if err != nil {
 				return err
@@ -177,13 +175,9 @@ func (self *Device) NewPollUntilEmpty(tag string, timeout time.Duration, ignore 
 }
 
 func (self *Device) DoPollSync(ctx context.Context) PacketError {
-	// self.lk.Lock()
-	// defer self.lk.Unlock()
 	r := self.Tx(self.PacketPoll)
 	if r.E != nil {
 		self.Log.Errorf("device=%s POLL err=%v", self.Name, r.E)
-	} else {
-		self.Log.Debugf("device=%s POLL=(%d)%s", self.Name, r.P.Len(), r.P.Format())
 	}
 	return r
 }

@@ -122,6 +122,7 @@ func MustReadConfigFile(path string, log *log2.Log) *Config {
 func NewTestContext(t testing.TB, config string, logLevel log2.Level) context.Context {
 	ctx := context.Background()
 	log := log2.NewTest(t, logLevel)
+	log.SetFlags(log2.LTestFlags)
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = ContextWithConfig(ctx, MustReadConfig(strings.NewReader(config), log))
 	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine())

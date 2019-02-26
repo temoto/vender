@@ -19,7 +19,7 @@ type _PI = money.PollItem
 func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level) context.Context {
 	ctx := state.NewTestContext(t, "", logLevel)
 
-	mdber, reqCh, respCh := mdb.NewTestMDBChan(t)
+	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
 	go func() {
 		defer close(respCh)
 		// InitSequence, SETUP

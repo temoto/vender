@@ -15,7 +15,7 @@ const ContextKey = "run/mdber"
 type Uarter interface {
 	Break(d time.Duration) error
 	Close() error
-	Open(path string) error
+	Open(options string) error
 	Tx(request, response []byte) (int, error)
 }
 
@@ -98,11 +98,12 @@ func (self *mdb) Tx(request Packet, response *Packet) error {
 	self.lk.Unlock()
 	response.l = n
 
-	// TODO construct arguments only when logging is enabled
-	self.Log.Debugf("mdb.Tx (%02d) %s -> (%02d) %s err=%v",
-		request.l, request.Format(), response.l, response.Format(), err)
 	if err != nil {
 		return errors.Annotatef(err, "Tx send=%s recv=%s", request.Format(), response.Format())
+	}
+	if self.Log.Enabled(log2.LDebug) {
+		self.Log.Debugf("mdb.Tx (%02d) %s -> (%02d) %s",
+			request.l, request.Format(), response.l, response.Format())
 	}
 	return nil
 }
