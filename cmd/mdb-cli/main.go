@@ -28,6 +28,7 @@ func main() {
 	cmdline.Parse(os.Args[1:])
 
 	log := log2.NewStderr(log2.LDebug)
+	log.SetFlags(log2.LInteractiveFlags)
 
 	var uarter mdb.Uarter
 	switch *uarterName {
@@ -74,6 +75,9 @@ func main() {
 		iteration := uint64(1)
 	wordLoop:
 		for _, word := range words {
+			if strings.TrimSpace(word) == "" {
+				continue
+			}
 			log.Debugf("(%d)%s", iteration, word)
 			switch {
 			case word == "help":

@@ -16,6 +16,7 @@ const (
 	DefaultDelayErr      = 500 * time.Millisecond
 	DefaultDelayNext     = 200 * time.Millisecond
 	DefaultDelayIdle     = 700 * time.Millisecond
+	DefaultDelayReset    = 500 * time.Millisecond
 	DefaultIdleThreshold = 30 * time.Second
 )
 
@@ -30,6 +31,7 @@ type Device struct {
 	DelayNext     time.Duration
 	DelayErr      time.Duration
 	DelayIdle     time.Duration
+	DelayReset    time.Duration
 	IdleThreshold time.Duration
 	PacketReset   Packet
 	PacketSetup   Packet
@@ -45,7 +47,6 @@ func (self *Device) Init(ctx context.Context, addr uint8, name string, byteOrder
 	self.Log = log2.ContextValueLogger(ctx, log2.ContextKey)
 	mdber := ContextValueMdber(ctx, ContextKey)
 	self.mdber = mdber
-	self.pollCh = make(chan Packet, 1)
 
 	self.Address = addr
 	self.Name = name
@@ -65,20 +66,25 @@ func (self *Device) Tx(request Packet) (r PacketError) {
 	return
 }
 
-func (self *Device) NewDoTx(request Packet) (*DoRequest, <-chan PacketError) {
-	d := &DoRequest{
-		dev:     self,
-		request: request,
-		rch:     make(chan PacketError, 1),
-	}
-	return d, d.rch
-}
-func (self *Device) NewDoTxNR(request Packet) *DoRequest {
-	d := &DoRequest{dev: self, request: request}
-	return d
+func (self *Device) NewTx(request Packet) *DoRequest {
+	return &DoRequest{dev: self, request: request}
 }
 
-func (self *Device) NewDoReset() engine.Doer { return self.NewDoTxNR(self.PacketReset) }
+func (self *Device) NewDoReset() engine.Doer {
+	// return self.NewTx(self.PacketReset)
+	return engine.Func0{Name: self.Name + ".reset", F: func() error {
+		self.lk.Lock()
+		defer self.lk.Unlock()
+
+		r := self.Tx(self.PacketReset)
+		if r.E != nil {
+			return r.E
+		}
+		time.Sleep(self.DelayReset)
+		return nil
+	}}
+}
+
 func (self *Device) DoSetup(ctx context.Context) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
@@ -191,14 +197,10 @@ type PacketError struct {
 type DoRequest struct {
 	dev     *Device
 	request Packet
-	rch     chan PacketError
 }
 
 func (self *DoRequest) Do(ctx context.Context) error {
 	r := self.dev.Tx(self.request)
-	if self.rch != nil {
-		self.rch <- r
-	}
 	return r.E
 }
 func (self *DoRequest) String() string {

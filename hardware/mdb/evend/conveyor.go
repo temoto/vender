@@ -29,6 +29,7 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 	err := self.Generic.Init(ctx, 0xd8, "conveyor")
 
 	engine := engine.ContextValueEngine(ctx, engine.ContextKey)
+	engine.Register("mdb.evend.conveyor_move_zero", self.NewMoveSync(0))
 	engine.Register("mdb.evend.conveyor_move_cup", self.NewMoveSync(self.posCup))
 	// TODO single action with parameter hopper index
 	for i, value := range self.posHoppers {

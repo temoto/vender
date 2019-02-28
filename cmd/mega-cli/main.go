@@ -50,6 +50,9 @@ func main() {
 		iteration := uint64(1)
 	wordLoop:
 		for _, word := range words {
+			if strings.TrimSpace(word) == "" {
+				continue
+			}
 			log.Debugf("(%d)%s", iteration, word)
 			switch {
 			case word == "help":

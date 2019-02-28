@@ -228,7 +228,7 @@ func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) engine.Doer {
 	self.dev.ByteOrder.PutUint16(buf[1:], accept)
 	self.dev.ByteOrder.PutUint16(buf[3:], dispense)
 	request := mdb.MustPacketFromBytes(buf[:], true)
-	return self.dev.NewDoTxNR(request)
+	return self.dev.NewTx(request)
 }
 
 func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) engine.Doer {

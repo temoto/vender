@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/temoto/vender/log2"
 )
 
 func TestEngineExecute(t *testing.T) {
@@ -46,7 +47,9 @@ boot -> n1 -> n2;
 	for _, c := range cases {
 		c := c
 		t.Run(c.name, func(t *testing.T) {
-			e := NewEngine()
+			ctx := context.Background()
+			ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
+			e := NewEngine(ctx)
 			scenario, err := ParseDot([]byte(strings.TrimSpace(c.input)))
 			if err != nil {
 				t.Fatalf("ParseDot err=%v", err)

@@ -125,6 +125,6 @@ func NewTestContext(t testing.TB, config string, logLevel log2.Level) context.Co
 	log.SetFlags(log2.LTestFlags)
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = ContextWithConfig(ctx, MustReadConfig(strings.NewReader(config), log))
-	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine())
+	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
 	return ctx
 }

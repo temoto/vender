@@ -30,7 +30,6 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string) error
 		return err
 	}
 	self.dev.Log.Infof("device=%s addr=%02x is working", name, address)
-	time.Sleep(self.dev.DelayNext)
 	err := self.dev.DoSetup(ctx)
 	return err
 }

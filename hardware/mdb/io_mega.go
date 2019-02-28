@@ -16,7 +16,7 @@ type megaUart struct {
 }
 
 func NewMegaUart(client *mega.Client) Uarter {
-	return &megaUart{client}
+	return &megaUart{c: client}
 }
 func (self *megaUart) Open(_ string) error {
 	self.c.IncRef("mdb-uart")

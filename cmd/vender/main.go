@@ -61,7 +61,7 @@ func main() {
 	ctx = context.WithValue(ctx, "alive", a)
 	ctx = context.WithValue(ctx, "lifecycle", lifecycle)
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine())
+	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
 
 	config := state.MustReadConfigFile(*flagConfig, log)
 	log.Debugf("config=%+v", config)

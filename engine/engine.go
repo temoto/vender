@@ -7,6 +7,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/log2"
 )
 
 const ContextKey = "run/engine"
@@ -14,6 +15,7 @@ const ContextKey = "run/engine"
 var EngineStop = errors.New("")
 
 type Engine struct {
+	Log     *log2.Log
 	lk      sync.Mutex
 	actions map[string]Doer
 }
@@ -30,8 +32,10 @@ func ContextValueEngine(ctx context.Context, key interface{}) *Engine {
 	panic(fmt.Errorf("context['%v'] expected type *Engine", key))
 }
 
-func NewEngine() *Engine {
+func NewEngine(ctx context.Context) *Engine {
+	log := log2.ContextValueLogger(ctx, log2.ContextKey)
 	self := &Engine{
+		Log:     log,
 		actions: make(map[string]Doer, 64),
 	}
 	return self
@@ -43,7 +47,11 @@ func (self *Engine) Register(action string, d Doer) {
 	self.lk.Unlock()
 }
 func (self *Engine) Resolve(action string) Doer {
-	return self.actions[action]
+	d, ok := self.actions[action]
+	if !ok {
+		self.Log.Errorf("engine.Resolve action=%s not found", action)
+	}
+	return d
 }
 
 func (self *Engine) Execute(ctx context.Context, scenario *Scenario) error {
