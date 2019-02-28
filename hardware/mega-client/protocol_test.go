@@ -69,10 +69,14 @@ func TestParseFields(t *testing.T) {
 		byte(FIELD_FIRMWARE_VERSION), 0x01, 0x02,
 		byte(FIELD_BEEBEE), 0xbe, 0xeb, 0xee,
 	)
-	result := ParseFields(packet.Data())
+	f, err := packet.ParseFields()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := f.String()
 	expect := "protocol=2,firmware=0102,beebee-mark"
 	if result != expect {
-		t.Errorf("expected fields=%s actual=%s", expect, result)
+		t.Errorf("fields expected=%s actual=%s", expect, result)
 	}
 }
 
@@ -107,7 +111,7 @@ func BenchmarkParseResponse(b *testing.B) {
 
 	b.Run("Bytes", mkBench(func(p Packet) { _ = p.Bytes() }))
 	b.Run("String", mkBench(func(p Packet) { _ = p.String() }))
-	b.Run("ParseFields", mkBench(func(p Packet) { _ = ParseFields(p.Data()) }))
+	b.Run("ParseFields", mkBench(func(p Packet) { _, _ = p.ParseFields() }))
 
 	_ = drop
 }

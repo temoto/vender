@@ -230,7 +230,7 @@ static void cmd_debug(uint8_t const command_id) {
   static uint8_t buf[RESPONSE_MAX_LENGTH];
   memset(buf, 0, sizeof(buf));
   uint8_t *bufp = buf;
-  *bufp++ = FIELD_MDB_PROTOTCOL_STATE;
+  *bufp++ = FIELD_MDB_PROTOCOL_STATE;
   *bufp++ = mdb.state;
   *bufp++ = FIELD_MDB_STAT;
   uint8_t const mdb_stat_len = sizeof(mdb_stat_t);

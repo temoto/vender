@@ -8,22 +8,31 @@ import (
 	"os"
 	"sync"
 	"syscall"
-	"time"
-)
+	"unsafe"
 
-const (
-	delay = 20 * time.Microsecond
+	"github.com/juju/errors"
 )
 
 const (
 	// as defined in /usr/include/linux/i2c-dev.h
-	I2C_SLAVE = 0x0703
-	I2C_SMBUS = 0x0720
+	I2C_RETRIES     = 0x0701 /* number of times a device address should be polled when not acknowledging */
+	I2C_TIMEOUT     = 0x0702 /* set timeout in units of 10 ms */
+	I2C_SLAVE       = 0x0703 /* Use this slave address */
+	I2C_FUNCS       = 0x0705 /* Get the adapter functionality mask */
+	I2C_SLAVE_FORCE = 0x0706 /* Use this slave address, even if it is already in use by a driver! */
+	I2C_RDWR        = 0x0707 /* Combined R/W transfer (one STOP only) */
+	I2C_SMBUS       = 0x0720 /* SMBus transfer */
+
+	// i2c_msg flags
 	// as defined in /usr/include/linux/i2c.h
-	I2C_SMBUS_WRITE          = 0
-	I2C_SMBUS_READ           = 1
-	I2C_SMBUS_I2C_BLOCK_DATA = 8
-	I2C_SMBUS_BLOCK_MAX      = 32
+	I2C_M_RD           = 0x0001 /* read data, from slave to master */
+	I2C_M_TEN          = 0x0010 /* this is a ten bit chip address */
+	I2C_M_RECV_LEN     = 0x0400 /* length will be first received byte */
+	I2C_M_NO_RD_ACK    = 0x0800 /* if I2C_FUNC_PROTOCOL_MANGLING */
+	I2C_M_IGNORE_NAK   = 0x1000 /* if I2C_FUNC_PROTOCOL_MANGLING */
+	I2C_M_REV_DIR_ADDR = 0x2000 /* if I2C_FUNC_PROTOCOL_MANGLING */
+	I2C_M_NOSTART      = 0x4000 /* if I2C_FUNC_NOSTART */
+	I2C_M_STOP         = 0x8000 /* if I2C_FUNC_PROTOCOL_MANGLING */
 )
 
 type i2c_msg struct {
@@ -48,14 +57,9 @@ type i2cBus struct {
 
 // I2CBus interface is used to interact with the I2C bus.
 type I2CBus interface {
-	ReadByteAt(addr byte) (value byte, err error)
-	WriteByteAt(addr, value byte) error
-
-	ReadBytesAt(addr byte, buf []byte) (n int, err error)
-	WriteBytesAt(addr byte, buf []byte) error
-
 	Init() error
 	Close() error
+	Tx(addr byte, bw []byte, br []byte) error
 }
 
 func NewI2CBus(busNo byte) I2CBus {
@@ -82,64 +86,43 @@ func (b *i2cBus) init() error {
 	return nil
 }
 
-func (b *i2cBus) setAddress(addr byte) error {
-	if addr != b.addr {
-		if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, b.file.Fd(), I2C_SLAVE, uintptr(addr)); errno != 0 {
-			return syscall.Errno(errno)
+func (b *i2cBus) Tx(addr byte, bw []byte, br []byte) error {
+	b.lk.Lock()
+	defer b.lk.Unlock()
+
+	if err := b.init(); err != nil {
+		return err
+	}
+
+	nmsg := uint32(0)
+	msgs := [2]i2c_msg{}
+	if bw != nil {
+		msgs[nmsg] = i2c_msg{
+			addr: uint16(addr), flags: 0,
+			buf: uintptr(unsafe.Pointer(&bw[0])), len: uint16(len(bw)),
 		}
-
-		b.addr = addr
+		nmsg++
+	}
+	if br != nil {
+		msgs[nmsg] = i2c_msg{
+			addr: uint16(addr), flags: I2C_M_RD,
+			buf: uintptr(unsafe.Pointer(&br[0])), len: uint16(len(br)),
+		}
+		nmsg++
+	}
+	if nmsg == 0 {
+		return errors.Errorf("i2cBus.Tx both bw=br=nil nothing to do")
 	}
 
-	return nil
-}
-
-func (b *i2cBus) ReadByteAt(addr byte) (byte, error) {
-	buf := []byte{0}
-	n, err := b.ReadBytesAt(addr, buf)
-	if err != nil {
-		return 0, err
+	rdwr_data := i2c_rdwr_ioctl_data{
+		msgs: uintptr(unsafe.Pointer(&msgs[0])),
+		nmsg: nmsg,
 	}
-	if n != 1 {
-		return 0, fmt.Errorf("i2c: Unexpected number (%v) of bytes read", n)
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(b.file.Fd()), uintptr(I2C_RDWR), uintptr(unsafe.Pointer(&rdwr_data)))
+	if errno != 0 {
+		return syscall.Errno(errno)
 	}
-	return buf[0], nil
-}
-
-func (b *i2cBus) ReadBytesAt(addr byte, buf []byte) (n int, err error) {
-	b.lk.Lock()
-	defer b.lk.Unlock()
-
-	if err = b.init(); err != nil {
-		return 0, err
-	}
-	if err = b.setAddress(addr); err != nil {
-		return 0, err
-	}
-	n, _ = b.file.Read(buf)
-
-	return n, nil
-}
-
-func (b *i2cBus) WriteByteAt(addr, value byte) error {
-	return b.WriteBytesAt(addr, []byte{value})
-}
-
-func (b *i2cBus) WriteBytesAt(addr byte, buf []byte) (err error) {
-	b.lk.Lock()
-	defer b.lk.Unlock()
-
-	if err = b.init(); err != nil {
-		return err
-	}
-	if err = b.setAddress(addr); err != nil {
-		return err
-	}
-	_, err = b.file.Write(buf)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

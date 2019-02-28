@@ -80,7 +80,7 @@ field_t const FIELD_TWI_STAT = 5;
 field_t const FIELD_UART_STAT = 6;
 field_t const FIELD_QUEUE_MASTER = 7;
 field_t const FIELD_QUEUE_TWI = 8;
-field_t const FIELD_MDB_PROTOTCOL_STATE = 9;
+field_t const FIELD_MDB_PROTOCOL_STATE = 9;
 field_t const FIELD_FIRMWARE_VERSION = 10;
 
 static bool uart_send_ready(void);

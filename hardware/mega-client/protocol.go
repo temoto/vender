@@ -2,6 +2,7 @@ package mega
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -11,15 +12,6 @@ import (
 )
 
 //go:generate ./generate
-
-type ResetFlag uint8
-
-const (
-	ResetFlagPowerOn = ResetFlag(1 << iota)
-	ResetFlagExternal
-	ResetFlagBrownOut
-	ResetFlagWatchdog
-)
 
 const packetOverhead = 4
 
@@ -51,6 +43,7 @@ func (self *Packet) Data() []byte {
 	return self.buf[3 : 3+self.dataLen]
 }
 
+// Overwrites packet state
 func (self *Packet) Parse(b []byte) (uint8, error) {
 	if len(b) == 0 {
 		return 0, errors.NotValidf("packet empty")
@@ -90,91 +83,22 @@ func (self *Packet) SimpleHex() string {
 	return hex.EncodeToString(b[2 : self.dataLen+3])
 }
 
-func mcusrString(b byte) string {
-	s := ""
-	if ResetFlag(b)&ResetFlagPowerOn != 0 {
-		s += "+PO"
-	}
-	if ResetFlag(b)&ResetFlagExternal != 0 {
-		s += "+EXT"
-	}
-	if ResetFlag(b)&ResetFlagBrownOut != 0 {
-		s += "+BO"
-	}
-	if ResetFlag(b)&ResetFlagWatchdog != 0 {
-		s += "+WD(PROBLEM)"
-	}
-	return s
-}
-
-func (f Field_t) parseAppend(b []byte, arg []byte) ([]byte, uint8) {
-	switch f {
-	case FIELD_PROTOCOL:
-		b = append(b, fmt.Sprintf("protocol=%d", arg[0])...)
-		return b, 1
-	case FIELD_FIRMWARE_VERSION:
-		b = append(b, fmt.Sprintf("firmware=%02x%02x", arg[0], arg[1])...)
-		return b, 2
-	case FIELD_BEEBEE:
-		if bytes.Equal(arg[:3], []byte{0xbe, 0xeb, 0xee}) {
-			b = append(b, "beebee-mark"...)
-		} else {
-			b = append(b, fmt.Sprintf("ERR:invalid-beebee:%02x", arg[:3])...)
-		}
-		return b, 3
-	case FIELD_MCUSR:
-		b = append(b, "reset="+mcusrString(arg[0])...)
-		return b, 1
-	case FIELD_QUEUE_MASTER:
-		b = append(b, fmt.Sprintf("master.length=%d", arg[0])...)
-		return b, 1
-	case FIELD_QUEUE_TWI:
-		b = append(b, fmt.Sprintf("twi.length=%d", arg[0])...)
-		return b, 1
-	case FIELD_MDB_PROTOTCOL_STATE:
-		b = append(b, fmt.Sprintf("mdb.state=%d", arg[0])...)
-		return b, 1
-	case FIELD_MDB_STAT:
-		n := arg[0]
-		b = append(b, fmt.Sprintf("mdb_stat=%02x", arg[1:1+n])...)
-		return b, n
-	case FIELD_TWI_STAT:
-		n := arg[0]
-		b = append(b, fmt.Sprintf("twi_stat=%02x", arg[1:1+n])...)
-		return b, n
-	default:
-		return b, 0
-	}
-}
-
-func ParseFields(b []byte) string {
-	if len(b) == 0 {
-		return ""
-	}
-	idx := uint8(0)
-	flen := uint8(0)
-	result := make([]byte, 0, 128)
-	for int(idx) < len(b) {
-		if idx > 0 {
-			result = append(result, ',')
-		}
-		tag := Field_t(b[idx])
-		idx++
-		result, flen = tag.parseAppend(result, b[idx:])
-		if flen == 0 {
-			// TODO return err
-			result = append(result, fmt.Sprintf("ERR:unknown-tag:%02x", tag)...)
-		}
-		idx += flen
-	}
-	return string(result)
+func (self *Packet) ParseFields() (Fields, error) {
+	f := Fields{}
+	err := f.Parse(self.Data())
+	return f, err
 }
 
 func (self *Packet) String() string {
 	info := ""
 	switch Response_t(self.Header) {
 	case RESPONSE_STATUS, RESPONSE_JUST_RESET, RESPONSE_DEBUG:
-		info = ParseFields(self.Data())
+		fields, err := self.ParseFields()
+		if err != nil {
+			info = "!ERROR:ParseFields err=" + err.Error()
+		} else {
+			info = fields.String()
+		}
 	}
 	return fmt.Sprintf("cmdid=%02x header=%s data=%s info=%s",
 		self.Id, Response_t(self.Header).String(), hex.EncodeToString(self.Data()), info)
@@ -211,4 +135,151 @@ func ParseResponse(b []byte, fun func(p Packet)) error {
 		offset += plen
 	}
 	return nil
+}
+
+type ResetFlag uint8
+
+const (
+	ResetFlagPowerOn = ResetFlag(1 << iota)
+	ResetFlagExternal
+	ResetFlagBrownOut
+	ResetFlagWatchdog
+)
+
+type Fields struct {
+	Len              uint8
+	tagOrder         [9]Field_t
+	Protocol         uint8
+	FirmwareVersion  uint16
+	Mcusr            byte
+	QueueMaster      uint8
+	QueueTwi         uint8
+	MdbProtocolState Mdb_state_t
+	MdbStat_b        [1]byte
+	TwiStat_b        [8]byte
+}
+
+func (self *Fields) Parse(b []byte) error {
+	*self = Fields{}
+	if len(b) == 0 {
+		return nil
+	}
+	bi := uint8(0)
+	flen := uint8(0)
+	var tag Field_t
+	for int(bi) < len(b) {
+		tag, flen = self.parseNext(b[bi:])
+		if flen == 0 {
+			// bi++ // try to parse rest
+			return fmt.Errorf("mega Fields.Parse data=%02x tag=%02x rest=%02x", b, tag, b[bi:])
+		} else {
+			self.tagOrder[self.Len] = tag
+			self.Len++
+			bi += flen
+		}
+	}
+	return nil
+}
+
+func (self Fields) String() string {
+	buf := make([]byte, 0, 128)
+	for i := uint8(0); i < self.Len; i++ {
+		tag := self.tagOrder[i]
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		buf = append(buf, self.FieldString(tag)...)
+	}
+	return string(buf)
+}
+func (self Fields) FieldString(tag Field_t) string {
+	switch tag {
+	case FIELD_PROTOCOL:
+		return fmt.Sprintf("protocol=%d", self.Protocol)
+	case FIELD_FIRMWARE_VERSION:
+		// TODO check/ensure byte order
+		return fmt.Sprintf("firmware=%04x", self.FirmwareVersion)
+	case FIELD_BEEBEE:
+		return "beebee-mark"
+	case FIELD_MCUSR:
+		return "reset=" + mcusrString(self.Mcusr)
+	case FIELD_QUEUE_MASTER:
+		return fmt.Sprintf("master.length=%d", self.QueueMaster)
+	case FIELD_QUEUE_TWI:
+		return fmt.Sprintf("twi.length=%d", self.QueueTwi)
+	case FIELD_MDB_PROTOCOL_STATE:
+		return fmt.Sprintf("mdb.state=%s", self.MdbProtocolState.String())
+	case FIELD_MDB_STAT:
+		// TODO use parsed mdb stat
+		return fmt.Sprintf("mdb_stat=%02x", self.MdbStat_b)
+	case FIELD_TWI_STAT:
+		// TODO use parsed twi stat
+		return fmt.Sprintf("twi_stat=%02x", self.TwiStat_b)
+	default:
+		return fmt.Sprintf("!ERROR:invalid-tag:%02x", tag)
+	}
+}
+
+func (self *Fields) parseNext(b []byte) (Field_t, uint8) {
+	tag := Field_t(b[0])
+	arg := b[1:]
+	switch tag {
+	case FIELD_PROTOCOL:
+		// assert len(arg)>=1
+		self.Protocol = arg[0]
+		return tag, 1 + 1
+	case FIELD_FIRMWARE_VERSION:
+		self.FirmwareVersion = binary.BigEndian.Uint16(arg)
+		return tag, 1 + 2
+	case FIELD_BEEBEE:
+		if bytes.Equal(arg[:3], []byte{0xbe, 0xeb, 0xee}) {
+			return tag, 1 + 3
+		} else {
+			return FIELD_INVALID, 0
+		}
+	case FIELD_MCUSR:
+		self.Mcusr = arg[0]
+		return tag, 1 + 1
+	case FIELD_QUEUE_MASTER:
+		self.QueueMaster = arg[0]
+		return tag, 1 + 1
+	case FIELD_QUEUE_TWI:
+		self.QueueTwi = arg[0]
+		return tag, 1 + 1
+	case FIELD_MDB_PROTOCOL_STATE:
+		self.MdbProtocolState = Mdb_state_t(arg[0])
+		return tag, 1 + 1
+	case FIELD_MDB_STAT:
+		n := arg[0]
+		// assert n==len(self.MdbStat_b)
+		// TODO parse mdb stat
+		copy(self.MdbStat_b[:], arg[1:])
+		return tag, 1 + n
+	case FIELD_TWI_STAT:
+		n := arg[0]
+		// assert n==len(self.TwiStat_b)
+		// TODO parse mdb stat
+		copy(self.TwiStat_b[:], arg[1:])
+		return tag, 1 + n
+	default:
+		return FIELD_INVALID, 0
+	}
+}
+
+func mcusrString(b byte) string {
+	s := ""
+	r := ResetFlag(b)
+	if r&ResetFlagPowerOn != 0 {
+		s += "+PO"
+	}
+	if r&ResetFlagExternal != 0 {
+		s += "+EXT"
+	}
+	if r&ResetFlagBrownOut != 0 {
+		s += "+BO"
+	}
+	if r&ResetFlagWatchdog != 0 {
+		s += "+WD(PROBLEM)"
+	}
+	return s
 }
