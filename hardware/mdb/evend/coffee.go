@@ -29,7 +29,7 @@ func (self *DeviceCoffee) Init(ctx context.Context) error {
 }
 
 func (self *DeviceCoffee) NewGrind() engine.Doer {
-	return engine.Func{Name: "grind", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".grind", F: func(ctx context.Context) error {
 		return self.CommandAction(ctx, []byte{0x01})
 	}}
 }
@@ -43,7 +43,7 @@ func (self *DeviceCoffee) NewGrindSync() engine.Doer {
 }
 
 func (self *DeviceCoffee) NewPress() engine.Doer {
-	return engine.Func{Name: "press", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".press", F: func(ctx context.Context) error {
 		return self.CommandAction(ctx, []byte{0x02})
 	}}
 }
@@ -57,7 +57,7 @@ func (self *DeviceCoffee) NewPressSync() engine.Doer {
 }
 
 func (self *DeviceCoffee) NewDispose() engine.Doer {
-	return engine.Func{Name: "dispose", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".dispose", F: func(ctx context.Context) error {
 		return self.CommandAction(ctx, []byte{0x03})
 	}}
 }
@@ -71,7 +71,7 @@ func (self *DeviceCoffee) NewDisposeSync() engine.Doer {
 }
 
 func (self *DeviceCoffee) NewHeat(on bool) engine.Doer {
-	return engine.Func{Name: "heat", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".heat", F: func(ctx context.Context) error {
 		arg := byte(0x05)
 		if !on {
 			arg = 0x06

@@ -23,6 +23,8 @@ const (
 type Device struct {
 	lk     sync.Mutex
 	mdber  *mdb
+	lastTx time.Time
+	online bool
 
 	Log           *log2.Log
 	Address       uint8
@@ -63,6 +65,7 @@ func (self *Device) Init(ctx context.Context, addr uint8, name string, byteOrder
 
 func (self *Device) Tx(request Packet) (r PacketError) {
 	r.E = self.mdber.Tx(request, &r.P)
+	self.lastTx = time.Now()
 	return
 }
 
@@ -175,7 +178,7 @@ func (self *Device) NewPollUntilEmpty(tag string, timeout time.Duration, ignore 
 				return false, nil
 			}
 		}
-		return false, errors.Errorf("%s poll-until unexpected response=%02x", tag, r.P.Bytes())
+		return false, errors.Errorf("%s poll-until unexpected response=%x", tag, r.P.Bytes())
 	}
 	return self.NewPollLoopActive(tag, timeout, fun)
 }

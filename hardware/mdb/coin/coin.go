@@ -135,10 +135,10 @@ func (self *CoinAcceptor) newPoller(fun func(money.PollItem)) mdb.PollParseFunc 
 }
 
 func (self *CoinAcceptor) newIniter() engine.Doer {
-	tx := engine.NewTransaction("coin-init")
+	tx := engine.NewTransaction(self.dev.Name + ".initer")
 	tx.Root.
 		Append(self.doSetup).
-		Append(engine.Func0{F: func() error {
+		Append(engine.Func0{Name: self.dev.Name + ".expid/diag", F: func() error {
 			var err error
 			// timeout is unfortunately common "response" for unsupported commands
 			if err = self.CommandExpansionIdentification(); err != nil && !errors.IsTimeout(err) {
@@ -153,9 +153,9 @@ func (self *CoinAcceptor) newIniter() engine.Doer {
 			}
 			return nil
 		}}).
-		Append(engine.Func0{F: self.CommandTubeStatus}).
+		Append(engine.Func0{Name: self.dev.Name + ".tubestatus", F: self.CommandTubeStatus}).
 		Append(engine.Sleep{Duration: self.dev.DelayNext}).
-		Append(engine.Func{F: func(ctx context.Context) error {
+		Append(engine.Func{Name: self.dev.Name + ".cointype", F: func(ctx context.Context) error {
 			config := state.GetConfig(ctx)
 			// TODO read enabled nominals from config
 			_ = config
@@ -165,7 +165,7 @@ func (self *CoinAcceptor) newIniter() engine.Doer {
 }
 
 func (self *CoinAcceptor) Restarter() engine.Doer {
-	tx := engine.NewTransaction("coin-restart")
+	tx := engine.NewTransaction(self.dev.Name + ".restarter")
 	tx.Root.
 		Append(self.doReset).
 		Append(engine.Sleep{Duration: self.dev.DelayNext}).
@@ -174,7 +174,7 @@ func (self *CoinAcceptor) Restarter() engine.Doer {
 }
 
 func (self *CoinAcceptor) newSetuper() engine.Doer {
-	return engine.Func{F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".setuper", F: func(ctx context.Context) error {
 		const expectLengthMin = 7
 		err := self.dev.DoSetup(ctx)
 		if err != nil {
@@ -232,7 +232,7 @@ func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) engine.Doer {
 }
 
 func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) engine.Doer {
-	tag := "coin/dispense"
+	tag := self.dev.Name + ".dispense"
 
 	doDispense := engine.Func{Name: tag, F: func(ctx context.Context) error {
 		if count >= 16 {
@@ -254,7 +254,7 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 }
 
 func (self *CoinAcceptor) NewPayout(amount currency.Amount) engine.Doer {
-	tag := "coin/payout"
+	tag := self.dev.Name + ".payout"
 
 	doPayout := engine.Func{Name: tag, F: func(ctx context.Context) error {
 		// FIXME 100 magic number

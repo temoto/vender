@@ -6,7 +6,7 @@ avr_objcopy = avr-objcopy
 avr_size = avr-size
 avrdude = avrdude
 
-cflags_common = -std=c11 -Wall -Wextra -Werror -pedantic -pipe -finline-functions
+cflags_common = -std=c11 -Wall -Wextra -Werror -pedantic -pipe -flto
 CFLAGS = -mmcu=$(mmcu) -O2 -g3 $(cflags_common)
 MAPFLAGS = -Wl,-Map,
 
@@ -31,13 +31,16 @@ format:
 
 main.hex: main.elf
 	$(avr_objcopy) -O ihex $< $@
+	cksum main.hex
 
 main.elf: main.c crc.c
 	$(avr_gcc) $(CFLAGS) -o $@ $^
 	$(avr_size) --common $@
+	cksum main.elf
 	cp main.elf mega-firmware.elf
 
-main.o: main.c buffer.c crc.c crc.h main.h mdb.c twi.c
+# TODO is it still useful? likely not
+# main.o: main.c main.h config.h buffer.h crc.c crc.h mdb.c twi.c
 
 crc_test: crc.c crc.h crc_test.c
 	$(CC) $(cflags_common) -DDEBUG -DTEST -g -O0 -o $@ crc_test.c crc.c

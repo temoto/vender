@@ -4,25 +4,14 @@ package mega
 
 import "strconv"
 
-const (
-	_Command_t_name_0 = "STATUSCONFIGRESETDEBUGFLASH"
-	_Command_t_name_1 = "MDB_BUS_RESETMDB_TRANSACTION_SIMPLEMDB_TRANSACTION_CUSTOM"
-)
+const _Command_t_name = "STATUSCONFIGRESETDEBUGFLASHTWI_LISTENMDB_BUS_RESETMDB_TRANSACTION_SIMPLEMDB_TRANSACTION_CUSTOM"
 
-var (
-	_Command_t_index_0 = [...]uint8{0, 6, 12, 17, 22, 27}
-	_Command_t_index_1 = [...]uint8{0, 13, 35, 57}
-)
+var _Command_t_index = [...]uint8{0, 6, 12, 17, 22, 27, 37, 50, 72, 94}
 
 func (i Command_t) String() string {
-	switch {
-	case 1 <= i && i <= 5:
-		i -= 1
-		return _Command_t_name_0[_Command_t_index_0[i]:_Command_t_index_0[i+1]]
-	case 7 <= i && i <= 9:
-		i -= 7
-		return _Command_t_name_1[_Command_t_index_1[i]:_Command_t_index_1[i+1]]
-	default:
-		return "Command_t(" + strconv.FormatInt(int64(i), 10) + ")"
+	i -= 1
+	if i >= Command_t(len(_Command_t_index)-1) {
+		return "Command_t(" + strconv.FormatInt(int64(i+1), 10) + ")"
 	}
+	return _Command_t_name[_Command_t_index[i]:_Command_t_index[i+1]]
 }

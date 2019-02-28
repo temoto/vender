@@ -7,8 +7,8 @@ import (
 	mega "github.com/temoto/vender/hardware/mega-client"
 )
 
-var (
-	ErrTimeout = errors.NewErr("MDB timeout")
+const (
+	DelayErr = 10 * time.Millisecond
 )
 
 type megaUart struct {
@@ -29,40 +29,66 @@ func (self *megaUart) Close() error {
 
 func responseError(p *mega.Packet) error {
 	switch mega.Response_t(p.Header) {
-	case mega.RESPONSE_MDB_SUCCESS:
-		return nil
-	case mega.RESPONSE_MDB_BUSY:
-		err := errors.NewErr("MDB busy TODO=autoretry")
-		err.SetLocation(2)
-		return &err
-	case mega.RESPONSE_MDB_TIMEOUT:
-		err := ErrTimeout
-		err.SetLocation(2)
-		return &err
-	default:
-		err := errors.NewErr("mega response=%s", p.String())
-		err.SetLocation(2)
-		return &err
+	case mega.RESPONSE_OK, mega.RESPONSE_ERROR:
+		switch p.Fields.MdbResult {
+		case mega.MDB_RESULT_SUCCESS:
+			return nil
+		case mega.MDB_RESULT_BUSY:
+			// err := errors.NewErr("MDB busy state=%s", mega.Mdb_state_t(p.Fields.MdbError).String())
+			err := ErrBusy
+			err.SetLocation(2)
+			return &err
+		case mega.MDB_RESULT_TIMEOUT:
+			err := ErrTimeout
+			err.SetLocation(2)
+			return &err
+		case mega.MDB_RESULT_NAK:
+			err := ErrNak
+			err.SetLocation(2)
+			return &err
+		default:
+			err := errors.NewErr("MDB error result=%s arg=%02x", p.Fields.MdbResult.String(), p.Fields.MdbError)
+			err.SetLocation(2)
+			return &err
+		}
 	}
+	err := errors.NewErr("mega response=%s", p.String())
+	err.SetLocation(2)
+	return &err
 }
 
 func (self *megaUart) Break(d time.Duration) error {
-	p, err := self.c.DoMdbBusReset(d)
-	if err != nil {
-		return err
+	var p mega.Packet
+	var err error
+	for retry := 1; retry <= 3; retry++ {
+		p, err = self.c.DoMdbBusReset(d)
+		if err != nil {
+			break
+		}
+		err = responseError(&p)
+		if err == nil {
+			break
+		}
+		time.Sleep(DelayErr)
 	}
-	return responseError(&p)
+	return err
 }
 
 func (self *megaUart) Tx(request, response []byte) (int, error) {
-	p, err := self.c.DoMdbTxSimple(request)
-	if err != nil {
-		return 0, err
-	}
-	err = responseError(&p)
+	var p mega.Packet
+	var err error
 	n := 0
-	if err == nil {
-		n = copy(response, p.Data())
+	for retry := 1; retry <= 3; retry++ {
+		p, err = self.c.DoMdbTxSimple(request)
+		if err != nil {
+			break
+		}
+		err = responseError(&p)
+		if err == nil {
+			n = copy(response, p.Fields.MdbData)
+			break
+		}
+		time.Sleep(DelayErr)
 	}
 	return n, err
 }

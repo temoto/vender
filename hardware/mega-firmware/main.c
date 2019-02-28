@@ -1,11 +1,8 @@
-/*
- * Created: 18/06/2018 21:16:04
- * Author : Alex
- */
+// Created: 18/06/2018 21:16:04
+// Author : Alex, Temoto
 
-#define F_CPU 16000000UL  // Clock Speed
+#include "config.h"
 
-#include "main.h"
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #include <avr/wdt.h>
@@ -14,12 +11,33 @@
 #include <string.h>
 #include <util/atomic.h>
 #include <util/delay.h>
+#include "bit.h"
+#include "buffer.h"
 #include "crc.h"
+#include "protocol.h"
 
-// must include .c after main.h
-#include "buffer.c"
+#define _INCLUDE_FROM_MAIN
+#include "common.h"
 #include "mdb.c"
 #include "twi.c"
+
+// fwd
+
+static void cmd_status(uint8_t const request_id, uint8_t const *const data,
+                       uint8_t const length) __attribute__((nonnull));
+static void cmd_reset(uint8_t const request_id, uint8_t const *const data,
+                      uint8_t const length) __attribute__((nonnull));
+static void cmd_debug(uint8_t const request_id);
+static void cmd_mdb_bus_reset(uint8_t const request_id,
+                              uint8_t const *const data, uint8_t const length)
+    __attribute__((nonnull));
+static void cmd_mdb_tx_simple(uint8_t const request_id,
+                              uint8_t const *const data, uint8_t const length)
+    __attribute__((nonnull));
+static void master_notify_init(void);
+static void master_notify_set(bool const on);
+static void clock_init(void);
+static void clock_stop(void);
 
 // Just .noinit is not enough for GCC 8.2
 // https://github.com/technomancy/atreus/issues/34
@@ -50,51 +68,59 @@ static void soft_reset(void) {
     ;
 }
 
+static void nop(void) { __asm volatile("nop" ::); }
+
+static void led_init(void);
+static void led_toggle(void);
+
 int main(void) {
+  cli();
   wdt_enable(WDTO_30MS);
   wdt_reset();
+  clock_stop();
   timer1_stop();
+
+  clock_init();
   twi_init_slave(0x78);
   mdb_init();
   master_notify_init();
+  led_init();
   // disable ADC
   bit_mask_clear(ADCSRA, _BV(ADEN));
   // power reduction
   PRR = _BV(PRTIM2) | _BV(PRSPI) | _BV(PRADC);
-  // hello after reset
-  uint8_t const jr_data[] = {
-      FIELD_PROTOCOL,
-      PROTOCOL_VERSION,
-      FIELD_FIRMWARE_VERSION,
-      (FIRMWARE_VERSION >> 8),
-      (FIRMWARE_VERSION & 0xff),
-      FIELD_BEEBEE,
-      0xbe,
-      0xeb,
-      0xee,
-      FIELD_MCUSR,
-      mcusr_saved,
-  };
-  master_out_n(reset_command_id, RESPONSE_JUST_RESET, jr_data, sizeof(jr_data));
-  reset_command_id = 0;
 
-  sei();
+  // hello after reset
+  response_begin(reset_command_id, RESPONSE_RESET);
+  response_f2(FIELD_FIRMWARE_VERSION, (FIRMWARE_VERSION >> 8),
+              (FIRMWARE_VERSION & 0xff));
+  response_f1(FIELD_MCUSR, mcusr_saved);
+  response_finish();
+  reset_command_id = 0;
 
   for (;;) {
     wdt_reset();
     bool again = false;
-    if (twi_idle) {
-      again |= twi_step();  // may take 130us on F_CPU=16MHz
-      cli();
-      master_notify_set((twi_out.used < twi_out.length) ||
-                        (master_out.length > 0));
-      sei();
-    }
+
+    cli();
+    again |= twi_step();  // may take TODO us on F_CPU=16MHz
+    sei();
+    nop();
+
+    cli();
+    // master_notify_set(twi_listen.length > 0);
+    master_notify_set((twi_out.used < twi_out.length) ||
+                      (twi_listen.length > 0));
+    sei();
+    nop();
+
+    cli();
     if (mdb.state != MDB_STATE_IDLE) {
-      // cli(); // TODO double check if mdb_step() is safe with interrupts
       again |= mdb_step();
-      // sei();
     }
+    sei();
+    nop();
+
     if (!again) {
       // TODO measure idle time
       _delay_us(300);
@@ -104,178 +130,127 @@ int main(void) {
   return 0;
 }
 
-// fwd
-static void cmd_status(uint8_t const command_id, uint8_t const *const data,
-                       uint8_t const length);
-static void cmd_reset(uint8_t const command_id, uint8_t const *const data,
-                      uint8_t const length);
-static void cmd_debug(uint8_t const command_id);
-static void cmd_mdb_bus_reset(uint8_t const command_id,
-                              uint8_t const *const data, uint8_t const length);
-static void cmd_mdb_tx_simple(uint8_t const command_id,
-                              uint8_t const *const data, uint8_t const length);
-
 static uint8_t master_command(uint8_t const *const bs,
                               uint8_t const max_length) {
   if (max_length < 4) {
-    master_out_1(0, RESPONSE_BAD_PACKET, 0);
+    response_begin(0, RESPONSE_ERROR);
+    response_f2(FIELD_ERROR2, ERROR_BAD_PACKET, max_length);
+    response_fn(FIELD_ERRORN, bs, max_length);
+    response_finish();
     return max_length;
   }
   uint8_t const length = bs[0];
   if (length > max_length) {
-    master_out_1(0, RESPONSE_BAD_PACKET, 0);
+    response_begin(0, RESPONSE_ERROR);
+    response_f2(FIELD_ERROR2, ERROR_BAD_PACKET, length);
+    response_fn(FIELD_ERRORN, bs, length);
+    response_finish();
     return length;
   }
   uint8_t const crc_in = bs[length - 1];
   uint8_t const crc_local = crc8_p93_n(0, bs, length - 1);
   if (crc_in != crc_local) {
-    master_out_1(0, RESPONSE_INVALID_CRC, crc_in);
+    response_error2(0, ERROR_INVALID_CRC, crc_in);
     return length;
   }
 
-  uint8_t const command_id = bs[1];
-  if (command_id == 0) {
-    master_out_1(command_id, RESPONSE_INVALID_ID, 0);
+  uint8_t const request_id = bs[1];
+  if (request_id == 0) {
+    response_error2(request_id, ERROR_INVALID_ID, 0);
     return length;
   }
+  current_request_id = request_id;
   command_t const header = bs[2];
   uint8_t const data_length = length - 4;
   uint8_t const *const data = bs + 3;
   if (header == COMMAND_STATUS) {
-    cmd_status(command_id, data, data_length);
+    cmd_status(request_id, data, data_length);
   } else if (header == COMMAND_CONFIG) {
     mcusr_saved = 0;
     // TODO
-    master_out_0(command_id, RESPONSE_NOT_IMPLEMENTED);
+    response_error2(request_id, ERROR_NOT_IMPLEMENTED, 0);
   } else if (header == COMMAND_RESET) {
-    cmd_reset(command_id, data, data_length);
+    cmd_reset(request_id, data, data_length);
   } else if (header == COMMAND_DEBUG) {
-    cmd_debug(command_id);
+    cmd_debug(request_id);
   } else if (header == COMMAND_FLASH) {
     // FIXME simulate bad watchdog event
     for (;;)
       ;
     // TODO
-    master_out_0(command_id, RESPONSE_NOT_IMPLEMENTED);
+    response_error2(request_id, ERROR_NOT_IMPLEMENTED, 0);
   } else if (header == COMMAND_MDB_BUS_RESET) {
-    cmd_mdb_bus_reset(command_id, data, data_length);
+    cmd_mdb_bus_reset(request_id, data, data_length);
   } else if (header == COMMAND_MDB_TRANSACTION_SIMPLE) {
-    cmd_mdb_tx_simple(command_id, data, data_length);
+    cmd_mdb_tx_simple(request_id, data, data_length);
   } else if (header == COMMAND_MDB_TRANSACTION_CUSTOM) {
     // TODO read options from data: timeout, retry
     // then proceed as COMMAND_MDB_TRANSACTION_SIMPLE
-    master_out_0(command_id, RESPONSE_NOT_IMPLEMENTED);
+    response_error2(request_id, ERROR_NOT_IMPLEMENTED, 0);
   } else {
-    master_out_0(command_id, RESPONSE_UNKNOWN_COMMAND);
+    response_error2(request_id, ERROR_UNKNOWN_COMMAND, header);
   }
   return length;
 }
-static void cmd_status(uint8_t const command_id,
+
+static void cmd_status(uint8_t const request_id,
                        __attribute__((unused)) uint8_t const *const data,
                        uint8_t const length) {
   if (length != 0) {
-    master_out_1(command_id, RESPONSE_INVALID_DATA, 0);
+    response_error2(request_id, ERROR_INVALID_DATA, 0);
     return;
   }
-  uint8_t const buf[] = {
-      FIELD_PROTOCOL,
-      PROTOCOL_VERSION,
-      FIELD_FIRMWARE_VERSION,
-      (FIRMWARE_VERSION >> 8),
-      (FIRMWARE_VERSION & 0xff),
-      FIELD_MCUSR,
-      mcusr_saved,
-      FIELD_QUEUE_TWI,
-      twi_out.length,
-      FIELD_QUEUE_MASTER,
-      master_out.length,
-  };
-  master_out_n(command_id, RESPONSE_STATUS, buf, sizeof(buf));
+
+  response_begin(request_id, RESPONSE_OK);
+  response_f2(FIELD_FIRMWARE_VERSION, (FIRMWARE_VERSION >> 8),
+              (FIRMWARE_VERSION & 0xff));
+  response_f1(FIELD_MCUSR, mcusr_saved);
+  response_f1(FIELD_TWI_LENGTH, twi_listen.length);
+  response_f1(FIELD_MDB_LENGTH, mdb_in.length);
+  response_finish();
 }
-static void cmd_reset(uint8_t const command_id, uint8_t const *const data,
+
+static void cmd_reset(uint8_t const request_id, uint8_t const *const data,
                       uint8_t const length) {
   if (length != 1) {
-    master_out_1(command_id, RESPONSE_INVALID_DATA, 0);
+    response_error2(request_id, ERROR_INVALID_DATA, 0);
     return;
   }
   switch (data[0]) {
     case 0x01:
       mdb_reset();
-      memset((void *)&twi_stat, 0, sizeof(twi_stat_t));
-      uint8_t const jr_data[] = {
-          FIELD_PROTOCOL,
-          PROTOCOL_VERSION,
-          FIELD_FIRMWARE_VERSION,
-          (FIRMWARE_VERSION >> 8),
-          (FIRMWARE_VERSION & 0xff),
-          FIELD_BEEBEE,
-          0xbe,
-          0xeb,
-          0xee,
-          FIELD_MCUSR,
-          mcusr_saved,
-      };
-      master_out_n(command_id, RESPONSE_JUST_RESET, jr_data, sizeof(jr_data));
+      buffer_clear_fast(&twi_listen);
+      response_begin(request_id, RESPONSE_OK);
+      response_f1(FIELD_MCUSR, mcusr_saved);
+      response_finish();
       break;
     case 0xff:
-      reset_command_id = command_id;
+      reset_command_id = request_id;
       soft_reset();  // noreturn
       break;
     default:
-      master_out_1(command_id, RESPONSE_INVALID_DATA, 1);
+      response_error2(request_id, ERROR_INVALID_DATA, 1);
       break;
   }
 }
-static void cmd_debug(uint8_t const command_id) {
-  static uint8_t buf[RESPONSE_MAX_LENGTH];
-  memset(buf, 0, sizeof(buf));
-  uint8_t *bufp = buf;
-  *bufp++ = FIELD_MDB_PROTOCOL_STATE;
-  *bufp++ = mdb.state;
-  *bufp++ = FIELD_MDB_STAT;
-  uint8_t const mdb_stat_len = sizeof(mdb_stat_t);
-  *bufp++ = mdb_stat_len;
-  memcpy(bufp, (void *)&mdb_stat, mdb_stat_len);
-  bufp += mdb_stat_len;
-  *bufp++ = FIELD_TWI_STAT;
-  uint8_t const twi_stat_len = sizeof(twi_stat_t);
-  *bufp++ = twi_stat_len;
-  memcpy(bufp, (void *)&twi_stat, twi_stat_len);
-  bufp += twi_stat_len;
-  master_out_n(command_id, RESPONSE_DEBUG, (uint8_t *)buf, bufp - buf);
+
+static void cmd_debug(uint8_t const request_id) {
+  response_error2(request_id, ERROR_NOT_IMPLEMENTED, 0);
 }
-static void cmd_mdb_bus_reset(uint8_t const command_id,
+
+static void cmd_mdb_bus_reset(uint8_t const request_id,
                               uint8_t const *const data, uint8_t const length) {
   if (length != 2) {
-    master_out_1(command_id, RESPONSE_INVALID_DATA, 0);
-    return;
-  }
-  uint8_t const mst = mdb.state;
-  if (mst != MDB_STATE_IDLE) {
-    master_out_1(command_id, RESPONSE_MDB_BUSY, mst);
+    response_error2(request_id, ERROR_INVALID_DATA, 0);
     return;
   }
   uint16_t const duration = (data[0] << 8) | data[1];
-  mdb_bus_reset_begin(command_id, duration);
+  mdb_bus_reset_begin(request_id, duration);
 }
-static void cmd_mdb_tx_simple(uint8_t const command_id,
+
+static void cmd_mdb_tx_simple(uint8_t const request_id,
                               uint8_t const *const data, uint8_t const length) {
-  if (length == 0) {
-    master_out_1(command_id, RESPONSE_INVALID_DATA, 0);
-    return;
-  }
-  if (length + 1 > mdb_out.size) {
-    master_out_1(command_id, RESPONSE_BUFFER_OVERFLOW, length + 1);
-    return;
-  }
-  uint8_t const mst = mdb.state;
-  if (mst != MDB_STATE_IDLE) {
-    master_out_1(command_id, RESPONSE_MDB_BUSY, mst);
-    return;
-  }
-  buffer_copy(&mdb_out, data, length);
-  buffer_append(&mdb_out, memsum(data, length));
-  mdb_tx_begin(command_id);
+  mdb_tx_begin(request_id, data, length);
 }
 
 static void master_notify_init(void) {
@@ -290,10 +265,36 @@ static void master_notify_set(bool const on) {
   }
 }
 
-static uint8_t memsum(uint8_t const *const src, uint8_t const length) {
-  uint8_t sum = 0;
-  for (uint8_t i = 0; i < length; i++) {
-    sum += src[i];
+static void led_init(void) { bit_mask_set(LED_DDR, _BV(LED_PIN)); }
+static void led_toggle(void) { LED_PORT ^= _BV(LED_PIN); }
+
+static void clock_init(void) {
+  _clock_10us = 0;
+  // prescale 8, CTC, TOP=19 -> interrupt every 10us
+  TCNT0 = 0;
+  OCR0A = 19;
+  TIMSK0 = _BV(OCIE0A);
+  TCCR0A = _BV(WGM01);
+  TCCR0B = _BV(CS01);
+}
+static void clock_stop(void) {
+  TCCR0A = 0;
+  TCCR0B = 0;
+  TIMSK0 = 0;
+}
+ISR(TIMER0_COMPA_vect) {
+  _clock_10us++;
+  static uint8_t tmp10us = 0;
+  static uint8_t tmp1ms = 0;
+  if (++tmp10us == 100) {
+    tmp10us = 0;
+    if (++tmp1ms == 100) {
+      tmp1ms = 0;
+      _clock_100ms++;
+      // cheap "every 1.6s"
+      if ((_clock_100ms & 0xf) == 0) {
+        led_toggle();
+      }
+    }
   }
-  return sum;
 }

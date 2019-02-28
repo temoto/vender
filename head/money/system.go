@@ -3,7 +3,6 @@ package money
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/log2"
@@ -37,14 +36,6 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	// 	self.cs.Stop(ctx)
 	// }
 
-	go func() {
-		time.Sleep(10 * time.Second)
-		self.Log.Debugf("!sim bill pause")
-		self.bs.Stop(ctx)
-		time.Sleep(10 * time.Second)
-		self.Log.Debugf("!sim bill unpause")
-		self.bs.Start(ctx, self)
-	}()
 	return nil
 }
 func (self *MoneySystem) Stop(ctx context.Context) error {

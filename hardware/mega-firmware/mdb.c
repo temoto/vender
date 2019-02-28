@@ -1,7 +1,16 @@
+#ifndef _INCLUDE_FROM_MAIN
+#error this file looks like standalone C source, but actually must be included in main.c
+#endif
 #ifndef INCLUDE_MDB_C
 #define INCLUDE_MDB_C
+#include <avr/interrupt.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#include <string.h>
+#include "bit.h"
+#include "buffer.h"
+#include "common.h"
+#include "protocol.h"
 
 /*
 MDB timings:
@@ -11,34 +20,44 @@ MDB timings:
   t = 200 mS setup (min.)
 */
 
-typedef struct { uint8_t timeout; } mdb_stat_t;
 typedef struct {
   mdb_state_t state;
-  uint8_t command_id;
+  uint8_t request_id;
+  mdb_result_t result;
+  uint8_t error_data;
   uint8_t in_chk;
   bool retrying;
+  uint16_t start_clock;
+  uint16_t duration;
 } mdb_t;
 
-static buffer_t mdb_in;
-static buffer_t mdb_out;
 static mdb_t volatile mdb;
-static mdb_stat_t volatile mdb_stat;
+static buffer_t volatile mdb_in;
+static buffer_t volatile mdb_out;
+static uint16_t volatile mdb_timeout_ticks;
 
-static void mdb_reset(void);
-static void mdb_finish_0(response_t const code);
-static void mdb_finish_1(response_t const code, uint8_t const data);
-static void mdb_finish_2(response_t const code, uint8_t const data1,
-                         uint8_t const data2);
-static void mdb_finish_n(response_t const code, uint8_t const* const data,
-                         uint8_t const length);
+// UCSZ02 = 9 data bit
+static uint8_t const UCSRB_BASE =
+    _BV(RXEN0) | _BV(TXEN0) | _BV(UCSZ02) | _BV(RXCIE0);
+
+// fwd
+
+static inline bool uart_recv_ready(void) __attribute__((warn_unused_result));
+static inline bool uart_send_ready(void) __attribute__((warn_unused_result));
 static void mdb_start_receive(void);
-
-static bool uart_send_ready(void) { return bit_mask_test(UCSR0A, _BV(UDRE0)); }
+static void mdb_finish(mdb_result_t const result, uint8_t const error_data);
+static void mdb_bus_reset_finish(void);
+static inline bool mdb_handle_recv_end(void);
+static inline uint16_t ms_to_timer16_p1024(uint16_t const ms)
+    __attribute__((const, hot, warn_unused_result));
+static void timer1_set(uint16_t const ms);
+static void timer1_stop(void);
 
 // Baud Rate = 9600 +1%/-2% NRZ 9-N-1
 static void mdb_init(void) {
-  static uint8_t in_data[MDB_PACKET_SIZE];
-  static uint8_t out_data[MDB_PACKET_SIZE];
+  static uint8_t in_data[MDB_BLOCK_SIZE];
+  static uint8_t out_data[MDB_BLOCK_SIZE];
+
   buffer_init(&mdb_in, (uint8_t * const)in_data, sizeof(in_data));
   buffer_init(&mdb_out, (uint8_t * const)out_data, sizeof(out_data));
   mdb_reset();
@@ -50,99 +69,161 @@ static void mdb_init(void) {
   UBRR0L = BAUD_PRESCALE;
   // UCSZ00+UCSZ01+UCSZ02 = 9 data bits
   UCSR0C = _BV(UCSZ00) | _BV(UCSZ01);
-  UCSR0B = _BV(RXEN0) | _BV(TXEN0)  // Enable receiver and transmitter
-           | _BV(UCSZ02)            // 9 data bit
-           | _BV(RXCIE0)            // Enable RX Complete Interrupt
-      ;
-}
+  UCSR0B = UCSRB_BASE;
 
-static void mdb_tx_begin(uint8_t const command_id) {
-  mdb.command_id = command_id;
-  // TODO wait for byte is sent?
-  if (!uart_send_ready()) {
-    mdb_finish_1(RESPONSE_UART_SEND_BUSY, 0);
-    return;
-  }
-  timer1_set(MDB_TIMEOUT);
-  mdb.state = MDB_STATE_SEND;
-  mdb.retrying = false;
-
-  uint8_t const csb = _BV(RXEN0) | _BV(TXEN0) | _BV(UCSZ02) | _BV(RXCIE0);
-  UCSR0B = csb | _BV(TXB80);
-  UDR0 = mdb_out.data[0];
-
-  // clear 9 bit for following bytes
-  UCSR0B = csb;
-
-  // important to set index before UDRIE
-  mdb_out.used = 1;
-  UCSR0B = csb | _BV(UDRIE0);
-  return;
+  mdb_timeout_ticks = ms_to_timer16_p1024(MDB_TIMEOUT_MS);
 }
 
 static bool mdb_step(void) {
+  bool again = false;
   if (mdb.state == MDB_STATE_RECV_END) {
-    uint8_t const len = mdb_in.length;
-    if (len == 0) {
-      mdb_finish_1(RESPONSE_MDB_CODE_ERROR, __LINE__);
-      return true;
-    }
-    uint8_t const last_byte = mdb_in.data[len - 1];
-    if (len == 1) {
-      // VMC ---ADD*---DAT---DAT---CHK-----
-      // VMC ---ADD*---CHK--
-      // Per -------------ACK*-
-      // Per -------------NAK*-
-      if (last_byte == MDB_ACK) {
-        mdb_finish_0(RESPONSE_MDB_SUCCESS);
-      } else if (last_byte == MDB_NAK) {
-        mdb_finish_1(RESPONSE_MDB_NAK, last_byte);
-      } else {
-        mdb_finish_1(RESPONSE_MDB_INVALID_END, last_byte);
-      }
-      return true;
+    again |= mdb_handle_recv_end();
+  }
+  if ((mdb.state == MDB_STATE_DONE)) {
+    if (!response_empty()) {
+      return false;
     }
 
-    if (last_byte != mdb.in_chk) {
-      if (mdb.retrying) {
-        // invalid checksum even after retry
-        // VMC ---ADD*---DAT--CHK----------------RET----------------NAK--
-        // Per ------------------DAT---DAT---CHK*---DAT---DAT---CHK*-----
-        UDR0 = MDB_NAK;
-        mdb_finish_n(RESPONSE_MDB_INVALID_CHK, mdb_in.data, len);
-        return true;
-      } else {
-        // VMC ---ADD*---DAT--CHK----------------RET----------------ACK--
-        // Per ------------------DAT---DAT---CHK*---DAT---DAT---CHK*-----
-        UDR0 = MDB_RET;
-        mdb.retrying = true;
-        mdb_start_receive();
-        return true;
-      }
-    }
+    uint8_t const r = mdb.result;  // anti-volatile
+    uint8_t len = mdb_in.length;
+    uint8_t const header =
+        (r == MDB_RESULT_SUCCESS ? RESPONSE_OK : RESPONSE_ERROR);
 
-    // VMC ---ADD*---CHK----------------ACK-
-    // Per -------------DAT---DAT---CHK*----
-    UDR0 = MDB_ACK;
-    mdb_finish_n(RESPONSE_MDB_SUCCESS, mdb_in.data, len - 1);
+    response_begin(mdb.request_id, header);
+    response_f2(FIELD_MDB_RESULT, r, mdb.error_data);
+    response_f2(FIELD_MDB_DURATION10U, (mdb.duration >> 8),
+                (mdb.duration & 0xff));
+
+    if ((r == MDB_RESULT_SUCCESS) && (len > 0)) {
+      len--;
+    }
+    response_fn(FIELD_MDB_DATA, mdb_in.data, len);
+    response_finish();
+    mdb_reset();
     return true;
   }
-  return false;
+
+  return again;
+}
+static inline bool mdb_handle_recv_end(void) {
+  uint8_t const len = mdb_in.length;
+  if (len == 0) {
+    mdb_finish(MDB_RESULT_CODE_ERROR, __LINE__);
+    return true;
+  }
+  uint8_t const last_byte = mdb_in.data[len - 1];
+  if (len == 1) {
+    // VMC ---ADD*---DAT---DAT---CHK-----
+    // VMC ---ADD*---CHK--
+    // Per -------------ACK*-
+    // Per -------------NAK*-
+    if (last_byte == MDB_ACK) {
+      mdb_finish(MDB_RESULT_SUCCESS, 0);
+    } else if (last_byte == MDB_NAK) {
+      mdb_finish(MDB_RESULT_NAK, 0);
+    } else {
+      mdb_finish(MDB_RESULT_INVALID_END, 0);
+    }
+    return true;
+  }
+
+  if (last_byte != mdb.in_chk) {
+    if (mdb.retrying) {
+      // invalid checksum even after retry
+      // VMC ---ADD*---DAT--CHK----------------RET----------------NAK--
+      // Per ------------------DAT---DAT---CHK*---DAT---DAT---CHK*-----
+      UDR0 = MDB_NAK;
+      mdb_finish(MDB_RESULT_INVALID_CHK, 0);
+      return true;
+    } else {
+      // VMC ---ADD*---DAT--CHK----------------RET----------------ACK--
+      // Per ------------------DAT---DAT---CHK*---DAT---DAT---CHK*-----
+      UDR0 = MDB_RET;
+      mdb.retrying = true;
+      mdb_start_receive();
+      return true;
+    }
+  }
+
+  // VMC ---ADD*---CHK----------------ACK-
+  // Per -------------DAT---DAT---CHK*----
+  UDR0 = MDB_ACK;
+  mdb_finish(MDB_RESULT_SUCCESS, 0);
+  return true;
 }
 
-static void mdb_bus_reset_begin(uint8_t const command_id,
+// Called from master_command()
+// allowed to write response
+static void mdb_tx_begin(uint8_t const request_id, uint8_t const *const data,
+                         uint8_t const length) {
+  if (length == 0) {
+    response_error2(request_id, ERROR_INVALID_DATA, 0);
+    return;
+  }
+  if (length + 1 > mdb_out.size) {
+    response_error2(request_id, ERROR_BUFFER_OVERFLOW, length + 1);
+    return;
+  }
+  uint8_t const mst = mdb.state;
+  if (mst != MDB_STATE_IDLE) {
+    response_begin(request_id, RESPONSE_ERROR);
+    response_f2(FIELD_MDB_RESULT, MDB_RESULT_BUSY, mst);
+    response_finish();
+    return;
+  }
+
+  // modified MDB state after this point,
+  // so must call mdb_reset() on errors
+  buffer_copy(&mdb_out, data, length);
+  buffer_append(&mdb_out, memsum(data, length));
+
+  mdb.request_id = request_id;
+  mdb.state = MDB_STATE_SEND;
+  mdb.start_clock = clock_10us();
+  if (!uart_send_ready()) {
+    response_begin(request_id, RESPONSE_ERROR);
+    response_f2(FIELD_MDB_RESULT, MDB_RESULT_UART_SEND_BUSY, 0);
+    response_finish();
+    return;
+  }
+  timer1_set(mdb_timeout_ticks);
+  mdb.retrying = false;
+
+  UCSR0B = UCSRB_BASE | _BV(TXB80);
+  UDR0 = data[0];
+
+  // clear 9 bit for following bytes
+  UCSR0B = UCSRB_BASE;
+
+  // important to set index before UDRIE
+  mdb_out.used = 1;
+  UCSR0B = UCSRB_BASE | _BV(UDRIE0);
+  return;
+}
+
+// Called from master_command()
+// allowed to write response
+static void mdb_bus_reset_begin(uint8_t const request_id,
                                 uint16_t const duration) {
-  mdb.command_id = command_id;
+  uint8_t const mst = mdb.state;
+  if (mst != MDB_STATE_IDLE) {
+    response_begin(request_id, RESPONSE_ERROR);
+    response_f2(FIELD_MDB_RESULT, MDB_RESULT_BUSY, mst);
+    response_finish();
+    return;
+  }
+
+  mdb.request_id = request_id;
   mdb.state = MDB_STATE_BUS_RESET;
-  bit_mask_clear(UCSR0B, _BV(TXEN0));  // disable UART TX
+  mdb.start_clock = clock_10us();
+  UCSR0B = 0;                          // disable RX,TX
   bit_mask_set(DDRD, _BV(1));          // set TX pin to output
   bit_mask_clear(PORTD, _BV(PORTD1));  // pull TX pin low
-  timer1_set(duration);
+  timer1_set(ms_to_timer16_p1024(duration));
 }
 static void mdb_bus_reset_finish(void) {
-  // MDB bus reset is finished, re-enable UART TX
-  bit_mask_set(UCSR0B, _BV(TXEN0));
-  mdb_finish_0(RESPONSE_MDB_SUCCESS);
+  // MDB bus reset is finished, make UART override TX pin again
+  mdb_finish(MDB_RESULT_SUCCESS, 0);
 }
 
 ISR(USART_RX_vect) {
@@ -158,30 +239,31 @@ ISR(USART_RX_vect) {
   uint8_t const err = csa & (_BV(FE0) | _BV(DOR0) | _BV(UPE0));
   if (err != 0) {
     if (bit_mask_test(err, _BV(FE0))) {
-      mdb_finish_1(RESPONSE_UART_READ_ERROR, err);
+      mdb_finish(MDB_RESULT_UART_READ_ERROR, err & (~_BV(FE0)));
     } else if (bit_mask_test(err, _BV(DOR0))) {
-      mdb_finish_1(RESPONSE_UART_READ_OVERFLOW, err);
+      mdb_finish(MDB_RESULT_UART_READ_OVERFLOW, err & (~_BV(DOR0)));
     } else if (bit_mask_test(err, _BV(UPE0))) {
-      mdb_finish_1(RESPONSE_UART_READ_PARITY, err);
+      mdb_finish(MDB_RESULT_UART_READ_PARITY, err & (~_BV(UPE0)));
     }
     return;
   }
 
   // received data out of session
   if (mdb.state != MDB_STATE_RECV) {
-    mdb_finish_2(RESPONSE_UART_READ_UNEXPECTED, data, mdb.state);
+    // mdb_finish(MDB_RESULT_UART_READ_UNEXPECTED, data);
     return;
   }
 
   if (!buffer_append(&mdb_in, data)) {
-    mdb_finish_1(RESPONSE_MDB_RECEIVE_OVERFLOW, data);
+    mdb_finish(MDB_RESULT_RECEIVE_OVERFLOW, 0);
     return;
   }
+
   if (bit_mask_test(csb, _BV(RXB80))) {
     mdb.state = MDB_STATE_RECV_END;
   } else {
     mdb.in_chk += data;
-    timer1_set(MDB_TIMEOUT);
+    timer1_set(mdb_timeout_ticks);
   }
 }
 
@@ -193,7 +275,7 @@ ISR(USART_UDRE_vect) {
   uint8_t const len = mdb_out.length;
   // debug mode
   if (used >= len) {
-    mdb_finish_1(RESPONSE_MDB_SEND_OVERFLOW, used);
+    mdb_finish(MDB_RESULT_SEND_OVERFLOW, used);
     return;
   }
 
@@ -202,42 +284,45 @@ ISR(USART_UDRE_vect) {
 
   // last byte is (about to be) sent
   if (mdb_out.used == len) {
-    // variable hoop to make volatile UCSR0B assignment once
-    uint8_t csb = UCSR0B;
-    bit_mask_clear(csb, _BV(UDRIE0));  // disable (this) TX ready interrupt
-    bit_mask_set(csb, _BV(TXCIE0));    // enable TX-finished interrupt
-    UCSR0B = csb;
+    // disable (this) TX ready interrupt
+    // enable TX-finished interrupt
+    UCSR0B = UCSRB_BASE | _BV(TXCIE0);
   }
 
   UDR0 = data;
 
-  timer1_set(MDB_TIMEOUT);
+  timer1_set(mdb_timeout_ticks);
 }
 
 // UART TX completed
 ISR(USART_TX_vect) {
   timer1_stop();
-  bit_mask_clear(UCSR0B, _BV(TXCIE0));  // disable (this) TX completed interrupt
+  UCSR0B = UCSRB_BASE;  // disable (this) TX completed interrupt
 
   uint8_t const mst = mdb.state;
   if (mst != MDB_STATE_SEND) {
-    mdb_finish_2(RESPONSE_MDB_CODE_ERROR, __LINE__, mst);
+    mdb_finish(MDB_RESULT_UART_TXC_UNEXPECTED, mst);
     return;
   }
 
   mdb_start_receive();
 }
 
-static void timer1_set(uint16_t const ms) {
+static inline uint16_t ms_to_timer16_p1024(uint16_t const ms) {
+  // cheap way to get more accuracy without float
+  uint32_t const ticks_expanded = ms * ((F_CPU << 4) / 1024000UL);
+  uint32_t const ticks = (ticks_expanded >> 4) + 1;
+  return ticks;
+}
+
+static void timer1_set(uint16_t const ticks) {
   timer1_stop();
-  uint16_t const per_ms = (F_CPU / 1024000UL);
-  uint16_t const cnt = 0 - (ms * per_ms);
-  TCNT1 = cnt;
+  TCNT1 = 0 - ticks;
   TIMSK1 = _BV(TOIE1);
   TCCR1A = 0;
   TCCR1B = _BV(CS12) | _BV(CS10);  // prescale 1024, normal mode
 }
-static void timer1_stop(void) {
+static inline void timer1_stop(void) {
   TCCR1B = 0;
   TCCR1A = 0;
   TIMSK1 = 0;
@@ -251,25 +336,27 @@ ISR(TIMER1_OVF_vect) {
     // MDB timeout while sending or receiving
     // VMC ---ADD*---CHK------------ADD*---CHK------
     // Per --------------[silence]------------ACK*--
-    mdb_stat.timeout++;
-    uint8_t const time_passed = MDB_TIMEOUT;  // FIXME get real value
-    mdb_finish_1(RESPONSE_MDB_TIMEOUT, time_passed);
+    mdb_finish(MDB_RESULT_TIMEOUT, mst);
   } else {
     // remove if timer is used by something other than MDB
-    master_out_1(mdb.command_id, RESPONSE_TIMER_CODE_ERROR, 1);
+    mdb_finish(MDB_RESULT_TIMER_CODE_ERROR, 1);
   }
 }
 
 // helpers
 
+static inline bool uart_recv_ready(void) {
+  return bit_mask_test(UCSR0A, _BV(RXC0));
+}
+static inline bool uart_send_ready(void) {
+  return bit_mask_test(UCSR0A, _BV(UDRE0));
+}
+
 static void mdb_reset(void) {
   timer1_stop();
-  memset((void*)&mdb_stat, 0, sizeof(mdb_stat_t));
   buffer_clear_fast(&mdb_in);
   buffer_clear_fast(&mdb_out);
-  mdb.command_id = 0;
-  mdb.in_chk = 0;
-  mdb.retrying = false;
+  memset((void *)&mdb, 0, sizeof(mdb_t));
   mdb.state = MDB_STATE_IDLE;
 }
 
@@ -277,26 +364,15 @@ static void mdb_start_receive(void) {
   buffer_clear_fast(&mdb_in);
   mdb.in_chk = 0;
   mdb.state = MDB_STATE_RECV;
-  timer1_set(MDB_TIMEOUT);
+  timer1_set(mdb_timeout_ticks);
 }
 
-static void mdb_finish_0(response_t const code) {
-  master_out_0(mdb.command_id, code);
-  mdb_reset();
-}
-static void mdb_finish_1(response_t const code, uint8_t const data) {
-  master_out_1(mdb.command_id, code, data);
-  mdb_reset();
-}
-static void mdb_finish_2(response_t const code, uint8_t const data1,
-                         uint8_t const data2) {
-  master_out_2(mdb.command_id, code, data1, data2);
-  mdb_reset();
-}
-static void mdb_finish_n(response_t const code, uint8_t const* const data,
-                         uint8_t const length) {
-  master_out_n(mdb.command_id, code, data, length);
-  mdb_reset();
+static void mdb_finish(mdb_result_t const result, uint8_t const error_data) {
+  UCSR0B = UCSRB_BASE;
+  mdb.result = result;
+  mdb.error_data = error_data;
+  mdb.duration = clock_10us() - mdb.start_clock;
+  mdb.state = MDB_STATE_DONE;
 }
 
 #endif  // INCLUDE_MDB_C

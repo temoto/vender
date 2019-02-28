@@ -23,7 +23,7 @@ type Client struct {
 	bus      i2c.I2CBus
 	addr     byte
 	pin      uint
-	twich    chan Packet
+	twich    chan uint16
 	refcount int32
 	alive    *alive.Alive
 	rnd      *rand.Rand
@@ -31,7 +31,7 @@ type Client struct {
 }
 type Stat struct {
 	Error       uint32
-	Command     uint32
+	Request     uint32
 	ResponseAll uint32
 	Twi         uint32
 	Stray       uint32
@@ -45,7 +45,7 @@ func NewClient(busNo byte, addr byte, pin uint, log *log2.Log) (*Client, error) 
 		bus:   i2c.NewI2CBus(busNo),
 		pin:   pin,
 		alive: alive.NewAlive(),
-		twich: make(chan Packet, 16),
+		twich: make(chan uint16, 16),
 		rnd:   helpers.RandUnix(),
 	}
 	if err := self.bus.Init(); err != nil {
@@ -78,22 +78,12 @@ func (self *Client) DecRef(debug string) error {
 }
 
 // TODO make it private, used by mega-cli
-func (self *Client) RawRead(b []byte) error {
-	err := self.bus.Tx(self.addr, nil, b)
-	// self.Log.Debugf("%s RawRead addr=%02x buf=%02x err=%v", modName, self.addr, b, err)
-	if err != nil {
-		atomic.AddUint32(&self.stat.Error, 1)
-	}
-	return err
-}
-
-// TODO make it private, used by mega-cli
 func (self *Client) RawWrite(b []byte) error {
-	err := self.bus.Tx(self.addr, b, nil)
+	err := self.bus.Tx(self.addr, b, nil, 1)
 	if err != nil {
 		atomic.AddUint32(&self.stat.Error, 1)
 	}
-	// self.Log.Debugf("%s RawWrite addr=%02x buf=%02x err=%v", modName, self.addr, b, err)
+	// self.Log.Debugf("%s RawWrite addr=%02x buf=%x err=%v", modName, self.addr, b, err)
 	return err
 }
 
@@ -112,18 +102,17 @@ func (self *Client) DoMdbTxSimple(data []byte) (Packet, error) {
 }
 
 func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration) (Packet, error) {
-	tbegin := time.Now()
-	self.Log.Debugf("dotimeout begin")
-	defer func() {
-		td := time.Now().Sub(tbegin)
-		self.Log.Debugf("dotimeout end %v", td)
-	}()
+	// tbegin := time.Now()
+	// defer func() {
+	// 	td := time.Now().Sub(tbegin)
+	// 	self.Log.Debugf("dotimeout end %v", td)
+	// }()
 
-	var bufOut [COMMAND_MAX_LENGTH + 1]byte
+	var bufOut [REQUEST_MAX_LENGTH + 1]byte
 	var bufIn [RESPONSE_MAX_LENGTH + 1]byte
 	var r PacketError
 
-	atomic.AddUint32(&self.stat.Command, 1)
+	atomic.AddUint32(&self.stat.Request, 1)
 	cmdPacket := NewPacket(
 		byte((self.rnd.Uint32()%254)+1),
 		byte(cmd),
@@ -132,7 +121,7 @@ func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration)
 	pb := cmdPacket.Bytes()
 	plen := copy(bufOut[:], pb)
 
-	self.ioTx(cmdPacket, bufOut[:plen], bufIn[:], timeout, &r)
+	self.Tx(cmdPacket.Id, bufOut[:plen], bufIn[:], timeout, &r)
 	return r.P, r.E
 }
 
@@ -145,23 +134,44 @@ type PacketError struct {
 	E error
 }
 
-func (self *Client) ioTx(request Packet, bufOut, bufIn []byte, timeout time.Duration, r *PacketError) {
+func (self *Client) Tx(requestId byte, bufOut, bufIn []byte, timeout time.Duration, r *PacketError) {
 	tbegin := time.Now()
 
-	r.E = self.bus.Tx(self.addr, bufOut, bufIn)
+	// self.Log.Debugf("tx out=%x", bufOut)
+	r.E = self.bus.Tx(self.addr, bufOut, bufIn, 0)
+	// self.Log.Debugf("immediate err=%v response=%x", r.E, bufIn)
 	if r.E != nil {
+		atomic.AddUint32(&self.stat.Error, 1)
 		return
 	}
 	for {
-		if bufIn[0] > 0 && self.parse(bufIn, request.Id, &r.P) {
+		if len(bufIn) > 0 && bufIn[0] == 0 {
+			goto tryWait
+		}
+		r.E = self.parse(bufIn, &r.P)
+		if r.E != nil {
+			atomic.AddUint32(&self.stat.Error, 1)
+			return
+		}
+		if requestId == 0 || r.P.Id == requestId {
+			return
+		}
+		self.Log.Errorf("%s tx CRITICAL stray packet=%s", modName, r.P.String())
+
+	tryWait:
+		time.Sleep(1 * time.Millisecond)
+
+		if timeout == 0 {
 			return
 		}
 		if time.Now().Sub(tbegin) > timeout {
 			r.E = errors.Timeoutf("mega/tx")
 			return
 		}
-		time.Sleep(1 * time.Millisecond)
-		if r.E = self.RawRead(bufIn); r.E != nil {
+		r.E = self.bus.Tx(self.addr, nil, bufIn, 0)
+		// self.Log.Debugf("%s tx read buf=%x err=%v", modName, bufIn, r.E)
+		if r.E != nil {
+			atomic.AddUint32(&self.stat.Error, 1)
 			return
 		}
 	}
@@ -178,58 +188,47 @@ func (self *Client) pinLoop() {
 		select {
 		case <-pinWatch.Notification:
 			// self.Log.Debugf("pin edge")
-			// self.DoTimeout(COMMAND_STATUS, nil, 10*time.Millisecond)
+			// self.DoTimeout(COMMAND_TWI_READ, nil, 10*time.Millisecond)
 		case <-stopch:
 			return
 		}
 	}
 }
 
-func (self *Client) parse(buf []byte, cmdId byte, dest *Packet) bool {
-	match := false
-	err := ParseResponse(buf, func(p Packet) {
-		// self.Log.Debugf("parsed packet=%02x %s", p.Bytes(), p.String())
-		switch Response_t(p.Header) {
-		case RESPONSE_JUST_RESET:
-			atomic.AddUint32(&self.stat.Reset, 1)
-			fields, err := p.ParseFields()
-			if err != nil {
-				atomic.AddUint32(&self.stat.Error, 1)
-				self.Log.Errorf("JUST_RESET ParseFields err=%v", err)
-			} else if ResetFlag(fields.Mcusr)&ResetFlagWatchdog != 0 {
-				atomic.AddUint32(&self.stat.Error, 1)
-				self.Log.Errorf("restarted by watchdog, info=%s", fields.String())
-			}
-		case RESPONSE_TWI:
-			if p.Id != 0 {
-				atomic.AddUint32(&self.stat.Error, 1)
-				self.Log.Errorf("code error RESPONSE_TWI unexpected Id=%d", p.Id)
-				return
-			}
-			atomic.AddUint32(&self.stat.Twi, 1)
+func (self *Client) parse(buf []byte, p *Packet) error {
+	err := p.Parse(buf)
+	if err != nil {
+		atomic.AddUint32(&self.stat.Error, 1)
+		self.Log.Errorf("%s parse=%x err=%v", modName, buf, err)
+		return err
+	}
+
+	// self.Log.Debugf("parsed packet=%x %s", p.Bytes(), p.String())
+	if p.Fields.Protocol != ProtocolVersion {
+		self.Log.Errorf("Protocol=%d expected=%d", p.Fields.Protocol, ProtocolVersion)
+		// return err
+	}
+	if len(p.Fields.TwiData) > 0 {
+		atomic.AddUint32(&self.stat.Twi, 1)
+		for i := 0; i+1 < len(p.Fields.TwiData); i += 2 {
+			twitem := binary.BigEndian.Uint16(p.Fields.TwiData[i : i+2])
 			select {
-			case self.twich <- p:
+			case self.twich <- twitem:
 			default:
 				self.Log.Errorf("CRITICAL twich chan is full")
 			}
-		default:
-			if p.Id == 0 {
-				self.Log.Errorf("non-response=%s", p.String())
-			}
 		}
+	}
+	if p.Id == 0 && Response_t(p.Header) == RESPONSE_RESET {
+		atomic.AddUint32(&self.stat.Reset, 1)
+		if ResetFlag(p.Fields.Mcusr)&ResetFlagWatchdog != 0 {
+			atomic.AddUint32(&self.stat.Error, 1)
+			self.Log.Errorf("restarted by watchdog, info=%s", p.Fields.String())
+		}
+	} else {
 		if p.Id != 0 {
 			atomic.AddUint32(&self.stat.ResponseAll, 1)
 		}
-		if p.Id == cmdId {
-			*dest = p
-			match = true
-		} else {
-			self.Log.Errorf("CRITICAL (parse) stray packet %s", p.String())
-		}
-	})
-	if err != nil {
-		atomic.AddUint32(&self.stat.Error, 1)
-		self.Log.Errorf("%s parse=%02x err=%v", modName, buf, err)
 	}
-	return match
+	return nil
 }

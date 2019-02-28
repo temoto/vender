@@ -59,7 +59,7 @@ type i2cBus struct {
 type I2CBus interface {
 	Init() error
 	Close() error
-	Tx(addr byte, bw []byte, br []byte) error
+	Tx(addr byte, bw []byte, br []byte, retry int) error
 }
 
 func NewI2CBus(busNo byte) I2CBus {
@@ -86,7 +86,7 @@ func (b *i2cBus) init() error {
 	return nil
 }
 
-func (b *i2cBus) Tx(addr byte, bw []byte, br []byte) error {
+func (b *i2cBus) Tx(addr byte, bw []byte, br []byte, retry int) error {
 	b.lk.Lock()
 	defer b.lk.Unlock()
 
@@ -118,10 +118,17 @@ func (b *i2cBus) Tx(addr byte, bw []byte, br []byte) error {
 		msgs: uintptr(unsafe.Pointer(&msgs[0])),
 		nmsg: nmsg,
 	}
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(b.file.Fd()), uintptr(I2C_RDWR), uintptr(unsafe.Pointer(&rdwr_data)))
+
+	var errno syscall.Errno
+	for ; retry >= 0; retry-- {
+		_, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+			uintptr(b.file.Fd()), uintptr(I2C_RDWR), uintptr(unsafe.Pointer(&rdwr_data)))
+		if errno != syscall.EIO {
+			break
+		}
+	}
 	if errno != 0 {
-		return syscall.Errno(errno)
+		return errno
 	}
 	return nil
 }

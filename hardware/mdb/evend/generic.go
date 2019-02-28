@@ -35,7 +35,7 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string) error
 }
 
 func (self *Generic) NewErrPollProblem(p mdb.Packet) error {
-	return errors.Errorf("device=%s POLL=%02x -> need to ask problem code", self.dev.Name, p.Bytes())
+	return errors.Errorf("device=%s POLL=%x -> need to ask problem code", self.dev.Name, p.Bytes())
 }
 func (self *Generic) NewErrPollUnexpected(p mdb.Packet) error { return nil }
 
@@ -49,7 +49,7 @@ func (self *Generic) CommandAction(ctx context.Context, args []byte) error {
 		self.dev.Log.Errorf("device=%s mdb request=%s err=%v", self.dev.Name, request.Format(), r.E)
 		return r.E
 	}
-	self.dev.Log.Debugf("device=%s action=%02x response=(%d)%s", self.dev.Name, args, r.P.Len(), r.P.Format())
+	self.dev.Log.Debugf("device=%s action=%x response=(%d)%s", self.dev.Name, args, r.P.Len(), r.P.Format())
 	return nil
 }
 
@@ -79,7 +79,7 @@ func (self *Generic) NewPollWait(tag string, timeout time.Duration, ignoreBits b
 			return true, nil
 		}
 		if len(bs) > 1 {
-			return true, errors.Errorf("device=%s POLL=%02x -> too long", self.dev.Name, bs)
+			return true, errors.Errorf("device=%s POLL=%x -> too long", self.dev.Name, bs)
 		}
 		value := bs[0]
 		if value&genericPollProblem != 0 {
@@ -108,13 +108,13 @@ func (self *Generic) NewPollWait2(tag string, timeout time.Duration) engine.Doer
 		if len(bs) == 0 {
 			self.dev.Log.Debugf("device=%s POLL=empty", self.dev.Name)
 			return false, nil
-			// return true, errors.Errorf("device=%s POLL=%02x -> expected non-empty", self.dev.Name, bs)
+			// return true, errors.Errorf("device=%s POLL=%x -> expected non-empty", self.dev.Name, bs)
 		}
 		if bytes.Equal(bs, success) {
 			return true, nil
 		}
 		if bs[0] == 0x04 {
-			return true, errors.Errorf("device=%s POLL=%02x -> parsed error", self.dev.Name, bs)
+			return true, errors.Errorf("device=%s POLL=%x -> parsed error", self.dev.Name, bs)
 		}
 		return true, self.NewErrPollUnexpected(r.P)
 	}

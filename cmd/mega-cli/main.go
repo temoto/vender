@@ -83,7 +83,7 @@ func main() {
 				}
 			case word[0] == 'p':
 				if bs, err := hex.DecodeString(word[1:]); err != nil {
-					log.Fatalf("token=%s error=%v", word, errors.ErrorStack(err))
+					log.Fatalf("token=%s err=%v", word, errors.ErrorStack(err))
 				} else {
 					if len(bs) < 1 {
 						log.Errorf("pXX... requires at least 1 byte for command")
@@ -91,28 +91,25 @@ func main() {
 					}
 					p, err := client.DoTimeout(mega.Command_t(bs[0]), bs[1:], mega.DefaultTimeout)
 					if err != nil {
-						log.Errorf("p rq=%02x rs=%s error=%v", bs, p.String(), err)
+						log.Errorf("p rq=%x rs=%s err=%v", bs, p.String(), err)
 						break
 					}
-					log.Debugf("response=%02x %s", p.Bytes(), p.String())
+					log.Debugf("response=%x %s", p.Bytes(), p.String())
 				}
 			case word[0] == 'r':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
 					log.Fatal(errors.ErrorStack(err))
 				} else {
-					buf := make([]byte, i)
-					err = client.RawRead(buf)
-					if err != nil {
-						log.Errorf("read error=%v", err)
+					if i < 1 {
 						break
 					}
-					// FIXME duplicate code
-					err = mega.ParseResponse(buf, func(p mega.Packet) {
-						log.Debugf("- packet=%s %s", p.SimpleHex(), p.String())
-					})
-					if err != nil {
-						log.Errorf("rs=%02x parse error=%v", buf, err)
-						break
+					buf := make([]byte, i)
+					r := mega.PacketError{}
+					client.Tx(0, nil, buf, 0, &r)
+					if r.E != nil {
+						log.Errorf("read err=%v", r.E)
+					} else {
+						log.Debugf("packet=%s %s", r.P.SimpleHex(), r.P.String())
 					}
 				}
 			case word[0] == 's':
@@ -123,10 +120,10 @@ func main() {
 				}
 			case word[0] == 't':
 				if bs, err := hex.DecodeString(word[1:]); err != nil {
-					log.Fatalf("token=%s error=%v", word, errors.ErrorStack(err))
+					log.Fatalf("token=%s err=%v", word, errors.ErrorStack(err))
 				} else {
 					err = client.RawWrite(bs)
-					log.Errorf("send error=%v", err)
+					log.Errorf("send err=%v", err)
 				}
 			}
 		}

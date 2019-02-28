@@ -12,6 +12,12 @@ import (
 
 const ContextKey = "run/mdber"
 
+var (
+	ErrNak     = errors.NewErr("MDB NAK")
+	ErrBusy    = errors.NewErr("MDB busy")
+	ErrTimeout = errors.NewErr("MDB timeout")
+)
+
 type Uarter interface {
 	Break(d time.Duration) error
 	Close() error
@@ -74,10 +80,12 @@ func NewMDB(u Uarter, options string, log *log2.Log) (*mdb, error) {
 
 func (self *mdb) BreakCustom(keep, sleep time.Duration) error {
 	self.Log.Debugf("mdb.BreakCustom keep=%v sleep=%v", keep, sleep)
+	self.lk.Lock()
 	err := self.io.Break(keep)
 	if err == nil {
 		time.Sleep(sleep)
 	}
+	self.lk.Unlock()
 	return errors.Trace(err)
 }
 

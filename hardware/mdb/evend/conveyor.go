@@ -41,7 +41,7 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 }
 
 func (self *DeviceConveyor) NewMove(position uint16) engine.Doer {
-	return engine.Func{Name: "move", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".move", F: func(ctx context.Context) error {
 		// exception byte order
 		arg := []byte{0x01, byte(position & 0xff), byte(position >> 8)}
 		return self.CommandAction(ctx, arg)

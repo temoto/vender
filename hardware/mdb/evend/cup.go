@@ -33,7 +33,7 @@ func (self *DeviceCup) Init(ctx context.Context) error {
 }
 
 func (self *DeviceCup) NewDispense() engine.Doer {
-	return engine.Func{Name: "dispense", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".dispense", F: func(ctx context.Context) error {
 		return self.CommandAction(ctx, []byte{0x01})
 	}}
 }
@@ -44,7 +44,7 @@ func (self *DeviceCup) NewDispenseSync() engine.Doer {
 		// FIXME don't ignore genericPollMiss
 		Append(self.NewPollWait(tag, self.timeout, genericPollMiss)).
 		Append(self.NewDispense()).
-		Append(engine.Func{Name: "ensure-busy", F: func(ctx context.Context) error {
+		Append(engine.Func{Name: self.dev.Name + ".ensure-busy", F: func(ctx context.Context) error {
 			time.Sleep(30 * time.Millisecond) // TODO tune
 			r := self.dev.DoPollSync(ctx)
 			if r.E != nil {
@@ -67,7 +67,7 @@ func (self *DeviceCup) NewDispenseSync() engine.Doer {
 }
 
 func (self *DeviceCup) NewLight(on bool) engine.Doer {
-	return engine.Func{Name: "light", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".light", F: func(ctx context.Context) error {
 		arg := byte(0x02)
 		if !on {
 			arg = 0x03
@@ -77,7 +77,7 @@ func (self *DeviceCup) NewLight(on bool) engine.Doer {
 }
 
 func (self *DeviceCup) NewCheck() engine.Doer {
-	return engine.Func{Name: "check", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".check", F: func(ctx context.Context) error {
 		return self.CommandAction(ctx, []byte{0x04})
 	}}
 }

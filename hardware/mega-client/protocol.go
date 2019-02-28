@@ -1,7 +1,6 @@
 package mega
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -15,10 +14,13 @@ import (
 
 const packetOverhead = 4
 
+const ProtocolVersion = 3
+
 type Packet struct {
 	buf     [RESPONSE_MAX_LENGTH]byte
 	Id      byte
 	Header  byte
+	Fields  Fields
 	dataLen uint8
 }
 
@@ -44,34 +46,39 @@ func (self *Packet) Data() []byte {
 }
 
 // Overwrites packet state
-func (self *Packet) Parse(b []byte) (uint8, error) {
+func (self *Packet) Parse(b []byte) error {
 	if len(b) == 0 {
-		return 0, errors.NotValidf("packet empty")
+		return errors.NotValidf("packet empty")
 	}
 	length := b[0]
 	if length < packetOverhead {
-		return length, errors.NotValidf("packet=%02x claims length=%d < min=%d", b, length, packetOverhead)
+		return errors.NotValidf("packet=%x claims length=%d < min=%d", b, length, packetOverhead)
 	}
 	if int(length) > len(self.buf) {
-		return length, errors.NotValidf("packet=%02x claims length=%d > max=%d", b, length, len(self.buf))
+		return errors.NotValidf("packet=%x claims length=%d > max=%d", b, length, len(self.buf))
 	}
 	if int(length) > len(b) {
-		return length, errors.NotValidf("packet=%02x claims length=%d > input=%d", b, length, len(b))
+		return errors.NotValidf("packet=%x claims length=%d > input=%d", b, length, len(b))
 	}
+	self.Fields = Fields{}
 	b = b[:length]
 	crcIn := b[length-1]
 	crcLocal := crc.CRC8_p93_n(0, b[:length-1])
 	if crcIn != crcLocal {
-		return length, errors.NotValidf("packet=%02x crc=%02x actual=%02x", b, crcIn, crcLocal)
+		return errors.NotValidf("packet=%x crc=%02x actual=%02x", b, crcIn, crcLocal)
 	}
 	self.Id = b[1]
 	self.Header = b[2]
-	if strings.HasPrefix(Response_t(self.Header).String(), "Response_t(") {
-		return length, errors.NotValidf("packet=%02x header=%02x", b, byte(self.Header))
+	switch Response_t(self.Header) {
+	case RESPONSE_OK, RESPONSE_RESET, RESPONSE_ERROR:
+	default:
+		return errors.NotValidf("packet=%x header=%02x", b, byte(self.Header))
 	}
 	copy(self.buf[:], b)
 	self.dataLen = length - packetOverhead
-	return length, nil
+
+	err := self.Fields.Parse(self.Data())
+	return err
 }
 
 func (self *Packet) Bytes() []byte {
@@ -83,58 +90,10 @@ func (self *Packet) SimpleHex() string {
 	return hex.EncodeToString(b[2 : self.dataLen+3])
 }
 
-func (self *Packet) ParseFields() (Fields, error) {
-	f := Fields{}
-	err := f.Parse(self.Data())
-	return f, err
-}
-
 func (self *Packet) String() string {
-	info := ""
-	switch Response_t(self.Header) {
-	case RESPONSE_STATUS, RESPONSE_JUST_RESET, RESPONSE_DEBUG:
-		fields, err := self.ParseFields()
-		if err != nil {
-			info = "!ERROR:ParseFields err=" + err.Error()
-		} else {
-			info = fields.String()
-		}
-	}
-	return fmt.Sprintf("cmdid=%02x header=%s data=%s info=%s",
-		self.Id, Response_t(self.Header).String(), hex.EncodeToString(self.Data()), info)
-}
-
-func ParseResponse(b []byte, fun func(p Packet)) error {
-	if len(b) == 0 {
-		return errors.NotValidf("response empty")
-	}
-	total := b[0]
-	if total == 0 {
-		return nil
-	}
-	if total > RESPONSE_MAX_LENGTH {
-		return errors.NotValidf("response=%02x claims length=%d > max=%d", b, total, RESPONSE_MAX_LENGTH)
-	}
-	bufLen := len(b) - 1
-	if int(total) > bufLen {
-		return errors.NotValidf("response=%02x claims length=%d > input=%d", b, total, bufLen)
-	}
-	b = b[:total+1]
-	var err error
-	var offset uint8 = 1
-	var plen byte
-	for offset <= total {
-		p := Packet{}
-		if plen, err = p.Parse(b[offset:]); err != nil {
-			return err
-		}
-		if plen == 0 {
-			panic("dead loop plen=0")
-		}
-		fun(p)
-		offset += plen
-	}
-	return nil
+	fields := self.Fields.String()
+	return fmt.Sprintf("cmdid=%02x header=%s data=%s fields=%s",
+		self.Id, Response_t(self.Header).String(), hex.EncodeToString(self.Data()), fields)
 }
 
 type ResetFlag uint8
@@ -147,16 +106,21 @@ const (
 )
 
 type Fields struct {
-	Len              uint8
-	tagOrder         [9]Field_t
-	Protocol         uint8
-	FirmwareVersion  uint16
-	Mcusr            byte
-	QueueMaster      uint8
-	QueueTwi         uint8
-	MdbProtocolState Mdb_state_t
-	MdbStat_b        [1]byte
-	TwiStat_b        [8]byte
+	Len             uint8
+	tagOrder        [32]Field_t
+	Protocol        uint8
+	Error2s         []uint16
+	ErrorNs         []string
+	FirmwareVersion uint16
+	Mcusr           byte
+	Clock10u        uint32
+	MdbResult       Mdb_result_t
+	MdbError        byte
+	MdbData         []byte
+	MdbDuration     uint32
+	MdbLength       uint8
+	TwiData         []byte
+	TwiLength       uint8
 }
 
 func (self *Fields) Parse(b []byte) error {
@@ -171,10 +135,12 @@ func (self *Fields) Parse(b []byte) error {
 		tag, flen = self.parseNext(b[bi:])
 		if flen == 0 {
 			// bi++ // try to parse rest
-			return fmt.Errorf("mega Fields.Parse data=%02x tag=%02x rest=%02x", b, tag, b[bi:])
+			return fmt.Errorf("mega Fields.Parse data=%x tag=%02x(%s) at=%x", b, byte(tag), tag.String(), b[bi:])
 		} else {
-			self.tagOrder[self.Len] = tag
-			self.Len++
+			if !(tag == FIELD_ERROR2 && len(self.Error2s) == 0) {
+				self.tagOrder[self.Len] = tag
+				self.Len++
+			}
 			bi += flen
 		}
 	}
@@ -199,22 +165,36 @@ func (self Fields) FieldString(tag Field_t) string {
 	case FIELD_FIRMWARE_VERSION:
 		// TODO check/ensure byte order
 		return fmt.Sprintf("firmware=%04x", self.FirmwareVersion)
-	case FIELD_BEEBEE:
-		return "beebee-mark"
+	case FIELD_ERROR2:
+		es := []string{}
+		for _, e16 := range self.Error2s {
+			code := Errcode_t(e16 >> 8)
+			arg := e16 & 0xff
+			es = append(es, fmt.Sprintf("%s:%02x", code.String(), arg))
+		}
+		return fmt.Sprintf("error2=%s", strings.Join(es, "|"))
+	case FIELD_ERRORN:
+		es := []string{}
+		for _, e := range self.ErrorNs {
+			es = append(es, e)
+		}
+		return fmt.Sprintf("errorn=%s", strings.Join(es, "|"))
 	case FIELD_MCUSR:
 		return "reset=" + mcusrString(self.Mcusr)
-	case FIELD_QUEUE_MASTER:
-		return fmt.Sprintf("master.length=%d", self.QueueMaster)
-	case FIELD_QUEUE_TWI:
-		return fmt.Sprintf("twi.length=%d", self.QueueTwi)
-	case FIELD_MDB_PROTOCOL_STATE:
-		return fmt.Sprintf("mdb.state=%s", self.MdbProtocolState.String())
-	case FIELD_MDB_STAT:
-		// TODO use parsed mdb stat
-		return fmt.Sprintf("mdb_stat=%02x", self.MdbStat_b)
-	case FIELD_TWI_STAT:
-		// TODO use parsed twi stat
-		return fmt.Sprintf("twi_stat=%02x", self.TwiStat_b)
+	case FIELD_MDB_RESULT:
+		return fmt.Sprintf("mdb_result=%s:%02x", self.MdbResult.String(), self.MdbError)
+	case FIELD_MDB_DATA:
+		return fmt.Sprintf("mdb_data=%x", self.MdbData)
+	case FIELD_MDB_DURATION10U:
+		return fmt.Sprintf("mdb_duration=%dus", self.MdbDuration)
+	case FIELD_MDB_LENGTH:
+		return fmt.Sprintf("mdb_length=%d", self.MdbLength)
+	case FIELD_TWI_DATA:
+		return fmt.Sprintf("twi_data=%x", self.TwiData)
+	case FIELD_TWI_LENGTH:
+		return fmt.Sprintf("twi_length=%d", self.TwiLength)
+	case FIELD_CLOCK10U:
+		return fmt.Sprintf("clock10u=%dus", self.Clock10u)
 	default:
 		return fmt.Sprintf("!ERROR:invalid-tag:%02x", tag)
 	}
@@ -225,42 +205,62 @@ func (self *Fields) parseNext(b []byte) (Field_t, uint8) {
 	arg := b[1:]
 	switch tag {
 	case FIELD_PROTOCOL:
-		// assert len(arg)>=1
+		// TODO assert len(arg)>=1
 		self.Protocol = arg[0]
 		return tag, 1 + 1
+	case FIELD_ERROR2:
+		// TODO assert len(arg)>=2
+		e16 := binary.BigEndian.Uint16(arg)
+		self.Error2s = append(self.Error2s, e16)
+		return tag, 1 + 2
+	case FIELD_ERRORN:
+		// TODO assert len(arg)>=1
+		n := arg[0]
+		// TODO assert len(arg)>=1+n
+		es := string(arg[1 : 1+n])
+		self.ErrorNs = append(self.ErrorNs, es)
+		return tag, 1 + 1 + n
 	case FIELD_FIRMWARE_VERSION:
+		// TODO assert len(arg)>=2
 		self.FirmwareVersion = binary.BigEndian.Uint16(arg)
 		return tag, 1 + 2
-	case FIELD_BEEBEE:
-		if bytes.Equal(arg[:3], []byte{0xbe, 0xeb, 0xee}) {
-			return tag, 1 + 3
-		} else {
-			return FIELD_INVALID, 0
-		}
 	case FIELD_MCUSR:
+		// TODO assert len(arg)>=1
 		self.Mcusr = arg[0]
 		return tag, 1 + 1
-	case FIELD_QUEUE_MASTER:
-		self.QueueMaster = arg[0]
-		return tag, 1 + 1
-	case FIELD_QUEUE_TWI:
-		self.QueueTwi = arg[0]
-		return tag, 1 + 1
-	case FIELD_MDB_PROTOCOL_STATE:
-		self.MdbProtocolState = Mdb_state_t(arg[0])
-		return tag, 1 + 1
-	case FIELD_MDB_STAT:
+	case FIELD_MDB_RESULT:
+		// TODO assert len(arg)>=4
+		self.MdbResult = Mdb_result_t(arg[0])
+		self.MdbError = arg[1]
+		return tag, 1 + 2
+	case FIELD_MDB_DATA:
+		// TODO assert len(arg)>=1
 		n := arg[0]
-		// assert n==len(self.MdbStat_b)
-		// TODO parse mdb stat
-		copy(self.MdbStat_b[:], arg[1:])
-		return tag, 1 + n
-	case FIELD_TWI_STAT:
+		// TODO assert len(arg)>=1+n
+		self.MdbData = arg[1 : 1+n]
+		return tag, 1 + 1 + n
+	case FIELD_MDB_DURATION10U:
+		// TODO assert len(arg)>=2
+		self.MdbDuration = uint32(binary.BigEndian.Uint16(arg)) * 10
+		return tag, 1 + 2
+	case FIELD_MDB_LENGTH:
+		// TODO assert len(arg)>=1
+		self.MdbLength = arg[0]
+		return tag, 1 + 1
+	case FIELD_TWI_DATA:
+		// TODO assert len(arg)>=1
 		n := arg[0]
-		// assert n==len(self.TwiStat_b)
-		// TODO parse mdb stat
-		copy(self.TwiStat_b[:], arg[1:])
-		return tag, 1 + n
+		// TODO assert len(arg)>=1+n
+		self.TwiData = arg[1 : 1+n]
+		return tag, 1 + 1 + n
+	case FIELD_TWI_LENGTH:
+		// TODO assert len(arg)>=1
+		self.TwiLength = arg[0]
+		return tag, 1 + 1
+	case FIELD_CLOCK10U:
+		// TODO assert len(arg)>=2
+		self.Clock10u = uint32(binary.BigEndian.Uint16(arg)) * 10
+		return tag, 1 + 2
 	default:
 		return FIELD_INVALID, 0
 	}

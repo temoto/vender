@@ -4,7 +4,7 @@ GENERATOR:
 
 PARSER:
   IncludePaths: ["./c4go_stub_include", "../mega-firmware"]
-  SourcesPaths: ["main.h"]
+  SourcesPaths: ["protocol.h"]
 
 TRANSLATOR:
   ConstRules:
@@ -14,12 +14,15 @@ TRANSLATOR:
   Rules:
     global:
       - {action: accept, from: "^COMMAND_"}
+      - {action: accept, from: "^ERROR_"}
       - {action: accept, from: "^FIELD_"}
-      - {action: accept, from: "^MDB_STATE_"}
-      - {action: accept, from: "^PROTOCOL_"}
+      - {action: accept, from: "^MDB_"}
+      - {action: accept, from: "^REQUEST_"}
       - {action: accept, from: "^RESPONSE_"}
+      - {action: accept, from: "^TWI_"}
       - {action: accept, from: "command_t"}
+      - {action: accept, from: "errcode_t"}
       - {action: accept, from: "field_t"}
-      - {action: accept, from: "mdb_state_t"}
+      - {action: accept, from: "mdb_result_t"}
       - {action: accept, from: "response_t"}
       - {transform: export}

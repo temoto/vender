@@ -5,40 +5,21 @@ package mega
 import "strconv"
 
 const (
-	_Response_t_name_0 = "STATUS"
-	_Response_t_name_1 = "JUST_RESETDEBUG"
-	_Response_t_name_2 = "TWI"
-	_Response_t_name_3 = "MDB_SUCCESS"
-	_Response_t_name_4 = "BAD_PACKETINVALID_CRCINVALID_IDUNKNOWN_COMMANDINVALID_DATABUFFER_OVERFLOWNOT_IMPLEMENTED"
-	_Response_t_name_5 = "MDB_BUSYMDB_INVALID_CHKMDB_NAKMDB_TIMEOUTMDB_INVALID_ENDMDB_RECEIVE_OVERFLOWMDB_SEND_OVERFLOWMDB_CODE_ERRORUART_READ_UNEXPECTEDUART_READ_ERRORUART_READ_OVERFLOWUART_READ_PARITYUART_SEND_BUSY"
-	_Response_t_name_6 = "TIMER_CODE_ERROR"
+	_Response_t_name_0 = "OKRESET"
+	_Response_t_name_1 = "ERROR"
 )
 
 var (
-	_Response_t_index_1 = [...]uint8{0, 10, 15}
-	_Response_t_index_4 = [...]uint8{0, 10, 21, 31, 46, 58, 73, 88}
-	_Response_t_index_5 = [...]uint8{0, 8, 23, 30, 41, 56, 76, 93, 107, 127, 142, 160, 176, 190}
+	_Response_t_index_0 = [...]uint8{0, 2, 7}
 )
 
 func (i Response_t) String() string {
 	switch {
-	case i == 1:
-		return _Response_t_name_0
-	case 3 <= i && i <= 4:
-		i -= 3
-		return _Response_t_name_1[_Response_t_index_1[i]:_Response_t_index_1[i+1]]
-	case i == 6:
-		return _Response_t_name_2
-	case i == 8:
-		return _Response_t_name_3
-	case 128 <= i && i <= 134:
-		i -= 128
-		return _Response_t_name_4[_Response_t_index_4[i]:_Response_t_index_4[i+1]]
-	case 136 <= i && i <= 148:
-		i -= 136
-		return _Response_t_name_5[_Response_t_index_5[i]:_Response_t_index_5[i+1]]
-	case i == 152:
-		return _Response_t_name_6
+	case 1 <= i && i <= 2:
+		i -= 1
+		return _Response_t_name_0[_Response_t_index_0[i]:_Response_t_index_0[i+1]]
+	case i == 128:
+		return _Response_t_name_1
 	default:
 		return "Response_t(" + strconv.FormatInt(int64(i), 10) + ")"
 	}

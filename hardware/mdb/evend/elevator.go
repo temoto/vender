@@ -33,7 +33,7 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 }
 
 func (self *DeviceElevator) NewMove(position uint8) engine.Doer {
-	return engine.Func{Name: "move", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".move", F: func(ctx context.Context) error {
 		arg := []byte{0x03, position, 0}
 		return self.CommandAction(ctx, arg)
 	}}

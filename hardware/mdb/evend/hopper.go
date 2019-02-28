@@ -26,7 +26,7 @@ func (self *DeviceHopper) Init(ctx context.Context, addr uint8, nameSuffix strin
 }
 
 func (self *DeviceHopper) NewRun(units uint8) engine.Doer {
-	return engine.Func{Name: "run", F: func(ctx context.Context) error {
+	return engine.Func{Name: self.dev.Name + ".run", F: func(ctx context.Context) error {
 		return self.CommandAction(ctx, []byte{units})
 	}}
 }

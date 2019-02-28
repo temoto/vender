@@ -128,11 +128,11 @@ func (self *BillValidator) newPoller(fun func(money.PollItem)) mdb.PollParseFunc
 }
 
 func (self *BillValidator) newIniter() engine.Doer {
-	tx := engine.NewTransaction(self.dev.Name + "-init")
+	tx := engine.NewTransaction(self.dev.Name + ".initer")
 	tx.Root.
 		// TODO maybe execute Reset?
-		Append(engine.Func{F: self.CommandSetup}).
-		Append(engine.Func0{F: func() error {
+		Append(engine.Func{Name: self.dev.Name + ".setup", F: self.CommandSetup}).
+		Append(engine.Func0{Name: self.dev.Name + ".expid", F: func() error {
 			if err := self.CommandExpansionIdentificationOptions(); err != nil {
 				if _, ok := err.(mdb.FeatureNotSupported); ok {
 					if err = self.CommandExpansionIdentification(); err != nil {
@@ -152,7 +152,7 @@ func (self *BillValidator) newIniter() engine.Doer {
 
 func (self *BillValidator) newConfigBills() engine.Doer {
 	return engine.Func{
-		Name: "enable-bills-config",
+		Name: self.dev.Name + ".configbills",
 		F: func(ctx context.Context) error {
 			config := state.GetConfig(ctx)
 			// TODO read enabled nominals from config
@@ -163,7 +163,7 @@ func (self *BillValidator) newConfigBills() engine.Doer {
 }
 
 func (self *BillValidator) NewRestarter() engine.Doer {
-	tx := engine.NewTransaction(self.dev.Name + "-restart")
+	tx := engine.NewTransaction(self.dev.Name + ".restarter")
 	tx.Root.
 		Append(self.dev.NewDoReset()).
 		Append(engine.Sleep{Duration: self.dev.DelayNext}).

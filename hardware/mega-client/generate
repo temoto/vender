@@ -1,10 +1,12 @@
 #!/bin/bash
 set -eux
-c-for-go -nocgo mega.c-for-go.yaml
+c-for-go -nocgo -nostamp mega.c-for-go.yaml
 rm -f *.gen.go *_string.go
 mv mega/const.go const.gen.go
 mv mega/types.go types.gen.go
 stringer -type=Command_t -trimprefix=COMMAND_
-stringer -type=Response_t -trimprefix=RESPONSE_
-stringer -type=Mdb_state_t -trimprefix=MDB_STATE_
+stringer -type=Errcode_t -trimprefix=ERROR_
+stringer -type=Field_t -trimprefix=FIELD_
+stringer -type=Mdb_result_t -trimprefix=MDB_RESULT_
 stringer -type=ResetFlag -trimprefix=ResetFlag
+stringer -type=Response_t -trimprefix=RESPONSE_
