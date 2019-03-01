@@ -2,13 +2,14 @@
 
 All eVend devices (more or less) respect following command addressing scheme.
 Like "standard" MDB devices:
-- base+0 (example: 40,B8) - RESET
-- base+1 (41,B9) - SETUP (long response with firmware version, etc)
-- base+3 (43,BB) - POLL (often returns 1 byte)
+- base+0 (example: 40,78) - RESET
+- base+1 (41,79) - SETUP (long response with firmware version, etc)
+- base+3 (43,7B) - POLL (often returns 1 byte)
 eVend specific:
-- base+2 (42,BA) XX... - device specific commands
-- base+4 (44,BC) 02 - get error code, call this when POLL returns byte with 08 bit mask set (08, 0c, 48, etc)
-- base+5 (C5,DD) XX... - device specific configuration
+- base+2 (42,7A) XX... - device specific commands
+- base+4 (44,7C) 02 - get error code, call this when POLL returns byte with 08 bit mask set (08, 0c, 48, etc)
+- base+5 (45,7D) XX... - device specific configuration
+- base+6 (46,7E) 02 upgrade firmware block 16 byte. after finishing 03 XX XX (may be checksum) 
 
 In device sections below, only unique commands are listed.
 
