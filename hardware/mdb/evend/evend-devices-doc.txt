@@ -38,7 +38,13 @@ Base addresses of hopper boards:
 Commands:
 base+2 (42,5A,etc) XX - run motor for XX * 0.1s
 
-BA TODO
+BA каретка
+Commands:
+BA 01 0A - run motor buker 1 for XX * 0.1s
+
+POLL response:
+04 XX - error, XX=code
+0D 00 - success
 
 
 === Valve block (C0) ===
