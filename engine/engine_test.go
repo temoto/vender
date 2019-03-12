@@ -13,7 +13,6 @@ import (
 
 func TestEngineExecute(t *testing.T) {
 	t.Parallel()
-	// log.SetFlags(log.Flags() | log.Lmicroseconds)
 	type Case struct {
 		name  string
 		input string
@@ -40,6 +39,7 @@ boot -> n1 -> n2;
 			engine.actions["finish"] = Func0{F: func() error { done <- struct{}{}; return nil }}
 
 			ctx := context.Background()
+			ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
 			return engine.Execute(ctx, scenario)
 		}},
 	}

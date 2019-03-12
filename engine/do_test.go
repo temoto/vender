@@ -8,6 +8,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/log2"
 )
 
 func TestTransactionConcurrent(t *testing.T) {
@@ -25,7 +26,9 @@ func TestTransactionConcurrent(t *testing.T) {
 	// dots := tx.Root.Dot("UD")
 	// t.Logf("%s", dots)
 	tbegin := time.Now()
-	err := tx.Do(context.Background())
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
+	err := tx.Do(ctx)
 	duration := time.Now().Sub(tbegin)
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +61,9 @@ func TestTransactionWide(t *testing.T) {
 	n3 := NewNode(&mockdo{name: "check"}, n21, n22, n23, n24, n25)
 	// dots := tx.Root.Dot("UD")
 	// t.Logf("%s", dots)
-	err := tx.Do(context.Background())
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
+	err := tx.Do(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,6 +74,8 @@ func TestTransactionWide(t *testing.T) {
 
 func TestTransactionFail(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
 	tx := NewTransaction("fail")
 	doErr := &Func{F: func(ctx context.Context) error {
 		return errors.Errorf("intentional-error")
@@ -77,7 +84,7 @@ func TestTransactionFail(t *testing.T) {
 	tx.Root.Append(doErr).Append(doCheck)
 	// dots := tx.Root.Dot("UD")
 	// t.Logf("%s", dots)
-	err := tx.Do(context.Background())
+	err := tx.Do(ctx)
 	if err == nil {
 		t.Fatalf("tx.Do() unexpected err=nil")
 	}
@@ -89,6 +96,8 @@ func TestTransactionFail(t *testing.T) {
 
 func TestTransactionRestart(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
 	tx := NewTransaction("restart")
 	doErr := &Func{F: func(ctx context.Context) error {
 		return errors.Errorf("intentional-error")
@@ -97,7 +106,7 @@ func TestTransactionRestart(t *testing.T) {
 	tx.Root.Append(&Nothing{"success"}).Append(doErr).Append(doCheck)
 
 	check := func() {
-		err := tx.Do(context.Background())
+		err := tx.Do(ctx)
 		if err == nil {
 			t.Fatalf("tx.Do() unexpected err=nil")
 		}

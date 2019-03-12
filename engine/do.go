@@ -9,6 +9,7 @@ import (
 
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/helpers/msync"
+	"github.com/temoto/vender/log2"
 )
 
 type Doer interface {
@@ -73,6 +74,8 @@ func (self *Transaction) String() string {
 }
 
 func walkExec(ctx context.Context, node *Node, state *execState) {
+	log := log2.ContextValueLogger(ctx, log2.ContextKey)
+
 	defer state.wg.Done()
 	nc := atomic.AddInt32(&node.callers, 1)
 	if nc <= 0 {
@@ -94,6 +97,7 @@ func walkExec(ctx context.Context, node *Node, state *execState) {
 		// log.Printf("exec %#v", node)
 		var err error
 		if _, ok := node.Doer.(Nothing); !ok {
+			log.Debugf("engine execute %s", node)
 			err = node.Do(ctx)
 		}
 		// texec := time.Now().Sub(tbegin)
@@ -138,6 +142,20 @@ func (self Sleep) Do(ctx context.Context) error {
 	return nil
 }
 func (self Sleep) String() string { return fmt.Sprintf("Sleep(%v)", self.Duration) }
+
+type RepeatN struct {
+	N uint
+	D Doer
+}
+
+func (self RepeatN) String() string { return fmt.Sprintf("RepeatN(N=%d D=%s)", self.N, self.D.String()) }
+func (self RepeatN) Do(ctx context.Context) error {
+	var err error
+	for i := uint(1); i <= self.N && err == nil; i++ {
+		err = self.D.Do(ctx)
+	}
+	return err
+}
 
 type mockdo struct {
 	name   string
