@@ -9,19 +9,37 @@ eVend specific:
 - base+2 (42,7A) XX... - device specific commands
 - base+4 (44,7C) 02 - get error code, call this when POLL returns byte with 08 bit mask set (08, 0c, 48, etc)
 - base+5 (45,7D) XX... - device specific configuration
-- base+6 (46,7E) 02 upgrade firmware block 16 byte. after finishing 03 XX XX (may be checksum) 
-
+- base+6 (46,7E) 02 XX... - upgrade firmware block 16 byte.
+- base+6 (46,7E) 03 XX XX - finish firmware upgrade, XX XX may be checksum.
 In device sections below, only unique commands are listed.
 
-POLL response is often single byte with following bit mask values:
-- 04 - soft-timeout? Sending POLL more often makes this disappear.
-- 08 - error, must call base+4 02 to get documented error code
-- 50 - busy
+After RESET devices enter inactive state for 2s. During this time:
+- POLL works fine
+- physical action (base+2) commands result in either timeout or NAK, depending on firmware
 
+Two types of protocol has been observed:
+- (type1) hoppers, mixer, elevator
+  During inactive state, action (base+2) commands do not respond (timeout).
+  POLL always return 2 bytes:
+  0D 00 - success
+  04 XX - error code XX
+  05 0B - previous request was invalid. Does not respond (timeout) to actual invalid request.
+  POLL does not indicate busy state.
+- (type2) valve, conveyor, cup, coffee
+  During inactive state, action (base+2) commands respond with NAK.
+  Invalid request (like garbage) responds with NAK, next POLL sets bit 20.
+  Valid request with invalid arguments responds with ACK, next POLL sets bit 20.
+  POLL returns empty response for success or 1 byte with bit mask values:
+  - 04 - soft-timeout? Sending POLL more often makes this disappear.
+  - 08 - error, must call base+4 02 to get documented error code
+  - 10 - busy, for some devices busy response is 50
+  - 20 - previous request was invalid. Responds NAK to actual invalid request.
 In device sections below, only unique POLL responses are listed.
 
 
 === Hoppers ===
+
+Protocol type1.
 
 May have separate address per hopper or multiplexer board (каретка) with a single address.
 Base addresses of hopper boards:
@@ -35,19 +53,16 @@ Base addresses of hopper boards:
 - 8 - 78
 - multiplexer - B8
 
-Commands:
+Individual hopper commands:
 base+2 (42,5A,etc) XX - run motor for XX * 0.1s
 
-BA каретка
-Commands:
-BA 01 0A - run motor buker 1 for XX * 0.1s
-
-POLL response:
-04 XX - error, XX=code
-0D 00 - success
+Multiplexer commands:
+BA XX YY - run motor XX for YY * 0.1s
 
 
 === Valve block (C0) ===
+
+Protocol type2.
 
 Commands:
 C4 11 - get hot water temperature (1 byte)
@@ -62,9 +77,6 @@ C2 12 YY - boiler valve (YY: 1=open / 2=close)
 C2 13 YY - espresso pump (YY: 1=start / 0=stop)
 C2 14 YY - pump (YY: 1=start / 0=stop)
 
-POLL response common bits:
-04 - soft-timeout? Sending POLL more often makes this disappear.
-08 - error, call C4 02 to get documented error code
 POLL response unique bits:
 10 - busy pouring water
 40 - hot temperature not in range
@@ -79,53 +91,78 @@ C3 -> 50 -- hot temp. not in range and busy pouring water
 
 === Mixer (C8) / Elevator (D0) ===
 
+Protocol type1.
+
 Same PCB, device address is chosen with 4th DIP switch: on=elevator (lift), off=mixer.
 
 Mixer:
-CA 01 YY ZZ - shake (run motor for YY * 0.1s, ZZ: speed 0-100%, 00-64 hex)
-CA 02 YY 00 - fan (YY: 01=on / 00=off)
-CA 03 YY 64 - move mixer up/down (YY: 0-100%, 00-64 hex) (this command is called "reverse")
+CA 01 XX YY - shake (run motor for XX * 0.1s, YY: speed 0-100%, 00-64 hex)
+CA 02 XX 00 - fan (XX: 01=on / 00=off)
+CA 03 XX 64 - move mixer up/down (XX: 0-100%, 00-64 hex) (this command is called "reverse")
 
 Elevator:
-D2 03 ?? ?? - move
+D2 03 XX 00 - move elevator up/down (XX: 0-100%, 00-64 hex)
 
-POLL response:
-04 XX - error, XX=code
-0D 00 - success
+Error codes:
+20 motor high load
 
 
 === Conveyor (D8) ===
 
-Commands:
-DD 10 XX - set speed. speed range 500 - 200 steps/minute. 1C=500 3C=200. unit=15steps
+Protocol type2. Busy response is always 50, ignore bit 40.
 
-DA 01 HI LO - move to position (HI>>8)+LO
+Commands:
+DD 10 XX - set speed. Range 500 .. 200 steps/min. 1C=500 3C=200. Unit=15steps/min.
+
+DA 01 LO HI - move to position (HI>>8)+LO
 DA 03 YY 00 - shake YY times - rapid forward-backward movement
 
-Before using Move command, must move to 0 = init device.
+Important notes:
+- After RESET, must execute MOVE to 0 to calibrate motor driver.
+
+Error codes:
+17 move error - not fatal, may try to reset and retry
 
 
 === Cup dispenser (E0) ===
 
+Protocol type2. Busy response is always 50, ignore bit 40.
+
 Commands:
-E2 01 - get cup
+E2 01 - dispense cup
 E2 02 - turn on leds
 E2 03 - turn off leds
-E2 04 - check cup
+E2 04 - ensure cup is available
 
-ВСЕГДА после выдачи стакана POLL должен ответить 50 (время на выдачу не нулевое) иначе проблема с мигриком.
+Important notes:
+- Must execute ENSURE before each DISPENSE.
+- DISPENSE must contain one POLL=busy (cup is dropped) right after command. Immediate POLL=empty is sensor error.
+- DISPENSE/ENSURE will rotate tubes until cup is available or ~40s timeout resulting in error=15.
+
+Error codes:
+15 out of cups
 
 
-=== Espresso (E8) ===
+=== Coffee (espresso) (E8) ===
+
+Protocol type2. Busy response is always 50, ignore bit 40.
 
 Commands:
 EA 01 - grind
 EA 02 - press grounds into tablet
-EA 03 - dispose tablet (motor runs until top position sensor opens circuit)
+EA 03 - release tablet (motor runs until top position sensor opens circuit)
 EA 05 - TODO (seemingly) turn on tablet heating
 EA 06 - TODO (seemingly) turn off tablet heating
 
-ВАЖНО
-Команда выбросить таблетку имитирует деятельность и при отключенном моторе: POLL отвечает 50 в течение 2.18с, потом пусто (ACK).
-Нижний сенсор также игнорируется. Через какое-то время говорит что сделал.
-Заклиненная мололка дает "просадку" по питанию.
+Important notes:
+- GRIND must contain at least 500ms busy state.
+- Jammed grinder creates low resistance circuit which makes power supply drop voltage.
+- PRESS/RELEASE commands ignore absent/dysfunctional motor: POLL responds busy for 2.18s, then success (empty response).
+- PRESS/RELEASE commands ignore absent sensors: will spin for (TODO time), then success (empty response).
+
+Error codes:
+3C press sensor
+3D release sensor
+3E out of coffee
+3F dispenser (dose) sensor
+41 dispenser (dose) high load
