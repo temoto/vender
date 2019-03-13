@@ -13,6 +13,12 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 )
 
+// Mostly affects POLL response, see doc.
+type evendProtocol uint8
+
+const proto1 evendProtocol = 1
+const proto2 evendProtocol = 2
+
 const (
 	genericPollMiss    = 0x04
 	genericPollProblem = 0x08
@@ -20,16 +26,19 @@ const (
 )
 
 type Generic struct {
-	dev mdb.Device
+	dev   mdb.Device
+	proto evendProtocol
 }
 
-func (self *Generic) Init(ctx context.Context, address uint8, name string) error {
+func (self *Generic) Init(ctx context.Context, address uint8, name string, proto evendProtocol) error {
+	if self.dev.DelayReset == 0 {
+		self.dev.DelayReset = 2100 * time.Millisecond
+	}
 	self.dev.Init(ctx, address, name, binary.BigEndian)
 
 	if err := self.dev.NewDoReset().Do(ctx); err != nil {
 		return err
 	}
-	self.dev.Log.Infof("device=%s addr=%02x is working", name, address)
 	err := self.dev.DoSetup(ctx)
 	return err
 }
@@ -69,7 +78,36 @@ func (self *Generic) CommandErrorCode(ctx context.Context) (byte, error) {
 	return rs[0], nil
 }
 
-func (self *Generic) NewPollWait(tag string, timeout time.Duration, ignoreBits byte) engine.Doer {
+func (self *Generic) ForcePoll() engine.Doer {
+	return engine.Func0{Name: self.dev.Name + ".force-poll", F: func() error {
+		return self.dev.Tx(self.dev.PacketPoll).E
+	}}
+}
+
+func (self *Generic) NewProto1PollWaitSuccess(tag string, timeout time.Duration) engine.Doer {
+	success := []byte{0x0d, 0x00}
+	fun := func(r mdb.PacketError) (bool, error) {
+		if r.E != nil {
+			return true, r.E
+		}
+		bs := r.P.Bytes()
+		if len(bs) == 0 {
+			self.dev.Log.Debugf("device=%s POLL=empty", self.dev.Name)
+			return false, nil
+			// return true, errors.Errorf("device=%s POLL=%x -> expected non-empty", self.dev.Name, bs)
+		}
+		if bytes.Equal(bs, success) {
+			return true, nil
+		}
+		if bs[0] == 0x04 {
+			return true, errors.Errorf("device=%s POLL=%x -> parsed error", self.dev.Name, bs)
+		}
+		return true, self.NewErrPollUnexpected(r.P)
+	}
+	return self.dev.NewPollLoopActive(tag, timeout, fun)
+}
+
+func (self *Generic) NewProto2PollWait(tag string, timeout time.Duration, ignoreBits byte) engine.Doer {
 	fun := func(r mdb.PacketError) (bool, error) {
 		if r.E != nil {
 			return true, r.E
@@ -91,30 +129,6 @@ func (self *Generic) NewPollWait(tag string, timeout time.Duration, ignoreBits b
 		// self.dev.Log.Debugf("npw v=%02x i=%02x &=%02x", value, ignoreBits, value&^ignoreBits)
 		if value&^ignoreBits == 0 {
 			return false, nil
-		}
-		return true, self.NewErrPollUnexpected(r.P)
-	}
-	return self.dev.NewPollLoopActive(tag, timeout, fun)
-}
-
-// mixer/elevator POLL returns 2 bytes
-func (self *Generic) NewPollWait2(tag string, timeout time.Duration) engine.Doer {
-	success := []byte{0x0d, 0x00}
-	fun := func(r mdb.PacketError) (bool, error) {
-		if r.E != nil {
-			return true, r.E
-		}
-		bs := r.P.Bytes()
-		if len(bs) == 0 {
-			self.dev.Log.Debugf("device=%s POLL=empty", self.dev.Name)
-			return false, nil
-			// return true, errors.Errorf("device=%s POLL=%x -> expected non-empty", self.dev.Name, bs)
-		}
-		if bytes.Equal(bs, success) {
-			return true, nil
-		}
-		if bs[0] == 0x04 {
-			return true, errors.Errorf("device=%s POLL=%x -> parsed error", self.dev.Name, bs)
 		}
 		return true, self.NewErrPollUnexpected(r.P)
 	}

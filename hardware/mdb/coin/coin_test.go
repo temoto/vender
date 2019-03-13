@@ -51,9 +51,10 @@ func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level)
 
 func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
 	ca := &CoinAcceptor{}
-	ca.dev.DelayErr = 0 * time.Millisecond
-	ca.dev.DelayIdle = 0 * time.Millisecond
-	ca.dev.DelayNext = 0 * time.Millisecond
+	ca.dev.DelayErr = 1
+	ca.dev.DelayIdle = 1
+	ca.dev.DelayNext = 1
+	ca.dev.DelayReset = 1
 	err := ca.Init(ctx)
 	if err != nil {
 		t.Fatalf("ca.Init err=%v", err)

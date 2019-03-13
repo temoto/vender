@@ -2,13 +2,13 @@ package evend
 
 import (
 	"testing"
-	"time"
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 )
 
 func TestValve(t *testing.T) {
+	t.Parallel()
 	init := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "c0", "")
 		mdb.TestChanTx(t, reqCh, respCh, "c1", "011810000a0000c8001fff01050a32640000000000000000000000")
@@ -28,8 +28,9 @@ func TestValve(t *testing.T) {
 	d := new(DeviceValve)
 	err := d.Init(ctx)
 	// TODO make small delay default in tests
-	d.dev.DelayNext = 0 * time.Millisecond
-	d.dev.DelayErr = 0 * time.Millisecond
+	d.dev.DelayErr = 1
+	d.dev.DelayNext = 1
+	d.dev.DelayReset = 1
 	if err != nil {
 		t.Fatalf("Init err=%v", err)
 	}

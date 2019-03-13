@@ -13,9 +13,9 @@ import (
 const ContextKey = "run/mdber"
 
 var (
-	ErrNak     = errors.NewErr("MDB NAK")
-	ErrBusy    = errors.NewErr("MDB busy")
-	ErrTimeout = errors.NewErr("MDB timeout")
+	ErrNak     = errors.Errorf("MDB NAK")
+	ErrBusy    = errors.Errorf("MDB busy")
+	ErrTimeout = errors.Errorf("MDB timeout")
 )
 
 type Uarter interface {

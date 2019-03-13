@@ -26,7 +26,7 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 	self.posHoppers[2] = 890
 	self.posHoppers[3] = 1210
 	self.posElevator = 1895
-	err := self.Generic.Init(ctx, 0xd8, "conveyor")
+	err := self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
 
 	engine := engine.ContextValueEngine(ctx, engine.ContextKey)
 	engine.Register("mdb.evend.conveyor_move_zero", self.NewMoveSync(0))
@@ -41,18 +41,21 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 }
 
 func (self *DeviceConveyor) NewMove(position uint16) engine.Doer {
-	return engine.Func{Name: self.dev.Name + ".move", F: func(ctx context.Context) error {
+	tag := fmt.Sprintf("%s.move:%d", self.dev.Name, position)
+	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		// exception byte order
 		arg := []byte{0x01, byte(position & 0xff), byte(position >> 8)}
 		return self.CommandAction(ctx, arg)
 	}}
 }
 func (self *DeviceConveyor) NewMoveSync(position uint16) engine.Doer {
-	tag := "tx_conveyor_move"
+	tag := fmt.Sprintf("%s.move_sync:%d", self.dev.Name, position)
 	tx := engine.NewTransaction(tag)
 	tx.Root.
+		// FIXME dont ignore genericPollMiss
+		Append(self.NewProto2PollWait(tag+"/wait-ready", self.moveTimeout, 0)).
 		Append(self.NewMove(position)).
 		// FIXME dont ignore genericPollMiss
-		Append(self.NewPollWait(tag, self.moveTimeout, genericPollMiss|genericPollBusy))
+		Append(self.NewProto2PollWait(tag+"/wait-done", self.moveTimeout, genericPollMiss|genericPollBusy))
 	return tx
 }

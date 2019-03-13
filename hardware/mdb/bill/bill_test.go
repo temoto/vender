@@ -49,6 +49,10 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 	}
 	ctx := testMake(t, reply)
 	bv := new(BillValidator)
+	bv.dev.DelayErr = 1
+	bv.dev.DelayNext = 1
+	bv.dev.DelayIdle = 1
+	bv.dev.DelayReset = 1
 	err := bv.Init(ctx)
 	if err != nil {
 		t.Fatalf("POLL err=%v", err)

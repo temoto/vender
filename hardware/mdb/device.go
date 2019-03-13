@@ -21,10 +21,9 @@ const (
 )
 
 type Device struct {
-	lk     sync.Mutex
-	mdber  *mdb
-	lastTx time.Time
-	online bool
+	cmdLk   sync.Mutex // TODO explore if chan approach is better
+	mdber   *mdb
+	lastOff time.Time // unused yet TODO self.lastOff.IsZero()
 
 	Log           *log2.Log
 	Address       uint8
@@ -43,8 +42,8 @@ type Device struct {
 }
 
 func (self *Device) Init(ctx context.Context, addr uint8, name string, byteOrder binary.ByteOrder) {
-	self.lk.Lock()
-	defer self.lk.Unlock()
+	self.cmdLk.Lock()
+	defer self.cmdLk.Unlock()
 
 	self.Log = log2.ContextValueLogger(ctx, log2.ContextKey)
 	mdber := ContextValueMdber(ctx, ContextKey)
@@ -53,10 +52,22 @@ func (self *Device) Init(ctx context.Context, addr uint8, name string, byteOrder
 	self.Address = addr
 	self.Name = name
 	self.ByteOrder = byteOrder
-	self.DelayNext = DefaultDelayNext
-	self.DelayErr = DefaultDelayErr
-	self.DelayIdle = DefaultDelayIdle
-	self.IdleThreshold = DefaultIdleThreshold
+
+	if self.DelayNext == 0 {
+		self.DelayNext = DefaultDelayNext
+	}
+	if self.DelayErr == 0 {
+		self.DelayErr = DefaultDelayErr
+	}
+	if self.DelayIdle == 0 {
+		self.DelayIdle = DefaultDelayIdle
+	}
+	if self.DelayReset == 0 {
+		self.DelayReset = DefaultDelayReset
+	}
+	if self.IdleThreshold == 0 {
+		self.IdleThreshold = DefaultIdleThreshold
+	}
 	self.SetupResponse = Packet{}
 	self.PacketReset = MustPacketFromBytes([]byte{self.Address + 0}, true)
 	self.PacketSetup = MustPacketFromBytes([]byte{self.Address + 1}, true)
@@ -65,7 +76,9 @@ func (self *Device) Init(ctx context.Context, addr uint8, name string, byteOrder
 
 func (self *Device) Tx(request Packet) (r PacketError) {
 	r.E = self.mdber.Tx(request, &r.P)
-	self.lastTx = time.Now()
+	if r.E == nil {
+		self.lastOff = time.Time{}
+	}
 	return
 }
 
@@ -74,27 +87,35 @@ func (self *Device) NewTx(request Packet) *DoRequest {
 }
 
 func (self *Device) NewDoReset() engine.Doer {
-	// return self.NewTx(self.PacketReset)
 	return engine.Func0{Name: self.Name + ".reset", F: func() error {
-		self.lk.Lock()
-		defer self.lk.Unlock()
+		self.cmdLk.Lock()
+		defer self.cmdLk.Unlock()
 
-		r := self.Tx(self.PacketReset)
+		request := self.PacketReset
+		r := self.Tx(request)
 		if r.E != nil {
+			if errors.Cause(r.E) == ErrTimeout {
+				self.lastOff = time.Now()
+				self.Log.Errorf("device=%s addr=%02x is offline RESET err=timeout", self.Name, self.Address)
+			} else {
+				self.Log.Errorf("device=%s RESET err=%s", self.Name, errors.ErrorStack(r.E))
+			}
 			return r.E
 		}
+		self.Log.Infof("device=%s addr=%02x is working", self.Name, self.Address)
 		time.Sleep(self.DelayReset)
 		return nil
 	}}
 }
 
 func (self *Device) DoSetup(ctx context.Context) error {
-	self.lk.Lock()
-	defer self.lk.Unlock()
+	self.cmdLk.Lock()
+	defer self.cmdLk.Unlock()
 
-	r := self.Tx(self.PacketSetup)
+	request := self.PacketSetup
+	r := self.Tx(request)
 	if r.E != nil {
-		self.Log.Errorf("device=%s mdb request=%s err=%v", self.Name, self.PacketSetup.Format(), r.E)
+		self.Log.Errorf("device=%s mdb request=%s err=%v", self.Name, request.Format(), r.E)
 		return r.E
 	}
 	self.SetupResponse = r.P

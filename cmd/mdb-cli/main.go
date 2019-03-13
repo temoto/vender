@@ -123,7 +123,7 @@ var doBreak = engine.Func{Name: "break", F: func(ctx context.Context) error {
 }}
 
 func newTx(request mdb.Packet) engine.Doer {
-	return engine.Func{Name: "tx:" + request.Format(), F: func(ctx context.Context) error {
+	return engine.Func{Name: "mdb:" + request.Format(), F: func(ctx context.Context) error {
 		log := log2.ContextValueLogger(ctx, log2.ContextKey)
 		m := mdb.ContextValueMdber(ctx, mdb.ContextKey)
 		response := new(mdb.Packet)
@@ -131,7 +131,7 @@ func newTx(request mdb.Packet) engine.Doer {
 		if err != nil {
 			log.Errorf(errors.ErrorStack(err))
 		} else {
-			log.Debugf("< %s", response.Format())
+			log.Infof("< %s", response.Format())
 		}
 		return err
 	}}

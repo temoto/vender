@@ -2,6 +2,7 @@ package evend
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/temoto/vender/engine"
@@ -22,7 +23,7 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 	self.posConveyor = 60
 	self.posReady = 0
 	self.timeout = 10 * time.Second
-	err := self.Generic.Init(ctx, 0xd0, "elevator")
+	err := self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
 	engine := engine.ContextValueEngine(ctx, engine.ContextKey)
 	engine.Register("mdb.evend.elevator_move_conveyor", self.NewMoveSync(self.posConveyor))
@@ -33,19 +34,18 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 }
 
 func (self *DeviceElevator) NewMove(position uint8) engine.Doer {
-	return engine.Func{Name: self.dev.Name + ".move", F: func(ctx context.Context) error {
+	tag := fmt.Sprintf("%s.move:%d", self.dev.Name, position)
+	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		arg := []byte{0x03, position, 0}
 		return self.CommandAction(ctx, arg)
 	}}
 }
 func (self *DeviceElevator) NewMoveSync(position uint8) engine.Doer {
-	tag := "tx_elevator_move"
+	tag := fmt.Sprintf("%s.move_sync:%d", self.dev.Name, position)
 	tx := engine.NewTransaction(tag)
 	tx.Root.
-		Append(self.NewPollWait2(tag, self.timeout)).
+		Append(self.dev.NewPollUntilEmpty(tag+"/wait-empty", self.timeout, nil)).
 		Append(self.NewMove(position)).
-		Append(self.NewPollWait2(tag, self.timeout))
+		Append(self.NewProto1PollWaitSuccess(tag+"/wait-done", self.timeout))
 	return tx
 }
-
-// TODO poll, returns 0d, 050b, 0510

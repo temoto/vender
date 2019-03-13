@@ -28,33 +28,21 @@ func (self *megaUart) Close() error {
 }
 
 func responseError(p *mega.Packet) error {
-	switch mega.Response_t(p.Header) {
-	case mega.RESPONSE_OK, mega.RESPONSE_ERROR:
-		switch p.Fields.MdbResult {
-		case mega.MDB_RESULT_SUCCESS:
-			return nil
-		case mega.MDB_RESULT_BUSY:
-			// err := errors.NewErr("MDB busy state=%s", mega.Mdb_state_t(p.Fields.MdbError).String())
-			err := ErrBusy
-			err.SetLocation(2)
-			return &err
-		case mega.MDB_RESULT_TIMEOUT:
-			err := ErrTimeout
-			err.SetLocation(2)
-			return &err
-		case mega.MDB_RESULT_NAK:
-			err := ErrNak
-			err.SetLocation(2)
-			return &err
-		default:
-			err := errors.NewErr("MDB error result=%s arg=%02x", p.Fields.MdbResult.String(), p.Fields.MdbError)
-			err.SetLocation(2)
-			return &err
-		}
+	switch p.Fields.MdbResult {
+	case mega.MDB_RESULT_SUCCESS:
+		return nil
+	case mega.MDB_RESULT_BUSY:
+		// err := errors.NewErr("MDB busy state=%s", mega.Mdb_state_t(p.Fields.MdbError).String())
+		return ErrBusy
+	case mega.MDB_RESULT_TIMEOUT:
+		return ErrTimeout
+	case mega.MDB_RESULT_NAK:
+		return ErrNak
+	default:
+		err := errors.NewErr("mega MDB error result=%s arg=%02x", p.Fields.MdbResult.String(), p.Fields.MdbError)
+		err.SetLocation(2)
+		return &err
 	}
-	err := errors.NewErr("mega response=%s", p.String())
-	err.SetLocation(2)
-	return &err
 }
 
 func (self *megaUart) Break(d time.Duration) error {
@@ -80,6 +68,7 @@ func (self *megaUart) Tx(request, response []byte) (int, error) {
 	n := 0
 	for retry := 1; retry <= 3; retry++ {
 		p, err = self.c.DoMdbTxSimple(request)
+		// self.c.Log.Debugf("mdb/mega/txsimple request=%x p=%s err=%v", request, p.String(), err)
 		if err != nil {
 			break
 		}
