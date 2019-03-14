@@ -53,6 +53,15 @@ func (self *Engine) Resolve(action string) Doer {
 	}
 	return d
 }
+func (self *Engine) List() []string {
+	self.lk.Lock()
+	r := make([]string, 0, len(self.actions))
+	for k := range self.actions {
+		r = append(r, k)
+	}
+	self.lk.Unlock()
+	return r
+}
 
 func (self *Engine) Execute(ctx context.Context, scenario *Scenario) error {
 	resolve := func(key string) bool {
