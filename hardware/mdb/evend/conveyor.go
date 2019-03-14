@@ -11,15 +11,21 @@ import (
 type DeviceConveyor struct {
 	Generic
 
-	moveTimeout time.Duration
-	posCup      uint16
-	posHoppers  [16]uint16
-	posElevator uint16
+	minSpeed     uint16
+	calibTimeout time.Duration
+	readyTimeout time.Duration
+	posCup       uint16
+	posHoppers   [16]uint16
+	posElevator  uint16
+
+	currentPos uint16 // estimated
 }
 
 func (self *DeviceConveyor) Init(ctx context.Context) error {
 	// TODO read config
-	self.moveTimeout = 10 * time.Second
+	self.calibTimeout = 15 * time.Second
+	self.readyTimeout = 1 * time.Second
+	self.minSpeed = 200
 	self.posCup = 1560
 	self.posHoppers[0] = 250
 	self.posHoppers[1] = 570
@@ -30,6 +36,7 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 
 	engine := engine.ContextValueEngine(ctx, engine.ContextKey)
 	engine.Register("mdb.evend.conveyor_move_zero", self.NewMoveSync(0))
+	engine.Register("mdb.evend.conveyor_move_mixer", self.NewMoveSync(1))
 	engine.Register("mdb.evend.conveyor_move_cup", self.NewMoveSync(self.posCup))
 	// TODO single action with parameter hopper index
 	for i, value := range self.posHoppers {
@@ -53,9 +60,31 @@ func (self *DeviceConveyor) NewMoveSync(position uint16) engine.Doer {
 	tx := engine.NewTransaction(tag)
 	tx.Root.
 		// FIXME dont ignore genericPollMiss
-		Append(self.NewProto2PollWait(tag+"/wait-ready", self.moveTimeout, 0)).
+		Append(self.NewProto2PollWait(tag+"/wait-ready", self.readyTimeout, 0)).
 		Append(self.NewMove(position)).
 		// FIXME dont ignore genericPollMiss
-		Append(self.NewProto2PollWait(tag+"/wait-done", self.moveTimeout, genericPollMiss|genericPollBusy))
+		Append(engine.Func{F: func(ctx context.Context) error {
+			var timeout time.Duration
+			if position == 0 {
+				timeout = self.calibTimeout
+			} else {
+				distance := absDiffU16(self.currentPos, position)
+				eta := time.Duration(float32(distance)/float32(self.minSpeed)*1000) * time.Millisecond
+				timeout = eta * 2
+			}
+			self.dev.Log.Debugf("device=%s position current=%d target=%d timeout=%s", self.dev.Name, self.currentPos, position, timeout)
+			err := self.NewProto2PollWait(tag+"/wait-done", timeout, genericPollMiss|genericPollBusy).Do(ctx)
+			if err == nil {
+				self.currentPos = position
+			}
+			return err
+		}})
 	return tx
+}
+
+func absDiffU16(a, b uint16) uint16 {
+	if a >= b {
+		return a - b
+	}
+	return b - a
 }

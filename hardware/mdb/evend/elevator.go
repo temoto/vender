@@ -44,7 +44,7 @@ func (self *DeviceElevator) NewMoveSync(position uint8) engine.Doer {
 	tag := fmt.Sprintf("%s.move_sync:%d", self.dev.Name, position)
 	tx := engine.NewTransaction(tag)
 	tx.Root.
-		Append(self.dev.NewPollUntilEmpty(tag+"/wait-empty", self.timeout, nil)).
+		Append(self.dev.NewPollUntilEmpty(tag+"/wait-ready", self.timeout, nil)).
 		Append(self.NewMove(position)).
 		Append(self.NewProto1PollWaitSuccess(tag+"/wait-done", self.timeout))
 	return tx

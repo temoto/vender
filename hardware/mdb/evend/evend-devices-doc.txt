@@ -112,7 +112,7 @@ Error codes:
 Protocol type2. Busy response is always 50, ignore bit 40.
 
 Commands:
-DD 10 XX - set speed. Range 500 .. 200 steps/min. 1C=500 3C=200. Unit=15steps/min.
+DD 10 XX - set speed. Range 500 .. 200 steps/s. 1C=500 3C=200. Unit=15steps/s.
 
 DA 01 LO HI - move to position (HI>>8)+LO
 DA 03 YY 00 - shake YY times - rapid forward-backward movement
