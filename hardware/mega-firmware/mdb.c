@@ -79,7 +79,7 @@ static bool mdb_step(void) {
   if (mdb.state == MDB_STATE_RECV_END) {
     again |= mdb_handle_recv_end();
   }
-  if ((mdb.state == MDB_STATE_DONE)) {
+  if (mdb.state == MDB_STATE_DONE) {
     if (!response_empty()) {
       return false;
     }
@@ -111,22 +111,12 @@ static inline bool mdb_handle_recv_end(void) {
     mdb_finish(MDB_RESULT_CODE_ERROR, __LINE__);
     return true;
   }
-  uint8_t const last_byte = mdb_in.data[len - 1];
   if (len == 1) {
-    // VMC ---ADD*---DAT---DAT---CHK-----
-    // VMC ---ADD*---CHK--
-    // Per -------------ACK*-
-    // Per -------------NAK*-
-    if (last_byte == MDB_ACK) {
-      mdb_finish(MDB_RESULT_SUCCESS, 0);
-    } else if (last_byte == MDB_NAK) {
-      mdb_finish(MDB_RESULT_NAK, 0);
-    } else {
-      mdb_finish(MDB_RESULT_INVALID_END, 0);
-    }
+    mdb_finish(MDB_RESULT_CODE_ERROR, __LINE__);
     return true;
   }
 
+  uint8_t const last_byte = mdb_in.data[len - 1];
   if (last_byte != mdb.in_chk) {
     if (mdb.retrying) {
       // invalid checksum even after retry
@@ -248,9 +238,10 @@ ISR(USART_RX_vect) {
     return;
   }
 
-  // received data out of session
-  if (mdb.state != MDB_STATE_RECV) {
-    // mdb_finish(MDB_RESULT_UART_READ_UNEXPECTED, data);
+  uint8_t const mst = mdb.state;
+  if (!(mst == MDB_STATE_SEND || mst == MDB_STATE_RECV)) {
+    // received data out of session
+    mdb_finish(MDB_RESULT_UART_READ_UNEXPECTED, data);
     return;
   }
 
@@ -259,11 +250,30 @@ ISR(USART_RX_vect) {
     return;
   }
 
-  if (bit_mask_test(csb, _BV(RXB80))) {
-    mdb.state = MDB_STATE_RECV_END;
-  } else {
+  if (!bit_mask_test(csb, _BV(RXB80))) {
     mdb.in_chk += data;
     timer1_set(mdb_timeout_ticks);
+    return;
+  }
+  uint8_t const len = mdb_in.length;
+  if (len == 1) {
+    // VMC ---ADD*---DAT---DAT---CHK-----
+    // VMC ---ADD*---CHK--
+    // Per -------------ACK*-
+    // Per -------------NAK*-
+    switch (data) {
+      case MDB_ACK:
+        mdb_finish(MDB_RESULT_SUCCESS, 0);
+        break;
+      case MDB_NAK:
+        mdb_finish(MDB_RESULT_NAK, 0);
+        break;
+      default:
+        mdb_finish(MDB_RESULT_INVALID_END, 0);
+        break;
+    }
+  } else {
+    mdb.state = MDB_STATE_RECV_END;
   }
 }
 

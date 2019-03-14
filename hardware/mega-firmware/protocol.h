@@ -56,9 +56,9 @@ field_t const FIELD_MDB_DATA = 11;         // len=N, without checksum
 field_t const FIELD_MDB_DURATION10U = 12;  // len=2, uint16 by 10us
 
 #define MDB_BLOCK_SIZE 36
-uint8_t const MDB_ACK = 0x00;
-uint8_t const MDB_RET = 0xaa;
-uint8_t const MDB_NAK = 0xff;
+#define MDB_ACK 0x00
+#define MDB_RET 0xaa
+#define MDB_NAK 0xff
 
 typedef uint8_t mdb_state_t;
 mdb_state_t const MDB_STATE_IDLE = 0;

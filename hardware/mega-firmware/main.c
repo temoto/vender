@@ -28,6 +28,7 @@ static void cmd_status(uint8_t const request_id, uint8_t const *const data,
 static void cmd_reset(uint8_t const request_id, uint8_t const *const data,
                       uint8_t const length) __attribute__((nonnull));
 static void cmd_debug(uint8_t const request_id);
+static void cmd_twi_listen(uint8_t const request_id);
 static void cmd_mdb_bus_reset(uint8_t const request_id,
                               uint8_t const *const data, uint8_t const length)
     __attribute__((nonnull));
@@ -97,6 +98,9 @@ int main(void) {
   response_f1(FIELD_MCUSR, mcusr_saved);
   response_finish();
   reset_command_id = 0;
+
+  static uint8_t debugb_data[RESPONSE_MAX_LENGTH - 12];
+  buffer_init(&debugb, debugb_data, sizeof(debugb_data));
 
   for (;;) {
     wdt_reset();
@@ -179,6 +183,8 @@ static uint8_t master_command(uint8_t const *const bs,
       ;
     // TODO
     response_error2(request_id, ERROR_NOT_IMPLEMENTED, 0);
+  } else if (header == COMMAND_TWI_LISTEN) {
+    cmd_twi_listen(request_id);
   } else if (header == COMMAND_MDB_BUS_RESET) {
     cmd_mdb_bus_reset(request_id, data, data_length);
   } else if (header == COMMAND_MDB_TRANSACTION_SIMPLE) {
@@ -235,7 +241,17 @@ static void cmd_reset(uint8_t const request_id, uint8_t const *const data,
 }
 
 static void cmd_debug(uint8_t const request_id) {
-  response_error2(request_id, ERROR_NOT_IMPLEMENTED, 0);
+  response_begin(request_id, RESPONSE_OK);
+  response_fn(FIELD_ERRORN, (void *)debugb.data, debugb.length);
+  response_finish();
+  buffer_clear_fast(&debugb);
+}
+
+static void cmd_twi_listen(uint8_t const request_id) {
+  response_begin(request_id, RESPONSE_OK);
+  response_fn(FIELD_TWI_DATA, twi_listen.data, twi_listen.length);
+  response_finish();
+  buffer_clear_fast(&twi_listen);
 }
 
 static void cmd_mdb_bus_reset(uint8_t const request_id,

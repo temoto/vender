@@ -16,7 +16,7 @@ import (
 )
 
 const modName string = "mega-client"
-const DefaultTimeout = 500 * time.Millisecond
+const DefaultTimeout = 100 * time.Millisecond
 
 type Client struct {
 	Log      *log2.Log
@@ -77,16 +77,6 @@ func (self *Client) DecRef(debug string) error {
 	panic(fmt.Sprintf("code error %s decref<0 debug=%s", modName, debug))
 }
 
-// TODO make it private, used by mega-cli
-func (self *Client) RawWrite(b []byte) error {
-	err := self.bus.Tx(self.addr, b, nil, 1)
-	if err != nil {
-		atomic.AddUint32(&self.stat.Error, 1)
-	}
-	// self.Log.Debugf("%s RawWrite addr=%02x buf=%x err=%v", modName, self.addr, b, err)
-	return err
-}
-
 func (self *Client) DoStatus() (Packet, error) {
 	return self.DoTimeout(COMMAND_STATUS, nil, DefaultTimeout)
 }
@@ -94,7 +84,7 @@ func (self *Client) DoStatus() (Packet, error) {
 func (self *Client) DoMdbBusReset(d time.Duration) (Packet, error) {
 	buf := [2]byte{}
 	binary.BigEndian.PutUint16(buf[:], uint16(d/time.Millisecond))
-	return self.DoTimeout(COMMAND_MDB_BUS_RESET, buf[:], DefaultTimeout)
+	return self.DoTimeout(COMMAND_MDB_BUS_RESET, buf[:], d+DefaultTimeout)
 }
 
 func (self *Client) DoMdbTxSimple(data []byte) (Packet, error) {
@@ -139,16 +129,28 @@ func (self *Client) Tx(requestId byte, bufOut, bufIn []byte, timeout time.Durati
 
 	// self.Log.Debugf("tx out=%x", bufOut)
 	r.E = self.bus.Tx(self.addr, bufOut, bufIn, 0)
-	// self.Log.Debugf("immediate err=%v response=%x", r.E, bufIn)
+	if !(len(bufIn) > 0 && bufIn[0] == 0) {
+		// self.Log.Debugf("immediate err=%v response=%x", r.E, bufIn)
+	}
 	if r.E != nil {
 		atomic.AddUint32(&self.stat.Error, 1)
 		return
 	}
+	if bufIn == nil {
+		return
+	}
+	// if len(bufIn) == 0 { panic("code error mega Client.Tx() bufIn not nil but empty") }
 	for {
-		if len(bufIn) > 0 && bufIn[0] == 0 {
+		// Fix wrong high bit due to Raspberry I2C problems.
+		// Luckily, we know for sure that first byte in proper response can't have high bit set.
+		if bufIn[0]&0x80 != 0 {
+			bufIn[0] &^= 0x80
+		}
+		if bufIn[0] == 0 {
 			goto tryWait
 		}
 		r.E = self.parse(bufIn, &r.P)
+		// self.Log.Debugf("parse p=%s err=%v", r.P.String(), r.E)
 		if r.E != nil {
 			atomic.AddUint32(&self.stat.Error, 1)
 			return
@@ -165,7 +167,7 @@ func (self *Client) Tx(requestId byte, bufOut, bufIn []byte, timeout time.Durati
 			return
 		}
 		if time.Now().Sub(tbegin) > timeout {
-			r.E = errors.Timeoutf("mega/tx")
+			r.E = errors.Timeoutf("mega-client read response timeout=%s", timeout)
 			return
 		}
 		r.E = self.bus.Tx(self.addr, nil, bufIn, 0)

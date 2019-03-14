@@ -8,6 +8,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/crc"
+	"github.com/temoto/vender/helpers"
 )
 
 //go:generate ./generate
@@ -110,7 +111,7 @@ type Fields struct {
 	tagOrder        [32]Field_t
 	Protocol        uint8
 	Error2s         []uint16
-	ErrorNs         []string
+	ErrorNs         [][]byte
 	FirmwareVersion uint16
 	Mcusr           byte
 	Clock10u        uint32
@@ -176,7 +177,7 @@ func (self Fields) FieldString(tag Field_t) string {
 	case FIELD_ERRORN:
 		es := []string{}
 		for _, e := range self.ErrorNs {
-			es = append(es, e)
+			es = append(es, helpers.HexSpecialBytes(e))
 		}
 		return fmt.Sprintf("errorn=%s", strings.Join(es, "|"))
 	case FIELD_MCUSR:
@@ -217,7 +218,7 @@ func (self *Fields) parseNext(b []byte) (Field_t, uint8) {
 		// TODO assert len(arg)>=1
 		n := arg[0]
 		// TODO assert len(arg)>=1+n
-		es := string(arg[1 : 1+n])
+		es := arg[1 : 1+n]
 		self.ErrorNs = append(self.ErrorNs, es)
 		return tag, 1 + 1 + n
 	case FIELD_FIRMWARE_VERSION:

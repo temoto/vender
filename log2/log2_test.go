@@ -9,20 +9,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"unicode"
-)
 
-func hexSpecial(input string) string {
-	result := ""
-	for _, r := range input {
-		if unicode.In(r, unicode.Digit, unicode.Letter, unicode.Punct, unicode.Space) {
-			result += string(r)
-		} else {
-			result += fmt.Sprintf("{%02x}", r)
-		}
-	}
-	return result
-}
+	"github.com/temoto/vender/helpers"
+)
 
 func callerShort(depth int) (file string, line int) {
 	var ok bool
@@ -76,7 +65,7 @@ func TestLog2(t *testing.T) {
 		c.expect = fmt.Sprintf("%s:%d: %s", file, line-1, c.expect)
 		s := buf.String()
 		if s != c.expect {
-			t.Errorf("debug expected='%s' actual='%s'", hexSpecial(c.expect), hexSpecial(s))
+			t.Errorf("debug expected='%s' actual='%s'", helpers.HexSpecialString(c.expect), helpers.HexSpecialString(s))
 		}
 	}
 }
@@ -127,7 +116,7 @@ func BenchmarkLog2(b *testing.B) {
 				expectTotal := len(result) * b.N
 				buf.Grow(expectTotal)
 				if result != expect {
-					b.Fatalf("expected='%s' actual='%s'", hexSpecial(expect), hexSpecial(result))
+					b.Fatalf("expected='%s' actual='%s'", helpers.HexSpecialString(expect), helpers.HexSpecialString(result))
 				}
 				buf.Reset()
 
@@ -142,7 +131,7 @@ func BenchmarkLog2(b *testing.B) {
 					written := string(buf.Bytes())
 					total := len(written)
 					if total != expectTotal {
-						b.Logf("expect='%s' buf='%s'", hexSpecial(result), hexSpecial(written))
+						b.Logf("expect='%s' buf='%s'", helpers.HexSpecialString(result), helpers.HexSpecialString(written))
 						b.Errorf("len(buf) expected=%d actual=%d", expectTotal, total)
 					}
 				}

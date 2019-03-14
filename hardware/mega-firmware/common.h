@@ -11,6 +11,7 @@
 static uint8_t volatile current_request_id;
 static buffer_t volatile twi_listen;
 static buffer_t volatile twi_out;
+static buffer_t volatile debugb;
 static uint16_t volatile _clock_10us;
 static uint8_t volatile _clock_100ms;
 static uint16_t volatile _clock_idle_total;
@@ -52,6 +53,17 @@ static void response_fn(field_t const f, uint8_t const *const data,
     __attribute__((hot, nonnull, used));
 
 // inline
+
+static inline void debug2(uint8_t const b1, uint8_t const b2) {
+  buffer_append(&debugb, b1);
+  buffer_append(&debugb, b2);
+}
+static inline void debugn(uint8_t const *const data, uint8_t const length) {
+  buffer_append_n(&debugb, data, length);
+}
+static inline void debugs(char const *const s) {
+  buffer_append_n(&debugb, (uint8_t const *const)s, strlen(s));
+}
 
 static void response_ensure_non_empty(void) {
   if (twi_out.length == 0) {
@@ -132,7 +144,7 @@ static void response_f2(field_t const f, uint8_t const d1, uint8_t const d2) {
 static void response_fn(field_t const f, uint8_t const *const data,
                         uint8_t const length) {
   response_ensure_non_empty();
-  if (!response_check_capacity(1 + length)) {
+  if (!response_check_capacity(2 + length)) {
     return;
   }
   buffer_append(&twi_out, f);

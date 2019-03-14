@@ -150,8 +150,10 @@ type RepeatN struct {
 
 func (self RepeatN) String() string { return fmt.Sprintf("RepeatN(N=%d D=%s)", self.N, self.D.String()) }
 func (self RepeatN) Do(ctx context.Context) error {
+	log := log2.ContextValueLogger(ctx, log2.ContextKey)
 	var err error
 	for i := uint(1); i <= self.N && err == nil; i++ {
+		log.Debugf("engine loop %d/%d", i, self.N)
 		err = self.D.Do(ctx)
 	}
 	return err

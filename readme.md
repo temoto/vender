@@ -2,7 +2,7 @@
 Vender is free open source VMC (Vending Machine Controller).
 
 Status:
-- MDB adapter hardware module - beta, works, has known bugs.
+- MDB adapter hardware module - works
 - VMC - in development
 - Configuration editor - planned
 

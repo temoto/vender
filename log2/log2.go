@@ -123,17 +123,31 @@ func (self *Log) Enabled(level Level) bool {
 	return atomic.LoadInt32((*int32)(&self.level)) >= int32(level)
 }
 
+func (self *Log) Log(level Level, s string) {
+	if self.Enabled(level) {
+		self.l.Output(3, s)
+	}
+}
 func (self *Log) Logf(level Level, format string, args ...interface{}) {
 	if self.Enabled(level) {
 		self.l.Output(3, fmt.Sprintf(format, args...))
 	}
 }
 
+func (self *Log) Error(args ...interface{}) {
+	self.Log(LError, "error: "+fmt.Sprint(args...))
+}
 func (self *Log) Errorf(format string, args ...interface{}) {
 	self.Logf(LError, "error: "+format, args...)
 }
+func (self *Log) Info(args ...interface{}) {
+	self.Log(LInfo, fmt.Sprint(args...))
+}
 func (self *Log) Infof(format string, args ...interface{}) {
 	self.Logf(LInfo, format, args...)
+}
+func (self *Log) Debug(args ...interface{}) {
+	self.Log(LDebug, "debug: "+fmt.Sprint(args...))
 }
 func (self *Log) Debugf(format string, args ...interface{}) {
 	self.Logf(LDebug, "debug: "+format, args...)
