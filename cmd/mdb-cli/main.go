@@ -1,17 +1,14 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
-	"fmt"
-	"io"
-	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	prompt "github.com/c-bata/go-prompt"
 	"github.com/juju/errors"
 	iodin "github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/engine"
@@ -24,7 +21,7 @@ const usage = `syntax: commands separated by whitespace
 (main)
 - break    MDB bus reset (TX high for 200ms, wait for 500ms)
 - sN       pause N milliseconds
-- tXX...   transmit MDB block from hex XX..., show response
+- @XX...   transmit MDB block from hex XX..., show response
 
 (meta)
 - log=yes  enable debug logging
@@ -32,6 +29,8 @@ const usage = `syntax: commands separated by whitespace
 - loop=N   repeat N times all commands on this line
 - par      execute concurrently all commands on this line
 `
+
+var log = log2.NewStderr(log2.LDebug)
 
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
@@ -43,7 +42,6 @@ func main() {
 	uarterName := cmdline.String("io", "file", "file|iodin|mega")
 	cmdline.Parse(os.Args[1:])
 
-	log := log2.NewStderr(log2.LDebug)
 	log.SetFlags(log2.LInteractiveFlags)
 
 	var uarter mdb.Uarter
@@ -75,31 +73,8 @@ func main() {
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = context.WithValue(ctx, mdb.ContextKey, m)
 
-	stdin := bufio.NewReader(os.Stdin)
-	defer os.Stdout.WriteString("\n")
-	for {
-		fmt.Fprintf(os.Stdout, "> ")
-		bline, _, err := stdin.ReadLine()
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			log.Fatal(errors.ErrorStack(err))
-		}
-		line := string(bline)
-
-		d, err := parseLine(line)
-		if err != nil {
-			log.Errorf(errors.ErrorStack(err))
-			// TODO continue when input is interactive (tty)
-			break
-		}
-		err = d.Do(ctx)
-		if err != nil {
-			log.Errorf(errors.ErrorStack(err))
-			continue
-		}
-	}
+	// TODO OptionHistory
+	prompt.New(newExecutor(ctx), newCompleter(ctx)).Run()
 }
 
 var doUsage = engine.Func{F: func(ctx context.Context) error {
@@ -121,6 +96,35 @@ var doBreak = engine.Func{Name: "break", F: func(ctx context.Context) error {
 	m := mdb.ContextValueMdber(ctx, mdb.ContextKey)
 	return m.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
 }}
+
+func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest {
+	suggests := []prompt.Suggest{
+		prompt.Suggest{Text: "break", Description: "MDB bus reset"},
+		prompt.Suggest{Text: "sN", Description: "pause for N ms"},
+		prompt.Suggest{Text: "loop=N", Description: "repeat line N times"},
+		prompt.Suggest{Text: "par", Description: "execute commands on line concurrently"},
+		prompt.Suggest{Text: "@XX", Description: "transmit MDB block, show response"},
+	}
+
+	return func(d prompt.Document) []prompt.Suggest {
+		return prompt.FilterFuzzy(suggests, d.GetWordBeforeCursor(), true)
+	}
+}
+
+func newExecutor(ctx context.Context) func(string) {
+	return func(line string) {
+		d, err := parseLine(line)
+		if err != nil {
+			log.Errorf(errors.ErrorStack(err))
+			// TODO continue when input is interactive (tty)
+			return
+		}
+		err = d.Do(ctx)
+		if err != nil {
+			log.Errorf(errors.ErrorStack(err))
+		}
+	}
+}
 
 func newTx(request mdb.Packet) engine.Doer {
 	return engine.Func{Name: "mdb:" + request.Format(), F: func(ctx context.Context) error {
@@ -179,16 +183,16 @@ func parseLine(line string) (engine.Doer, error) {
 	var tail *engine.Node = &tx.Root
 	for _, word := range wordsRest {
 		if strings.HasPrefix(word, "log=") && par {
-			log.Printf("warning: log with par will produce unpredictable output, likely not what you want")
+			log.Errorf("warning: log with par will produce unpredictable output, likely not what you want")
 		}
 
 		d, err := parseCommand(word)
+		if d == nil && err == nil {
+			log.Fatalf("code error parseCommand word='%s' both doer and err are nil", word)
+		}
 		if err != nil {
 			// TODO accumulate errors into list
 			return nil, err
-		}
-		if d == nil {
-			log.Fatalf("code error parseCommand word='%s' both doer and err are nil", word)
 		}
 		if !par {
 			tail = tail.Append(d)
@@ -215,10 +219,9 @@ func parseCommand(word string) (engine.Doer, error) {
 		i, err := strconv.ParseUint(word[1:], 10, 32)
 		if err != nil {
 			return nil, errors.Annotatef(err, "word=%s", word)
-			log.Fatal(errors.ErrorStack(err))
 		}
-		return engine.Sleep{time.Duration(i) * time.Millisecond}, nil
-	case word[0] == 't':
+		return engine.Sleep{Duration: time.Duration(i) * time.Millisecond}, nil
+	case word[0] == '@':
 		request, err := mdb.PacketFromHex(word[1:], true)
 		if err != nil {
 			return nil, err

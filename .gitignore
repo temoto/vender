@@ -13,11 +13,6 @@
 /.tags*
 /.vagrant
 /build
-/cmd/display-mt16-test/display-mt16-test
-/cmd/i2c-test/i2c-test
-/cmd/mdb-cli/mdb-cli
-/cmd/mega-cli/mega-cli
-/cmd/vender/vender
 /cover.out
 /coverage*.info
 /coverage*.txt
@@ -28,6 +23,7 @@
 /mdbr/target
 /mega-cli
 /vender
+/vender-engine-cli
 /vender.sublime-*
 _cgo_defun.c
 _cgo_export.*
@@ -35,3 +31,9 @@ _cgo_gotypes.go
 _obj
 _test
 _testmain.go
+cmd/display-mt16-test/display-mt16-test
+cmd/i2c-test/i2c-test
+cmd/mdb-cli/mdb-cli
+cmd/mega-cli/mega-cli
+cmd/vender-engine-cli/vender-engine-cli
+cmd/vender/vender
