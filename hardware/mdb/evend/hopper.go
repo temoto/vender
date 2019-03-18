@@ -28,7 +28,7 @@ func (self *DeviceHopper) Init(ctx context.Context, addr uint8, nameSuffix strin
 func (self *DeviceHopper) NewRun(units uint8) engine.Doer {
 	tag := fmt.Sprintf("%s.run:%d", self.dev.Name, units)
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
-		return self.CommandAction(ctx, []byte{units})
+		return self.CommandAction([]byte{units})
 	}}
 }
 
@@ -36,7 +36,8 @@ func (self *DeviceHopper) NewRunSync(units uint8) engine.Doer {
 	tag := fmt.Sprintf("%s.run:%d", self.dev.Name, units)
 	tx := engine.NewTransaction(tag)
 	tx.Root.
+		Append(self.DoWaitReady(tag)).
 		Append(self.NewRun(units)).
-		Append(self.NewProto2PollWait(tag+"/wait-done", self.runTimeout*time.Duration(units), genericPollMiss|genericPollBusy))
+		Append(self.DoWaitDone(tag, self.runTimeout*time.Duration(units)))
 	return tx
 }

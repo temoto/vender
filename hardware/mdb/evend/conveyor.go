@@ -13,7 +13,6 @@ type DeviceConveyor struct {
 
 	minSpeed     uint16
 	calibTimeout time.Duration
-	readyTimeout time.Duration
 	posCup       uint16
 	posHoppers   [16]uint16
 	posElevator  uint16
@@ -24,7 +23,6 @@ type DeviceConveyor struct {
 func (self *DeviceConveyor) Init(ctx context.Context) error {
 	// TODO read config
 	self.calibTimeout = 15 * time.Second
-	self.readyTimeout = 1 * time.Second
 	self.minSpeed = 200
 	self.posCup = 1560
 	self.posHoppers[0] = 250
@@ -52,18 +50,16 @@ func (self *DeviceConveyor) NewMove(position uint16) engine.Doer {
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		// exception byte order
 		arg := []byte{0x01, byte(position & 0xff), byte(position >> 8)}
-		return self.CommandAction(ctx, arg)
+		return self.CommandAction(arg)
 	}}
 }
 func (self *DeviceConveyor) NewMoveSync(position uint16) engine.Doer {
 	tag := fmt.Sprintf("%s.move_sync:%d", self.dev.Name, position)
 	tx := engine.NewTransaction(tag)
 	tx.Root.
-		// FIXME dont ignore genericPollMiss
-		Append(self.NewProto2PollWait(tag+"/wait-ready", self.readyTimeout, 0)).
+		Append(self.DoWaitReady(tag)).
 		Append(self.NewMove(position)).
-		// FIXME dont ignore genericPollMiss
-		Append(engine.Func{F: func(ctx context.Context) error {
+		Append(engine.Func{Name: tag + "/custom-wait-done", F: func(ctx context.Context) error {
 			var timeout time.Duration
 			if position == 0 {
 				timeout = self.calibTimeout
@@ -72,8 +68,8 @@ func (self *DeviceConveyor) NewMoveSync(position uint16) engine.Doer {
 				eta := time.Duration(float32(distance)/float32(self.minSpeed)*1000) * time.Millisecond
 				timeout = eta * 2
 			}
-			self.dev.Log.Debugf("device=%s position current=%d target=%d timeout=%s", self.dev.Name, self.currentPos, position, timeout)
-			err := self.NewProto2PollWait(tag+"/wait-done", timeout, genericPollMiss|genericPollBusy).Do(ctx)
+			self.dev.Log.Debugf("%s position current=%d target=%d timeout=%s", self.logPrefix, self.currentPos, position, timeout)
+			err := self.DoWaitDone(tag, timeout).Do(ctx)
 			if err == nil {
 				self.currentPos = position
 			}

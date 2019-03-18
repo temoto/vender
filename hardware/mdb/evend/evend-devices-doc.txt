@@ -71,14 +71,14 @@ C5 10 YY - set temperature YY degrees Celsius
 C2 01 YY - pour hot water for YY units (1.538462 ml)
 C2 02 YY - pour cold water for YY units (1.538462 ml)
 C2 03 YY - pour espresso water for YY units (1.538462 ml)
-C2 10 YY - cold valve (YY: 1=open / 2=close)
-C2 11 YY - hot valve (YY: 1=open / 2=close)
-C2 12 YY - boiler valve (YY: 1=open / 2=close)
+C2 10 YY - cold valve (YY: 1=open / 0=close)
+C2 11 YY - hot valve (YY: 1=open / 0=close)
+C2 12 YY - boiler valve (YY: 1=open / 0=close)
 C2 13 YY - espresso pump (YY: 1=start / 0=stop)
 C2 14 YY - pump (YY: 1=start / 0=stop)
 
 POLL response unique bits:
-10 - busy pouring water
+10 - busy pouring water, other commands do not indicate busy state
 40 - hot temperature not in range
 
 Examples:
@@ -86,7 +86,7 @@ C4 11 -> 17 -- what is hot water temp? 22C
 C5 10 55 -- make it 85C
 C3 -> 44 -- hot temp. not in range and should repeat POLL
 C2 01 4E -- pour 120ml of hot water
-C3 -> 50 -- hot temp. not in range and busy pouring water
+C3 -> 10 -- busy pouring water
 
 
 === Mixer (C8) / Elevator (D0) ===

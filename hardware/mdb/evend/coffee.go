@@ -32,45 +32,48 @@ func (self *DeviceCoffee) Init(ctx context.Context) error {
 func (self *DeviceCoffee) NewGrind() engine.Doer {
 	tag := fmt.Sprintf("%s.grind", self.dev.Name)
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
-		return self.CommandAction(ctx, []byte{0x01})
+		return self.CommandAction([]byte{0x01})
 	}}
 }
 func (self *DeviceCoffee) NewGrindSync() engine.Doer {
 	tag := fmt.Sprintf("%s.grind_sync", self.dev.Name)
 	tx := engine.NewTransaction(tag)
 	tx.Root.
+		Append(self.DoWaitReady(tag)).
 		Append(self.NewGrind()).
-		Append(self.NewProto2PollWait(tag+"/wait-done", self.timeout, genericPollMiss))
+		Append(self.DoWaitDone(tag, self.timeout))
 	return tx
 }
 
 func (self *DeviceCoffee) NewPress() engine.Doer {
 	tag := fmt.Sprintf("%s.press", self.dev.Name)
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
-		return self.CommandAction(ctx, []byte{0x02})
+		return self.CommandAction([]byte{0x02})
 	}}
 }
 func (self *DeviceCoffee) NewPressSync() engine.Doer {
 	tag := fmt.Sprintf("%s.press_sync", self.dev.Name)
 	tx := engine.NewTransaction(tag)
 	tx.Root.
+		Append(self.DoWaitReady(tag)).
 		Append(self.NewPress()).
-		Append(self.NewProto2PollWait(tag+"/wait-done", self.timeout, genericPollMiss))
+		Append(self.DoWaitDone(tag, self.timeout))
 	return tx
 }
 
 func (self *DeviceCoffee) NewRelease() engine.Doer {
 	tag := fmt.Sprintf("%s.release", self.dev.Name)
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
-		return self.CommandAction(ctx, []byte{0x03})
+		return self.CommandAction([]byte{0x03})
 	}}
 }
 func (self *DeviceCoffee) NewReleaseSync() engine.Doer {
 	tag := fmt.Sprintf("%s.release_sync", self.dev.Name)
 	tx := engine.NewTransaction(tag)
 	tx.Root.
+		Append(self.DoWaitReady(tag)).
 		Append(self.NewRelease()).
-		Append(self.NewProto2PollWait(tag+"/wait-done", self.timeout, genericPollMiss))
+		Append(self.DoWaitDone(tag, self.timeout))
 	return tx
 }
 
@@ -81,6 +84,6 @@ func (self *DeviceCoffee) NewHeat(on bool) engine.Doer {
 		if !on {
 			arg = 0x06
 		}
-		return self.CommandAction(ctx, []byte{arg})
+		return self.CommandAction([]byte{arg})
 	}}
 }

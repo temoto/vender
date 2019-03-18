@@ -15,16 +15,22 @@ func TestConveyor(t *testing.T) {
 	}
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "db", "04")
+		mdb.TestChanTx(t, reqCh, respCh, "db", "04")
+		mdb.TestChanTx(t, reqCh, respCh, "db", "")
 		mdb.TestChanTx(t, reqCh, respCh, "da011806", "")
 		mdb.TestChanTx(t, reqCh, respCh, "db", "50")
-		mdb.TestChanTx(t, reqCh, respCh, "db", "54")
+		mdb.TestChanTx(t, reqCh, respCh, "db", "50")
 		mdb.TestChanTx(t, reqCh, respCh, "db", "")
 
 		mdb.TestChanTx(t, reqCh, respCh, "db", "")
 		mdb.TestChanTx(t, reqCh, respCh, "da016707", "")
-		mdb.TestChanTx(t, reqCh, respCh, "db", "54")
 		mdb.TestChanTx(t, reqCh, respCh, "db", "50")
 		mdb.TestChanTx(t, reqCh, respCh, "db", "")
+
+		// TODO test + handle it too
+		// mdb.TestChanTx(t, reqCh, respCh, "db", "")
+		// mdb.TestChanTx(t, reqCh, respCh, "da016707", "")
+		// mdb.TestChanTx(t, reqCh, respCh, "db", "54") // oops
 	}
 	ctx := testMake(t, init, reply)
 	e := engine.ContextValueEngine(ctx, engine.ContextKey)

@@ -37,15 +37,15 @@ func (self *DeviceElevator) NewMove(position uint8) engine.Doer {
 	tag := fmt.Sprintf("%s.move:%d", self.dev.Name, position)
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		arg := []byte{0x03, position, 0}
-		return self.CommandAction(ctx, arg)
+		return self.CommandAction(arg)
 	}}
 }
 func (self *DeviceElevator) NewMoveSync(position uint8) engine.Doer {
 	tag := fmt.Sprintf("%s.move_sync:%d", self.dev.Name, position)
 	tx := engine.NewTransaction(tag)
 	tx.Root.
-		Append(self.dev.NewPollUntilEmpty(tag+"/wait-ready", self.timeout, nil)).
+		Append(self.DoWaitReady(tag)).
 		Append(self.NewMove(position)).
-		Append(self.NewProto1PollWaitSuccess(tag+"/wait-done", self.timeout))
+		Append(self.DoWaitDone(tag, self.timeout))
 	return tx
 }

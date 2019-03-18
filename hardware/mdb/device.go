@@ -165,7 +165,7 @@ func (self *Device) PollLoopPassive(ctx context.Context, a *alive.Alive, fun Pol
 type PollActiveFunc func(PacketError) (bool, error)
 
 func (self *Device) NewPollLoopActive(tag string, timeout time.Duration, fun PollActiveFunc) engine.Doer {
-	return engine.Func{Name: tag + "-active-poll", F: func(ctx context.Context) error {
+	return engine.Func{Name: tag + "/active-poll-loop", F: func(ctx context.Context) error {
 		r := PacketError{}
 		deadline := time.Now().Add(timeout)
 
