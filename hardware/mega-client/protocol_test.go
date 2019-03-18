@@ -28,6 +28,7 @@ func TestParse(t *testing.T) {
 		{"ok-and-garbage", "04d0019cffffff", "d0:01", ""},
 		{"mdb-success-empty", "088501010a010081", "85:01010a0100", ""},
 		{"with-fields", "12170101030504060a1507000a01ff0b00ef", "17:0101030504060a1507000a01ff0b00", ""},
+		{"twi-listen", "0d0003010306a3a308020031b600", "00:03010306a3a308020031", ""},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {

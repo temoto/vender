@@ -38,7 +38,7 @@ func main() {
 	iodinPath := cmdline.String("iodin", "./iodin", "Path to iodin executable")
 	megaI2CBus := cmdline.Uint("mega-i2c-bus", 0, "mega I2C bus number")
 	megaI2CAddr := cmdline.Uint("mega-i2c-addr", 0x78, "mega I2C address")
-	megaPin := cmdline.Uint("mega-pin", 23, "mega notify pin")
+	megaPin := cmdline.Int("mega-pin", 25, "mega notify pin")
 	uarterName := cmdline.String("io", "file", "file|iodin|mega")
 	cmdline.Parse(os.Args[1:])
 

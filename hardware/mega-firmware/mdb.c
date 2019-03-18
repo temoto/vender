@@ -47,9 +47,9 @@ static inline bool uart_send_ready(void) __attribute__((warn_unused_result));
 static void mdb_start_receive(void);
 static void mdb_finish(mdb_result_t const result, uint8_t const error_data);
 static void mdb_bus_reset_finish(void);
-static inline bool mdb_handle_recv_end(void);
+static inline void mdb_handle_recv_end(void);
 static inline uint16_t ms_to_timer16_p1024(uint16_t const ms)
-    __attribute__((const, hot, warn_unused_result));
+    __attribute__((const, warn_unused_result));
 static void timer1_set(uint16_t const ms);
 static void timer1_stop(void);
 
@@ -74,14 +74,13 @@ static void mdb_init(void) {
   mdb_timeout_ticks = ms_to_timer16_p1024(MDB_TIMEOUT_MS);
 }
 
-static bool mdb_step(void) {
-  bool again = false;
+static void mdb_step(void) {
   if (mdb.state == MDB_STATE_RECV_END) {
-    again |= mdb_handle_recv_end();
+    mdb_handle_recv_end();
   }
   if (mdb.state == MDB_STATE_DONE) {
     if (!response_empty()) {
-      return false;
+      return;
     }
 
     uint8_t const r = mdb.result;  // anti-volatile
@@ -100,20 +99,20 @@ static bool mdb_step(void) {
     response_fn(FIELD_MDB_DATA, mdb_in.data, len);
     response_finish();
     mdb_reset();
-    return true;
+    return;
   }
 
-  return again;
+  return;
 }
-static inline bool mdb_handle_recv_end(void) {
+static inline void mdb_handle_recv_end(void) {
   uint8_t const len = mdb_in.length;
   if (len == 0) {
     mdb_finish(MDB_RESULT_CODE_ERROR, __LINE__);
-    return true;
+    return;
   }
   if (len == 1) {
     mdb_finish(MDB_RESULT_CODE_ERROR, __LINE__);
-    return true;
+    return;
   }
 
   uint8_t const last_byte = mdb_in.data[len - 1];
@@ -124,14 +123,14 @@ static inline bool mdb_handle_recv_end(void) {
       // Per ------------------DAT---DAT---CHK*---DAT---DAT---CHK*-----
       UDR0 = MDB_NAK;
       mdb_finish(MDB_RESULT_INVALID_CHK, 0);
-      return true;
+      return;
     } else {
       // VMC ---ADD*---DAT--CHK----------------RET----------------ACK--
       // Per ------------------DAT---DAT---CHK*---DAT---DAT---CHK*-----
       UDR0 = MDB_RET;
       mdb.retrying = true;
       mdb_start_receive();
-      return true;
+      return;
     }
   }
 
@@ -139,7 +138,7 @@ static inline bool mdb_handle_recv_end(void) {
   // Per -------------DAT---DAT---CHK*----
   UDR0 = MDB_ACK;
   mdb_finish(MDB_RESULT_SUCCESS, 0);
-  return true;
+  return;
 }
 
 // Called from master_command()

@@ -3,7 +3,7 @@
 
 #define F_CPU 16000000UL  // Clock Speed
 
-#define FIRMWARE_VERSION 0x0104
+#define FIRMWARE_VERSION 0x0105
 #define MDB_TIMEOUT_MS 6
 
 #define MASTER_NOTIFY_DDR DDRB

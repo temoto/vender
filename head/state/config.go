@@ -69,7 +69,7 @@ func ReadConfig(r io.Reader, log *log2.Log) (*Config, error) {
 	case "", "file":
 		c.Hardware.Mdb.Uarter = mdb.NewFileUart(log)
 	case "mega":
-		mega, err := mega.NewClient(byte(c.Hardware.Mega.I2CBus), byte(c.Hardware.Mega.I2CAddr), uint(c.Hardware.Mega.Pin), log)
+		mega, err := mega.NewClient(byte(c.Hardware.Mega.I2CBus), byte(c.Hardware.Mega.I2CAddr), c.Hardware.Mega.Pin, log)
 		if err != nil {
 			return nil, errors.Annotatef(err, "config: mdb.uart_driver=%s mega=%#v", c.Hardware.Mdb.UartDriver, c.Hardware.Mega)
 		}

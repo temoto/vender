@@ -28,7 +28,6 @@ static void cmd_status(uint8_t const request_id, uint8_t const *const data,
 static void cmd_reset(uint8_t const request_id, uint8_t const *const data,
                       uint8_t const length) __attribute__((nonnull));
 static void cmd_debug(uint8_t const request_id);
-static void cmd_twi_listen(uint8_t const request_id);
 static void cmd_mdb_bus_reset(uint8_t const request_id,
                               uint8_t const *const data, uint8_t const length)
     __attribute__((nonnull));
@@ -39,6 +38,9 @@ static void master_notify_init(void);
 static void master_notify_set(bool const on);
 static void clock_init(void);
 static void clock_stop(void);
+static void led_init(void);
+static void led_toggle(void) __attribute__((used));
+static void led_set(bool const on) __attribute__((used));
 
 // Just .noinit is not enough for GCC 8.2
 // https://github.com/technomancy/atreus/issues/34
@@ -71,9 +73,6 @@ static void soft_reset(void) {
 
 static void nop(void) { __asm volatile("nop" ::); }
 
-static void led_init(void);
-static void led_toggle(void);
-
 int main(void) {
   cli();
   wdt_enable(WDTO_30MS);
@@ -104,31 +103,23 @@ int main(void) {
 
   for (;;) {
     wdt_reset();
-    bool again = false;
 
     cli();
-    again |= twi_step();  // may take TODO us on F_CPU=16MHz
-    sei();
-    nop();
-
-    cli();
-    // master_notify_set(twi_listen.length > 0);
-    master_notify_set((twi_out.used < twi_out.length) ||
-                      (twi_listen.length > 0));
+    led_set(twi_out.length > 0);
+    twi_step();
+    master_notify_set(!response_empty());
     sei();
     nop();
 
     cli();
     if (mdb.state != MDB_STATE_IDLE) {
-      again |= mdb_step();
+      mdb_step();
     }
     sei();
     nop();
 
-    if (!again) {
-      // TODO measure idle time
-      _delay_us(300);
-    }
+    // TODO measure idle time
+    _delay_us(300);
   }
 
   return 0;
@@ -183,8 +174,6 @@ static uint8_t master_command(uint8_t const *const bs,
       ;
     // TODO
     response_error2(request_id, ERROR_NOT_IMPLEMENTED, 0);
-  } else if (header == COMMAND_TWI_LISTEN) {
-    cmd_twi_listen(request_id);
   } else if (header == COMMAND_MDB_BUS_RESET) {
     cmd_mdb_bus_reset(request_id, data, data_length);
   } else if (header == COMMAND_MDB_TRANSACTION_SIMPLE) {
@@ -211,7 +200,6 @@ static void cmd_status(uint8_t const request_id,
   response_f2(FIELD_FIRMWARE_VERSION, (FIRMWARE_VERSION >> 8),
               (FIRMWARE_VERSION & 0xff));
   response_f1(FIELD_MCUSR, mcusr_saved);
-  response_f1(FIELD_TWI_LENGTH, twi_listen.length);
   response_f1(FIELD_MDB_LENGTH, mdb_in.length);
   response_finish();
 }
@@ -225,7 +213,6 @@ static void cmd_reset(uint8_t const request_id, uint8_t const *const data,
   switch (data[0]) {
     case 0x01:
       mdb_reset();
-      buffer_clear_fast(&twi_listen);
       response_begin(request_id, RESPONSE_OK);
       response_f1(FIELD_MCUSR, mcusr_saved);
       response_finish();
@@ -245,13 +232,6 @@ static void cmd_debug(uint8_t const request_id) {
   response_fn(FIELD_ERRORN, (void *)debugb.data, debugb.length);
   response_finish();
   buffer_clear_fast(&debugb);
-}
-
-static void cmd_twi_listen(uint8_t const request_id) {
-  response_begin(request_id, RESPONSE_OK);
-  response_fn(FIELD_TWI_DATA, twi_listen.data, twi_listen.length);
-  response_finish();
-  buffer_clear_fast(&twi_listen);
 }
 
 static void cmd_mdb_bus_reset(uint8_t const request_id,
@@ -283,6 +263,13 @@ static void master_notify_set(bool const on) {
 
 static void led_init(void) { bit_mask_set(LED_DDR, _BV(LED_PIN)); }
 static void led_toggle(void) { LED_PORT ^= _BV(LED_PIN); }
+static void led_set(bool const on) {
+  if (on) {
+    bit_mask_set(LED_PORT, _BV(LED_PIN));
+  } else {
+    bit_mask_clear(LED_PORT, _BV(LED_PIN));
+  }
+}
 
 static void clock_init(void) {
   _clock_10us = 0;
@@ -309,7 +296,7 @@ ISR(TIMER0_COMPA_vect) {
       _clock_100ms++;
       // cheap "every 1.6s"
       if ((_clock_100ms & 0xf) == 0) {
-        led_toggle();
+        // led_toggle();
       }
     }
   }

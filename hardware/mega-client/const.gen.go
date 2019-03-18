@@ -8,10 +8,16 @@ const (
 	TWI_LISTEN_MAX_LENGTH = 36
 	// REQUEST_MAX_LENGTH as defined in mega-firmware/protocol.h:13
 	REQUEST_MAX_LENGTH = 70
-	// RESPONSE_MAX_LENGTH as defined in mega-firmware/protocol.h:25
+	// RESPONSE_MAX_LENGTH as defined in mega-firmware/protocol.h:24
 	RESPONSE_MAX_LENGTH = 70
 	// MDB_BLOCK_SIZE as defined in mega-firmware/protocol.h:58
 	MDB_BLOCK_SIZE = 36
+	// MDB_ACK as defined in mega-firmware/protocol.h:59
+	MDB_ACK = 0
+	// MDB_RET as defined in mega-firmware/protocol.h:60
+	MDB_RET = 170
+	// MDB_NAK as defined in mega-firmware/protocol.h:61
+	MDB_NAK = 255
 )
 
 // COMMAND_STATUS as declared in mega-firmware/protocol.h:15
@@ -29,23 +35,23 @@ const COMMAND_DEBUG Command_t = 4
 // COMMAND_FLASH as declared in mega-firmware/protocol.h:19
 const COMMAND_FLASH Command_t = 5
 
-// COMMAND_TWI_LISTEN as declared in mega-firmware/protocol.h:20
-const COMMAND_TWI_LISTEN Command_t = 6
-
-// COMMAND_MDB_BUS_RESET as declared in mega-firmware/protocol.h:21
+// COMMAND_MDB_BUS_RESET as declared in mega-firmware/protocol.h:20
 const COMMAND_MDB_BUS_RESET Command_t = 7
 
-// COMMAND_MDB_TRANSACTION_SIMPLE as declared in mega-firmware/protocol.h:22
+// COMMAND_MDB_TRANSACTION_SIMPLE as declared in mega-firmware/protocol.h:21
 const COMMAND_MDB_TRANSACTION_SIMPLE Command_t = 8
 
-// COMMAND_MDB_TRANSACTION_CUSTOM as declared in mega-firmware/protocol.h:23
+// COMMAND_MDB_TRANSACTION_CUSTOM as declared in mega-firmware/protocol.h:22
 const COMMAND_MDB_TRANSACTION_CUSTOM Command_t = 9
 
-// RESPONSE_OK as declared in mega-firmware/protocol.h:27
+// RESPONSE_OK as declared in mega-firmware/protocol.h:26
 const RESPONSE_OK Response_t = 1
 
-// RESPONSE_RESET as declared in mega-firmware/protocol.h:28
+// RESPONSE_RESET as declared in mega-firmware/protocol.h:27
 const RESPONSE_RESET Response_t = 2
+
+// RESPONSE_TWI_LISTEN as declared in mega-firmware/protocol.h:28
+const RESPONSE_TWI_LISTEN Response_t = 3
 
 // RESPONSE_ERROR as declared in mega-firmware/protocol.h:29
 const RESPONSE_ERROR Response_t = 128
@@ -115,15 +121,6 @@ const FIELD_MDB_DATA Field_t = 11
 
 // FIELD_MDB_DURATION10U as declared in mega-firmware/protocol.h:56
 const FIELD_MDB_DURATION10U Field_t = 12
-
-// MDB_ACK as declared in mega-firmware/protocol.h:59
-const MDB_ACK byte = 0
-
-// MDB_RET as declared in mega-firmware/protocol.h:60
-const MDB_RET byte = 170
-
-// MDB_NAK as declared in mega-firmware/protocol.h:61
-const MDB_NAK byte = 255
 
 // MDB_STATE_IDLE as declared in mega-firmware/protocol.h:64
 const MDB_STATE_IDLE byte = 0

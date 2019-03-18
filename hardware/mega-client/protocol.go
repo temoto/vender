@@ -71,7 +71,7 @@ func (self *Packet) Parse(b []byte) error {
 	self.Id = b[1]
 	self.Header = b[2]
 	switch Response_t(self.Header) {
-	case RESPONSE_OK, RESPONSE_RESET, RESPONSE_ERROR:
+	case RESPONSE_OK, RESPONSE_RESET, RESPONSE_TWI_LISTEN, RESPONSE_ERROR:
 	default:
 		return errors.NotValidf("packet=%x header=%02x", b, byte(self.Header))
 	}

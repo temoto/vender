@@ -17,7 +17,6 @@ command_t const COMMAND_CONFIG = 0x02;
 command_t const COMMAND_RESET = 0x03;
 command_t const COMMAND_DEBUG = 0x04;
 command_t const COMMAND_FLASH = 0x05;
-command_t const COMMAND_TWI_LISTEN = 0x06;
 command_t const COMMAND_MDB_BUS_RESET = 0x07;
 command_t const COMMAND_MDB_TRANSACTION_SIMPLE = 0x08;
 command_t const COMMAND_MDB_TRANSACTION_CUSTOM = 0x09;
@@ -26,6 +25,7 @@ command_t const COMMAND_MDB_TRANSACTION_CUSTOM = 0x09;
 typedef uint8_t response_t;
 response_t const RESPONSE_OK = 0x01;
 response_t const RESPONSE_RESET = 0x02;
+response_t const RESPONSE_TWI_LISTEN = 0x03;
 response_t const RESPONSE_ERROR = 0x80;
 
 typedef uint8_t errcode_t;

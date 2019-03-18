@@ -6,7 +6,7 @@ package mega
 // Command_t type as declared in mega-firmware/protocol.h:14
 type Command_t byte
 
-// Response_t type as declared in mega-firmware/protocol.h:26
+// Response_t type as declared in mega-firmware/protocol.h:25
 type Response_t byte
 
 // Errcode_t type as declared in mega-firmware/protocol.h:31

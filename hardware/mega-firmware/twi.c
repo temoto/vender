@@ -22,45 +22,41 @@ static uint8_t volatile _drop;
 
 static void twi_init_slave(uint8_t const address) {
   static uint8_t twi_in_data[REQUEST_MAX_LENGTH];
-  static uint8_t twi_listen_data[TWI_LISTEN_MAX_LENGTH];
   static uint8_t twi_out_data[RESPONSE_MAX_LENGTH];
 
   TWCR = 0;
-  TWBR = 0x0c;
+  TWBR = 0;  // TWI slave does not control clock
   TWAR = address << 1;
   TWSR = 0;
   twi_idle = true;
   buffer_init(&twi_in, (uint8_t *)twi_in_data, sizeof(twi_in_data));
   buffer_init(&twi_out, (uint8_t *)twi_out_data, sizeof(twi_out_data));
-  buffer_init(&twi_listen, (uint8_t *)twi_listen_data, sizeof(twi_listen_data));
-  TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE);
+  TWCR = TWCR_ACK;
 }
 
-static bool twi_step(void) {
+static void twi_step(void) {
   if (!twi_idle) {
-    return false;
+    return;
   }
-  bool again = false;
 
-  // TWI read is finished
+  // TWI session is finished
   uint8_t const in_length = twi_in.length;  // anti-volatile
   if (in_length == 1) {
+    if (response_empty()) {
+      response_begin(0, RESPONSE_TWI_LISTEN);
+    }
     // keyboard sends 1 byte, encode as 2 for future compatibility
-    buffer_append_n(&twi_listen, (uint8_t const[]){0, twi_in.data[0]}, 2);
+    response_fn(FIELD_TWI_DATA, (uint8_t const[]){0, twi_in.data[0]}, 2);
+    response_finish();
     buffer_clear_fast(&twi_in);
-    again = true;
   } else if (in_length > 1) {
     // master sends >= 4 bytes
     // command is likely to generate response, wait until out buffer is empty
-    if (twi_out.length != 0) {
-      return false;
+    if (response_empty()) {
+      master_command(twi_in.data, in_length);
+      buffer_clear_fast(&twi_in);
     }
-    master_command(twi_in.data, in_length);
-    buffer_clear_fast(&twi_in);
-    again = true;
   }
-
-  return again;
 }
 
 // Standard speed 100KHz = 160 clocks at F_CPU=16MHz.
@@ -68,6 +64,8 @@ static bool twi_step(void) {
 ISR(TWI_vect) {
   uint8_t data;
   uint8_t const st = TW_STATUS;
+  static uint8_t out_idx;
+
   switch (st) {
     case TW_NO_INFO:
       return;
@@ -75,6 +73,8 @@ ISR(TWI_vect) {
     case TW_BUS_ERROR:
       twi_idle = true;
       TWCR = TWCR_STOP;
+      buffer_clear_fast(&twi_in);
+      out_idx = 0;
       return;
 
     // Receive SLA+R LP
@@ -122,21 +122,21 @@ ISR(TWI_vect) {
       if (twi_out.length > 0) {
         TWDR = twi_out.data[0];
         TWCR = TWCR_ACK;
-        twi_out.used = 1;
+        out_idx = 1;
       } else {
         TWDR = 0;
         TWCR = TWCR_NACK;
-        twi_out.used = 0;
+        out_idx = 0;
       }
       return;
 
     // Send Byte Receive ACK
     case TW_ST_DATA_ACK:
       twi_idle = false;
-      if (twi_out.used < twi_out.length) {
-        TWDR = twi_out.data[twi_out.used];
+      if (out_idx < twi_out.length) {
+        TWDR = twi_out.data[out_idx];
         TWCR = TWCR_ACK;
-        twi_out.used++;
+        out_idx++;
       } else {
         TWDR = 0;
         TWCR = TWCR_NACK;
@@ -166,7 +166,6 @@ ISR(TWI_vect) {
       return;
 
     default:
-      twi_idle = true;
       TWCR = TWCR_ACK;
   }
 }

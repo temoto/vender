@@ -9,7 +9,6 @@
 #include "protocol.h"
 
 static uint8_t volatile current_request_id;
-static buffer_t volatile twi_listen;
 static buffer_t volatile twi_out;
 static buffer_t volatile debugb;
 static uint16_t volatile _clock_10us;
@@ -18,39 +17,37 @@ static uint16_t volatile _clock_idle_total;
 static uint16_t volatile clock_idle;
 
 static uint8_t master_command(uint8_t const *const bs, uint8_t const max_length)
-    __attribute__((hot, nonnull));
-static inline uint16_t clock_10us(void) __attribute__((hot));
+    __attribute__((nonnull));
+static inline uint16_t clock_10us(void);
 
 static void mdb_init(void);
-static bool mdb_step(void) __attribute__((hot));
+static void mdb_step(void);
 static void mdb_tx_begin(uint8_t const request_id, uint8_t const *const data,
                          uint8_t const length) __attribute__((nonnull));
 static void mdb_bus_reset_begin(uint8_t const request_id,
                                 uint16_t const duration);
 static void mdb_reset(void);
-static void timer1_stop(void) __attribute__((hot));
+static void timer1_stop(void);
 
 static void twi_init_slave(uint8_t const address);
-static bool twi_step(void) __attribute__((hot));
+static void twi_step(void);
 
 // fwd
 
-static void response_ensure_non_empty() __attribute__((hot));
-static bool response_check_capacity(uint8_t const more) __attribute__((hot));
-static bool response_empty(void) __attribute__((hot, warn_unused_result));
-static void response_begin(uint8_t const request_id, response_t const header)
-    __attribute__((hot));
-static void response_finish(void) __attribute__((hot));
+static void response_ensure_non_empty();
+static bool response_check_capacity(uint8_t const more);
+static bool response_empty(void) __attribute__((warn_unused_result));
+static void response_begin(uint8_t const request_id, response_t const header);
+static void response_finish(void);
 static void response_error2(uint8_t const request_id, errcode_t const ec,
-                            uint8_t const arg) __attribute__((hot, used));
-static void response_f0(field_t const f) __attribute__((hot, used));
+                            uint8_t const arg) __attribute__((used));
+static void response_f0(field_t const f) __attribute__((used));
 static void response_f1(field_t const f, uint8_t const data)
-    __attribute__((hot, used));
+    __attribute__((used));
 static void response_f2(field_t const f, uint8_t const d1, uint8_t const d2)
-    __attribute__((hot, used));
+    __attribute__((used));
 static void response_fn(field_t const f, uint8_t const *const data,
-                        uint8_t const length)
-    __attribute__((hot, nonnull, used));
+                        uint8_t const length) __attribute__((nonnull, used));
 
 // inline
 
@@ -67,12 +64,16 @@ static inline void debugs(char const *const s) {
 
 static void response_ensure_non_empty(void) {
   if (twi_out.length == 0) {
-    uint8_t const b[] = {0,
-                         current_request_id,
-                         RESPONSE_ERROR,
-                         FIELD_ERROR2,
-                         ERROR_RESPONSE_EMPTY,
-                         0};
+    uint8_t const b[] = {
+        0,
+        current_request_id,
+        RESPONSE_ERROR,
+        FIELD_PROTOCOL,
+        PROTOCOL_VERSION,
+        FIELD_ERROR2,
+        ERROR_RESPONSE_EMPTY,
+        0,
+    };
     buffer_copy(&twi_out, b, sizeof(b));
   }
 }
@@ -100,7 +101,12 @@ static void response_begin(uint8_t const request_id, response_t const header) {
 
 static void response_finish(void) {
   response_ensure_non_empty();
-  twi_out.data[0] = twi_out.length + 1;
+  uint8_t const packet_length = twi_out.data[0];
+  if (packet_length == 0) {
+    twi_out.data[0] = twi_out.length + 1;
+  } else {
+    twi_out.length = packet_length - 1;
+  }
   uint8_t const crc = crc8_p93_n(0, twi_out.data, twi_out.length);
   buffer_append(&twi_out, crc);
   current_request_id = 0;
@@ -111,7 +117,11 @@ static void response_error2(uint8_t const request_id, errcode_t const ec,
   if (response_empty()) {
     response_begin(request_id, RESPONSE_ERROR);
   } else {
-    twi_out.length = twi_out.data[0];
+    uint8_t const packet_length = twi_out.data[0];
+    if (packet_length != 0) {
+      twi_out.data[0] = 0;
+      twi_out.length = packet_length - 1;
+    }
   }
   response_f2(FIELD_ERROR2, ec, arg);
   response_finish();

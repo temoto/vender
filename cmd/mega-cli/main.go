@@ -29,15 +29,21 @@ func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	i2cBusNo := cmdline.Uint("i2cbus", 0, "")
 	addr := cmdline.Uint("addr", 0x78, "")
-	pin := cmdline.Uint("pin", 23, "")
+	pin := cmdline.Int("pin", 25, "")
 	cmdline.Parse(os.Args[1:])
 
 	log.SetFlags(log2.LInteractiveFlags)
 
 	client, err := mega.NewClient(byte(*i2cBusNo), byte(*addr), *pin, log)
 	if err != nil {
-		log.Fatal(errors.Trace(err))
+		log.Fatal(errors.ErrorStack(errors.Trace(err)))
 	}
+
+	go func() {
+		for kb := range client.TwiChan {
+			log.Infof("keyboard event: %04x", kb)
+		}
+	}()
 
 	// TODO OptionHistory
 	prompt.New(newExecutor(client), newCompleter()).Run()
@@ -49,7 +55,6 @@ func newCompleter() func(d prompt.Document) []prompt.Suggest {
 		prompt.Suggest{Text: "@0301", Description: "soft reset (zero variables)"},
 		prompt.Suggest{Text: "@03ff", Description: "hard reset (reboot)"},
 		prompt.Suggest{Text: "@04", Description: "debug"},
-		prompt.Suggest{Text: "@06", Description: "read TWI listen"},
 		prompt.Suggest{Text: "@07", Description: "MDB bus reset"},
 		prompt.Suggest{Text: "@08", Description: "MDB transaction"},
 		prompt.Suggest{Text: "help"},
@@ -135,14 +140,16 @@ func newExecutor(client *mega.Client) func(string) {
 					if i < 1 {
 						return
 					}
-					buf := make([]byte, i)
 					r := mega.PacketError{}
-					client.Tx(0, nil, buf, 0, &r)
-					if r.E != nil {
+					client.Tx(0, nil, true, 0, &r)
+					switch r.E {
+					case mega.ErrResponseEmpty:
+						log.Infof("read empty")
+					case nil:
+						log.Infof("packet=%s %s", r.P.SimpleHex(), r.P.String())
+					default:
 						log.Errorf("read err=%v", r.E)
 						return
-					} else {
-						log.Debugf("packet=%s %s", r.P.SimpleHex(), r.P.String())
 					}
 				}
 			case word[0] == 's':
@@ -158,7 +165,7 @@ func newExecutor(client *mega.Client) func(string) {
 					return
 				} else {
 					r := mega.PacketError{}
-					client.Tx(0, bs, nil, 0, &r)
+					client.Tx(0, bs, false, 0, &r)
 					if r.E != nil {
 						log.Errorf("send err=%v", r.E)
 						return
