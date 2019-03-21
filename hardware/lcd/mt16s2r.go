@@ -3,7 +3,7 @@ package lcd
 import (
 	"time"
 
-	"github.com/nathan-osman/go-rpigpio"
+	rpi "github.com/nathan-osman/go-rpigpio"
 )
 
 type LCD struct {
@@ -29,19 +29,19 @@ func (self *LCD) Init() (err error) {
 	if err != nil {
 		return
 	}
-	self.pin_db4, err = rpi.OpenPin(8, rpi.OUT)
+	self.pin_db4, err = rpi.OpenPin(22, rpi.OUT)
 	if err != nil {
 		return
 	}
-	self.pin_db5, err = rpi.OpenPin(7, rpi.OUT)
+	self.pin_db5, err = rpi.OpenPin(21, rpi.OUT)
 	if err != nil {
 		return
 	}
-	self.pin_db6, err = rpi.OpenPin(9, rpi.OUT)
+	self.pin_db6, err = rpi.OpenPin(17, rpi.OUT)
 	if err != nil {
 		return
 	}
-	self.pin_db7, err = rpi.OpenPin(10, rpi.OUT)
+	self.pin_db7, err = rpi.OpenPin(7, rpi.OUT)
 	if err != nil {
 		return
 	}

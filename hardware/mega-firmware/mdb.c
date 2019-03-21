@@ -22,13 +22,13 @@ MDB timings:
 
 typedef struct {
   mdb_state_t state;
-  uint8_t request_id;
   mdb_result_t result;
   uint8_t error_data;
   uint8_t in_chk;
   bool retrying;
   uint16_t start_clock;
   uint16_t duration;
+  uint8_t out_used;
 } mdb_t;
 
 static mdb_t volatile mdb;
@@ -50,16 +50,13 @@ static void mdb_bus_reset_finish(void);
 static inline void mdb_handle_recv_end(void);
 static inline uint16_t ms_to_timer16_p1024(uint16_t const ms)
     __attribute__((const, warn_unused_result));
-static void timer1_set(uint16_t const ms);
-static void timer1_stop(void);
+static inline uint8_t memsum(uint8_t const *const src, uint8_t const length)
+    __attribute__((nonnull, pure));
 
 // Baud Rate = 9600 +1%/-2% NRZ 9-N-1
 static void mdb_init(void) {
-  static uint8_t in_data[MDB_BLOCK_SIZE];
-  static uint8_t out_data[MDB_BLOCK_SIZE];
-
-  buffer_init(&mdb_in, (uint8_t * const)in_data, sizeof(in_data));
-  buffer_init(&mdb_out, (uint8_t * const)out_data, sizeof(out_data));
+  buffer_init((buffer_t *)&mdb_in);
+  buffer_init((buffer_t *)&mdb_out);
   mdb_reset();
 
   uint32_t const MDB_BAUDRATE = 9600;
@@ -85,10 +82,8 @@ static void mdb_step(void) {
 
     uint8_t const r = mdb.result;  // anti-volatile
     uint8_t len = mdb_in.length;
-    uint8_t const header =
-        (r == MDB_RESULT_SUCCESS ? RESPONSE_OK : RESPONSE_ERROR);
 
-    response_begin(mdb.request_id, header);
+    response_begin(RESPONSE_OK);
     response_f2(FIELD_MDB_RESULT, r, mdb.error_data);
     response_f2(FIELD_MDB_DURATION10U, (mdb.duration >> 8),
                 (mdb.duration & 0xff));
@@ -96,8 +91,8 @@ static void mdb_step(void) {
     if ((r == MDB_RESULT_SUCCESS) && (len > 0)) {
       len--;
     }
-    response_fn(FIELD_MDB_DATA, mdb_in.data, len);
-    response_finish();
+    response_fn(FIELD_MDB_DATA, (uint8_t const *const)mdb_in.data, len);
+    response.filled = true;
     mdb_reset();
     return;
   }
@@ -141,68 +136,63 @@ static inline void mdb_handle_recv_end(void) {
   return;
 }
 
-// Called from master_command()
-// allowed to write response
-static void mdb_tx_begin(uint8_t const request_id, uint8_t const *const data,
-                         uint8_t const length) {
-  if (length == 0) {
-    response_error2(request_id, ERROR_INVALID_DATA, 0);
+// Called from request_exec() so no need to close response
+static void mdb_tx_begin(void) {
+  uint8_t const arg_length = request.b.length;  // anti-volatile
+  uint8_t const *const arg_data =
+      (uint8_t const *const)request.b.data;  // cast shortening alias
+
+  if (arg_length == 0) {
+    response_error2(ERROR_INVALID_DATA, 0);
     return;
   }
-  if (length + 1 > mdb_out.size) {
-    response_error2(request_id, ERROR_BUFFER_OVERFLOW, length + 1);
+  if (arg_length > MDB_BLOCK_SIZE) {
+    response_error2(ERROR_BUFFER_OVERFLOW, arg_length + 1);
     return;
   }
   uint8_t const mst = mdb.state;
   if (mst != MDB_STATE_IDLE) {
-    response_begin(request_id, RESPONSE_ERROR);
+    response_begin(RESPONSE_ERROR);
     response_f2(FIELD_MDB_RESULT, MDB_RESULT_BUSY, mst);
-    response_finish();
     return;
   }
 
   // modified MDB state after this point,
   // so must call mdb_reset() on errors
-  buffer_copy(&mdb_out, data, length);
-  buffer_append(&mdb_out, memsum(data, length));
+  buffer_copy((buffer_t *)&mdb_out, arg_data, arg_length);
+  buffer_append((buffer_t *)&mdb_out, memsum(arg_data, arg_length));
 
-  mdb.request_id = request_id;
   mdb.state = MDB_STATE_SEND;
   mdb.start_clock = clock_10us();
   if (!uart_send_ready()) {
-    response_begin(request_id, RESPONSE_ERROR);
+    response_begin(RESPONSE_ERROR);
     response_f2(FIELD_MDB_RESULT, MDB_RESULT_UART_SEND_BUSY, 0);
-    response_finish();
     return;
   }
   timer1_set(mdb_timeout_ticks);
   mdb.retrying = false;
 
   UCSR0B = UCSRB_BASE | _BV(TXB80);
-  UDR0 = data[0];
+  UDR0 = arg_data[0];
 
   // clear 9 bit for following bytes
   UCSR0B = UCSRB_BASE;
 
   // important to set index before UDRIE
-  mdb_out.used = 1;
+  mdb.out_used = 1;
   UCSR0B = UCSRB_BASE | _BV(UDRIE0);
   return;
 }
 
-// Called from master_command()
-// allowed to write response
-static void mdb_bus_reset_begin(uint8_t const request_id,
-                                uint16_t const duration) {
+// Called from request_exec() so no need to close response
+static void mdb_bus_reset_begin(uint16_t const duration) {
   uint8_t const mst = mdb.state;
   if (mst != MDB_STATE_IDLE) {
-    response_begin(request_id, RESPONSE_ERROR);
+    response_begin(RESPONSE_ERROR);
     response_f2(FIELD_MDB_RESULT, MDB_RESULT_BUSY, mst);
-    response_finish();
     return;
   }
 
-  mdb.request_id = request_id;
   mdb.state = MDB_STATE_BUS_RESET;
   mdb.start_clock = clock_10us();
   UCSR0B = 0;                          // disable RX,TX
@@ -244,7 +234,7 @@ ISR(USART_RX_vect) {
     return;
   }
 
-  if (!buffer_append(&mdb_in, data)) {
+  if (!buffer_append((buffer_t *)&mdb_in, data)) {
     mdb_finish(MDB_RESULT_RECEIVE_OVERFLOW, 0);
     return;
   }
@@ -280,7 +270,7 @@ ISR(USART_RX_vect) {
 ISR(USART_UDRE_vect) {
   timer1_stop();
   // anti-volatile
-  uint8_t const used = mdb_out.used;
+  uint8_t const used = mdb.out_used;
   uint8_t const len = mdb_out.length;
   // debug mode
   if (used >= len) {
@@ -289,10 +279,10 @@ ISR(USART_UDRE_vect) {
   }
 
   uint8_t const data = mdb_out.data[used];
-  mdb_out.used++;
+  mdb.out_used++;
 
   // last byte is (about to be) sent
-  if (mdb_out.used == len) {
+  if (mdb.out_used == len) {
     // disable (this) TX ready interrupt
     // enable TX-finished interrupt
     UCSR0B = UCSRB_BASE | _BV(TXCIE0);
@@ -363,14 +353,14 @@ static inline bool uart_send_ready(void) {
 
 static void mdb_reset(void) {
   timer1_stop();
-  buffer_clear_fast(&mdb_in);
-  buffer_clear_fast(&mdb_out);
+  buffer_clear_fast((buffer_t *)&mdb_in);
+  buffer_clear_fast((buffer_t *)&mdb_out);
   memset((void *)&mdb, 0, sizeof(mdb_t));
   mdb.state = MDB_STATE_IDLE;
 }
 
 static void mdb_start_receive(void) {
-  buffer_clear_fast(&mdb_in);
+  buffer_clear_fast((buffer_t *)&mdb_in);
   mdb.in_chk = 0;
   mdb.state = MDB_STATE_RECV;
   timer1_set(mdb_timeout_ticks);
@@ -382,6 +372,14 @@ static void mdb_finish(mdb_result_t const result, uint8_t const error_data) {
   mdb.error_data = error_data;
   mdb.duration = clock_10us() - mdb.start_clock;
   mdb.state = MDB_STATE_DONE;
+}
+
+static inline uint8_t memsum(uint8_t const *const src, uint8_t const length) {
+  uint8_t sum = 0;
+  for (uint8_t i = 0; i < length; i++) {
+    sum += src[i];
+  }
+  return sum;
 }
 
 #endif  // INCLUDE_MDB_C

@@ -4,13 +4,51 @@ package mega
 
 import "strconv"
 
-const _Field_t_name = "INVALIDPROTOCOLFIRMWARE_VERSIONERROR2ERRORNMCUSRCLOCK10UTWI_LENGTHTWI_DATAMDB_LENGTHMDB_RESULTMDB_DATAMDB_DURATION10U"
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[FIELD_INVALID-0]
+	_ = x[FIELD_FIRMWARE_VERSION-1]
+	_ = x[FIELD_CLOCK10U-2]
+	_ = x[FIELD_MCUSR-3]
+	_ = x[FIELD_ERRORN-8]
+	_ = x[FIELD_ERROR2-9]
+	_ = x[FIELD_MDB_RESULT-16]
+	_ = x[FIELD_MDB_DATA-17]
+	_ = x[FIELD_MDB_DURATION10U-18]
+	_ = x[FIELD_TWI_ADDR-32]
+	_ = x[FIELD_TWI_DATA-33]
+}
 
-var _Field_t_index = [...]uint8{0, 7, 15, 31, 37, 43, 48, 56, 66, 74, 84, 94, 102, 117}
+const (
+	_Field_t_name_0 = "INVALIDFIRMWARE_VERSIONCLOCK10UMCUSR"
+	_Field_t_name_1 = "ERRORNERROR2"
+	_Field_t_name_2 = "MDB_RESULTMDB_DATAMDB_DURATION10U"
+	_Field_t_name_3 = "TWI_ADDRTWI_DATA"
+)
+
+var (
+	_Field_t_index_0 = [...]uint8{0, 7, 23, 31, 36}
+	_Field_t_index_1 = [...]uint8{0, 6, 12}
+	_Field_t_index_2 = [...]uint8{0, 10, 18, 33}
+	_Field_t_index_3 = [...]uint8{0, 8, 16}
+)
 
 func (i Field_t) String() string {
-	if i >= Field_t(len(_Field_t_index)-1) {
+	switch {
+	case 0 <= i && i <= 3:
+		return _Field_t_name_0[_Field_t_index_0[i]:_Field_t_index_0[i+1]]
+	case 8 <= i && i <= 9:
+		i -= 8
+		return _Field_t_name_1[_Field_t_index_1[i]:_Field_t_index_1[i+1]]
+	case 16 <= i && i <= 18:
+		i -= 16
+		return _Field_t_name_2[_Field_t_index_2[i]:_Field_t_index_2[i+1]]
+	case 32 <= i && i <= 33:
+		i -= 32
+		return _Field_t_name_3[_Field_t_index_3[i]:_Field_t_index_3[i+1]]
+	default:
 		return "Field_t(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _Field_t_name[_Field_t_index[i]:_Field_t_index[i+1]]
 }

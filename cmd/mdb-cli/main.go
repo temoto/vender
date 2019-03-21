@@ -36,9 +36,8 @@ func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	devicePath := cmdline.String("device", "/dev/ttyAMA0", "")
 	iodinPath := cmdline.String("iodin", "./iodin", "Path to iodin executable")
-	megaI2CBus := cmdline.Uint("mega-i2c-bus", 0, "mega I2C bus number")
-	megaI2CAddr := cmdline.Uint("mega-i2c-addr", 0x78, "mega I2C address")
-	megaPin := cmdline.Int("mega-pin", 25, "mega notify pin")
+	megaSpi := cmdline.String("mega-spi", "", "mega SPI port")
+	megaPin := cmdline.String("mega-pin", "25", "mega notify pin")
 	uarterName := cmdline.String("io", "file", "file|iodin|mega")
 	cmdline.Parse(os.Args[1:])
 
@@ -55,7 +54,7 @@ func main() {
 		}
 		uarter = mdb.NewIodinUart(iodin)
 	case "mega":
-		mega, err := mega.NewClient(byte(*megaI2CBus), byte(*megaI2CAddr), *megaPin, log)
+		mega, err := mega.NewClient(*megaSpi, *megaPin, log)
 		if err != nil {
 			log.Fatal(errors.Trace(err))
 		}

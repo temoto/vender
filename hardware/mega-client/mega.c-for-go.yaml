@@ -17,12 +17,16 @@ TRANSLATOR:
       - {action: accept, from: "^ERROR_"}
       - {action: accept, from: "^FIELD_"}
       - {action: accept, from: "^MDB_"}
+      - {action: accept, from: "^PACKET_"}
+      - {action: accept, from: "^PROTOCOL_"}
       - {action: accept, from: "^REQUEST_"}
       - {action: accept, from: "^RESPONSE_"}
       - {action: accept, from: "^TWI_"}
+      - {action: accept, from: "BUFFER_SIZE"}
       - {action: accept, from: "command_t"}
       - {action: accept, from: "errcode_t"}
       - {action: accept, from: "field_t"}
       - {action: accept, from: "mdb_result_t"}
       - {action: accept, from: "response_t"}
+      - {action: ignore, from: "PROTOCOL_VERSION"}
       - {transform: export}

@@ -4,6 +4,16 @@ package mega
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[ResetFlagPowerOn-1]
+	_ = x[ResetFlagExternal-2]
+	_ = x[ResetFlagBrownOut-4]
+	_ = x[ResetFlagWatchdog-8]
+}
+
 const (
 	_ResetFlag_name_0 = "PowerOnExternal"
 	_ResetFlag_name_1 = "BrownOut"

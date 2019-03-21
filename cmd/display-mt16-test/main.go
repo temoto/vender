@@ -37,7 +37,6 @@ func main() {
 
 	for {
 		d.WriteBytes(translate("Добро спасёт мир\n"))
-		time.Sleep(2000 * time.Millisecond)
 		d.WriteBytes(translate("если повезёт "))
 		d.Data(0x1c)
 		d.Data(0xbc)

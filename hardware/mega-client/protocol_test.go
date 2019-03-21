@@ -1,6 +1,7 @@
 package mega
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
@@ -8,6 +9,25 @@ import (
 	"testing"
 	"time"
 )
+
+func TestNewCommand(t *testing.T) {
+	t.Parallel()
+	f := NewCommand(COMMAND_MDB_TRANSACTION_SIMPLE, 0xe1)
+	expect := []byte{0x44, 0x02, 0x08, 0xe1, 0x1f}
+	actual := f.Bytes()
+	if !bytes.Equal(actual, expect) {
+		t.Errorf("frame.Bytes() expected=%x actual=%x", expect, actual)
+	}
+
+	wire := bytes.Repeat([]byte{PROTOCOL_PAD_OK}, totalOverheads)
+	copy(wire, actual)
+	wire[len(actual)] = 0 // padding errcode
+	f2 := new(Frame)
+	err := f2.Parse(wire)
+	if err != nil {
+		t.Fatalf("Parse() back err=%v", err)
+	}
+}
 
 func TestParse(t *testing.T) {
 	t.Parallel()
@@ -18,17 +38,17 @@ func TestParse(t *testing.T) {
 		expectErr string
 	}
 	cases := []Case{
-		{"empty", "", "", "packet empty not valid"},
-		{"long", "f1", "", "packet=f1 claims length=241 > max=70 not valid"},
-		{"under-length", "04", "", "packet=04 claims length=4 > input=1 not valid"},
-		{"short", "01", "", "packet=01 claims length=1 < min=4 not valid"},
-		{"corrupted", "040000ff", "", "packet=040000ff crc=ff actual=86 not valid"},
-		{"invalid-header", "04000086", "", "packet=04000086 header=00 not valid"},
-		{"ok", "04000115", "00:01", ""},
-		{"ok-and-garbage", "04d0019cffffff", "d0:01", ""},
-		{"mdb-success-empty", "088501010a010081", "85:01010a0100", ""},
-		{"with-fields", "12170101030504060a1507000a01ff0b00ef", "17:0101030504060a1507000a01ff0b00", ""},
-		{"twi-listen", "0d0003010306a3a308020031b600", "00:03010306a3a308020031", ""},
+		{"input-under-length", "", "", "input length too small not valid"},
+		{"empty-ok", "040000000101010101010101", "", ""},
+		{"long", "04f1aaff000101010101010101", "", "frame=04f1aaff claims length=241 > input-overhead=1 not valid"},
+		{"corrupted", "0401f4f2e7a9c2d9f5b4a62314", "", "frame=0401f4f2e7a9c2d9f5b4a62314 padding=b4a62314 not valid"},
+		{"wrong-padding", "4403019cffffffffffffffffffffff", "01", "frame=4403019cffffffffffffffffffffff padding=ffffffff not valid"},
+		{"invalid-header", "440100b800010101010101010101", "", "frame=440100b8 response=Response_t(0) not valid"},
+		{"ok", "4401012b00010101010101010101", "01", ""},
+		{"reset", "4409020200000101050302f90001010101", "020200000101050302", ""},
+		{"status", "4409010204d40101050302d70001010101", "010204d40101050302", ""},
+		// {"mdb-success-empty", "440701010a010081000101010101010101", "01010a0100", ""},
+		// {"twi-listen", "440c03010306a3a308020031d300010101010101010101", "03010306a3a308020031", ""},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
@@ -37,15 +57,18 @@ func TestParse(t *testing.T) {
 			if err != nil {
 				t.Fatalf("invalid input=%s err='%v'", c.input, err)
 			}
-			var p Packet
+			var f Frame
 			errString := ""
-			err = p.Parse(input)
+			err = f.Parse(input)
+			if err == nil {
+				err = f.ParseFields()
+			}
 			if err != nil {
 				errString = err.Error()
 			} else {
-				ps := fmt.Sprintf("%02x:%s", p.Id, p.SimpleHex())
+				ps := fmt.Sprintf("%x", f.Payload())
 				if ps != c.expect {
-					t.Errorf("input=%s packets expected='%s' actual='%s'", c.input, c.expect, ps)
+					t.Errorf("input=%s frame hex expected='%s' actual='%s'", c.input, c.expect, ps)
 				}
 			}
 			if errString != c.expectErr {
@@ -63,8 +86,8 @@ func TestParseFields(t *testing.T) {
 		expect string
 	}
 	cases := []Case{
-		Case{"mdb-e0", "0c3e010a01000c015a0b004f", "mdb_result=SUCCESS:00,mdb_duration=3460us,mdb_data="},
-		Case{"status", "1258010103020103050607000900063a799e", "protocol=3,firmware=0103,reset=+EXT+BO,twi_length=0,mdb_length=0,clock10u=149690us"},
+		Case{"status", "4409010204d40101050302d70001010101", "clock10u=12360us,firmware=0105,reset=+EXT"},
+		// Case{"mdb-e0", "4409010a01000c015a0b00a600010101010101", "mdb_result=SUCCESS:00,mdb_duration=3460us,mdb_data="},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -73,12 +96,15 @@ func TestParseFields(t *testing.T) {
 				t.Fatalf("invalid input=%s err='%v'", c.input, err)
 			}
 
-			p := Packet{}
-			err = p.Parse(input)
-			if err != nil {
-				t.Fatalf("p.Parse input=%s err=%v", c.input, err)
+			f := new(Frame)
+			err = f.Parse(input)
+			if err == nil {
+				err = f.ParseFields()
 			}
-			fstr := p.Fields.String()
+			if err != nil {
+				t.Fatalf("f.Parse input=%s err=%v", c.input, err)
+			}
+			fstr := f.Fields.String()
 			if fstr != c.expect {
 				t.Errorf("fields expected='%s' actual='%s'", c.expect, fstr)
 			}
@@ -99,7 +125,7 @@ func TestFieldCover(t *testing.T) {
 		fstr := f.String()
 		should := !strings.HasPrefix(fstr, "Field_t(")
 		hasString := !strings.HasPrefix(fs.FieldString(f), invalidTagPrefix)
-		data := [RESPONSE_MAX_LENGTH]byte{}
+		data := [BUFFER_SIZE]byte{}
 		data[0] = f8
 		hasParse := false
 		if pf, _ := fs.parseNext(data[:]); pf != FIELD_INVALID {
@@ -118,22 +144,24 @@ func TestFieldCover(t *testing.T) {
 }
 
 func BenchmarkParse(b *testing.B) {
-	packet1 := NewPacket(1, byte(RESPONSE_OK),
-		byte(FIELD_PROTOCOL), 3,
-		byte(FIELD_FIRMWARE_VERSION), 0x01, 0x02,
-		byte(FIELD_MDB_DATA), 2, 0x0d, 0x00,
-	)
-	packet2 := NewPacket(2, byte(RESPONSE_OK), byte(FIELD_MDB_RESULT), byte(MDB_RESULT_SUCCESS), 0)
-	packet3 := NewPacket(0, byte(RESPONSE_RESET), byte(FIELD_PROTOCOL), 3)
+	type Case struct {
+		name  string
+		input string
+	}
+	cases := []Case{
+		Case{"reset", "4409020200000101050302f90001010101"},
+		Case{"status", "4409010204d40101050302d70001010101"},
+		Case{"mdb-long", "441c0102141b1001001208a2111006000b0100010a06d807362800000701080001010101"},
+	}
 
 	mkBench := func(input []byte) func(b *testing.B) {
 		return func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(input)))
-			p := Packet{}
+			f := Frame{}
 			b.ResetTimer()
 			for i := 1; i <= b.N; i++ {
-				err := p.Parse(input)
+				err := f.Parse(input)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -141,8 +169,12 @@ func BenchmarkParse(b *testing.B) {
 		}
 	}
 
-	for i, p := range []Packet{packet1, packet2, packet3} {
-		p := p
-		b.Run(fmt.Sprint(i), mkBench(p.Bytes()))
+	for _, c := range cases {
+		c := c
+		inputBytes, err := hex.DecodeString(c.input)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Run(c.name, mkBench(inputBytes))
 	}
 }

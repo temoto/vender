@@ -27,8 +27,8 @@ func (self *megaUart) Close() error {
 	return self.c.DecRef("mdb-uart")
 }
 
-func responseError(p *mega.Packet) error {
-	switch p.Fields.MdbResult {
+func responseError(r mega.Mdb_result_t, arg byte) error {
+	switch r {
 	case mega.MDB_RESULT_SUCCESS:
 		return nil
 	case mega.MDB_RESULT_BUSY:
@@ -39,21 +39,21 @@ func responseError(p *mega.Packet) error {
 	case mega.MDB_RESULT_NAK:
 		return ErrNak
 	default:
-		err := errors.NewErr("mega MDB error result=%s arg=%02x", p.Fields.MdbResult.String(), p.Fields.MdbError)
+		err := errors.NewErr("mega MDB error result=%s arg=%02x", r.String(), arg)
 		err.SetLocation(2)
 		return &err
 	}
 }
 
 func (self *megaUart) Break(d time.Duration) error {
-	var p mega.Packet
+	var f mega.Frame
 	var err error
 	for retry := 1; retry <= 3; retry++ {
-		p, err = self.c.DoMdbBusReset(d)
+		f, err = self.c.DoMdbBusReset(d)
 		if err != nil {
 			break
 		}
-		err = responseError(&p)
+		err = responseError(f.Fields.MdbResult, f.Fields.MdbError)
 		if err == nil {
 			break
 		}
@@ -63,18 +63,18 @@ func (self *megaUart) Break(d time.Duration) error {
 }
 
 func (self *megaUart) Tx(request, response []byte) (int, error) {
-	var p mega.Packet
+	var f mega.Frame
 	var err error
 	n := 0
 	for retry := 1; retry <= 3; retry++ {
-		p, err = self.c.DoMdbTxSimple(request)
+		f, err = self.c.DoMdbTxSimple(request)
 		// self.c.Log.Debugf("mdb/mega/txsimple request=%x p=%s err=%v", request, p.String(), err)
 		if err != nil {
 			break
 		}
-		err = responseError(&p)
+		err = responseError(f.Fields.MdbResult, f.Fields.MdbError)
 		if err == nil {
-			n = copy(response, p.Fields.MdbData)
+			n = copy(response, f.Fields.MdbData)
 			break
 		}
 		time.Sleep(DelayErr)

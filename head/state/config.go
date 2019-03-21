@@ -22,10 +22,10 @@ import (
 type Config struct {
 	Hardware struct {
 		IodinPath string `hcl:"iodin_path"`
-		Mega      struct {
-			I2CBus  int `hcl:"i2c_bus"`
-			I2CAddr int `hcl:"i2c_addr"`
-			Pin     int `hcl:"pin"`
+		// TODO KeyboardListenAddr int
+		Mega struct {
+			Spi string `hcl:"spi"`
+			Pin string `hcl:"pin"`
 		}
 		Mdb struct {
 			Log        bool `hcl:"log_enable"`
@@ -69,7 +69,7 @@ func ReadConfig(r io.Reader, log *log2.Log) (*Config, error) {
 	case "", "file":
 		c.Hardware.Mdb.Uarter = mdb.NewFileUart(log)
 	case "mega":
-		mega, err := mega.NewClient(byte(c.Hardware.Mega.I2CBus), byte(c.Hardware.Mega.I2CAddr), c.Hardware.Mega.Pin, log)
+		mega, err := mega.NewClient(c.Hardware.Mega.Spi, c.Hardware.Mega.Pin, log)
 		if err != nil {
 			return nil, errors.Annotatef(err, "config: mdb.uart_driver=%s mega=%#v", c.Hardware.Mdb.UartDriver, c.Hardware.Mega)
 		}

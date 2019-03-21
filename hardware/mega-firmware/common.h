@@ -8,40 +8,48 @@
 #include "crc.h"
 #include "protocol.h"
 
-static uint8_t volatile current_request_id;
-static buffer_t volatile twi_out;
+#if defined(LED_DDR) && defined(LED_PORT) && defined(LED_PIN)
+#define LED_CONFIGURED
+#endif
+
+static packet_t volatile request;
+static packet_t volatile response;
 static buffer_t volatile debugb;
 static uint16_t volatile _clock_10us;
 static uint8_t volatile _clock_100ms;
-static uint16_t volatile _clock_idle_total;
-static uint16_t volatile clock_idle;
 
-static uint8_t master_command(uint8_t const *const bs, uint8_t const max_length)
-    __attribute__((nonnull));
+static void clock_init(void);
+static void clock_stop(void);
 static inline uint16_t clock_10us(void);
+
+static void master_notify_init(void);
+static void master_notify_set(bool const on);
+static void led_init(void);
+static void led_toggle(void) __attribute__((used));
+static void led_set(bool const on) __attribute__((used));
 
 static void mdb_init(void);
 static void mdb_step(void);
-static void mdb_tx_begin(uint8_t const request_id, uint8_t const *const data,
-                         uint8_t const length) __attribute__((nonnull));
-static void mdb_bus_reset_begin(uint8_t const request_id,
-                                uint16_t const duration);
+static void mdb_tx_begin(void);
+static void mdb_bus_reset_begin(uint16_t const duration);
 static void mdb_reset(void);
+static void timer1_set(uint16_t const ticks);
 static void timer1_stop(void);
+
+static void spi_init_slave(void);
+static void spi_step(void);
 
 static void twi_init_slave(uint8_t const address);
 static void twi_step(void);
+static void nop(void) __attribute__((used, always_inline));
 
 // fwd
 
-static void response_ensure_non_empty();
+static bool response_empty(void);
 static bool response_check_capacity(uint8_t const more);
-static bool response_empty(void) __attribute__((warn_unused_result));
-static void response_begin(uint8_t const request_id, response_t const header);
-static void response_finish(void);
-static void response_error2(uint8_t const request_id, errcode_t const ec,
-                            uint8_t const arg) __attribute__((used));
-static void response_f0(field_t const f) __attribute__((used));
+static void response_begin(response_t const header);
+static void response_error2(errcode_t const ec, uint8_t const arg)
+    __attribute__((used));
 static void response_f1(field_t const f, uint8_t const data)
     __attribute__((used));
 static void response_f2(field_t const f, uint8_t const d1, uint8_t const d2)
@@ -52,127 +60,69 @@ static void response_fn(field_t const f, uint8_t const *const data,
 // inline
 
 static inline void debug2(uint8_t const b1, uint8_t const b2) {
-  buffer_append(&debugb, b1);
-  buffer_append(&debugb, b2);
+  buffer_append((buffer_t *)&debugb, b1);
+  buffer_append((buffer_t *)&debugb, b2);
 }
 static inline void debugn(uint8_t const *const data, uint8_t const length) {
-  buffer_append_n(&debugb, data, length);
+  buffer_append_n((buffer_t *)&debugb, data, length);
 }
 static inline void debugs(char const *const s) {
-  buffer_append_n(&debugb, (uint8_t const *const)s, strlen(s));
+  buffer_append_n((buffer_t *)&debugb, (uint8_t const *const)s, strlen(s));
 }
 
-static void response_ensure_non_empty(void) {
-  if (twi_out.length == 0) {
-    uint8_t const b[] = {
-        0,
-        current_request_id,
-        RESPONSE_ERROR,
-        FIELD_PROTOCOL,
-        PROTOCOL_VERSION,
-        FIELD_ERROR2,
-        ERROR_RESPONSE_EMPTY,
-        0,
-    };
-    buffer_copy(&twi_out, b, sizeof(b));
-  }
-}
+static inline bool response_empty(void) { return response.h.response == 0; }
+
 static bool response_check_capacity(uint8_t const more) {
   uint8_t const RESERVED_FOR_ERROR = 5;
   // FIXME length check in buffer_append_n is wasted
-  if (twi_out.length + more + RESERVED_FOR_ERROR > twi_out.size) {
-    uint8_t const b[] = {FIELD_ERROR2, ERROR_BUFFER_OVERFLOW, more};
-    buffer_append_n(&twi_out, b, sizeof(b));
-    response_finish();
+  if (response.b.length + more + RESERVED_FOR_ERROR >
+      PACKET_FIELDS_MAX_LENGTH) {
+    buffer_append((buffer_t *)&response.b, FIELD_ERROR2);
+    buffer_append_2((buffer_t *)&response.b, ERROR_BUFFER_OVERFLOW, more);
+    response.filled = true;
     return false;
   }
   return true;
 }
 
-static inline bool response_empty(void) { return twi_out.length == 0; }
-
-static void response_begin(uint8_t const request_id, response_t const header) {
-  uint8_t const b[] = {0, request_id, header};
-  uint16_t const clk = clock_10us();
-  buffer_copy(&twi_out, b, sizeof(b));
-  response_f1(FIELD_PROTOCOL, PROTOCOL_VERSION);
-  response_f2(FIELD_CLOCK10U, (clk >> 8), (clk & 0xff));
+static void response_begin(response_t const kind) {
+  if (response.h.response == 0) {
+    response.h.response = kind;
+    uint16_t const clk = clock_10us();
+    response_f2(FIELD_CLOCK10U, (clk >> 8), (clk & 0xff));
+  }
 }
 
-static void response_finish(void) {
-  response_ensure_non_empty();
-  uint8_t const packet_length = twi_out.data[0];
-  if (packet_length == 0) {
-    twi_out.data[0] = twi_out.length + 1;
-  } else {
-    twi_out.length = packet_length - 1;
-  }
-  uint8_t const crc = crc8_p93_n(0, twi_out.data, twi_out.length);
-  buffer_append(&twi_out, crc);
-  current_request_id = 0;
-}
-
-static void response_error2(uint8_t const request_id, errcode_t const ec,
-                            uint8_t const arg) {
-  if (response_empty()) {
-    response_begin(request_id, RESPONSE_ERROR);
-  } else {
-    uint8_t const packet_length = twi_out.data[0];
-    if (packet_length != 0) {
-      twi_out.data[0] = 0;
-      twi_out.length = packet_length - 1;
-    }
-  }
+static void response_error2(errcode_t const ec, uint8_t const arg) {
+  response_begin(RESPONSE_ERROR);
   response_f2(FIELD_ERROR2, ec, arg);
-  response_finish();
 }
 
-static void response_f0(field_t const f) {
-  response_ensure_non_empty();
-  if (!response_check_capacity(1)) {
-    return;
-  }
-  buffer_append(&twi_out, f);
-}
 static void response_f1(field_t const f, uint8_t const data) {
-  response_ensure_non_empty();
   if (!response_check_capacity(2)) {
     return;
   }
-  buffer_append(&twi_out, f);
-  buffer_append(&twi_out, data);
+  buffer_append_2((buffer_t *)&response.b, f, data);
 }
 static void response_f2(field_t const f, uint8_t const d1, uint8_t const d2) {
-  response_ensure_non_empty();
   if (!response_check_capacity(3)) {
     return;
   }
-  buffer_append(&twi_out, f);
-  buffer_append(&twi_out, d1);
-  buffer_append(&twi_out, d2);
+  buffer_append((buffer_t *)&response.b, f);
+  buffer_append_2((buffer_t *)&response.b, d1, d2);
 }
 static void response_fn(field_t const f, uint8_t const *const data,
                         uint8_t const length) {
-  response_ensure_non_empty();
   if (!response_check_capacity(2 + length)) {
     return;
   }
-  buffer_append(&twi_out, f);
-  buffer_append(&twi_out, length);
-  buffer_append_n(&twi_out, data, length);
-}
-
-static inline uint8_t memsum(uint8_t const *const src, uint8_t const length)
-    __attribute__((nonnull, pure));
-static inline uint8_t memsum(uint8_t const *const src, uint8_t const length) {
-  uint8_t sum = 0;
-  for (uint8_t i = 0; i < length; i++) {
-    sum += src[i];
-  }
-  return sum;
+  buffer_append_2((buffer_t *)&response.b, f, length);
+  buffer_append_n((buffer_t *)&response.b, data, length);
 }
 
 static inline uint16_t clock_10us(void) __attribute__((warn_unused_result));
 static inline uint16_t clock_10us(void) { return _clock_10us; }
+
+static inline void nop(void) { __asm volatile("nop" ::); }
 
 #endif  // INCLUDE_COMMON_H

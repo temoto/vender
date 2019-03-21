@@ -4,14 +4,40 @@ package mega
 
 import "strconv"
 
-const _Errcode_t_name = "BAD_PACKETINVALID_CRCINVALID_IDUNKNOWN_COMMANDINVALID_DATABUFFER_OVERFLOWNOT_IMPLEMENTEDRESPONSE_OVERWRITERESPONSE_EMPTY"
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[ERROR_FRAME_HEADER-1]
+	_ = x[ERROR_FRAME_LENGTH-2]
+	_ = x[ERROR_INVALID_CRC-2]
+	_ = x[ERROR_REQUEST_OVERWRITE-3]
+	_ = x[ERROR_INVALID_ACK-4]
+	_ = x[ERROR_BUFFER_OVERFLOW-5]
+	_ = x[ERROR_UNKNOWN_COMMAND-16]
+	_ = x[ERROR_INVALID_DATA-17]
+	_ = x[ERROR_NOT_IMPLEMENTED-18]
+}
 
-var _Errcode_t_index = [...]uint8{0, 10, 21, 31, 46, 58, 73, 88, 106, 120}
+const (
+	_Errcode_t_name_0 = "FRAME_HEADERFRAME_LENGTHREQUEST_OVERWRITEINVALID_ACKBUFFER_OVERFLOW"
+	_Errcode_t_name_1 = "UNKNOWN_COMMANDINVALID_DATANOT_IMPLEMENTED"
+)
+
+var (
+	_Errcode_t_index_0 = [...]uint8{0, 12, 24, 41, 52, 67}
+	_Errcode_t_index_1 = [...]uint8{0, 15, 27, 42}
+)
 
 func (i Errcode_t) String() string {
-	i -= 1
-	if i >= Errcode_t(len(_Errcode_t_index)-1) {
-		return "Errcode_t(" + strconv.FormatInt(int64(i+1), 10) + ")"
+	switch {
+	case 1 <= i && i <= 5:
+		i -= 1
+		return _Errcode_t_name_0[_Errcode_t_index_0[i]:_Errcode_t_index_0[i+1]]
+	case 16 <= i && i <= 18:
+		i -= 16
+		return _Errcode_t_name_1[_Errcode_t_index_1[i]:_Errcode_t_index_1[i+1]]
+	default:
+		return "Errcode_t(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _Errcode_t_name[_Errcode_t_index[i]:_Errcode_t_index[i+1]]
 }

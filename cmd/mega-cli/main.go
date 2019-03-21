@@ -27,14 +27,13 @@ var log = log2.NewStderr(log2.LDebug)
 
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	i2cBusNo := cmdline.Uint("i2cbus", 0, "")
-	addr := cmdline.Uint("addr", 0x78, "")
-	pin := cmdline.Int("pin", 25, "")
+	spiPort := cmdline.String("spi", "", "")
+	pin := cmdline.String("pin", "25", "")
 	cmdline.Parse(os.Args[1:])
 
 	log.SetFlags(log2.LInteractiveFlags)
 
-	client, err := mega.NewClient(byte(*i2cBusNo), byte(*addr), *pin, log)
+	client, err := mega.NewClient(*spiPort, *pin, log)
 	if err != nil {
 		log.Fatal(errors.ErrorStack(errors.Trace(err)))
 	}
@@ -115,23 +114,23 @@ func newExecutor(client *mega.Client) func(string) {
 					}
 					p, err := client.DoTimeout(mega.Command_t(bs[0]), bs[1:], mega.DefaultTimeout)
 					if err != nil {
-						log.Errorf("p rq=%x rs=%s err=%v", bs, p.String(), err)
+						log.Errorf("p rq=%x rs=%s err=%v", bs, p.ResponseString(), err)
 						return
 					}
-					log.Debugf("response=%x %s", p.Bytes(), p.String())
+					log.Infof("response=%s", p.ResponseString())
 				}
 			case word[0] == 'p':
 				if bs, err := hex.DecodeString(word[1:]); err != nil {
 					log.Errorf("token=%s err=%v", word, err)
 					return
 				} else {
-					p := mega.Packet{}
-					err := p.Parse(bs)
+					f := mega.Frame{}
+					err := f.Parse(bs)
 					if err != nil {
 						log.Errorf("parse input=%x err=%v", bs, err)
 						return
 					}
-					log.Info(p.String())
+					log.Info(f.ResponseString())
 				}
 			case word[0] == 'r':
 				if i, err := strconv.ParseUint(word[1:], 10, 32); err != nil {
@@ -140,15 +139,15 @@ func newExecutor(client *mega.Client) func(string) {
 					if i < 1 {
 						return
 					}
-					r := mega.PacketError{}
-					client.Tx(0, nil, true, 0, &r)
-					switch r.E {
+					r := mega.Frame{}
+					err = client.Tx(nil, &r, 0)
+					switch err {
 					case mega.ErrResponseEmpty:
 						log.Infof("read empty")
 					case nil:
-						log.Infof("packet=%s %s", r.P.SimpleHex(), r.P.String())
+						log.Infof("frame=%x %s", r.Bytes(), r.ResponseString())
 					default:
-						log.Errorf("read err=%v", r.E)
+						log.Errorf("read err=%v", err)
 						return
 					}
 				}
@@ -160,16 +159,20 @@ func newExecutor(client *mega.Client) func(string) {
 					time.Sleep(time.Duration(i) * time.Millisecond)
 				}
 			case word[0] == 't':
-				if bs, err := hex.DecodeString(word[1:]); err != nil {
-					log.Fatalf("token=%s err=%v", word, errors.ErrorStack(err))
+				bs, err := hex.DecodeString(word[1:])
+				if err != nil {
+					log.Errorf("token=%s err=%v", word, errors.ErrorStack(err))
 					return
-				} else {
-					r := mega.PacketError{}
-					client.Tx(0, bs, false, 0, &r)
-					if r.E != nil {
-						log.Errorf("send err=%v", r.E)
-						return
-					}
+				}
+				f := new(mega.Frame)
+				if err = f.Parse(bs); err != nil {
+					log.Errorf("token=%x parse err=%v", bs, errors.ErrorStack(err))
+					return
+				}
+				err = client.Tx(f, nil, 0)
+				if err != nil {
+					log.Errorf("send err=%v", err)
+					return
 				}
 			default:
 				log.Errorf("unknown command '%s'", word)

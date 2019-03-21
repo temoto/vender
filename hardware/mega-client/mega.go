@@ -1,20 +1,22 @@
 package mega
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/brian-armstrong/gpio"
 	"github.com/juju/errors"
-	rpi "github.com/nathan-osman/go-rpigpio"
 	"github.com/temoto/alive"
-	"github.com/temoto/vender/hardware/i2c"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
+	"periph.io/x/periph/conn/gpio"
+	"periph.io/x/periph/conn/gpio/gpioreg"
+	"periph.io/x/periph/conn/physic"
+	"periph.io/x/periph/conn/spi"
+	"periph.io/x/periph/conn/spi/spireg"
+	"periph.io/x/periph/host"
 )
 
 const modName string = "mega-client"
@@ -23,15 +25,15 @@ const DefaultTimeout = 100 * time.Millisecond
 var ErrResponseEmpty = errors.New("mega response empty")
 
 type Client struct {
-	Log      *log2.Log
-	TwiChan  chan uint16
-	txlk     sync.Mutex
-	bus      i2c.I2CBus
-	addr     byte
-	pinready chan struct{}
+	Log     *log2.Log
+	TwiChan chan uint16
+	txlk    sync.Mutex
+	spiPort spi.Port
+	spiConn spi.Conn
+	pin     gpio.PinIO
+	// pinready chan struct{}
 	refcount int32
 	alive    *alive.Alive
-	rnd      *rand.Rand
 	stat     Stat
 }
 type Stat struct {
@@ -41,43 +43,68 @@ type Stat struct {
 	Reset       uint32
 }
 
-func NewClient(busNo byte, addr byte, gpioNo int, log *log2.Log) (*Client, error) {
-	self := &Client{
-		Log:      log,
-		addr:     addr,
-		bus:      i2c.NewI2CBus(busNo),
-		alive:    alive.NewAlive(),
-		pinready: make(chan struct{}),
-		TwiChan:  make(chan uint16, TWI_LISTEN_MAX_LENGTH/2),
-		rnd:      helpers.RandUnix(),
+func NewClient(bus string, notifyPinName string, log *log2.Log) (*Client, error) {
+	if _, err := host.Init(); err != nil {
+		return nil, errors.Annotate(err, "periph/init")
 	}
 
-	if err := self.bus.Init(); err != nil {
-		return nil, err
+	spiPort, err := spireg.Open(bus)
+	if err != nil {
+		return nil, errors.Annotate(err, "SPI Open")
 	}
-	go self.pinLoop(gpioNo)
+	spiSpeed := 400 * physic.KiloHertz
+	spiMode := spi.Mode(0)
+	spiConn, err := spiPort.Connect(spiSpeed, spiMode, 8)
+	if err != nil {
+		spiPort.Close()
+		return nil, errors.Annotate(err, "SPI Connect")
+	}
+
+	pin := gpioreg.ByName(notifyPinName)
+	if pin == nil {
+		spiPort.Close()
+		return nil, errors.Annotate(err, "notify pin open")
+	}
+	err = pin.In(gpio.PullDown, gpio.RisingEdge)
+	if err != nil {
+		spiPort.Close()
+		return nil, errors.Annotate(err, "notify pin setup")
+	}
+
+	self := &Client{
+		Log:     log,
+		spiPort: spiPort,
+		spiConn: spiConn,
+		pin:     pin,
+		alive:   alive.NewAlive(),
+		// pinready: make(chan struct{}),
+		TwiChan: make(chan uint16, TWI_LISTEN_MAX_LENGTH/2),
+	}
 
 	// try to read RESET
-	p := new(Packet)
-	// TODO check valid outcomes: RESET or empty
-	// other packets: log error
-	err := self.readParse(p)
+	f := new(Frame)
+	err = self.readParse(f)
 	switch err {
 	case ErrResponseEmpty:
 		// mega was reset at other time and RESET was read
 	case nil:
-		// TODO is it RESET?
+		// TODO header==RESET -> OK, other -> log error
+		if f.ResponseKind() != RESPONSE_RESET {
+			self.Log.Errorf("first frame not reset: %s", f.ResponseString())
+		}
 	default:
 		self.Close()
 		return nil, err
 	}
+
+	go self.pinLoop()
 
 	return self, nil
 }
 
 func (self *Client) Close() error {
 	close(self.TwiChan)
-	close(self.pinready)
+	// close(self.pinready)
 	self.alive.Stop()
 	self.alive.Wait()
 	return errors.NotImplementedf("")
@@ -99,231 +126,283 @@ func (self *Client) DecRef(debug string) error {
 	panic(fmt.Sprintf("code error %s decref<0 debug=%s", modName, debug))
 }
 
-func (self *Client) DoStatus() (Packet, error) {
+func (self *Client) DoStatus() (Frame, error) {
 	return self.DoTimeout(COMMAND_STATUS, nil, DefaultTimeout)
 }
 
-func (self *Client) DoMdbBusReset(d time.Duration) (Packet, error) {
+func (self *Client) DoMdbBusReset(d time.Duration) (Frame, error) {
 	buf := [2]byte{}
 	binary.BigEndian.PutUint16(buf[:], uint16(d/time.Millisecond))
 	return self.DoTimeout(COMMAND_MDB_BUS_RESET, buf[:], d+DefaultTimeout)
 }
 
-func (self *Client) DoMdbTxSimple(data []byte) (Packet, error) {
+func (self *Client) DoMdbTxSimple(data []byte) (Frame, error) {
 	return self.DoTimeout(COMMAND_MDB_TRANSACTION_SIMPLE, data, DefaultTimeout)
 }
 
-func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration) (Packet, error) {
+func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration) (Frame, error) {
 	// tbegin := time.Now()
 	// defer func() {
 	// 	td := time.Now().Sub(tbegin)
 	// 	self.Log.Debugf("dotimeout end %v", td)
 	// }()
 
-	var r PacketError
-	var bufSend [REQUEST_MAX_LENGTH + 1]byte
-
 	atomic.AddUint32(&self.stat.Request, 1)
-	cmdPacket := NewPacket(
-		byte((self.rnd.Uint32()%254)+1),
-		byte(cmd),
-		data...,
-	)
-	pb := cmdPacket.Bytes()
-	plen := copy(bufSend[:], pb)
+	cmdFrame := NewCommand(cmd, data...)
 
-	self.Tx(cmdPacket.Id, bufSend[:plen], true, timeout, &r)
-	return r.P, r.E
+	var response Frame
+	err := self.Tx(&cmdFrame, &response, timeout)
+	return response, err
 }
 
 func (self *Client) Stat() Stat {
 	return self.stat
 }
 
-type PacketError struct {
-	P Packet
-	E error
-}
-
-func (self *Client) Tx(requestId byte, bufSend []byte, recv bool, timeout time.Duration, r *PacketError) {
+func (self *Client) Tx(send, recv *Frame, timeout time.Duration) error {
 	self.txlk.Lock()
 	defer self.txlk.Unlock()
 
-	// self.Log.Debugf("Tx() send=%x", bufSend)
-	if bufSend != nil {
-		r.E = self.bus.Tx(self.addr, bufSend, nil, 0)
-		if r.E != nil {
+	var err error
+	if send != nil {
+		err = self.write(send)
+		if err != nil {
 			atomic.AddUint32(&self.stat.Error, 1)
-			return
+			return err
 		}
 	}
 
 	// Tx() invoked to send only
-	if !recv {
-		return
+	if recv == nil {
+		return nil
 	}
 
-	var deadlineCh <-chan time.Time
-	var timerCh <-chan time.Time
-	if timeout > 0 {
-		deadline := time.NewTimer(timeout)
-		defer deadline.Stop()
-		deadlineCh = deadline.C
-		timer := time.NewTicker(timeout / 4)
-		defer timer.Stop()
-		timerCh = timer.C
-	}
 	var timeoutErr error
+
+wait:
+	if self.pin.Read() == gpio.High {
+		goto read
+	}
+	if timeout > 0 {
+		edge := self.pin.WaitForEdge(timeout)
+		if edge || (self.pin.Read() == gpio.High) {
+			goto read
+		}
+		timeoutErr = errors.Timeoutf("mega-client Tx() send=%x response timeout=%s", send.Bytes(), timeout)
+	}
+
 read:
-	r.E = self.readParse(&r.P)
-	switch r.E {
+	err = self.readParse(recv)
+	switch err {
 	case ErrResponseEmpty:
 		// wait again
 	case nil:
-		if !(requestId == 0 || r.P.Id == requestId) {
-			self.Log.Errorf("%s Tx() CRITICAL stray packet=%s", modName, r.P.String())
-			r.P = Packet{}
-			break // wait again
+		switch recv.ResponseKind() {
+		case RESPONSE_TWI_LISTEN, RESPONSE_RESET:
+			goto wait
 		}
-		return
+		return nil
 	default:
-		return
-	}
-	if timeout == 0 {
-		return
-	}
-	if timeoutErr != nil {
-		r.E = timeoutErr
-		return
-	}
-
-	select {
-	case <-timerCh:
-		self.Log.Debugf("redundant timer")
-		goto read
-	case <-self.pinready:
-		self.Log.Debugf("pin ready")
-		goto read
-	case <-deadlineCh:
-		self.Log.Debugf("deadline")
-		timeoutErr = errors.Timeoutf("mega-client Tx() requestId=%02x send=%x response timeout=%s", requestId, bufSend, timeout)
-		goto read
-	}
-}
-
-func (self *Client) pinLoop(gpioNo int) {
-	stopch := self.alive.StopChan()
-	pin, err := rpi.OpenPin(gpioNo, rpi.IN)
-	if err != nil {
-		self.Log.Errorf("gpio=%d open err=%v", gpioNo, err)
-	}
-	pinWatch := gpio.NewWatcher()
-	pinWatch.AddPinWithEdgeAndLogic(uint(gpioNo), gpio.EdgeRising, gpio.ActiveHigh)
-	defer pinWatch.Close()
-
-	var pinPacket Packet
-	for self.alive.IsRunning() {
-		select {
-		case watchEvent := <-pinWatch.Notification:
-			if !(int(watchEvent.Pin) == gpioNo && gpio.Value(watchEvent.Value) == gpio.Active) {
-				break
-			}
-			select {
-			case self.pinready <- struct{}{}:
-			default:
-				// re-read pin with lock to skip reads intended for concurrent Tx()
-				self.txlk.Lock()
-				pinValue, _ := pin.Read()
-				shouldRead := pinValue == rpi.HIGH
-				if shouldRead {
-					err = self.readParse(&pinPacket)
-				}
-				self.txlk.Unlock()
-				if !shouldRead {
-					// self.Log.Errorf("REDUNDANT READ PREVENTED")
-					break
-				}
-				switch err {
-				case ErrResponseEmpty:
-					self.Log.Errorf("%s pin was high but read empty", modName)
-				case nil:
-					// TODO rewrite as ".parse() has consumed packet"
-					resp := Response_t(pinPacket.Header)
-					if resp != RESPONSE_RESET && resp != RESPONSE_TWI_LISTEN {
-						self.Log.Errorf("%s pinLoop() CRITICAL stray packet=%s", modName, pinPacket.String())
-					}
-				default:
-					self.Log.Errorf("%s pinLoop() read err=%v", modName, err)
-				}
-			}
-		case <-stopch:
-			return
-		}
-	}
-}
-
-func (self *Client) readParse(p *Packet) error {
-	var buf [RESPONSE_MAX_LENGTH + 1]byte
-
-	err := self.bus.Tx(self.addr, nil, buf[:], 0)
-	self.Log.Debugf("%s read buf=%x err=%v", modName, buf, err)
-	if err != nil {
-		atomic.AddUint32(&self.stat.Error, 1)
 		return err
 	}
-
-	// Fix wrong high bit due to Raspberry I2C problems.
-	// Luckily, we know for sure that first byte in proper response can't have high bit set.
-	if buf[0]&0x80 != 0 {
-		buf[0] &^= 0x80
-		self.Log.Errorf("CORRUPTED READ")
+	if timeout == 0 {
+		return err
 	}
-	if buf[0] == 0 {
+	if timeoutErr != nil {
+		return timeoutErr
+	}
+	goto wait
+}
+
+func (self *Client) write(f *Frame) error {
+	// static allocation of maximum possible size
+	var bufarr [BUFFER_SIZE + totalOverheads]byte
+	// slice it down to shorten SPI session time
+	bs := f.Bytes()
+	buf := bufarr[:len(bs)+ /*recv ack*/ 6+totalOverheads]
+	copy(buf, bs)
+	ackExpect := []byte{0x00, 0xff, f.crc, f.crc}
+
+	for try := 1; try <= 3; try++ {
+		// self.Log.Debugf("write out=%x", buf)
+		err := self.spiConn.Tx(buf, buf)
+		if err != nil {
+			return err
+		}
+		// self.Log.Debugf("write -in=%x", buf)
+
+		var padStart int
+		var errcode Errcode_t
+		if padStart, errcode, err = parsePadding(buf, false); err != nil {
+			return err
+		}
+		switch errcode {
+		case 0:
+		case ERROR_REQUEST_OVERWRITE:
+			tmp := Frame{}
+			err = self.readParse(&tmp)
+			if err != nil {
+				self.Log.Errorf("stray read err=%v", err)
+				return err
+			}
+			self.Log.Debugf("stray read frame=%s", tmp.ResponseString())
+		default:
+			return errors.Errorf("FIXME %x", buf)
+		}
+		if padStart < 6 {
+			self.Log.Errorf("mega write: invalid ack buf=%x", buf)
+			continue
+		}
+		ackRemote := buf[padStart-6 : padStart-2]
+		if !bytes.Equal(ackRemote, ackExpect) {
+			self.Log.Errorf("mega write: invalid ack expected=%x actual=%x", ackExpect, ackRemote)
+			continue
+		}
+
+		if buf[0]&PROTOCOL_FLAG_REQUEST_BUSY != 0 {
+			self.Log.Debugf("mega write: input buffer is busy -> sleep,retry")
+			time.Sleep(500 * time.Microsecond)
+			continue
+		}
+
+		break
+	}
+
+	return nil
+}
+
+func (self *Client) pinLoop() {
+	const edgeTimeout = 1 * time.Second
+	const expectLevel = gpio.High
+	var err error
+	var pinFrame Frame
+	for {
+		edge := self.pin.WaitForEdge(edgeTimeout)
+		if !self.alive.IsRunning() {
+			break
+		}
+		if !(edge || (self.pin.Read() == expectLevel)) {
+			continue
+		}
+
+		// re-read pin with lock to skip reads intended for concurrent Tx()
+		self.txlk.Lock()
+		shouldRead := self.pin.Read() == expectLevel
+		if shouldRead {
+			err = self.readParse(&pinFrame)
+		}
+		self.txlk.Unlock()
+		if !shouldRead {
+			break
+		}
+		switch err {
+		case ErrResponseEmpty:
+			// pinLoop expects "side" frames (twi,reset) only and they are hidden by readParse()
+		case nil:
+			self.Log.Errorf("%s pinLoop() CRITICAL stray packet=%s debug=%x", modName, pinFrame.ResponseString(), pinFrame.Bytes())
+		default:
+			self.Log.Errorf("%s pinLoop() read err=%v", modName, err)
+		}
+	}
+}
+
+func (self *Client) poll() (uint8, error) {
+	var buf [2]byte
+	buf[0] = ProtocolVersion
+
+	// self.Log.Debugf("%s poll out=%x", modName, buf[:])
+	err := self.spiConn.Tx(buf[:], buf[:])
+	// self.Log.Debugf("%s poll -in=%x err=%v", modName, buf[:], err)
+	if err != nil {
+		return 0, err
+	}
+	return buf[1], nil
+}
+
+func (self *Client) readParse(f *Frame) error {
+	remoteLength, err := self.poll()
+	if remoteLength == 0 {
 		return ErrResponseEmpty
 	}
 
-	err = self.parse(buf[:], p)
-	// self.Log.Debugf("parse p=%s err=%v", p.String(), err)
+	var buf [BUFFER_SIZE + totalOverheads]byte
+	bs := buf[:remoteLength+totalOverheads]
+	bs[0] = ProtocolVersion
+	// self.Log.Debugf("%s read out=%x", modName, bs)
+	err = self.spiConn.Tx(bs, bs)
+	// self.Log.Debugf("%s read -in=%x err=%v", modName, bs, err)
 	if err != nil {
-		atomic.AddUint32(&self.stat.Error, 1)
 		return err
+	}
+
+	err = self.parse(bs, f)
+	if err != nil {
+		return err
+	}
+	err = self.ack(f)
+	if err != nil {
+		return err
+	}
+	switch f.ResponseKind() {
+	case RESPONSE_TWI_LISTEN, RESPONSE_RESET:
+		// consume asynchronous frames
+		return ErrResponseEmpty
 	}
 	return nil
 }
 
-func (self *Client) parse(buf []byte, p *Packet) error {
-	err := p.Parse(buf)
-	if err != nil {
-		atomic.AddUint32(&self.stat.Error, 1)
-		self.Log.Errorf("%s parse=%x err=%v", modName, buf, err)
+func (self *Client) ack(f *Frame) error {
+	var buf [2 + totalOverheads]byte
+	buf[0] = PROTOCOL_FLAG_REQUEST_BUSY | ProtocolVersion
+	buf[1] = 2
+	buf[2] = f.plen
+	buf[3] = f.crc
+
+	// self.Log.Debugf("%s ack out=%x", modName, buf)
+	err := self.spiConn.Tx(buf[:], buf[:])
+	// self.Log.Debugf("%s ack -in=%x err=%v", modName, buf, err)
+
+	if _, _, err = parsePadding(buf[:], true); err != nil {
 		return err
 	}
 
-	// self.Log.Debugf("parsed packet=%x %s", p.Bytes(), p.String())
-	if p.Fields.Protocol != ProtocolVersion {
-		self.Log.Errorf("Protocol=%d expected=%d", p.Fields.Protocol, ProtocolVersion)
-		// return err
+	return err
+}
+
+func (self *Client) parse(buf []byte, f *Frame) error {
+	err := f.Parse(buf)
+	if err != nil {
+		atomic.AddUint32(&self.stat.Error, 1)
+		self.Log.Errorf("%s parse buf=%x err=%v", modName, buf, err)
+		return err
+	}
+	if f.plen == 0 {
+		return ErrResponseEmpty
+	}
+	err = f.ParseFields()
+	if err != nil {
+		atomic.AddUint32(&self.stat.Error, 1)
+		self.Log.Errorf("%s ParseFields frame=%x err=%v", modName, f.Bytes(), err)
+		return err
 	}
 
-	if p.Id == 0 {
-		switch Response_t(p.Header) {
-		case RESPONSE_TWI_LISTEN:
-			for i := 0; i+1 < len(p.Fields.TwiData); i += 2 {
-				twitem := binary.BigEndian.Uint16(p.Fields.TwiData[i : i+2])
-				select {
-				case self.TwiChan <- twitem:
-				default:
-					self.Log.Errorf("CRITICAL twich chan is full")
-				}
+	switch f.ResponseKind() {
+	case RESPONSE_TWI_LISTEN:
+		for i := 0; i+1 < len(f.Fields.TwiData); i += 2 {
+			twitem := binary.BigEndian.Uint16(f.Fields.TwiData[i : i+2])
+			select {
+			case self.TwiChan <- twitem:
+			default:
+				self.Log.Errorf("CRITICAL twich chan is full")
 			}
-		case RESPONSE_RESET:
-			atomic.AddUint32(&self.stat.Reset, 1)
-			if ResetFlag(p.Fields.Mcusr)&ResetFlagWatchdog != 0 {
-				atomic.AddUint32(&self.stat.Error, 1)
-				self.Log.Errorf("mega restarted by watchdog, info=%s", p.Fields.String())
-			} else {
-				self.Log.Debugf("mega normal reset, info=%s", p.Fields.String())
-			}
+		}
+	case RESPONSE_RESET:
+		atomic.AddUint32(&self.stat.Reset, 1)
+		if ResetFlag(f.Fields.Mcusr)&ResetFlagWatchdog != 0 {
+			atomic.AddUint32(&self.stat.Error, 1)
+			self.Log.Errorf("mega restarted by watchdog, info=%s", f.Fields.String())
+		} else {
+			self.Log.Debugf("mega normal reset, info=%s", f.Fields.String())
 		}
 	}
 

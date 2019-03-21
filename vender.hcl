@@ -1,12 +1,12 @@
 hardware {
   iodin_path = "target/release/iodin"
 
-  mega {
-    i2c_bus  = 0
-    i2c_addr = 0x78
-    pin      = 25
-  }
+  // TODO keyboard_listen_addr = 0x78
 
+  mega {
+    spi = ""
+    pin = "25"
+  }
   mdb {
     log_enable = true
 

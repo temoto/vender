@@ -4,6 +4,16 @@ package mega
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[RESPONSE_OK-1]
+	_ = x[RESPONSE_RESET-2]
+	_ = x[RESPONSE_TWI_LISTEN-3]
+	_ = x[RESPONSE_ERROR-128]
+}
+
 const (
 	_Response_t_name_0 = "OKRESETTWI_LISTEN"
 	_Response_t_name_1 = "ERROR"

@@ -4,6 +4,20 @@ package mega
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[COMMAND_STATUS-1]
+	_ = x[COMMAND_CONFIG-2]
+	_ = x[COMMAND_RESET-3]
+	_ = x[COMMAND_DEBUG-4]
+	_ = x[COMMAND_FLASH-5]
+	_ = x[COMMAND_MDB_BUS_RESET-7]
+	_ = x[COMMAND_MDB_TRANSACTION_SIMPLE-8]
+	_ = x[COMMAND_MDB_TRANSACTION_CUSTOM-9]
+}
+
 const (
 	_Command_t_name_0 = "STATUSCONFIGRESETDEBUGFLASH"
 	_Command_t_name_1 = "MDB_BUS_RESETMDB_TRANSACTION_SIMPLEMDB_TRANSACTION_CUSTOM"

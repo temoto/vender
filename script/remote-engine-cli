@@ -12,4 +12,4 @@ go test ./... >/dev/null || go test -v ./...
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
 rsync -a $base/$target $base/vender.hcl $remote:~/bin/
 rsync -a $base/vender.hcl $remote:~/
-ssh -t $remote time sudo -n \~/bin/vender-engine-cli -config \~/bin/vender.hcl
+ssh -t $remote time sudo -n chrt --fifo 99 \~/bin/vender-engine-cli -config \~/bin/vender.hcl

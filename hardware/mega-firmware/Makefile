@@ -7,10 +7,9 @@ avr_size = avr-size
 avrdude = avrdude
 
 cflags_common = -std=c11 -Wall -Wextra -Werror -pedantic -pipe -flto
-CFLAGS = -mmcu=$(mmcu) -O2 -g3 $(cflags_common)
-MAPFLAGS = -Wl,-Map,
+CFLAGS = -mmcu=$(mmcu) -O2 -mbranch-cost=2 -g3 $(cflags_common)
 
-.PHONY : all clean main_test upload upload-a fuse
+.PHONY : all asm clean main_test upload upload-a fuse
 .DEFAULT_GOAL := all
 
 all: format crc_test main.hex
@@ -33,24 +32,19 @@ main.hex: main.elf
 	$(avr_objcopy) -O ihex $< $@
 	cksum main.hex
 
-main.elf: main.c crc.c
+main.elf: main.c
 	$(avr_gcc) $(CFLAGS) -o $@ $^
 	$(avr_size) --common $@
 	cksum main.elf
 	cp main.elf mega-firmware.elf
 
-# TODO is it still useful? likely not
-# main.o: main.c main.h config.h buffer.h crc.c crc.h mdb.c twi.c
-
 crc_test: crc.c crc.h crc_test.c
 	$(CC) $(cflags_common) -DDEBUG -DTEST -g -O0 -o $@ crc_test.c crc.c
 	./crc_test
 
-main_test: main.c crc.c
+main_test: main.c
 	$(avr_gcc) $(CFLAGS) -DDEBUG -DTEST -g -Og -o $@ main.c
 	avr-run -v -m11 ./main_test
 
-%.lst: %.c
-	$(avr_gcc) $(CFLAGS) -fverbose-asm -g -c -Wa,-alhnd $^ >$@
-
-asm: main.lst
+asm: main.elf
+	avr-objdump -D -j .text -m avr5 main.elf

@@ -1,16 +1,24 @@
 #ifndef INCLUDE_PROTOCOL_H
 #define INCLUDE_PROTOCOL_H
+#include "config.h"
+
 #include <inttypes.h>
 #include <stdbool.h>
+#include "buffer.h"
 
-#define PROTOCOL_VERSION 3
-// request: packet
-// response: packet
-// packet: length:u8 id:u8 header:u8 data:u8{0+} crc8:u8
+#define PROTOCOL_VERSION 4
+#define PROTOCOL_HEADER_FLAG_MASK 0xf0
+#define PROTOCOL_HEADER_VERSION_MASK 0x0f
+#define PROTOCOL_FLAG_REQUEST_BUSY 0x80
+#define PROTOCOL_FLAG_PAYLOAD 0x40
+#define PROTOCOL_PAD_OK 0x01
+#define PROTOCOL_PAD_ERROR 0xfe
+
+#define PACKET_FIELDS_MAX_LENGTH (BUFFER_SIZE - 1)
+#define FIELD_MAX_LENGTH (BUFFER_SIZE - 10)
 
 #define TWI_LISTEN_MAX_LENGTH 36
 
-#define REQUEST_MAX_LENGTH 70
 typedef uint8_t command_t;
 command_t const COMMAND_STATUS = 0x01;
 command_t const COMMAND_CONFIG = 0x02;
@@ -21,39 +29,52 @@ command_t const COMMAND_MDB_BUS_RESET = 0x07;
 command_t const COMMAND_MDB_TRANSACTION_SIMPLE = 0x08;
 command_t const COMMAND_MDB_TRANSACTION_CUSTOM = 0x09;
 
-#define RESPONSE_MAX_LENGTH 70
 typedef uint8_t response_t;
 response_t const RESPONSE_OK = 0x01;
 response_t const RESPONSE_RESET = 0x02;
 response_t const RESPONSE_TWI_LISTEN = 0x03;
 response_t const RESPONSE_ERROR = 0x80;
 
+typedef struct packet {
+  bool filled;
+  union {
+    command_t command;
+    response_t response;
+  } h;
+  buffer_t b;
+} packet_t;
+
+static void packet_clear_fast(packet_t* const p) __attribute__((nonnull));
+static inline void packet_clear_fast(packet_t* const p) {
+  p->h.command = 0;
+  buffer_clear_fast(&p->b);
+  p->filled = false;
+}
+
 typedef uint8_t errcode_t;
-errcode_t const ERROR_BAD_PACKET = 0x1;
-errcode_t const ERROR_INVALID_CRC = 0x2;
-errcode_t const ERROR_INVALID_ID = 0x3;
-errcode_t const ERROR_UNKNOWN_COMMAND = 0x4;
-errcode_t const ERROR_INVALID_DATA = 0x5;
-errcode_t const ERROR_BUFFER_OVERFLOW = 0x6;
-errcode_t const ERROR_NOT_IMPLEMENTED = 0x7;
-errcode_t const ERROR_RESPONSE_OVERWRITE = 0x8;
-errcode_t const ERROR_RESPONSE_EMPTY = 0x9;
+errcode_t const ERROR_FRAME_HEADER = 0x01;
+errcode_t const ERROR_FRAME_LENGTH = 0x02;
+errcode_t const ERROR_INVALID_CRC = 0x02;
+errcode_t const ERROR_REQUEST_OVERWRITE = 0x03;
+errcode_t const ERROR_INVALID_ACK = 0x04;
+errcode_t const ERROR_BUFFER_OVERFLOW = 0x05;
+errcode_t const ERROR_UNKNOWN_COMMAND = 0x10;
+errcode_t const ERROR_INVALID_DATA = 0x11;
+errcode_t const ERROR_NOT_IMPLEMENTED = 0x12;
 
 // Protobuf-like encoding for response data.
 typedef uint8_t field_t;
 field_t const FIELD_INVALID = 0;
-field_t const FIELD_PROTOCOL = 1;          // len=1
-field_t const FIELD_FIRMWARE_VERSION = 2;  // len=2
-field_t const FIELD_ERROR2 = 3;            // len=2
-field_t const FIELD_ERRORN = 4;            // len=N
-field_t const FIELD_MCUSR = 5;             // len=1
-field_t const FIELD_CLOCK10U = 6;          // len=2, uint16 by 10us
-field_t const FIELD_TWI_LENGTH = 7;        // len=1
-field_t const FIELD_TWI_DATA = 8;          // len=N
-field_t const FIELD_MDB_LENGTH = 9;        // len=1
-field_t const FIELD_MDB_RESULT = 10;       // len=2: result_t, error-data
-field_t const FIELD_MDB_DATA = 11;         // len=N, without checksum
-field_t const FIELD_MDB_DURATION10U = 12;  // len=2, uint16 by 10us
+field_t const FIELD_FIRMWARE_VERSION = 0x01;  // len=2
+field_t const FIELD_CLOCK10U = 0x02;          // len=2, uint16 by 10us
+field_t const FIELD_MCUSR = 0x03;             // len=1
+field_t const FIELD_ERRORN = 0x08;            // len=N
+field_t const FIELD_ERROR2 = 0x09;            // len=2
+field_t const FIELD_MDB_RESULT = 0x10;        // len=2: result_t, error-data
+field_t const FIELD_MDB_DATA = 0x11;          // len=N, without checksum
+field_t const FIELD_MDB_DURATION10U = 0x12;   // len=2, uint16 by 10us
+field_t const FIELD_TWI_ADDR = 0x20;          // len=1
+field_t const FIELD_TWI_DATA = 0x21;          // len=N
 
 #define MDB_BLOCK_SIZE 36
 #define MDB_ACK 0x00
@@ -67,7 +88,7 @@ mdb_state_t const MDB_STATE_SEND = 2;
 mdb_state_t const MDB_STATE_RECV = 3;
 mdb_state_t const MDB_STATE_RECV_END = 4;
 mdb_state_t const MDB_STATE_BUS_RESET = 5;
-mdb_state_t const MDB_STATE_DONE = 6;  // read result with COMMAND_STATUS
+mdb_state_t const MDB_STATE_DONE = 6;
 
 typedef uint8_t mdb_result_t;
 mdb_result_t const MDB_RESULT_SUCCESS = 0x01;

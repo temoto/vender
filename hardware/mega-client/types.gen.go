@@ -3,17 +3,17 @@
 
 package mega
 
-// Command_t type as declared in mega-firmware/protocol.h:14
+// Command_t type as declared in mega-firmware/protocol.h:22
 type Command_t byte
 
-// Response_t type as declared in mega-firmware/protocol.h:25
+// Response_t type as declared in mega-firmware/protocol.h:32
 type Response_t byte
 
-// Errcode_t type as declared in mega-firmware/protocol.h:31
+// Errcode_t type as declared in mega-firmware/protocol.h:54
 type Errcode_t byte
 
-// Field_t type as declared in mega-firmware/protocol.h:43
+// Field_t type as declared in mega-firmware/protocol.h:66
 type Field_t byte
 
-// Mdb_result_t type as declared in mega-firmware/protocol.h:72
+// Mdb_result_t type as declared in mega-firmware/protocol.h:93
 type Mdb_result_t byte
