@@ -3,59 +3,59 @@ package lcd
 import (
 	"time"
 
-	rpi "github.com/nathan-osman/go-rpigpio"
+	"github.com/juju/errors"
+	"github.com/temoto/vender/helpers"
+	"periph.io/x/periph/conn/gpio"
+	"periph.io/x/periph/conn/gpio/gpioreg"
+	"periph.io/x/periph/host"
 )
 
 type LCD struct {
-	pin_rs  *rpi.Pin // command/data, aliases: A0, RS
-	pin_rw  *rpi.Pin // read/write
-	pin_e   *rpi.Pin // enable
-	pin_db4 *rpi.Pin
-	pin_db5 *rpi.Pin
-	pin_db6 *rpi.Pin
-	pin_db7 *rpi.Pin
+	pin_rs  gpio.PinIO // command/data, aliases: A0, RS
+	pin_rw  gpio.PinIO // read/write
+	pin_e   gpio.PinIO // enable
+	pin_db4 gpio.PinIO
+	pin_db5 gpio.PinIO
+	pin_db6 gpio.PinIO
+	pin_db7 gpio.PinIO
 }
 
-func (self *LCD) Init() (err error) {
-	self.pin_rs, err = rpi.OpenPin(23, rpi.OUT)
-	if err != nil {
-		return
+func openPin(name string, errs *[]error) gpio.PinIO {
+	p := gpioreg.ByName(name)
+	if p == nil {
+		*errs = append(*errs, errors.Errorf("LCD/init unknown pin=%s", name))
+		return nil
 	}
-	self.pin_rw, err = rpi.OpenPin(18, rpi.OUT)
-	if err != nil {
-		return
+	if err := p.Out(gpio.Low); err != nil {
+		*errs = append(*errs, errors.Annotatef(err, "LCD/init pin.Out() pin=%s", name))
+		return nil
 	}
-	self.pin_e, err = rpi.OpenPin(24, rpi.OUT)
-	if err != nil {
-		return
-	}
-	self.pin_db4, err = rpi.OpenPin(22, rpi.OUT)
-	if err != nil {
-		return
-	}
-	self.pin_db5, err = rpi.OpenPin(21, rpi.OUT)
-	if err != nil {
-		return
-	}
-	self.pin_db6, err = rpi.OpenPin(17, rpi.OUT)
-	if err != nil {
-		return
-	}
-	self.pin_db7, err = rpi.OpenPin(7, rpi.OUT)
-	if err != nil {
-		return
-	}
-	self.setAllPins(false)
-
-	return nil
+	return p
 }
 
-func setPinBool(pin *rpi.Pin, value bool) error {
-	var v rpi.Value = rpi.LOW
-	if value {
-		v = rpi.HIGH
+func (self *LCD) Init() error {
+	if _, err := host.Init(); err != nil {
+		return errors.Annotate(err, "periph/init")
 	}
-	return pin.Write(v)
+
+	errs := make([]error, 0, 8)
+	self.pin_rs = openPin("23", &errs)
+	self.pin_rw = openPin("18", &errs)
+	self.pin_e = openPin("24", &errs)
+	self.pin_db4 = openPin("22", &errs)
+	self.pin_db5 = openPin("21", &errs)
+	self.pin_db6 = openPin("17", &errs)
+	self.pin_db7 = openPin("7", &errs)
+
+	return helpers.FoldErrors(errs)
+}
+
+func setPinBool(pin gpio.PinOut, b bool) error {
+	level := gpio.Low
+	if b {
+		level = gpio.High
+	}
+	return pin.Out(level)
 }
 
 func (self *LCD) setAllPins(b bool) {
@@ -69,9 +69,9 @@ func (self *LCD) setAllPins(b bool) {
 }
 
 func (self *LCD) blinkE() {
-	setPinBool(self.pin_e, true)
+	self.pin_e.Out(gpio.High)
 	time.Sleep(1 * time.Microsecond)
-	setPinBool(self.pin_e, false)
+	self.pin_e.Out(gpio.Low)
 	time.Sleep(1 * time.Microsecond)
 }
 
