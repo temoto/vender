@@ -12,7 +12,7 @@ env:
   - "PATH=$PATH:$HOME/bin"
   - protoc_version=3.1.0
 language: go
-go: "1.10"
+go: "1.11"
 matrix:
   include:
     - env: task=vender
