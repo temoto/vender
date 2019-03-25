@@ -38,8 +38,6 @@ github.com/mattn/go-tty
 # github.com/paulrosania/go-charset v0.0.0-20151028000031-621bb39fcc83
 github.com/paulrosania/go-charset/charset
 github.com/paulrosania/go-charset/data
-# github.com/pkg/errors v0.8.1
-github.com/pkg/errors
 # github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942
 github.com/pkg/term/termios
 # github.com/temoto/alive v0.0.0-20180810133442-4a79f8881856

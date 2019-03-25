@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/log2"
 )
 

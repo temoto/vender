@@ -100,7 +100,7 @@ func walkExec(ctx context.Context, node *Node, state *execState) {
 			log.Debugf("engine execute %s", node)
 			err = node.Do(ctx)
 		}
-		// texec := time.Now().Sub(tbegin)
+		// texec := time.Since(tbegin)
 		// log texec
 		if err != nil {
 			atomic.AddUint32(&state.failed, 1)

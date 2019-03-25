@@ -33,7 +33,7 @@ func TestList01(t *testing.T) {
 	l.Append(slow, t.Name()+"/slow3")
 	t1 := time.Now()
 	errs := l.Do(context.Background())
-	duration := time.Now().Sub(t1)
+	duration := time.Since(t1)
 	helpers.AssertEqual(t, called, uint32(5))
 	if duration > 2*delay {
 		t.Errorf("expected total duration %v < %v", duration, 2*delay)

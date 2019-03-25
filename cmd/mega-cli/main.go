@@ -180,7 +180,7 @@ func newExecutor(client *mega.Client) func(string) {
 			}
 		}
 
-		lineDuration := time.Now().Sub(tbegin)
+		lineDuration := time.Since(tbegin)
 		log.Debugf("line duration=%s", lineDuration)
 	}
 }

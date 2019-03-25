@@ -29,7 +29,7 @@ func TestTransactionConcurrent(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
 	err := tx.Do(ctx)
-	duration := time.Now().Sub(tbegin)
+	duration := time.Since(tbegin)
 	if err != nil {
 		t.Fatal(err)
 	}

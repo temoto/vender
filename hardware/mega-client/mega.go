@@ -25,22 +25,21 @@ const DefaultTimeout = 100 * time.Millisecond
 var ErrResponseEmpty = errors.New("mega response empty")
 
 type Client struct {
-	Log     *log2.Log
-	TwiChan chan uint16
-	txlk    sync.Mutex
-	spiPort spi.Port
-	spiConn spi.Conn
-	pin     gpio.PinIO
-	// pinready chan struct{}
+	Log      *log2.Log
+	TwiChan  chan uint16
+	txlk     sync.Mutex
+	spiPort  spi.Port
+	spiConn  spi.Conn
+	pin      gpio.PinIO
 	refcount int32
 	alive    *alive.Alive
 	stat     Stat
 }
 type Stat struct {
-	Error       uint32
-	Request     uint32
-	ResponseAll uint32
-	Reset       uint32
+	Request   uint32
+	Error     uint32
+	TwiListen uint32
+	Reset     uint32
 }
 
 func NewClient(bus string, notifyPinName string, log *log2.Log) (*Client, error) {
@@ -77,7 +76,6 @@ func NewClient(bus string, notifyPinName string, log *log2.Log) (*Client, error)
 		spiConn: spiConn,
 		pin:     pin,
 		alive:   alive.NewAlive(),
-		// pinready: make(chan struct{}),
 		TwiChan: make(chan uint16, TWI_LISTEN_MAX_LENGTH/2),
 	}
 
@@ -104,7 +102,6 @@ func NewClient(bus string, notifyPinName string, log *log2.Log) (*Client, error)
 
 func (self *Client) Close() error {
 	close(self.TwiChan)
-	// close(self.pinready)
 	self.alive.Stop()
 	self.alive.Wait()
 	return errors.NotImplementedf("")
@@ -141,12 +138,6 @@ func (self *Client) DoMdbTxSimple(data []byte) (Frame, error) {
 }
 
 func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration) (Frame, error) {
-	// tbegin := time.Now()
-	// defer func() {
-	// 	td := time.Now().Sub(tbegin)
-	// 	self.Log.Debugf("dotimeout end %v", td)
-	// }()
-
 	atomic.AddUint32(&self.stat.Request, 1)
 	cmdFrame := NewCommand(cmd, data...)
 
@@ -373,7 +364,7 @@ func (self *Client) parse(buf []byte, f *Frame) error {
 	err := f.Parse(buf)
 	if err != nil {
 		atomic.AddUint32(&self.stat.Error, 1)
-		self.Log.Errorf("%s parse buf=%x err=%v", modName, buf, err)
+		self.Log.Errorf("%s Parse buf=%x err=%v", modName, buf, err)
 		return err
 	}
 	if f.plen == 0 {
@@ -388,12 +379,13 @@ func (self *Client) parse(buf []byte, f *Frame) error {
 
 	switch f.ResponseKind() {
 	case RESPONSE_TWI_LISTEN:
+		atomic.AddUint32(&self.stat.TwiListen, 1)
 		for i := 0; i+1 < len(f.Fields.TwiData); i += 2 {
 			twitem := binary.BigEndian.Uint16(f.Fields.TwiData[i : i+2])
 			select {
 			case self.TwiChan <- twitem:
 			default:
-				self.Log.Errorf("CRITICAL twich chan is full")
+				self.Log.Errorf("CRITICAL TwiChan is full")
 			}
 		}
 	case RESPONSE_RESET:

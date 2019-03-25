@@ -145,7 +145,7 @@ func (self *Device) PollLoopPassive(ctx context.Context, a *alive.Alive, fun Pol
 				delay = self.DelayNext
 				lastActive = time.Now()
 			} else if delay != self.DelayIdle {
-				if time.Now().Sub(lastActive) > self.IdleThreshold {
+				if time.Since(lastActive) > self.IdleThreshold {
 					delay = self.DelayIdle
 				}
 			}
