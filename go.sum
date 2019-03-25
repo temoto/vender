@@ -41,8 +41,8 @@ github.com/paulrosania/go-charset v0.0.0-20151028000031-621bb39fcc83 h1:XQonH5Iv
 github.com/paulrosania/go-charset v0.0.0-20151028000031-621bb39fcc83/go.mod h1:YnNlZP7l4MhyGQ4CBRwv6ohZTPrUJJZtEv4ZgADkbs4=
 github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942 h1:A7GG7zcGjl3jqAqGPmcNjd/D9hzL95SuoOQAaFNdLU0=
 github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942/go.mod h1:eCbImbZ95eXtAUIbLAuAVnBnwf83mjf6QIVH8SHYwqQ=
-github.com/temoto/alive v0.0.0-20180810133442-4a79f8881856 h1:7/ge712HHvXFkvdnQ++eSR6mrAzKXjzhO/zEe6lH5vc=
-github.com/temoto/alive v0.0.0-20180810133442-4a79f8881856/go.mod h1:byZzRaChaco8Bf4fx2FI1tpv8rmoTXym6Nrr5ZzpOp4=
+github.com/temoto/alive v1.0.1 h1:cl+3tI65ReltXq2dqXmFk2kpCJO9TWkUm9xqXlkIcQs=
+github.com/temoto/alive v1.0.1/go.mod h1:byZzRaChaco8Bf4fx2FI1tpv8rmoTXym6Nrr5ZzpOp4=
 github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86 h1:28eUgClE9ZSaq7N79vvygkYH0CoRSdx2eLBGaB/T4Uk=
 github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86/go.mod h1:PSCCOZs9yzxJX2JS1q+rk6pzNvFhs5HGfpnAmsELeMY=
 golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3/go.mod h1:UVdnD1Gm6xHRNCYTkRU2/jEulfH38KcIWyp/GAMgvoE=

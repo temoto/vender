@@ -13,6 +13,12 @@ func testMake(t testing.TB, initFunc, replyFunc mdb.TestReplyFunc) context.Conte
 	ctx := state.NewTestContext(t, "", log2.LDebug)
 
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
+	config := state.GetConfig(ctx)
+	config.Global().Hardware.Mdb.Mdber = mdber
+	if _, err := config.Mdber(); err != nil {
+		t.Fatal(err)
+	}
+
 	go func() {
 		defer close(respCh)
 		initFunc(t, reqCh, respCh)
@@ -21,6 +27,5 @@ func testMake(t testing.TB, initFunc, replyFunc mdb.TestReplyFunc) context.Conte
 		}
 	}()
 
-	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
 	return ctx
 }

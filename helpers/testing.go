@@ -1,7 +1,10 @@
 package helpers
 
 import (
+	"bytes"
+	"fmt"
 	"math/rand"
+	"runtime"
 	"testing"
 	"time"
 
@@ -45,8 +48,22 @@ func AssertEqual(t testing.TB, a, b interface{}) {
 		if a.(string) == b.(string) {
 			return
 		}
+	case []byte:
+		if bytes.Equal(a.([]byte), b.([]byte)) {
+			return
+		}
 	default:
 		panic(errors.Errorf("code error AssertEqual does not support type of %#v", a))
 	}
-	t.Fatalf("assert equal fail\na=%#v\nb=%#v", a, b)
+	location := formatCaller(2)
+	t.Fatalf("%s assert equal fail\na=%#v\nb=%#v", location, a, b)
+}
+
+func formatCaller(depth int) string {
+	_, file, line, ok := runtime.Caller(depth)
+	if !ok {
+		file = "???"
+		line = 0
+	}
+	return fmt.Sprintf("%s:%d", file, line)
 }

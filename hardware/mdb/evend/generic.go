@@ -12,6 +12,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/head/state"
 )
 
 // Mostly affects POLL response, see doc.
@@ -53,12 +54,17 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 	if self.dev.DelayReset == 0 {
 		self.dev.DelayReset = 2100 * time.Millisecond
 	}
-	self.dev.Init(ctx, address, name, binary.BigEndian)
+	config := state.GetConfig(ctx)
+	m, err := config.Mdber()
+	if err != nil {
+		return err // TODO annotate
+	}
+	self.dev.Init(m, config.Global().Log, address, name, binary.BigEndian)
 
-	if err := self.dev.NewDoReset().Do(ctx); err != nil {
+	if err = self.dev.NewDoReset().Do(ctx); err != nil {
 		return err
 	}
-	err := self.dev.DoSetup(ctx)
+	err = self.dev.DoSetup(ctx)
 	return err
 }
 

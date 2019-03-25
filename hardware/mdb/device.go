@@ -22,7 +22,7 @@ const (
 
 type Device struct {
 	cmdLk   sync.Mutex // TODO explore if chan approach is better
-	mdber   *mdb
+	mdber   *Mdb
 	lastOff time.Time // unused yet TODO self.lastOff.IsZero()
 
 	Log           *log2.Log
@@ -41,17 +41,15 @@ type Device struct {
 	SetupResponse Packet
 }
 
-func (self *Device) Init(ctx context.Context, addr uint8, name string, byteOrder binary.ByteOrder) {
+func (self *Device) Init(m *Mdb, log *log2.Log, addr uint8, name string, byteOrder binary.ByteOrder) {
 	self.cmdLk.Lock()
 	defer self.cmdLk.Unlock()
 
-	self.Log = log2.ContextValueLogger(ctx, log2.ContextKey)
-	mdber := ContextValueMdber(ctx, ContextKey)
-	self.mdber = mdber
-
 	self.Address = addr
-	self.Name = name
 	self.ByteOrder = byteOrder
+	self.Log = log
+	self.mdber = m
+	self.Name = name
 
 	if self.DelayNext == 0 {
 		self.DelayNext = DefaultDelayNext
@@ -128,10 +126,7 @@ type PollParseFunc func(PacketError) bool
 // used by coin/bill devices
 func (self *Device) PollLoopPassive(ctx context.Context, a *alive.Alive, fun PollParseFunc) {
 	lastActive := time.Now()
-	stopch := a.StopChan()
 	delay := self.DelayNext
-	delayTimer := time.NewTimer(delay)
-	delayTimer.Stop()
 	r := PacketError{}
 
 	for a.IsRunning() {
@@ -150,15 +145,7 @@ func (self *Device) PollLoopPassive(ctx context.Context, a *alive.Alive, fun Pol
 				}
 			}
 		}
-		if !delayTimer.Stop() {
-			<-delayTimer.C
-		}
-		delayTimer.Reset(delay)
-		select {
-		case <-delayTimer.C:
-		case <-stopch:
-			return
-		}
+		time.Sleep(delay)
 	}
 }
 
@@ -166,7 +153,7 @@ type PollActiveFunc func(PacketError) (bool, error)
 
 func (self *Device) NewPollLoopActive(tag string, timeout time.Duration, fun PollActiveFunc) engine.Doer {
 	return engine.Func{Name: tag + "/active-poll-loop", F: func(ctx context.Context) error {
-		r := PacketError{}
+		var r PacketError
 		deadline := time.Now().Add(timeout)
 
 		for {

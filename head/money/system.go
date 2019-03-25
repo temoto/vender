@@ -31,10 +31,9 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	if err := self.bs.Init(ctx, self); err != nil {
 		self.Log.Errorf("head/money Start bill error=%v", errors.ErrorStack(err))
 	}
-	// if err := self.cs.Init(ctx, self, m); err != nil {
-	// 	self.Log.Errorf("head/money Start coin error=%v", errors.ErrorStack(err))
-	// 	self.cs.Stop(ctx)
-	// }
+	if err := self.cs.Init(ctx, self); err != nil {
+		self.Log.Errorf("head/money Start coin error=%v", errors.ErrorStack(err))
+	}
 
 	return nil
 }

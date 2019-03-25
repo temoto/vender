@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	prompt "github.com/c-bata/go-prompt"
+	"github.com/c-bata/go-prompt"
 	"github.com/juju/errors"
-	mega "github.com/temoto/vender/hardware/mega-client"
+	"github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/log2"
 )
 

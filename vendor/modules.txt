@@ -40,7 +40,7 @@ github.com/paulrosania/go-charset/charset
 github.com/paulrosania/go-charset/data
 # github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942
 github.com/pkg/term/termios
-# github.com/temoto/alive v0.0.0-20180810133442-4a79f8881856
+# github.com/temoto/alive v1.0.1
 github.com/temoto/alive
 # github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 github.com/temoto/iodin/client/go-iodin
@@ -96,12 +96,11 @@ google.golang.org/grpc/internal/syscall
 # periph.io/x/periph v3.4.0+incompatible
 periph.io/x/periph/conn/gpio
 periph.io/x/periph/conn/gpio/gpioreg
+periph.io/x/periph/host
 periph.io/x/periph/conn/physic
 periph.io/x/periph/conn/spi
 periph.io/x/periph/conn/spi/spireg
-periph.io/x/periph/host
 periph.io/x/periph/conn/pin
-periph.io/x/periph/conn
 periph.io/x/periph
 periph.io/x/periph/host/allwinner
 periph.io/x/periph/host/am335x
@@ -113,6 +112,7 @@ periph.io/x/periph/host/odroidc1
 periph.io/x/periph/host/pine64
 periph.io/x/periph/host/rpi
 periph.io/x/periph/host/sysfs
+periph.io/x/periph/conn
 periph.io/x/periph/host/cpu
 periph.io/x/periph/host/distro
 periph.io/x/periph/host/pmem

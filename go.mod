@@ -16,7 +16,7 @@ require (
 	github.com/mattn/go-tty v0.0.0-20181127064339-e4f871175a2f // indirect
 	github.com/paulrosania/go-charset v0.0.0-20151028000031-621bb39fcc83
 	github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942 // indirect
-	github.com/temoto/alive v0.0.0-20180810133442-4a79f8881856
+	github.com/temoto/alive v1.0.1
 	github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 	golang.org/x/net v0.0.0-20180826012351-8a410e7b638d
 	golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223

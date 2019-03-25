@@ -16,7 +16,7 @@ func TestReadConfig(t *testing.T) {
 	}
 	cases := []Case{
 		Case{"empty", "",
-			func(c *Config) bool { return !c.Hardware.Mdb.Log }},
+			func(c *Config) bool { return !c.Hardware.Mdb.LogEnable }},
 		Case{"mdb",
 			"hardware { mdb { uart_device = \"/dev/shmoo\" } }",
 			func(c *Config) bool { return c.Hardware.Mdb.UartDevice == "/dev/shmoo" },

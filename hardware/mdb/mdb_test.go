@@ -11,7 +11,7 @@ import (
 	"github.com/temoto/vender/log2"
 )
 
-func testMdberStrings(t testing.TB, r io.Reader, w io.Writer) *mdb {
+func testMdberStrings(t testing.TB, r io.Reader, w io.Writer) *Mdb {
 	log := log2.NewTest(t, log2.LDebug)
 	m, err := NewMDB(NewNullUart(r, w, log), "", log)
 	if err != nil {

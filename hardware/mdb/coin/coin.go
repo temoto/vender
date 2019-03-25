@@ -76,9 +76,15 @@ var (
 	ErrSlugs         = errors.Errorf("Slugs")
 )
 
+// FIXME convert to Enum() idea
 func (self *CoinAcceptor) Init(ctx context.Context) error {
-	// TODO read config
-	self.dev.Init(ctx, 0x08, "coinacceptor", binary.BigEndian)
+	config := state.GetConfig(ctx)
+	m, err := config.Mdber()
+	if err != nil {
+		return err // TODO annotate
+	}
+	// TODO read settings from config
+	self.dev.Init(m, config.Global().Log, 0x08, "coinacceptor", binary.BigEndian)
 	self.dispenseTimeout = 10 * time.Second
 
 	self.doReset = self.dev.NewDoReset()
@@ -87,7 +93,7 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	self.coinTypeCredit = make([]currency.Nominal, coinTypeCount)
 	self.internalScalingFactor = 1 // FIXME
 	// TODO maybe execute CommandReset then wait for StatusWasReset
-	err := self.newIniter().Do(ctx)
+	err = self.newIniter().Do(ctx)
 	return errors.Annotate(err, "hardware/mdb/coin/Init")
 }
 
@@ -116,7 +122,7 @@ func (self *CoinAcceptor) newPoller(fun func(money.PollItem)) mdb.PollParseFunc 
 			return false
 		}
 
-		pi := money.PollItem{}
+		var pi money.PollItem
 		skip := false
 		for i, b := range bs {
 			if skip {

@@ -1,7 +1,6 @@
 package mdb
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -9,8 +8,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/log2"
 )
-
-const ContextKey = "run/mdber"
 
 var (
 	ErrNak     = errors.Errorf("MDB NAK")
@@ -25,23 +22,10 @@ type Uarter interface {
 	Tx(request, response []byte) (int, error)
 }
 
-// Context[key] -> Mdber or panic
-func ContextValueMdber(ctx context.Context, key interface{}) *mdb {
-	v := ctx.Value(key)
-	if v == nil {
-		panic(fmt.Errorf("context['%v'] is nil", key))
-	}
-	if m, ok := v.(*mdb); ok {
-		return m
-	}
-	panic(fmt.Errorf("context['%v'] expected type *mdb", key))
-}
-
-type mdb struct {
-	Log     *log2.Log
-	recvBuf []byte
-	io      Uarter
-	lk      sync.Mutex
+type Mdb struct {
+	Log *log2.Log
+	io  Uarter
+	lk  sync.Mutex
 }
 
 type InvalidChecksum struct {
@@ -65,20 +49,19 @@ func checksum(bs []byte) byte {
 	return chk
 }
 
-func NewMDB(u Uarter, options string, log *log2.Log) (*mdb, error) {
-	self := &mdb{
-		Log:     log,
-		io:      u,
-		recvBuf: make([]byte, 0, PacketMaxLength),
+func NewMDB(u Uarter, options string, log *log2.Log) (*Mdb, error) {
+	self := &Mdb{
+		Log: log,
+		io:  u,
 	}
 	err := self.io.Open(options)
 	if err != nil {
-		return nil, errors.Annotatef(err, "mdb.NewMDB Uarter=%s Open(%s)", u, options)
+		return nil, errors.Annotatef(err, "Mdb.NewMDB Uarter=%s Open(%s)", u, options)
 	}
 	return self, nil
 }
 
-func (self *mdb) BreakCustom(keep, sleep time.Duration) error {
+func (self *Mdb) BreakCustom(keep, sleep time.Duration) error {
 	self.Log.Debugf("mdb.BreakCustom keep=%v sleep=%v", keep, sleep)
 	self.lk.Lock()
 	err := self.io.Break(keep)
@@ -89,7 +72,10 @@ func (self *mdb) BreakCustom(keep, sleep time.Duration) error {
 	return errors.Trace(err)
 }
 
-func (self *mdb) Tx(request Packet, response *Packet) error {
+func (self *Mdb) Tx(request Packet, response *Packet) error {
+	if self == nil {
+		panic(fmt.Sprintf("code error mdb=nil request=%x", request.Bytes()))
+	}
 	if response == nil {
 		panic("code error mdb.Tx() response=nil")
 	}

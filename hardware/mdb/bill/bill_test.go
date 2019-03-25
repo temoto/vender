@@ -18,20 +18,26 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 	ctx := state.NewTestContext(t, "", log2.LDebug)
 
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
+	config := state.GetConfig(ctx)
+	config.Global().Hardware.Mdb.Mdber = mdber
+	if _, err := config.Mdber(); err != nil {
+		t.Fatal(err)
+	}
+
 	go func() {
 		defer close(respCh)
-		// InitSequence, SETUP
+		// initer, SETUP
 		// TODO fill real response
 		mdb.TestChanTx(t, reqCh, respCh, "31", "011810000a0000c8001fff01050a32640000000000000000000000")
 
-		// InitSequence, EXPANSION IDENTIFICATION
+		// initer, EXPANSION IDENTIFICATION
 		// TODO fill real response
 		mdb.TestChanTx(t, reqCh, respCh, "3700", "49435430303030303030303030303056372d5255523530303030300120")
 
-		// InitSequence, STACKER
+		// initer, STACKER
 		mdb.TestChanTx(t, reqCh, respCh, "36", "000b")
 
-		// InitSequence, BILL TYPE
+		// initer, BILL TYPE
 		mdb.TestChanTx(t, reqCh, respCh, "34ffff0000", "")
 
 		if replyFunc != nil {
@@ -39,7 +45,6 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 		}
 	}()
 
-	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
 	return ctx
 }
 

@@ -20,24 +20,30 @@ func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level)
 	ctx := state.NewTestContext(t, "", logLevel)
 
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
+	config := state.GetConfig(ctx)
+	config.Global().Hardware.Mdb.Mdber = mdber
+	if _, err := config.Mdber(); err != nil {
+		t.Fatal(err)
+	}
+
 	go func() {
 		defer close(respCh)
-		// InitSequence, SETUP
+		// initer, SETUP
 		mdb.TestChanTx(t, reqCh, respCh, "09", "021643640200170102050a0a1900000000000000000000")
 
-		// InitSequence, EXPANSION IDENTIFICATION
+		// initer, EXPANSION IDENTIFICATION
 		mdb.TestChanTx(t, reqCh, respCh, "0f00", "434f47303030303030303030303030463030313230303120202020029000000003")
 
-		// InitSequence, FEATURE ENABLE
+		// initer, FEATURE ENABLE
 		mdb.TestChanTx(t, reqCh, respCh, "0f0100000002", "")
 
-		// InitSequence, DIAG STATUS
+		// initer, DIAG STATUS
 		mdb.TestChanTx(t, reqCh, respCh, "0f05", "01000600")
 
-		// InitSequence, TUBE STATUS
+		// initer, TUBE STATUS
 		mdb.TestChanTx(t, reqCh, respCh, "0a", "0000110008")
 
-		// InitSequence, COIN TYPE
+		// initer, COIN TYPE
 		mdb.TestChanTx(t, reqCh, respCh, "0cffffffff", "")
 
 		if replyFunc != nil {
@@ -45,7 +51,6 @@ func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level)
 		}
 	}()
 
-	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
 	return ctx
 }
 

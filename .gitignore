@@ -16,12 +16,11 @@
 /cover.out
 /coverage*.info
 /coverage*.txt
-/display-mt16-test
 /hardware/mega-client/mega
-/i2c-test
 /mdb-cli
 /mdbr/target
 /mega-cli
+/ui-dev
 /vender
 /vender-engine-cli
 /vender.sublime-*
@@ -31,9 +30,8 @@ _cgo_gotypes.go
 _obj
 _test
 _testmain.go
-cmd/display-mt16-test/display-mt16-test
-cmd/i2c-test/i2c-test
 cmd/mdb-cli/mdb-cli
 cmd/mega-cli/mega-cli
+cmd/ui-dev/ui-dev
 cmd/vender-engine-cli/vender-engine-cli
 cmd/vender/vender

@@ -114,7 +114,7 @@ func (self *nullUart) resetRead() error {
 	return nil
 }
 
-func NewTestMDBRaw(t testing.TB) (*mdb, func([]byte), *bytes.Buffer) {
+func NewTestMDBRaw(t testing.TB) (*Mdb, func([]byte), *bytes.Buffer) {
 	r := bytes.NewBuffer(nil)
 	w := bytes.NewBuffer(nil)
 	log := log2.NewTest(t, log2.LDebug)
@@ -181,7 +181,7 @@ func NewChanIO(timeout time.Duration) *ChanIO {
 	return c
 }
 
-func NewTestMDBChan(t testing.TB, ctx context.Context) (*mdb, <-chan Packet, chan<- Packet) {
+func NewTestMDBChan(t testing.TB, ctx context.Context) (*Mdb, <-chan Packet, chan<- Packet) {
 	cio := NewChanIO(5 * time.Second)
 	log := log2.ContextValueLogger(ctx, log2.ContextKey)
 	uarter := NewNullUart(cio, cio, log)

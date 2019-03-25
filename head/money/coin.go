@@ -83,7 +83,7 @@ func (self *CoinState) handlePollItem(ctx context.Context, m *MoneySystem, pi mo
 	case money.StatusCredit:
 		err := self.credit.Add(pi.DataNominal, uint(pi.DataCount))
 		if err != nil {
-			self.Log.Debugf("coin credit.Add n=%v c=%d err=%v", pi.DataNominal, pi.DataCount, err)
+			self.Log.Errorf("coin credit.Add n=%v c=%d err=%v", pi.DataNominal, pi.DataCount, err)
 		}
 		self.hw.CommandTubeStatus()
 		self.hw.CommandExpansionSendDiagStatus(nil)

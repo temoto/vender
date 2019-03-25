@@ -10,10 +10,9 @@ import (
 
 	prompt "github.com/c-bata/go-prompt"
 	"github.com/juju/errors"
-	iodin "github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
-	mega "github.com/temoto/vender/hardware/mega-client"
+	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/log2"
 )
 
@@ -30,8 +29,6 @@ const usage = `syntax: commands separated by whitespace
 - par      execute concurrently all commands on this line
 `
 
-var log = log2.NewStderr(log2.LDebug)
-
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	devicePath := cmdline.String("device", "/dev/ttyAMA0", "")
@@ -41,36 +38,30 @@ func main() {
 	uarterName := cmdline.String("io", "file", "file|iodin|mega")
 	cmdline.Parse(os.Args[1:])
 
+	log := log2.NewStderr(log2.LDebug)
 	log.SetFlags(log2.LInteractiveFlags)
 
-	var uarter mdb.Uarter
-	switch *uarterName {
-	case "file":
-		uarter = mdb.NewFileUart(log)
-	case "iodin":
-		iodin, err := iodin.NewClient(*iodinPath)
-		if err != nil {
-			log.Fatal(errors.Trace(err))
-		}
-		uarter = mdb.NewIodinUart(iodin)
-	case "mega":
-		mega, err := mega.NewClient(*megaSpi, *megaPin, log)
-		if err != nil {
-			log.Fatal(errors.Trace(err))
-		}
-		uarter = mdb.NewMegaUart(mega)
-	default:
-		log.Fatalf("invalid -io=%s", *uarterName)
+	config := new(state.Config)
+	config.Hardware.IodinPath = *iodinPath
+	config.Hardware.Mdb.UartDevice = *devicePath
+	config.Hardware.Mdb.UartDriver = *uarterName
+	config.Hardware.Mega.Pin = *megaPin
+	config.Hardware.Mega.Spi = *megaSpi
+	if err := config.Init(log); err != nil {
+		log.Fatal(err)
 	}
-	defer uarter.Close()
+	if _, err := config.Mdber(); err != nil {
+		log.Fatal(err)
+	}
+	defer config.Global().Hardware.Mdb.Uarter.Close()
 
-	m, err := mdb.NewMDB(uarter, *devicePath, log)
-	if err != nil {
-		log.Fatalf("mdb open: %v", errors.ErrorStack(err))
-	}
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	ctx = context.WithValue(ctx, mdb.ContextKey, m)
+	ctx = state.ContextWithConfig(ctx, config)
+
+	if err := doBreak.Do(ctx); err != nil {
+		log.Fatal(err)
+	}
 
 	// TODO OptionHistory
 	prompt.New(newExecutor(ctx), newCompleter(ctx)).Run()
@@ -82,17 +73,29 @@ var doUsage = engine.Func{F: func(ctx context.Context) error {
 	return nil
 }}
 var doLogYes = engine.Func{Name: "log=yes", F: func(ctx context.Context) error {
-	m := mdb.ContextValueMdber(ctx, mdb.ContextKey)
+	config := state.GetConfig(ctx)
+	m, err := config.Mdber()
+	if err != nil {
+		return err
+	}
 	m.Log.SetLevel(log2.LDebug)
 	return nil
 }}
 var doLogNo = engine.Func{Name: "log=no", F: func(ctx context.Context) error {
-	m := mdb.ContextValueMdber(ctx, mdb.ContextKey)
+	config := state.GetConfig(ctx)
+	m, err := config.Mdber()
+	if err != nil {
+		return err
+	}
 	m.Log.SetLevel(log2.LError)
 	return nil
 }}
 var doBreak = engine.Func{Name: "break", F: func(ctx context.Context) error {
-	m := mdb.ContextValueMdber(ctx, mdb.ContextKey)
+	config := state.GetConfig(ctx)
+	m, err := config.Mdber()
+	if err != nil {
+		return err
+	}
 	return m.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
 }}
 
@@ -111,8 +114,10 @@ func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest 
 }
 
 func newExecutor(ctx context.Context) func(string) {
+	config := state.GetConfig(ctx)
+	log := config.Global().Log
 	return func(line string) {
-		d, err := parseLine(line)
+		d, err := parseLine(ctx, line)
 		if err != nil {
 			log.Errorf(errors.ErrorStack(err))
 			// TODO continue when input is interactive (tty)
@@ -127,10 +132,14 @@ func newExecutor(ctx context.Context) func(string) {
 
 func newTx(request mdb.Packet) engine.Doer {
 	return engine.Func{Name: "mdb:" + request.Format(), F: func(ctx context.Context) error {
-		log := log2.ContextValueLogger(ctx, log2.ContextKey)
-		m := mdb.ContextValueMdber(ctx, mdb.ContextKey)
+		config := state.GetConfig(ctx)
+		log := config.Global().Log
+		m, err := config.Mdber()
+		if err != nil {
+			return err
+		}
 		response := new(mdb.Packet)
-		err := m.Tx(request, response)
+		err = m.Tx(request, response)
 		if err != nil {
 			log.Errorf(errors.ErrorStack(err))
 		} else {
@@ -140,7 +149,10 @@ func newTx(request mdb.Packet) engine.Doer {
 	}}
 }
 
-func parseLine(line string) (engine.Doer, error) {
+func parseLine(ctx context.Context, line string) (engine.Doer, error) {
+	config := state.GetConfig(ctx)
+	log := config.Global().Log
+
 	words := strings.Split(line, " ")
 	empty := true
 	for i, w := range words {

@@ -93,15 +93,21 @@ func (self *CommandStacker) String() string {
 	return fmt.Sprintf("STACKER done=%t full=%t count=%d", self.done, self.full, self.count)
 }
 
+// FIXME convert to Enum() idea
 func (self *BillValidator) Init(ctx context.Context) error {
-	// TODO read config
-	self.dev.Init(ctx, 0x30, "billvalidator", binary.BigEndian)
+	config := state.GetConfig(ctx)
+	m, err := config.Mdber()
+	if err != nil {
+		return err // TODO annotate
+	}
+	// TODO read settings from config
+	self.dev.Init(m, config.Global().Log, 0x30, "billvalidator", binary.BigEndian)
 
 	// warning: hidden dependencies in order of following calls
 	self.DoConfigBills = self.newConfigBills()
 	self.DoIniter = self.newIniter()
 
-	err := self.DoIniter.Do(ctx)
+	err = self.DoIniter.Do(ctx)
 	return err
 }
 

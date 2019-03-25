@@ -11,7 +11,6 @@ import (
 
 	prompt "github.com/c-bata/go-prompt"
 	"github.com/juju/errors"
-	iodin "github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/mdb/evend"
@@ -31,14 +30,12 @@ const usage = `syntax: commands separated by whitespace
 - par      execute concurrently all commands on this line
 `
 
-var log = log2.NewStderr(log2.LDebug)
-
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	flagConfig := cmdline.String("config", "vender.hcl", "")
-	flagUarter := cmdline.String("uarter", "file", "")
 	cmdline.Parse(os.Args[1:])
 
+	log := log2.NewStderr(log2.LDebug)
 	log.SetFlags(log2.LInteractiveFlags)
 
 	ctx := context.Background()
@@ -50,24 +47,6 @@ func main() {
 	log.Debugf("config=%+v", config)
 	ctx = state.ContextWithConfig(ctx, config)
 
-	if *flagUarter == "iodin" {
-		iodin, err := iodin.NewClient(config.Hardware.IodinPath)
-		if err != nil {
-			err = errors.Annotatef(err, "config: mdb.uart_driver=%s iodin_path=%s", config.Hardware.Mdb.UartDriver, config.Hardware.IodinPath)
-			log.Fatal(err)
-		}
-		config.Hardware.Mdb.Uarter = mdb.NewIodinUart(iodin)
-		config.Hardware.Mdb.UartDevice = "\x0f\x0e"
-	}
-
-	mdber, err := mdb.NewMDB(config.Hardware.Mdb.Uarter, config.Hardware.Mdb.UartDevice, log.Clone(log2.LError))
-	if err != nil {
-		log.Fatal(errors.ErrorStack(err))
-	}
-	if config.Hardware.Mdb.Log {
-		mdber.Log.SetLevel(log2.LDebug)
-	}
-	ctx = context.WithValue(ctx, mdb.ContextKey, mdber)
 	if err := doMdbBreak.Do(ctx); err != nil {
 		log.Fatal(errors.ErrorStack(err))
 	}
@@ -98,10 +77,11 @@ func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest 
 }
 
 func newExecutor(ctx context.Context) func(string) {
-	eng := engine.ContextValueEngine(ctx, engine.ContextKey)
+	config := state.GetConfig(ctx)
+	log := config.Global().Log
 
 	return func(line string) {
-		d, err := parseLine(eng, line)
+		d, err := parseLine(ctx, line)
 		if err != nil {
 			log.Errorf(errors.ErrorStack(err))
 			return
@@ -114,22 +94,32 @@ func newExecutor(ctx context.Context) func(string) {
 }
 
 var doMdbBreak = engine.Func{Name: "mdb.break", F: func(ctx context.Context) error {
-	mdber := mdb.ContextValueMdber(ctx, mdb.ContextKey)
-	return mdber.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
+	config := state.GetConfig(ctx)
+	m, err := config.Mdber()
+	if err != nil {
+		return err
+	}
+	return m.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
 }}
 
 var doUsage = engine.Func{F: func(ctx context.Context) error {
-	log := log2.ContextValueLogger(ctx, log2.ContextKey)
+	config := state.GetConfig(ctx)
+	log := config.Global().Log
 	log.Infof(usage)
 	return nil
 }}
 
 func newTx(request mdb.Packet) engine.Doer {
 	return engine.Func{Name: "mdb:" + request.Format(), F: func(ctx context.Context) error {
-		log := log2.ContextValueLogger(ctx, log2.ContextKey)
-		m := mdb.ContextValueMdber(ctx, mdb.ContextKey)
+		config := state.GetConfig(ctx)
+		log := config.Global().Log
+		m, err := config.Mdber()
+		if err != nil {
+			return err
+		}
+
 		response := new(mdb.Packet)
-		err := m.Tx(request, response)
+		err = m.Tx(request, response)
 		if err != nil {
 			log.Errorf(errors.ErrorStack(err))
 		} else {
@@ -139,7 +129,11 @@ func newTx(request mdb.Packet) engine.Doer {
 	}}
 }
 
-func parseLine(eng *engine.Engine, line string) (engine.Doer, error) {
+func parseLine(ctx context.Context, line string) (engine.Doer, error) {
+	config := state.GetConfig(ctx)
+	log := config.Global().Log
+	eng := engine.ContextValueEngine(ctx, engine.ContextKey)
+
 	parts := strings.Split(line, " ")
 	words := make([]string, 0, len(parts))
 	empty := true
