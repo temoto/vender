@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,15 @@ var (
 	PacketEmpty = &Packet{readonly: true}
 	PacketNul1  = &Packet{readonly: true, l: 1}
 )
+
+type InvalidChecksum struct {
+	Received byte
+	Actual   byte
+}
+
+func (self InvalidChecksum) Error() string {
+	return fmt.Sprintf("Invalid checksum received=%02x actual=%02x", self.Received, self.Actual)
+}
 
 type Packet struct {
 	b [PacketMaxLength]byte

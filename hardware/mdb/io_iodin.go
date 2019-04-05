@@ -1,6 +1,7 @@
 package mdb
 
 import (
+	"sync"
 	"time"
 
 	"github.com/juju/errors"
@@ -8,7 +9,8 @@ import (
 )
 
 type iodinUart struct {
-	c *iodin.Client
+	c  *iodin.Client
+	lk sync.Mutex
 }
 
 func NewIodinUart(c *iodin.Client) *iodinUart {
@@ -22,11 +24,18 @@ func (self *iodinUart) Close() error {
 	return nil
 }
 
-func (self *iodinUart) Break(d time.Duration) error {
+func (self *iodinUart) Break(d, sleep time.Duration) error {
+	self.lk.Lock()
+	defer self.lk.Unlock()
+
 	ms := int(d / time.Millisecond)
 	var r iodin.Response
 	err := self.c.Do(&iodin.Request{Command: iodin.Request_MDB_RESET, ArgUint: uint32(ms)}, &r)
-	return errors.Trace(err)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	time.Sleep(sleep)
+	return nil
 }
 
 func (self *iodinUart) Open(path string) error {
@@ -36,9 +45,9 @@ func (self *iodinUart) Open(path string) error {
 }
 
 func (self *iodinUart) Tx(request, response []byte) (n int, err error) {
-	if len(request) == 0 {
-		return 0, errors.New("Tx request empty")
-	}
+	self.lk.Lock()
+	defer self.lk.Unlock()
+
 	var r iodin.Response
 	err = self.c.Do(&iodin.Request{Command: iodin.Request_MDB_TX, ArgBytes: request}, &r)
 	n = copy(response, r.DataBytes)

@@ -11,13 +11,16 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
+
+const testScalingFactor = 100
 
 type _PI = money.PollItem
 
 func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level) context.Context {
-	ctx := state.NewTestContext(t, "", logLevel)
+	ctx := state.NewTestContext(t, "money { scale=100 change_over_compensate=10 }", logLevel)
 
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
 	config := state.GetConfig(ctx)
@@ -29,7 +32,8 @@ func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level)
 	go func() {
 		defer close(respCh)
 		// initer, SETUP
-		mdb.TestChanTx(t, reqCh, respCh, "09", "021643640200170102050a0a1900000000000000000000")
+		setupResponse := fmt.Sprintf("021643%02x0200170102050a0a1900000000000000000000", testScalingFactor)
+		mdb.TestChanTx(t, reqCh, respCh, "09", setupResponse)
 
 		// initer, EXPANSION IDENTIFICATION
 		mdb.TestChanTx(t, reqCh, respCh, "0f00", "434f47303030303030303030303030463030313230303120202020029000000003")
@@ -43,9 +47,6 @@ func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level)
 		// initer, TUBE STATUS
 		mdb.TestChanTx(t, reqCh, respCh, "0a", "0000110008")
 
-		// initer, COIN TYPE
-		mdb.TestChanTx(t, reqCh, respCh, "0cffffffff", "")
-
 		if replyFunc != nil {
 			replyFunc(t, reqCh, respCh)
 		}
@@ -56,7 +57,7 @@ func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level)
 
 func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
 	ca := &CoinAcceptor{}
-	ca.dev.DelayErr = 1
+	ca.dispenseTimeout = 1
 	ca.dev.DelayIdle = 1
 	ca.dev.DelayNext = 1
 	ca.dev.DelayReset = 1
@@ -64,10 +65,6 @@ func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
 	if err != nil {
 		t.Fatalf("ca.Init err=%v", err)
 	}
-	ca.coinTypeCredit[0] = currency.Nominal(1)
-	ca.coinTypeCredit[1] = currency.Nominal(2)
-	ca.coinTypeCredit[2] = currency.Nominal(5)
-	ca.coinTypeCredit[3] = currency.Nominal(10)
 	return ca
 }
 
@@ -75,18 +72,21 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "0b", input)
 	}
-	ca := newDevice(t, mockContext(t, reply, log2.LDebug))
-	r := ca.dev.DoPollSync(context.Background())
+	ctx := mockContext(t, reply, log2.LDebug)
+	ca := newDevice(t, ctx)
+	// ca.AcceptMax(ctx, 1000)
+	r := ca.dev.Tx(ca.dev.PacketPoll)
 	if r.E != nil {
 		t.Fatalf("POLL err=%v", r.E)
 	}
 	pis := make([]_PI, 0, len(input)/2)
-	ca.newPoller(func(pi money.PollItem) { pis = append(pis, pi) })(r)
+	ca.pollFun(func(pi money.PollItem) bool { pis = append(pis, pi); return false })(r.P)
 	money.TestPollItemsEqual(t, pis, expected)
 }
 
 func TestCoinPoll(t *testing.T) {
 	t.Parallel()
+
 	type Case struct {
 		name   string
 		input  string
@@ -94,17 +94,19 @@ func TestCoinPoll(t *testing.T) {
 	}
 	cases := []Case{
 		Case{"empty", "", []_PI{}},
-		Case{"reset", "0b", []_PI{_PI{Status: money.StatusWasReset}}},
-		Case{"slugs", "21", []_PI{_PI{Status: money.StatusInfo, Error: ErrSlugs, DataCount: 1}}},
-		Case{"deposited-cashbox", "4109", []_PI{_PI{
+		// TODO Case{"reset", "0b", []_PI{{Status: money.StatusWasReset}}},
+		Case{"reset", "0b", []_PI{}},
+		// TODO Case{"slugs", "21", []_PI{_PI{Status: money.StatusInfo, Error: ErrSlugs, DataCount: 1}}},
+		Case{"slugs", "21", []_PI{}},
+		Case{"deposited-cashbox", "4109", []_PI{{
 			Status:      money.StatusCredit,
-			DataNominal: currency.Nominal(2),
+			DataNominal: currency.Nominal(2) * testScalingFactor,
 			DataCount:   1,
 			DataCashbox: true,
 		}}},
-		Case{"deposited-tube", "521e", []_PI{_PI{Status: money.StatusCredit, DataNominal: currency.Nominal(5), DataCount: 1}}},
-		Case{"deposited-reject", "7300", []_PI{_PI{Status: money.StatusRejected, DataNominal: currency.Nominal(10), DataCount: 1}}},
-		Case{"dispensed", "9251", []_PI{_PI{Status: money.StatusDispensed, DataNominal: currency.Nominal(5), DataCount: 1}}},
+		Case{"deposited-tube", "521e", []_PI{{Status: money.StatusCredit, DataNominal: currency.Nominal(5) * testScalingFactor, DataCount: 1}}},
+		Case{"deposited-reject", "7300", []_PI{{Status: money.StatusRejected, DataNominal: currency.Nominal(10) * testScalingFactor, DataCount: 1}}},
+		Case{"dispensed", "9251", []_PI{{Status: money.StatusDispensed, DataNominal: currency.Nominal(5) * testScalingFactor, DataCount: 1}}},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
@@ -116,29 +118,82 @@ func TestCoinPoll(t *testing.T) {
 	}
 }
 
-func checkDiag(t testing.TB, input string, expected DiagResult) {
+func TestCoinPayout(t *testing.T) {
+	t.Parallel()
+
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "0f05", input)
+		mdb.TestChanTx(t, reqCh, respCh, "0f0207", "")
+		mdb.TestChanTx(t, reqCh, respCh, "0f04", "00")
+		mdb.TestChanTx(t, reqCh, respCh, "0f04", "")
+		mdb.TestChanTx(t, reqCh, respCh, "0f03", "07000000")
 	}
-	ca := newDevice(t, mockContext(t, reply, log2.LDebug))
-	dr := new(DiagResult)
-	err := ca.CommandExpansionSendDiagStatus(dr)
+	ctx := mockContext(t, reply, log2.LDebug)
+	ca := newDevice(t, ctx)
+
+	dispensed := new(currency.NominalGroup)
+	dispensed.SetValid(ca.SupportedNominals())
+	err := ca.NewPayout(7*currency.Amount(ca.scalingFactor), dispensed).Do(ctx)
 	if err != nil {
-		t.Fatalf("CommandExpansionSendDiagStatus() err=%v", err)
+		t.Fatal(err)
 	}
-	s := fmt.Sprintf("checkDiag input=%s dr=(%d)%s expect=(%d)%s", input, len(*dr), dr.Error(), len(expected), expected.Error())
-	if len(*dr) != len(expected) {
-		t.Fatal(s)
+	helpers.AssertEqual(t, dispensed.String(), "1:7,total:7")
+}
+
+func TestCoinAccept(t *testing.T) {
+	t.Parallel()
+
+	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
+		mdb.TestChanTx(t, reqCh, respCh, "0c001fffff", "")
 	}
-	for i, ds := range *dr {
-		if ds != expected[i] {
-			t.Fatal(s)
-		}
+	ctx := mockContext(t, reply, log2.LDebug)
+	ca := newDevice(t, ctx)
+
+	err := ca.AcceptMax(1000).Do(ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
+func TestCoinDispenseSmart(t *testing.T) {
+	t.Parallel()
+
+	// type Case struct {
+	// 	tubes  currency.NominalGroup
+	// 	input  currency.Amount
+	// 	over   bool
+	// 	expect currency.NominalGroup
+	// }
+	// cases := []Case{
+	// }
+	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
+		mdb.TestChanTx(t, reqCh, respCh, "0a", "00000003")
+		mdb.TestChanTx(t, reqCh, respCh, "0f0201", "")
+		mdb.TestChanTx(t, reqCh, respCh, "0f04", "")
+		mdb.TestChanTx(t, reqCh, respCh, "0f03", "00")
+		mdb.TestChanTx(t, reqCh, respCh, "0f0201", "")
+		mdb.TestChanTx(t, reqCh, respCh, "0f04", "")
+		mdb.TestChanTx(t, reqCh, respCh, "0f03", "00")
+		mdb.TestChanTx(t, reqCh, respCh, "0f0202", "")
+		mdb.TestChanTx(t, reqCh, respCh, "0f04", "")
+		mdb.TestChanTx(t, reqCh, respCh, "0f03", "0001")
+	}
+	ctx := mockContext(t, reply, log2.LDebug)
+	ca := newDevice(t, ctx)
+
+	dispensed := new(currency.NominalGroup)
+	err := ca.NewDispenseSmart(1*currency.Amount(ca.scalingFactor), true, dispensed).Do(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers.AssertEqual(t, dispensed.String(), "2:1,total:2")
+}
+
+// func checkDispenseSmart(t testing.TB, input currency.Amount, over bool, expect *currency.NominalGroup) {
+// }
+
 func TestCoinDiag(t *testing.T) {
 	t.Parallel()
+
 	type Case struct {
 		name   string
 		input  string
@@ -160,6 +215,26 @@ func TestCoinDiag(t *testing.T) {
 		})
 	}
 }
+func checkDiag(t testing.TB, input string, expected DiagResult) {
+	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
+		mdb.TestChanTx(t, reqCh, respCh, "0f05", input)
+	}
+	ca := newDevice(t, mockContext(t, reply, log2.LDebug))
+	dr := new(DiagResult)
+	err := ca.CommandExpansionSendDiagStatus(dr)
+	if err != nil {
+		t.Fatalf("CommandExpansionSendDiagStatus() err=%v", err)
+	}
+	s := fmt.Sprintf("checkDiag input=%s dr=(%d)%s expect=(%d)%s", input, len(*dr), dr.Error(), len(expected), expected.Error())
+	if len(*dr) != len(expected) {
+		t.Fatal(s)
+	}
+	for i, ds := range *dr {
+		if ds != expected[i] {
+			t.Fatal(s)
+		}
+	}
+}
 
 func BenchmarkCoinPoll(b *testing.B) {
 	type Case struct {
@@ -169,6 +244,7 @@ func BenchmarkCoinPoll(b *testing.B) {
 	cases := []Case{
 		Case{"empty", ""},
 		Case{"reset", "0b"},
+		Case{"deposited-tube", "521e"},
 	}
 	for _, c := range cases {
 		c := c
@@ -180,11 +256,11 @@ func BenchmarkCoinPoll(b *testing.B) {
 				}
 			}
 			ca := newDevice(b, mockContext(b, reply, log2.LError))
-			poller := ca.newPoller(func(money.PollItem) {})
+			parse := ca.pollFun(func(money.PollItem) bool { return false })
 			b.SetBytes(int64(len(c.input) / 2))
 			b.ResetTimer()
 			for i := 1; i <= b.N; i++ {
-				poller(ca.dev.DoPollSync(context.Background()))
+				parse(ca.dev.Tx(ca.dev.PacketPoll).P)
 			}
 		})
 	}

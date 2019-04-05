@@ -42,6 +42,9 @@ type Generic struct {
 }
 
 func (self *Generic) Init(ctx context.Context, address uint8, name string, proto evendProtocol) error {
+	self.logPrefix = fmt.Sprintf("mdb.evend.%s(%02x)", name, address)
+	tag := self.logPrefix + ".Init"
+
 	if self.proto2BusyMask == 0 {
 		self.proto2BusyMask = genericPollBusy
 	}
@@ -49,7 +52,6 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 		self.readyTimeout = DefaultReadyTimeout
 	}
 	self.proto = proto
-	self.logPrefix = fmt.Sprintf("device=%s(%02x) proto%v", name, address, proto)
 
 	if self.dev.DelayReset == 0 {
 		self.dev.DelayReset = 2100 * time.Millisecond
@@ -57,15 +59,16 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 	config := state.GetConfig(ctx)
 	m, err := config.Mdber()
 	if err != nil {
-		return err // TODO annotate
+		return errors.Annotate(err, tag)
 	}
-	self.dev.Init(m, config.Global().Log, address, name, binary.BigEndian)
+	self.dev.Init(m.Tx, config.Global().Log, address, name, binary.BigEndian)
 
-	if err = self.dev.NewDoReset().Do(ctx); err != nil {
-		return err
+	// FIXME Enum, remove IO from Init
+	if err = self.dev.NewReset().Do(ctx); err != nil {
+		return errors.Annotate(err, tag)
 	}
 	err = self.dev.DoSetup(ctx)
-	return err
+	return errors.Annotate(err, tag)
 }
 
 func (self *Generic) NewErrPollProblem(p mdb.Packet) error {
@@ -82,24 +85,24 @@ func (self *Generic) CommandAction(args []byte) error {
 	request := mdb.MustPacketFromBytes(bs, true)
 	r := self.dev.Tx(request)
 	if r.E != nil {
-		self.dev.Log.Errorf("device=%s mdb request=%s err=%v", self.dev.Name, request.Format(), r.E)
 		return r.E
 	}
-	self.dev.Log.Debugf("device=%s action=%x response=(%d)%s", self.dev.Name, args, r.P.Len(), r.P.Format())
+	self.dev.Log.Debugf("%s action=%x response=(%d)%s", self.logPrefix, args, r.P.Len(), r.P.Format())
 	return nil
 }
 
 func (self *Generic) CommandErrorCode() (byte, error) {
+	tag := self.logPrefix + ".errorcode"
+
 	bs := []byte{self.dev.Address + 4, 0x02}
 	request := mdb.MustPacketFromBytes(bs, true)
 	r := self.dev.Tx(request)
 	if r.E != nil {
-		self.dev.Log.Errorf("device=%s request=%s response=%s", self.dev.Name, request.Format(), r.E)
-		return 0, r.E
+		return 0, errors.Annotate(r.E, tag)
 	}
 	rs := r.P.Bytes()
 	if len(rs) < 1 {
-		err := errors.Errorf("device=%s request=%s response=%s", self.dev.Name, request.Format(), r.E)
+		err := errors.Errorf("%s request=%s response=%s", tag, request.Format(), r.E)
 		return 0, err
 	}
 	return rs[0], nil
@@ -110,7 +113,15 @@ func (self *Generic) DoWaitReady(tagPrefix string) engine.Doer {
 	tag := tagPrefix + "/wait-ready"
 	switch self.proto {
 	case proto1:
-		return self.dev.NewPollUntilEmpty(tag, self.readyTimeout, nil)
+		fun := func(p mdb.Packet) (bool, error) {
+			bs := p.Bytes()
+			if len(bs) == 0 {
+				return true, nil
+			}
+			return false, errors.Errorf("%s unexpected response=%x", tag, bs)
+		}
+
+		return self.dev.NewPollLoop(tag, self.dev.PacketPoll, self.readyTimeout, fun)
 	case proto2:
 		return self.doProto2PollWait(tag, self.readyTimeout, genericPollMiss)
 	default:
@@ -133,11 +144,8 @@ func (self *Generic) DoWaitDone(tagPrefix string, timeout time.Duration) engine.
 
 func (self *Generic) doProto1PollWaitSuccess(tag string, timeout time.Duration) engine.Doer {
 	success := []byte{0x0d, 0x00}
-	fun := func(r mdb.PacketError) (bool, error) {
-		if r.E != nil {
-			return true, r.E
-		}
-		bs := r.P.Bytes()
+	fun := func(p mdb.Packet) (bool, error) {
+		bs := p.Bytes()
 		if len(bs) == 0 {
 			self.dev.Log.Debugf("device=%s POLL=empty", self.dev.Name)
 			return false, nil
@@ -147,19 +155,16 @@ func (self *Generic) doProto1PollWaitSuccess(tag string, timeout time.Duration) 
 			return true, nil
 		}
 		if bs[0] == 0x04 {
-			return true, errors.Errorf("device=%s POLL=%x -> parsed error", self.dev.Name, bs)
+			return true, errors.Errorf("tag=%s device=%s POLL=%x -> parsed error", tag, self.dev.Name, bs)
 		}
-		return true, self.NewErrPollUnexpected(r.P)
+		return true, self.NewErrPollUnexpected(p)
 	}
-	return self.dev.NewPollLoopActive(tag, timeout, fun)
+	return self.dev.NewPollLoop(tag, self.dev.PacketPoll, timeout, fun)
 }
 
 func (self *Generic) doProto2PollWait(tag string, timeout time.Duration, ignoreBits byte) engine.Doer {
-	fun := func(r mdb.PacketError) (bool, error) {
-		if r.E != nil {
-			return true, r.E
-		}
-		bs := r.P.Bytes()
+	fun := func(p mdb.Packet) (bool, error) {
+		bs := p.Bytes()
 		if len(bs) == 0 {
 			return true, nil
 		}
@@ -182,13 +187,13 @@ func (self *Generic) doProto2PollWait(tag string, timeout time.Duration, ignoreB
 			if err == nil {
 				err = errors.Errorf("%s POLL=%x errorcode=%[3]d %[3]02x", self.logPrefix, bs, errCode)
 			}
-			return true, err
+			return true, errors.Annotate(err, tag)
 		}
 		self.dev.Log.Debugf("npw v=%02x i=%02x &=%02x", value, ignoreBits, value&^ignoreBits)
 		if value&^ignoreBits == 0 {
 			return false, nil
 		}
-		return true, self.NewErrPollUnexpected(r.P)
+		return true, self.NewErrPollUnexpected(p)
 	}
-	return self.dev.NewPollLoopActive(tag, timeout, fun)
+	return self.dev.NewPollLoop(tag, self.dev.PacketPoll, timeout, fun)
 }

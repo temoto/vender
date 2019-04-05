@@ -56,7 +56,7 @@ func (self *DeviceCup) NewDispenseSync() engine.Doer {
 		Append(self.NewDispense()).
 		Append(engine.Func{Name: tag + "/assert-busy", F: func(ctx context.Context) error {
 			time.Sleep(30 * time.Millisecond) // TODO tune
-			r := self.dev.DoPollSync(ctx)
+			r := self.dev.Tx(self.dev.PacketPoll)
 			if r.E != nil {
 				return r.E
 			}

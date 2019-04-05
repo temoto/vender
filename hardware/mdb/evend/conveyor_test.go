@@ -9,6 +9,7 @@ import (
 
 func TestConveyor(t *testing.T) {
 	t.Parallel()
+
 	init := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "d8", "")
 		mdb.TestChanTx(t, reqCh, respCh, "d9", "011810000a0000c8001fff01050a32640000000000000000000000")
@@ -36,7 +37,7 @@ func TestConveyor(t *testing.T) {
 	e := engine.ContextValueEngine(ctx, engine.ContextKey)
 	d := new(DeviceConveyor)
 	// TODO make small delay default in tests
-	d.dev.DelayErr = 1
+	d.dev.DelayIdle = 1
 	d.dev.DelayNext = 1
 	d.dev.DelayReset = 1
 	err := d.Init(ctx)

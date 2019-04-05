@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
 )
 
 // Amount is integer counting lowest currency unit, e.g. $1.20 = 120
 type Amount uint32
 
-func (self Amount) Format100I() string                   { return fmt.Sprint(float32(self) / 100) }
-func (self Amount) FormatCtx(ctx context.Context) string { return "TODO" }
+func (self Amount) Format100I() string { return fmt.Sprint(float32(self) / 100) }
+func (self Amount) FormatCtx(ctx context.Context) string {
+	// XXX FIXME
+	return self.Format100I()
+}
 
 // Nominal is value of one coin or bill
 type Nominal Amount
@@ -44,7 +48,9 @@ func (self *NominalGroup) Copy() *NominalGroup {
 func (self *NominalGroup) SetValid(valid []Nominal) {
 	self.values = make(map[Nominal]uint, len(valid))
 	for _, n := range valid {
-		self.values[n] = 0
+		if n != 0 {
+			self.values[n] = 0
+		}
 	}
 }
 
@@ -55,6 +61,14 @@ func (self *NominalGroup) Add(n Nominal, count uint) error {
 	self.values[n] += count
 	return nil
 }
+func (self *NominalGroup) AddFrom(source *NominalGroup) {
+	if self.values == nil {
+		self.values = make(map[Nominal]uint, len(source.values))
+	}
+	for k, v := range source.values {
+		self.values[k] += v
+	}
+}
 
 func (self *NominalGroup) Clear() {
 	for n := range self.values {
@@ -62,8 +76,16 @@ func (self *NominalGroup) Clear() {
 	}
 }
 
+func (self *NominalGroup) Get(n Nominal) (uint, error) {
+	if stored, ok := self.values[n]; !ok {
+		return 0, ErrNominalInvalid
+	} else {
+		return stored, nil
+	}
+}
+
 func (self *NominalGroup) Contains(a Amount) bool {
-	return self.Withdraw(a, NewExpendLeastCount(), false) == nil
+	return self.Copy().Withdraw(nil, a, NewExpendLeastCount()) == nil
 }
 
 func (self *NominalGroup) Iter(f func(nominal Nominal, count uint) error) error {
@@ -83,24 +105,38 @@ func (self *NominalGroup) Total() Amount {
 	return sum
 }
 
+func (self *NominalGroup) Diff(other *NominalGroup) Amount {
+	result := Amount(0)
+	for n, c := range self.values {
+		result += Amount(n)*Amount(c) - Amount(n)*Amount(other.values[n])
+	}
+	return result
+}
 func (self *NominalGroup) Sub(other *NominalGroup) {
 	for nominal := range self.values {
 		self.values[nominal] -= other.values[nominal]
 	}
 }
 
-func (self *NominalGroup) Withdraw(a Amount, strategy ExpendStrategy, commit bool) error {
-	// check if transfer is possible with given strategy
-	if err := self.Copy().expendLoop(a, strategy); err != nil {
-		return err
-	}
-	if commit {
-		return self.expendLoop(a, strategy)
-	}
-	return nil
+func (self *NominalGroup) Withdraw(to *NominalGroup, a Amount, strategy ExpendStrategy) error {
+	return self.expendLoop(to, a, strategy)
 }
 
-func (self *NominalGroup) expendLoop(amount Amount, strategy ExpendStrategy) error {
+func (self *NominalGroup) String() string {
+	parts := make([]string, 0, len(self.values)+1)
+	sum := Amount(0)
+	for nominal, count := range self.values {
+		if count > 0 {
+			parts = append(parts, fmt.Sprintf("%s:%d", Amount(nominal).Format100I(), count))
+			sum += Amount(nominal) * Amount(count)
+		}
+	}
+	sort.Strings(parts)
+	parts = append(parts, fmt.Sprintf("total:%s", sum.Format100I()))
+	return strings.Join(parts, ",")
+}
+
+func (self *NominalGroup) expendLoop(to *NominalGroup, amount Amount, strategy ExpendStrategy) error {
 	strategy.Reset(self)
 	for amount > 0 {
 		nominal, err := strategy.ExpendOne(self, amount)
@@ -111,6 +147,9 @@ func (self *NominalGroup) expendLoop(amount Amount, strategy ExpendStrategy) err
 			panic("ExpendStrategy returned Nominal 0 without error")
 		}
 		amount -= Amount(nominal)
+		if to != nil {
+			to.values[nominal] += 1
+		}
 	}
 	return nil
 }
@@ -152,6 +191,7 @@ func ngOrderSortElemCount(n Nominal, c uint) Nominal   { return Nominal(c) }
 type ExpendStrategy interface {
 	Reset(from *NominalGroup)
 	ExpendOne(from *NominalGroup, max Amount) (Nominal, error)
+	Validate() bool
 }
 
 type ExpendGenericOrder struct {
@@ -165,6 +205,7 @@ func (self *ExpendGenericOrder) Reset(from *NominalGroup) {
 func (self *ExpendGenericOrder) ExpendOne(from *NominalGroup, max Amount) (Nominal, error) {
 	return expendOneOrdered(from, self.order, max)
 }
+func (self *ExpendGenericOrder) Validate() bool { return true }
 
 func NewExpendLeastCount() ExpendStrategy {
 	return &ExpendGenericOrder{SortElemFunc: ngOrderSortElemNominal}
@@ -184,6 +225,9 @@ func (self *ExpendStatistical) Reset(from *NominalGroup) {
 func (self *ExpendStatistical) ExpendOne(from *NominalGroup, max Amount) (Nominal, error) {
 	return expendOneOrdered(from, self.order, max)
 }
+func (self *ExpendStatistical) Validate() bool {
+	return self.Stat.Total() > 0
+}
 
 type ExpendCombine struct {
 	rnd   *rand.Rand
@@ -202,4 +246,7 @@ func (self *ExpendCombine) ExpendOne(from *NominalGroup, max Amount) (Nominal, e
 		return self.S1.ExpendOne(from, max)
 	}
 	return self.S2.ExpendOne(from, max)
+}
+func (self *ExpendCombine) Validate() bool {
+	return self.S1 != nil && self.S2 != nil && self.S1.Validate() && self.S2.Validate()
 }

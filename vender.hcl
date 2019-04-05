@@ -32,7 +32,8 @@ hardware {
     pin = "25"
   }
   mdb {
-    log_enable = true
+    // log_debug = true
+    log_debug = false
 
     uart_driver = "mega"
 
@@ -42,6 +43,18 @@ hardware {
     #uart_driver = "iodin"
     #uart_device = "\x0f\x0e"
   }
+}
+
+money {
+  // Multiple of lowest money unit for config convenience and formatting.
+  // All money numbers in config are multipled by scale.
+  // For USD/EUR set `scale=1` and specify prices in cents.
+  scale = 100
+
+  credit_max = 200
+
+  // limit to over-compensate change return when exact amount is not available
+  change_over_compensate = 10
 }
 
 papa {

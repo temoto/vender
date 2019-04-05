@@ -10,7 +10,7 @@ import (
 )
 
 func testMake(t testing.TB, initFunc, replyFunc mdb.TestReplyFunc) context.Context {
-	ctx := state.NewTestContext(t, "", log2.LDebug)
+	ctx := state.NewTestContext(t, "money { scale=100 }", log2.LDebug)
 
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
 	config := state.GetConfig(ctx)

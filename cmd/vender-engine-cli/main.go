@@ -12,8 +12,8 @@ import (
 	prompt "github.com/c-bata/go-prompt"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
@@ -54,7 +54,7 @@ func main() {
 	eng.Register("break", doMdbBreak)
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
 	// right now Enum does IO implicitly
-	evend.Enum(ctx, nil)
+	hardware.Enum(ctx, nil)
 
 	log.Debugf("devices init complete")
 
@@ -99,7 +99,7 @@ var doMdbBreak = engine.Func{Name: "mdb.break", F: func(ctx context.Context) err
 	if err != nil {
 		return err
 	}
-	return m.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
+	return m.BusReset(200*time.Millisecond, 500*time.Millisecond)
 }}
 
 var doUsage = engine.Func{F: func(ctx context.Context) error {

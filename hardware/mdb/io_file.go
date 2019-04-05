@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"runtime/debug"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -22,6 +23,7 @@ type fileUart struct {
 	w   io.Writer // override in test
 	br  *bufio.Reader
 	t2  termios2
+	lk  sync.Mutex
 }
 
 func NewFileUart(l *log2.Log) *fileUart {
@@ -75,12 +77,19 @@ func (self *fileUart) write9(p []byte, start9 bool) (n int, err error) {
 	return n + n2, nil
 }
 
-func (self *fileUart) Break(d time.Duration) (err error) {
+func (self *fileUart) Break(d, sleep time.Duration) (err error) {
+	const tag = "fileUart.Break"
 	ms := int(d / time.Millisecond)
+	self.lk.Lock()
+	defer self.lk.Unlock()
 	if err = self.resetRead(); err != nil {
-		return errors.Annotate(err, "fileUart.Break")
+		return errors.Annotate(err, tag)
 	}
-	return ioctl(self.fd, uintptr(cTCSBRKP), uintptr(ms/100))
+	if err = ioctl(self.fd, uintptr(cTCSBRKP), uintptr(ms/100)); err != nil {
+		return errors.Annotate(err, tag)
+	}
+	time.Sleep(sleep)
+	return nil
 }
 
 func (self *fileUart) Close() error {
@@ -134,6 +143,11 @@ func (self *fileUart) Tx(request, response []byte) (n int, err error) {
 	if len(request) == 0 {
 		return 0, errors.New("Tx request empty")
 	}
+
+	// TODO feed IO operations to loop in always running goroutine
+	// that would also eliminate lock
+	self.lk.Lock()
+	defer self.lk.Unlock()
 
 	saveGCPercent := debug.SetGCPercent(-1)
 	defer debug.SetGCPercent(saveGCPercent)

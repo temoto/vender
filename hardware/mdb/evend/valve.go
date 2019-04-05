@@ -65,41 +65,41 @@ func (self *DeviceValve) MlToTimeout(ml uint16) time.Duration {
 }
 
 func (self *DeviceValve) DoGetTempHot() engine.Doer {
-	tag := fmt.Sprintf("%s.get_temp_hot", self.dev.Name)
+	tag := self.Generic.logPrefix + ".get_temp_hot"
+
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		bs := []byte{self.dev.Address + 4, 0x11}
 		request := mdb.MustPacketFromBytes(bs, true)
 		r := self.dev.Tx(request)
 		if r.E != nil {
-			self.dev.Log.Errorf("%s mdb request=%s err=%v", self.logPrefix, request.Format(), r.E)
-			return r.E
+			return errors.Annotate(r.E, tag)
 		}
 		bs = r.P.Bytes()
-		self.dev.Log.Debugf("%s request=%s response=(%d)%s", self.logPrefix, request.Format(), r.P.Len(), r.P.Format())
+		self.dev.Log.Debugf("%s request=%s response=(%d)%s", tag, request.Format(), r.P.Len(), r.P.Format())
 		if len(bs) != 1 {
-			return errors.NotValidf("invalid")
+			return errors.NotValidf("%s response=%x", tag, bs)
 		}
 		return nil
 	}}
 }
 func (self *DeviceValve) DoSetTempHot(arg uint8) engine.Doer {
-	tag := fmt.Sprintf("%s.set_temp_hot:%d", self.dev.Name, arg)
+	tag := self.Generic.logPrefix + ".get_temp_hot"
+
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		bs := []byte{self.dev.Address + 5, 0x10, arg}
 		request := mdb.MustPacketFromBytes(bs, true)
 		r := self.dev.Tx(request)
 		if r.E != nil {
-			self.dev.Log.Errorf("%s mdb request=%s err=%v", self.logPrefix, request.Format(), r.E)
-			return r.E
+			return errors.Annotate(r.E, tag)
 		}
-		self.dev.Log.Debugf("%s request=%s response=(%d)%s", self.logPrefix, request.Format(), r.P.Len(), r.P.Format())
+		self.dev.Log.Debugf("%s request=%s response=(%d)%s", tag, request.Format(), r.P.Len(), r.P.Format())
 		return nil
 	}}
 }
 
 func (self *DeviceValve) doPourCareful(name string, arg1 byte, ml uint16, abort engine.Doer) engine.Doer {
 	tagPour := "pour_" + name
-	tag := fmt.Sprintf("%s.%s_sync:%d", self.dev.Name, tagPour, ml)
+	tag := fmt.Sprintf("%s.%s_sync:%d", self.Generic.logPrefix, tagPour, ml)
 	tx := engine.NewTransaction(tag)
 	const cautionPartMl = 20
 	tx.Root.

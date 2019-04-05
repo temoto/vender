@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/hcl"
 	"github.com/juju/errors"
 	iodin "github.com/temoto/iodin/client/go-iodin"
+	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
 	"github.com/temoto/vender/hardware/lcd"
@@ -41,7 +42,7 @@ type Config struct {
 			// TODO ListenAddr int
 		}
 		Mdb struct {
-			LogEnable  bool   `hcl:"log_enable"`
+			LogDebug   bool   `hcl:"log_debug"`
 			UartDevice string `hcl:"uart_device"`
 			UartDriver string `hcl:"uart_driver"` // file|mega|iodin
 		}
@@ -49,6 +50,11 @@ type Config struct {
 			Spi string `hcl:"spi"`
 			Pin string `hcl:"pin"`
 		}
+	}
+	Money struct {
+		Scale                int `hcl:"scale"`
+		CreditMax            int `hcl:"credit_max"`
+		ChangeOverCompensate int `hcl:"change_over_compensate"`
 	}
 	Papa struct {
 		Address  string
@@ -113,6 +119,12 @@ func (c *Config) Mdber() (*mdb.Mdb, error) {
 	return c.g.Hardware.Mdb.Mdber, err
 }
 
+func (c *Config) ScaleI(i int) currency.Amount {
+	return currency.Amount(i) * currency.Amount(c.Money.Scale)
+}
+func (c *Config) ScaleU(u uint32) currency.Amount          { return currency.Amount(u * uint32(c.Money.Scale)) }
+func (c *Config) ScaleA(a currency.Amount) currency.Amount { return a * currency.Amount(c.Money.Scale) }
+
 // Lazy loading starts to bite
 func (c *Config) requireMega() error {
 	if c.g.Hardware.Mega.Client != nil {
@@ -147,12 +159,13 @@ func (c *Config) requireMdber() error {
 	default:
 		return fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, fast", c.Hardware.Mdb.UartDriver)
 	}
-	m, err := mdb.NewMDB(c.g.Hardware.Mdb.Uarter, c.Hardware.Mdb.UartDevice, c.g.Log.Clone(log2.LError))
+	mdbLog := c.g.Log.Clone(log2.LInfo)
+	if c.Hardware.Mdb.LogDebug {
+		mdbLog.SetLevel(log2.LDebug)
+	}
+	m, err := mdb.NewMDB(c.g.Hardware.Mdb.Uarter, c.Hardware.Mdb.UartDevice, mdbLog)
 	if err != nil {
 		return errors.Annotatef(err, "config: mdb=%v", c.Hardware.Mdb)
-	}
-	if c.Hardware.Mdb.LogEnable {
-		m.Log.SetLevel(log2.LDebug)
 	}
 	c.g.Hardware.Mdb.Mdber = m
 
@@ -161,11 +174,10 @@ func (c *Config) requireMdber() error {
 
 func (c *Config) Init(log *log2.Log) error {
 	c.g.Log = log
-	var err error
 
 	if c.Hardware.HD44780.Enable {
 		dev := new(lcd.LCD)
-		if err = dev.Init(c.Hardware.HD44780.Pinmap); err != nil {
+		if err := dev.Init(c.Hardware.HD44780.Pinmap); err != nil {
 			return errors.Annotatef(err, "config: %#v", c.Hardware)
 		}
 		ctrl := lcd.ControlOn
@@ -192,8 +204,8 @@ func (c *Config) Init(log *log2.Log) error {
 	}
 
 	if c.Hardware.Keyboard.Enable {
-		if err = c.requireMega(); err != nil {
-			return err // TODO annotate
+		if err := c.requireMega(); err != nil {
+			return errors.Annotatef(err, "config: %#v", c.Hardware)
 		}
 		kb, err := keyboard.NewKeyboard(c.g.Hardware.Mega.Client)
 		if err != nil {
@@ -201,6 +213,14 @@ func (c *Config) Init(log *log2.Log) error {
 		}
 		c.g.Hardware.Keyboard.Device = kb
 	}
+
+	if c.Money.Scale == 0 {
+		return errors.NotValidf("config: money.scale is not set")
+	} else if c.Money.Scale < 0 {
+		return errors.NotValidf("config: money.scale < 0")
+	}
+	c.Money.CreditMax *= c.Money.Scale
+	c.Money.ChangeOverCompensate *= c.Money.Scale
 
 	return nil
 }

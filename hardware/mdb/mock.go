@@ -30,9 +30,10 @@ func NewNullUart(r io.Reader, w io.Writer, log *log2.Log) *nullUart {
 	}
 }
 
-func (self *nullUart) Break(d time.Duration) error {
+func (self *nullUart) Break(d, sleep time.Duration) error {
 	self.resetRead()
 	time.Sleep(d)
+	time.Sleep(sleep)
 	return nil
 }
 
@@ -236,6 +237,7 @@ type TestReplyFunc func(t testing.TB, reqCh <-chan Packet, respCh chan<- Packet)
 
 func TestChanTx(t testing.TB, reqCh <-chan Packet, respCh chan<- Packet, expectRequestHex, responseHex string) {
 	request := <-reqCh
+	// log.Printf("chtx expect=%s request=%x", expectRequestHex,  request.Bytes())
 	request.TestHex(t, expectRequestHex)
 	response, err := PacketFromHex(responseHex, true)
 	if err != nil {

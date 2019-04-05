@@ -96,7 +96,7 @@ var doBreak = engine.Func{Name: "break", F: func(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return m.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
+	return m.BusResetDefault()
 }}
 
 func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest {

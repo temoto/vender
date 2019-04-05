@@ -1,6 +1,7 @@
 package mdb
 
 import (
+	"sync"
 	"time"
 
 	"github.com/juju/errors"
@@ -12,7 +13,8 @@ const (
 )
 
 type megaUart struct {
-	c *mega.Client
+	c  *mega.Client
+	lk sync.Mutex
 }
 
 func NewMegaUart(client *mega.Client) Uarter {
@@ -45,7 +47,10 @@ func responseError(r mega.Mdb_result_t, arg byte) error {
 	}
 }
 
-func (self *megaUart) Break(d time.Duration) error {
+func (self *megaUart) Break(d, sleep time.Duration) error {
+	self.lk.Lock()
+	defer self.lk.Unlock()
+
 	var f mega.Frame
 	var err error
 	for retry := 1; retry <= 3; retry++ {
@@ -63,6 +68,9 @@ func (self *megaUart) Break(d time.Duration) error {
 }
 
 func (self *megaUart) Tx(request, response []byte) (int, error) {
+	self.lk.Lock()
+	defer self.lk.Unlock()
+
 	var f mega.Frame
 	var err error
 	n := 0

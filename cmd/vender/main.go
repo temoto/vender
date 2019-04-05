@@ -5,7 +5,6 @@ import (
 	"flag"
 	"os"
 	"runtime"
-	"time"
 
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/juju/errors"
@@ -25,7 +24,6 @@ type systems struct {
 	money     money.MoneySystem
 	papa      papa.PapaSystem
 	telemetry telemetry.TelemetrySystem
-	ui        ui.UISystem
 }
 
 var log = log2.NewStderr(log2.LDebug)
@@ -50,7 +48,6 @@ func main() {
 	lifecycle.RegisterSystem(&sys.money)
 	lifecycle.RegisterSystem(&sys.papa)
 	lifecycle.RegisterSystem(&sys.telemetry)
-	lifecycle.RegisterSystem(&sys.ui)
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, "alive", a)
@@ -65,10 +62,11 @@ func main() {
 		log.Fatal(errors.ErrorStack(err))
 	}
 
-	config.Global().Hardware.Mdb.Mdber.BreakCustom(200*time.Millisecond, 500*time.Millisecond)
+	config.Global().Hardware.Mdb.Mdber.BusResetDefault()
 
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
 	// right now Enum does IO implicitly
+	// FIXME hardware.Enum() but money system inits bill/coin devices explicitly
 	evend.Enum(ctx, nil)
 
 	if err := helpers.FoldErrors(lifecycle.OnStart.Do(ctx)); err != nil {
@@ -77,22 +75,8 @@ func main() {
 	sdnotify(daemon.SdNotifyReady)
 
 	log.Debugf("systems init complete, running")
-	stopCh := a.StopChan()
 	for a.IsRunning() {
-		select {
-		case <-stopCh:
-		case em := <-sys.money.Events():
-			log.Debugf("money event: %s", em.String())
-			switch em.Name() {
-			case money.EventCredit:
-				sys.ui.Logf("credit:%s", em.Amount().Format100I())
-			case money.EventAbort:
-				err := sys.money.Abort(ctx)
-				log.Infof("user requested abort err=%v", err)
-			default:
-				panic("head: unknown money event: " + em.String())
-			}
-		}
+		uiStep(ctx, &sys, a.StopChan())
 	}
 
 	a.Wait()
@@ -101,6 +85,44 @@ func main() {
 	runtime.KeepAlive(ctx)
 	runtime.KeepAlive(lifecycle)
 	runtime.KeepAlive(&sys)
+}
+
+func uiStep(ctx context.Context, sys *systems, stopCh <-chan struct{}) {
+	menu := ui.NewUIMenu(ctx, nil)
+	menu.SetCredit(sys.money.Credit(ctx))
+
+	endCh := make(chan struct{})
+	defer close(endCh)
+	go func() {
+		for {
+			select {
+			case <-endCh:
+				return
+			case <-stopCh:
+				return
+			case em := <-sys.money.Events():
+				log.Debugf("money event: %s", em.String())
+				switch em.Name() {
+				case money.EventCredit:
+					menu.SetCredit(sys.money.Credit(ctx))
+				case money.EventAbort:
+					err := sys.money.Abort(ctx)
+					log.Infof("user requested abort err=%v", err)
+					menu.SetCredit(sys.money.Credit(ctx))
+				default:
+					panic("head: unknown money event: " + em.String())
+				}
+			}
+		}
+	}()
+
+	menuResult := menu.Run()
+	log.Debugf("menu result=%#v", menuResult)
+	if !menuResult.Confirm {
+		return
+	}
+
+	menuResult.Item.D.Do(ctx)
 }
 
 func sdnotify(s string) bool {

@@ -2,11 +2,15 @@ package mdb
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/log2"
+)
+
+const (
+	DefaultBusResetKeep  = 200 * time.Millisecond
+	DefaultBusResetSleep = 500 * time.Millisecond
 )
 
 var (
@@ -16,7 +20,7 @@ var (
 )
 
 type Uarter interface {
-	Break(d time.Duration) error
+	Break(d, sleep time.Duration) error
 	Close() error
 	Open(options string) error
 	Tx(request, response []byte) (int, error)
@@ -25,17 +29,9 @@ type Uarter interface {
 type Mdb struct {
 	Log *log2.Log
 	io  Uarter
-	lk  sync.Mutex
 }
 
-type InvalidChecksum struct {
-	Received byte
-	Actual   byte
-}
-
-func (self InvalidChecksum) Error() string {
-	return fmt.Sprintf("Invalid checksum received=%x actual=%x", self.Received, self.Actual)
-}
+type TxFunc func(request Packet, response *Packet) error
 
 type FeatureNotSupported string
 
@@ -61,15 +57,12 @@ func NewMDB(u Uarter, options string, log *log2.Log) (*Mdb, error) {
 	return self, nil
 }
 
-func (self *Mdb) BreakCustom(keep, sleep time.Duration) error {
-	self.Log.Debugf("mdb.BreakCustom keep=%v sleep=%v", keep, sleep)
-	self.lk.Lock()
-	err := self.io.Break(keep)
-	if err == nil {
-		time.Sleep(sleep)
-	}
-	self.lk.Unlock()
-	return errors.Trace(err)
+func (self *Mdb) BusResetDefault() error {
+	return errors.Trace(self.BusReset(DefaultBusResetKeep, DefaultBusResetSleep))
+}
+func (self *Mdb) BusReset(keep, sleep time.Duration) error {
+	self.Log.Debugf("mdb.BusReset keep=%v sleep=%v", keep, sleep)
+	return errors.Trace(self.io.Break(keep, sleep))
 }
 
 func (self *Mdb) Tx(request Packet, response *Packet) error {
@@ -87,13 +80,11 @@ func (self *Mdb) Tx(request Packet, response *Packet) error {
 	}
 
 	rbs := request.Bytes()
-	self.lk.Lock()
 	n, err := self.io.Tx(rbs, response.b[:])
-	self.lk.Unlock()
 	response.l = n
 
 	if err != nil {
-		return errors.Annotatef(err, "Tx send=%s recv=%s", request.Format(), response.Format())
+		return errors.Annotatef(err, "mdb.Tx send=%s recv=%s err=%v", request.Format(), response.Format(), err)
 	}
 	if self.Log.Enabled(log2.LDebug) {
 		self.Log.Debugf("mdb.Tx (%02d) %s -> (%02d) %s",

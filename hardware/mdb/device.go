@@ -3,35 +3,33 @@ package mdb
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/log2"
 )
 
 const (
-	DefaultDelayErr      = 500 * time.Millisecond
-	DefaultDelayNext     = 200 * time.Millisecond
 	DefaultDelayIdle     = 700 * time.Millisecond
+	DefaultDelayNext     = 200 * time.Millisecond
 	DefaultDelayReset    = 500 * time.Millisecond
 	DefaultIdleThreshold = 30 * time.Second
 )
 
 type Device struct {
 	cmdLk   sync.Mutex // TODO explore if chan approach is better
-	mdber   *Mdb
+	txfun   TxFunc
 	lastOff time.Time // unused yet TODO self.lastOff.IsZero()
 
 	Log           *log2.Log
 	Address       uint8
 	Name          string
 	ByteOrder     binary.ByteOrder
-	DelayNext     time.Duration
-	DelayErr      time.Duration
 	DelayIdle     time.Duration
+	DelayNext     time.Duration
 	DelayReset    time.Duration
 	IdleThreshold time.Duration
 	PacketReset   Packet
@@ -41,24 +39,21 @@ type Device struct {
 	SetupResponse Packet
 }
 
-func (self *Device) Init(m *Mdb, log *log2.Log, addr uint8, name string, byteOrder binary.ByteOrder) {
+func (self *Device) Init(txfun TxFunc, log *log2.Log, addr uint8, name string, byteOrder binary.ByteOrder) {
 	self.cmdLk.Lock()
 	defer self.cmdLk.Unlock()
 
 	self.Address = addr
 	self.ByteOrder = byteOrder
 	self.Log = log
-	self.mdber = m
+	self.txfun = txfun
 	self.Name = name
 
-	if self.DelayNext == 0 {
-		self.DelayNext = DefaultDelayNext
-	}
-	if self.DelayErr == 0 {
-		self.DelayErr = DefaultDelayErr
-	}
 	if self.DelayIdle == 0 {
 		self.DelayIdle = DefaultDelayIdle
+	}
+	if self.DelayNext == 0 {
+		self.DelayNext = DefaultDelayNext
 	}
 	if self.DelayReset == 0 {
 		self.DelayReset = DefaultDelayReset
@@ -73,9 +68,15 @@ func (self *Device) Init(m *Mdb, log *log2.Log, addr uint8, name string, byteOrd
 }
 
 func (self *Device) Tx(request Packet) (r PacketError) {
-	r.E = self.mdber.Tx(request, &r.P)
+	r.E = self.txfun(request, &r.P)
 	if r.E == nil {
 		self.lastOff = time.Time{}
+	} else {
+		self.Log.Errorf("mdb.dev.%s request=%s err=%v", self.Name, request.Format(), r.E)
+		if self.lastOff.IsZero() && errors.Cause(r.E) == ErrTimeout {
+			self.lastOff = time.Now()
+		}
+		r.E = errors.Annotatef(r.E, "request=%x", request.Bytes())
 	}
 	return
 }
@@ -84,8 +85,10 @@ func (self *Device) NewTx(request Packet) *DoRequest {
 	return &DoRequest{dev: self, request: request}
 }
 
-func (self *Device) NewDoReset() engine.Doer {
-	return engine.Func0{Name: self.Name + ".reset", F: func() error {
+func (self *Device) NewReset() engine.Doer {
+	tag := fmt.Sprintf("mdb.%s.reset", self.Name)
+
+	return engine.Func0{Name: tag, F: func() error {
 		self.cmdLk.Lock()
 		defer self.cmdLk.Unlock()
 
@@ -94,13 +97,13 @@ func (self *Device) NewDoReset() engine.Doer {
 		if r.E != nil {
 			if errors.Cause(r.E) == ErrTimeout {
 				self.lastOff = time.Now()
-				self.Log.Errorf("device=%s addr=%02x is offline RESET err=timeout", self.Name, self.Address)
+				self.Log.Errorf("%s addr=%02x is offline RESET err=timeout", tag, self.Address)
 			} else {
-				self.Log.Errorf("device=%s RESET err=%s", self.Name, errors.ErrorStack(r.E))
+				self.Log.Errorf("%s RESET err=%s", tag, errors.ErrorStack(r.E))
 			}
 			return r.E
 		}
-		self.Log.Infof("device=%s addr=%02x is working", self.Name, self.Address)
+		self.Log.Infof("%s addr=%02x is working", tag, self.Address)
 		time.Sleep(self.DelayReset)
 		return nil
 	}}
@@ -113,90 +116,70 @@ func (self *Device) DoSetup(ctx context.Context) error {
 	request := self.PacketSetup
 	r := self.Tx(request)
 	if r.E != nil {
-		self.Log.Errorf("device=%s mdb request=%s err=%v", self.Name, request.Format(), r.E)
 		return r.E
 	}
 	self.SetupResponse = r.P
 	return nil
 }
 
-type PollParseFunc func(PacketError) bool
+// "Idle mode" polling, runs forever until receive on `stopch`.
+// Switches between fast/idle delays.
+// Used by bill/coin devices.
+type PollDelay struct {
+	lastActive time.Time
+	lastDelay  time.Duration
+}
 
-// "idle mode" checking, wants to run forever
-// used by coin/bill devices
-func (self *Device) PollLoopPassive(ctx context.Context, a *alive.Alive, fun PollParseFunc) {
-	lastActive := time.Now()
-	delay := self.DelayNext
-	r := PacketError{}
+func (self *PollDelay) Delay(dev *Device, active bool, err bool, stopch <-chan struct{}) bool {
+	delay := dev.DelayNext
 
-	for a.IsRunning() {
-		r = self.Tx(self.PacketPoll)
-		parsedActive := fun(r)
-		if r.E != nil {
-			delay = self.DelayErr
-			lastActive = time.Now()
-		} else {
-			if parsedActive {
-				delay = self.DelayNext
-				lastActive = time.Now()
-			} else if delay != self.DelayIdle {
-				if time.Since(lastActive) > self.IdleThreshold {
-					delay = self.DelayIdle
-				}
-			}
+	if err {
+		delay = dev.DelayIdle
+	} else if active {
+		self.lastActive = time.Now()
+	} else if self.lastDelay != dev.DelayIdle { // save time syscall while idle continues
+		if time.Since(self.lastActive) > dev.IdleThreshold {
+			delay = dev.DelayIdle
 		}
-		time.Sleep(delay)
+	}
+	self.lastDelay = delay
+
+	select {
+	case <-stopch:
+		return false
+	case <-time.After(delay):
+		return true
 	}
 }
 
-type PollActiveFunc func(PacketError) (bool, error)
+type PollFunc func(Packet) (stop bool, err error)
 
-func (self *Device) NewPollLoopActive(tag string, timeout time.Duration, fun PollActiveFunc) engine.Doer {
-	return engine.Func{Name: tag + "/active-poll-loop", F: func(ctx context.Context) error {
+func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duration, fun PollFunc) engine.Doer {
+	tag += "/poll-loop"
+	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var r PacketError
-		deadline := time.Now().Add(timeout)
+		tbegin := time.Now()
 
+		self.cmdLk.Lock()
+		defer self.cmdLk.Unlock()
 		for {
-			r = self.Tx(self.PacketPoll)
-			stop, err := fun(r)
-			if err != nil {
-				return err
+			r = self.Tx(request)
+			if r.E != nil {
+				return errors.Annotate(r.E, tag)
 			}
-			if stop {
+			stop, err := fun(r.P)
+			if err != nil {
+				return errors.Annotate(err, tag)
+			}
+			if stop || timeout == 0 {
 				return nil
 			}
 			time.Sleep(self.DelayNext)
-			if time.Now().After(deadline) {
+			if time.Since(tbegin) > timeout {
 				return errors.Timeoutf(tag)
 			}
 		}
 	}}
-}
-
-func (self *Device) NewPollUntilEmpty(tag string, timeout time.Duration, ignore []Packet) engine.Doer {
-	fun := func(r PacketError) (bool, error) {
-		if r.E != nil {
-			return false, r.E
-		}
-		if r.P.Len() == 0 {
-			return true, nil
-		}
-		for _, x := range ignore {
-			if r.P.Equal(&x) {
-				return false, nil
-			}
-		}
-		return false, errors.Errorf("%s poll-until unexpected response=%x", tag, r.P.Bytes())
-	}
-	return self.NewPollLoopActive(tag, timeout, fun)
-}
-
-func (self *Device) DoPollSync(ctx context.Context) PacketError {
-	r := self.Tx(self.PacketPoll)
-	if r.E != nil {
-		self.Log.Errorf("device=%s POLL err=%v", self.Name, r.E)
-	}
-	return r
 }
 
 type PacketError struct {
@@ -215,7 +198,7 @@ func (self *DoRequest) Do(ctx context.Context) error {
 	return r.E
 }
 func (self *DoRequest) String() string {
-	return "mdb=" + self.request.Format()
+	return fmt.Sprintf("mdb.%s/%s", self.dev.Name, self.request.Format())
 }
 
 type DoPoll struct {

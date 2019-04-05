@@ -30,8 +30,9 @@ const (
 	msgSugar  = "Сахар"
 	msgCredit = "Кредит:"
 
-	msgMenuCodeEmpty   = "нажимайте цифры"
-	msgMenuCodeInvalid = "проверьте код"
+	msgMenuCodeEmpty          = "нажимайте цифры"
+	msgMenuCodeInvalid        = "проверьте код"
+	msgMenuInsufficientCredit = "добавьте денег"
 )
 
 const (
@@ -53,6 +54,7 @@ var ScaleAlpha = []byte{
 
 type UIMenu struct {
 	alive     *alive.Alive
+	menu      Menu
 	credit    atomic.Value
 	display   *lcd.TextDisplay
 	inputCh   <-chan InputEvent
@@ -62,16 +64,17 @@ type UIMenu struct {
 
 type UIMenuResult struct {
 	Confirm bool
-	Code    uint16
+	Item    MenuItem
 	Cream   uint8
 	Sugar   uint8
 }
 
-func NewUIMenu(ctx context.Context) *UIMenu {
+func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
 	config := state.GetConfig(ctx)
 
 	self := &UIMenu{
 		alive:     alive.NewAlive(),
+		menu:      menu,
 		display:   config.Global().Hardware.HD44780.Display,
 		refreshCh: make(chan struct{}),
 		result: UIMenuResult{
@@ -119,14 +122,14 @@ init:
 
 	for self.alive.IsRunning() {
 		// step 1: refresh display
+		credit := self.credit.Load().(currency.Amount)
 		switch mode {
 		case modeMenuStatus:
 			l1 := self.display.Translate(msgIntro)
 			// TODO write state flags such as "no hot water" on line2
 			l2 := self.display.Translate("")
-			credit := self.credit.Load().(currency.Amount)
 			if (credit != 0) || (len(inputBuf) > 0) {
-				// l1 = self.display.Translate("Кредит:" + credit.FormatCtx(ctx))
+				// l1 = self.display.Translate(msgCredit + credit.FormatCtx(ctx))
 				l1 = self.display.Translate(msgCredit + credit.Format100I())
 				l2 = self.display.Translate(fmt.Sprintf("код:%s\x00", string(inputBuf)))
 			}
@@ -191,13 +194,25 @@ init:
 					self.ConveyError(msgMenuCodeInvalid)
 					break
 				}
+				code := uint16(x)
+
+				mitem, ok := self.menu[code]
+				if !ok {
+					self.ConveyError(msgMenuCodeInvalid)
+					break
+				}
+				log.Printf("compare price=%v credit=%v", mitem.Price, credit)
+				if mitem.Price > credit {
+					self.ConveyError(msgMenuInsufficientCredit)
+					break
+				}
 
 				self.result.Confirm = true
-				self.result.Code = uint16(x)
+				self.result.Item = mitem
 
 				// debug
-				self.ConveyText("debug", fmt.Sprintf("%d +%d +%d",
-					self.result.Code, self.result.Cream, self.result.Sugar))
+				self.ConveyText("debug", fmt.Sprintf("%s +%d +%d",
+					self.result.Item.Name, self.result.Cream, self.result.Sugar))
 
 				return self.result
 			}

@@ -3,10 +3,10 @@ package coin
 import (
 	"context"
 	"encoding/binary"
+	"sync"
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	coinTypeCount = 16
+	TypeCount = 16
 )
 
 //go:generate stringer -type=CoinRouting -trimprefix=Routing
@@ -41,31 +41,30 @@ const (
 type CoinAcceptor struct {
 	dev             mdb.Device
 	dispenseTimeout time.Duration
+	pollmu          sync.Mutex // isolate active/idle polling
 
-	// Indicates the value of the bill types 0 to 15.
-	// These are final values including all scaling factors.
-	coinTypeCredit []currency.Nominal
-
-	coinTypeRouting uint16
-
+	// parsed from SETUP
 	featureLevel      uint8
 	supportedFeatures Features
+	nominals          [TypeCount]currency.Nominal // final values, including all scaling factors
+	scalingFactor     uint8
+	typeRouting       uint16
 
-	internalScalingFactor int
+	// dynamic state useful for external code
+	tubesmu sync.Mutex
+	tubes   currency.NominalGroup
 
-	doReset engine.Doer
-	doSetup engine.Doer
+	doReset      engine.Doer
+	doSetup      engine.Doer
+	DoTubeStatus engine.Doer
 }
 
 var (
-	packetTubeStatus = mdb.MustPacketFromHex("0a", true)
-	packetExpIdent   = mdb.MustPacketFromHex("0f00", true)
-	packetDiagStatus = mdb.MustPacketFromHex("0f05", true)
-
-	dispenseBusyPs = []mdb.Packet{
-		mdb.MustPacketFromHex("02", true),
-		mdb.MustPacketFromHex("0f", true),
-	}
+	packetTubeStatus   = mdb.MustPacketFromHex("0a", true)
+	packetExpIdent     = mdb.MustPacketFromHex("0f00", true)
+	packetDiagStatus   = mdb.MustPacketFromHex("0f05", true)
+	packetPayoutPoll   = mdb.MustPacketFromHex("0f04", true)
+	packetPayoutStatus = mdb.MustPacketFromHex("0f03", true)
 )
 
 var (
@@ -76,50 +75,87 @@ var (
 	ErrSlugs         = errors.Errorf("Slugs")
 )
 
-// FIXME convert to Enum() idea
 func (self *CoinAcceptor) Init(ctx context.Context) error {
+	const tag = "mdb.coin.Init"
+
 	config := state.GetConfig(ctx)
 	m, err := config.Mdber()
 	if err != nil {
-		return err // TODO annotate
+		return errors.Annotate(err, tag)
 	}
 	// TODO read settings from config
-	self.dev.Init(m, config.Global().Log, 0x08, "coinacceptor", binary.BigEndian)
-	self.dispenseTimeout = 10 * time.Second
+	self.dev.Init(m.Tx, config.Global().Log, 0x08, "coinacceptor", binary.BigEndian)
+	self.dispenseTimeout = 5 * time.Second
+	self.scalingFactor = 1 // FIXME
 
-	self.doReset = self.dev.NewDoReset()
+	self.doReset = self.dev.NewReset()
 	self.doSetup = self.newSetuper()
+	self.DoTubeStatus = self.NewTubeStatus()
 
-	self.coinTypeCredit = make([]currency.Nominal, coinTypeCount)
-	self.internalScalingFactor = 1 // FIXME
-	// TODO maybe execute CommandReset then wait for StatusWasReset
+	engine := engine.ContextValueEngine(ctx, engine.ContextKey)
+	engine.Register("mdb.coin.restart", self.Restarter())
+
+	// TODO (Enum idea) no IO in Init(), call Restarter() outside
 	err = self.newIniter().Do(ctx)
-	return errors.Annotate(err, "hardware/mdb/coin/Init")
+	return errors.Annotate(err, tag)
+}
+
+func (self *CoinAcceptor) AcceptMax(max currency.Amount) engine.Doer {
+	// config := state.GetConfig(ctx)
+	enableBitset := uint16(0)
+
+	if max != 0 {
+		for i, n := range self.nominals {
+			if n == 0 {
+				continue
+			}
+			if currency.Amount(n) <= max {
+				// TODO consult config
+				// _ = config
+				enableBitset |= 1 << uint(i)
+			}
+		}
+	}
+
+	return self.NewCoinType(enableBitset, 0xffff)
 }
 
 func (self *CoinAcceptor) SupportedNominals() []currency.Nominal {
-	ns := make([]currency.Nominal, 0, len(self.coinTypeCredit))
-	for _, n := range self.coinTypeCredit {
-		if n > 0 {
+	ns := make([]currency.Nominal, 0, TypeCount)
+	for _, n := range self.nominals {
+		if n != 0 {
 			ns = append(ns, n)
 		}
 	}
 	return ns
 }
 
-func (self *CoinAcceptor) Run(ctx context.Context, a *alive.Alive, fun func(money.PollItem)) {
-	self.dev.PollLoopPassive(ctx, a, self.newPoller(fun))
-}
-
-func (self *CoinAcceptor) newPoller(fun func(money.PollItem)) mdb.PollParseFunc {
-	return func(r mdb.PacketError) bool {
-		if r.E != nil {
-			return true
+func (self *CoinAcceptor) Run(ctx context.Context, stopch <-chan struct{}, fun func(money.PollItem) bool) {
+	pd := mdb.PollDelay{}
+	var r mdb.PacketError
+	parse := self.pollFun(fun)
+	var active bool
+	var err error
+	for {
+		self.pollmu.Lock()
+		r = self.dev.Tx(self.dev.PacketPoll)
+		if r.E == nil {
+			active, err = parse(r.P)
 		}
+		self.pollmu.Unlock()
 
-		bs := r.P.Bytes()
+		if !pd.Delay(&self.dev, active, err != nil, stopch) {
+			break
+		}
+	}
+}
+func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
+	const tag = "mdb.coin.poll"
+
+	return func(p mdb.Packet) (bool, error) {
+		bs := p.Bytes()
 		if len(bs) == 0 {
-			return false
+			return false, nil
 		}
 
 		var pi money.PollItem
@@ -134,18 +170,37 @@ func (self *CoinAcceptor) newPoller(fun func(money.PollItem)) mdb.PollParseFunc 
 				b2 = bs[i+1]
 			}
 			pi, skip = self.parsePollItem(b, b2)
-			fun(pi)
+			switch pi.Status {
+			case money.StatusInfo:
+				self.dev.Log.Infof("%s/info: %s", tag, pi.String())
+				// TODO telemetry
+			case money.StatusError:
+				self.dev.Log.Errorf("%s/error: %v", tag, pi.String())
+				// TODO telemetry
+			case money.StatusFatal:
+				self.dev.Log.Errorf("%s/fatal: %v", tag, pi.String())
+				// TODO telemetry
+			case money.StatusBusy:
+			case money.StatusWasReset:
+				self.dev.Log.Infof("coin was reset")
+				// TODO telemetry
+				// TODO enable coin types
+			default:
+				fun(pi)
+			}
 		}
-		return true
+		return true, nil
 	}
 }
 
 func (self *CoinAcceptor) newIniter() engine.Doer {
-	tx := engine.NewTransaction(self.dev.Name + ".initer")
+	tag := self.dev.Name + ".initer"
+	tx := engine.NewTransaction(tag)
 	tx.Root.
 		Append(self.doSetup).
-		Append(engine.Func0{Name: self.dev.Name + ".expid/diag", F: func() error {
+		Append(engine.Func0{Name: tag + "/expid-diag", F: func() error {
 			var err error
+			// FIXME Append(IgnoreTimeout(...))
 			// timeout is unfortunately common "response" for unsupported commands
 			if err = self.CommandExpansionIdentification(); err != nil && !errors.IsTimeout(err) {
 				return err
@@ -159,14 +214,7 @@ func (self *CoinAcceptor) newIniter() engine.Doer {
 			}
 			return nil
 		}}).
-		Append(engine.Func0{Name: self.dev.Name + ".tubestatus", F: self.CommandTubeStatus}).
-		Append(engine.Sleep{Duration: self.dev.DelayNext}).
-		Append(engine.Func{Name: self.dev.Name + ".cointype", F: func(ctx context.Context) error {
-			config := state.GetConfig(ctx)
-			// TODO read enabled nominals from config
-			_ = config
-			return self.CommandCoinType(0xffff, 0xffff).Do(ctx)
-		}})
+		Append(self.NewTubeStatus())
 	return tx
 }
 
@@ -174,62 +222,92 @@ func (self *CoinAcceptor) Restarter() engine.Doer {
 	tx := engine.NewTransaction(self.dev.Name + ".restarter")
 	tx.Root.
 		Append(self.doReset).
-		Append(engine.Sleep{Duration: self.dev.DelayNext}).
 		Append(self.newIniter())
 	return tx
 }
 
 func (self *CoinAcceptor) newSetuper() engine.Doer {
-	return engine.Func{Name: self.dev.Name + ".setuper", F: func(ctx context.Context) error {
+	const tag = "mdb.coin.setuper"
+	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		const expectLengthMin = 7
 		err := self.dev.DoSetup(ctx)
 		if err != nil {
-			return errors.Annotate(err, "hardware/mdb/coin SETUP")
+			return errors.Annotate(err, tag)
 		}
 		bs := self.dev.SetupResponse.Bytes()
 		if len(bs) < expectLengthMin {
-			return errors.Errorf("hardware/mdb/coin SETUP response=%s expected >= %d bytes", self.dev.SetupResponse.Format(), expectLengthMin)
+			return errors.Errorf("%s response=%s expected >= %d bytes",
+				tag, self.dev.SetupResponse.Format(), expectLengthMin)
 		}
 		self.featureLevel = bs[0]
-		scalingFactor := bs[3]
-		self.coinTypeRouting = self.dev.ByteOrder.Uint16(bs[5 : 5+2])
-		for i, sf := range bs[7 : 7+16] {
-			n := currency.Nominal(sf) * currency.Nominal(scalingFactor) * currency.Nominal(self.internalScalingFactor)
-			self.dev.Log.Debugf("i=%d sf=%d nominal=%s", i, sf, currency.Amount(n).Format100I())
-			self.coinTypeCredit[i] = n
+		self.scalingFactor = bs[3]
+		self.typeRouting = self.dev.ByteOrder.Uint16(bs[5 : 5+2])
+		for i, sf := range bs[7 : 7+TypeCount] {
+			if sf == 0 {
+				continue
+			}
+			n := currency.Nominal(sf) * currency.Nominal(self.scalingFactor)
+			self.dev.Log.Debugf("%s [%d] sf=%d nominal=(%d)%s",
+				tag, i, sf, n, currency.Amount(n).FormatCtx(ctx))
+			self.nominals[i] = n
 		}
-		self.dev.Log.Debugf("Changer Feature Level: %d", self.featureLevel)
-		self.dev.Log.Debugf("Country / Currency Code: %x", bs[1:1+2])
-		self.dev.Log.Debugf("Coin Scaling Factor: %d", scalingFactor)
-		self.dev.Log.Debugf("Decimal Places: %d", bs[4])
-		self.dev.Log.Debugf("Coin Type Routing: %b", self.coinTypeRouting)
-		self.dev.Log.Debugf("Coin Type Credit: %x %#v", bs[7:], self.coinTypeCredit)
+		self.tubes.SetValid(self.nominals[:])
+
+		self.dev.Log.Debugf("%s Changer Feature Level: %d", tag, self.featureLevel)
+		self.dev.Log.Debugf("%s Country / Currency Code: %x", tag, bs[1:1+2])
+		self.dev.Log.Debugf("%s Coin Scaling Factor: %d", tag, self.scalingFactor)
+		// self.dev.Log.Debugf("%s Decimal Places: %d", tag, bs[4])
+		self.dev.Log.Debugf("%s Coin Type Routing: %b", tag, self.typeRouting)
+		self.dev.Log.Debugf("%s Coin Type Credit: %x %v", tag, bs[7:], self.nominals)
 		return nil
 	}}
 }
 
-func (self *CoinAcceptor) CommandTubeStatus() error {
-	const expectLengthMin = 2
-	request := packetTubeStatus
-	r := self.dev.Tx(request)
-	if r.E != nil {
-		return errors.Annotate(r.E, "hardware/mdb/coin TUBE STATUS")
-	}
-	self.dev.Log.Debugf("tubestatus response=(%d)%s", r.P.Len(), r.P.Format())
-	bs := r.P.Bytes()
-	if len(bs) < expectLengthMin {
-		return errors.Errorf("hardware/mdb/coin TUBE money.Status response=%s expected >= %d bytes", r.P.Format(), expectLengthMin)
-	}
-	full := self.dev.ByteOrder.Uint16(bs[0:2])
-	counts := bs[2:18]
-	self.dev.Log.Debugf("tubestatus full=%b counts=%v", full, counts)
-	// TODO use full,counts
-	_ = full
-	_ = counts
-	return nil
+func (self *CoinAcceptor) NewTubeStatus() engine.Doer {
+	const tag = "mdb.coin.tubestatus"
+	return engine.Func{Name: tag, F: func(ctx context.Context) error {
+		const expectLengthMin = 2
+
+		r := self.dev.Tx(packetTubeStatus)
+		if r.E != nil {
+			return errors.Annotate(r.E, tag)
+		}
+		self.dev.Log.Debugf("%s response=(%d)%s", tag, r.P.Len(), r.P.Format())
+		bs := r.P.Bytes()
+		if len(bs) < expectLengthMin {
+			return errors.Errorf("%s response=%s expected >= %d bytes",
+				tag, r.P.Format(), expectLengthMin)
+		}
+		fulls := self.dev.ByteOrder.Uint16(bs[0:2])
+		counts := bs[2:18]
+		self.dev.Log.Debugf("%s fulls=%b counts=%v", tag, fulls, counts)
+
+		self.tubesmu.Lock()
+		defer self.tubesmu.Unlock()
+
+		self.tubes.Clear()
+		for i := uint8(0); i < TypeCount; i++ {
+			full := (fulls & (1 << i)) != 0
+			if full && counts[i] == 0 {
+				// TODO telemetry
+				self.dev.Log.Errorf("%s tube=%d problem (jam/sensor/etc)", tag, i+1)
+			} else {
+				nominal := self.coinTypeNominal(i)
+				self.tubes.Add(nominal, uint(counts[i]))
+			}
+		}
+		self.dev.Log.Debugf("%s tubes=%s", tag, self.tubes.String())
+		return nil
+	}}
+}
+func (self *CoinAcceptor) Tubes() *currency.NominalGroup {
+	self.tubesmu.Lock()
+	result := self.tubes.Copy()
+	self.tubesmu.Unlock()
+	return result
 }
 
-func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) engine.Doer {
+func (self *CoinAcceptor) NewCoinType(accept, dispense uint16) engine.Doer {
 	buf := [5]byte{0x0c}
 	self.dev.ByteOrder.PutUint16(buf[1:], accept)
 	self.dev.ByteOrder.PutUint16(buf[3:], dispense)
@@ -237,61 +315,25 @@ func (self *CoinAcceptor) CommandCoinType(accept, dispense uint16) engine.Doer {
 	return self.dev.NewTx(request)
 }
 
-func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) engine.Doer {
-	tag := self.dev.Name + ".dispense"
-
-	doDispense := engine.Func{Name: tag, F: func(ctx context.Context) error {
-		if count >= 16 {
-			return errors.Errorf("%s count=%d overflow >=16", tag, count)
-		}
-		coinType := self.nominalCoinType(nominal)
-		if coinType < 0 {
-			return errors.Errorf("%s not supported for nominal=%v", tag, currency.Amount(nominal).Format100I())
-		}
-
-		request := mdb.MustPacketFromBytes([]byte{0x0d, (count << 4) + uint8(coinType)}, true)
-		err := self.dev.Tx(request).E
-		return errors.Annotate(err, tag)
-	}}
-
-	tx := engine.NewTransaction(tag)
-	tx.Root.Append(doDispense).Append(self.dev.NewPollUntilEmpty(tag, self.dispenseTimeout, dispenseBusyPs))
-	return tx
-}
-
-func (self *CoinAcceptor) NewPayout(amount currency.Amount) engine.Doer {
-	tag := self.dev.Name + ".payout"
-
-	doPayout := engine.Func{Name: tag, F: func(ctx context.Context) error {
-		// FIXME 100 magic number
-		request := mdb.MustPacketFromBytes([]byte{0x0f, 0x02, byte(int(amount) / 100 / self.internalScalingFactor)}, true)
-		err := self.dev.Tx(request).E
-		return errors.Annotate(err, tag)
-	}}
-
-	tx := engine.NewTransaction(tag)
-	tx.Root.Append(doPayout).Append(self.dev.NewPollUntilEmpty(tag, self.dispenseTimeout*4, dispenseBusyPs))
-	return tx
-}
-
 func (self *CoinAcceptor) CommandExpansionIdentification() error {
+	const tag = "mdb.coin.ExpId"
 	const expectLength = 33
 	request := packetExpIdent
 	r := self.dev.Tx(request)
 	if r.E != nil {
-		return errors.Annotate(r.E, "hardware/mdb/coin/CommandExpansionIdentification")
+		return errors.Annotate(r.E, tag)
 	}
-	self.dev.Log.Debugf("EXPANSION IDENTIFICATION response=(%d)%s", r.P.Len(), r.P.Format())
+	self.dev.Log.Debugf("%s response=(%d)%s", tag, r.P.Len(), r.P.Format())
 	bs := r.P.Bytes()
 	if len(bs) < expectLength {
-		return errors.Errorf("hardware/mdb/coin EXPANSION IDENTIFICATION response=%s expected %d bytes", r.P.Format(), expectLength)
+		return errors.Errorf("%s response=%s expected %d bytes", tag, r.P.Format(), expectLength)
 	}
 	self.supportedFeatures = Features(self.dev.ByteOrder.Uint32(bs[29 : 29+4]))
-	self.dev.Log.Debugf("Manufacturer Code: %x", bs[0:0+3])
-	self.dev.Log.Debugf("Serial Number: '%s'", string(bs[3:3+12]))
-	self.dev.Log.Debugf("Model #/Tuning Revision: '%s'", string(bs[15:15+12]))
-	self.dev.Log.Debugf("Software Version: %x", bs[27:27+2])
-	self.dev.Log.Debugf("Optional Features: %b", self.supportedFeatures)
+	self.dev.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
+	self.dev.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
+	self.dev.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
+	self.dev.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
+	self.dev.Log.Debugf("%s Optional Features: %b", tag, self.supportedFeatures)
 	return nil
 }
 
@@ -299,20 +341,22 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 // - `nil` if command is not supported by device, result is not modified
 // - otherwise returns nil or MDB/parse error, result set to valid DiagResult
 func (self *CoinAcceptor) CommandExpansionSendDiagStatus(result *DiagResult) error {
+	const tag = "mdb.coin.ExpansionSendDiagStatus"
+
 	if self.supportedFeatures&FeatureExtendedDiagnostic == 0 {
-		self.dev.Log.Debugf("CommandExpansionSendDiagStatus feature is not supported")
+		self.dev.Log.Debugf("%s feature is not supported", tag)
 		return nil
 	}
 	r := self.dev.Tx(packetDiagStatus)
 	if r.E != nil {
-		return errors.Annotate(r.E, "hardware/mdb/coin/CommandExpansionSendDiagStatus")
+		return errors.Annotate(r.E, tag)
 	}
 	dr, err := parseDiagResult(r.P.Bytes(), self.dev.ByteOrder)
-	self.dev.Log.Debugf("DiagStatus=%s", dr.Error())
+	self.dev.Log.Debugf("%s result=%s", tag, dr.Error())
 	if result != nil {
 		*result = dr
 	}
-	return errors.Annotate(err, "hardware/mdb/coin/CommandExpansionSendDiagStatus")
+	return errors.Annotate(err, tag)
 }
 
 func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
@@ -321,20 +365,20 @@ func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
 	self.dev.ByteOrder.PutUint32(buf[2:], uint32(f))
 	request := mdb.MustPacketFromBytes(buf[:], true)
 	err := self.dev.Tx(request).E
-	return errors.Annotate(err, "hardware/mdb/coin/CommandFeatureEnable")
+	return errors.Annotate(err, "mdb.coin.FeatureEnable")
 }
 
 func (self *CoinAcceptor) coinTypeNominal(b byte) currency.Nominal {
-	if b >= coinTypeCount {
+	if b >= TypeCount {
 		self.dev.Log.Errorf("invalid coin type: %d", b)
 		return 0
 	}
-	return self.coinTypeCredit[b]
+	return self.nominals[b]
 }
 
 func (self *CoinAcceptor) nominalCoinType(nominal currency.Nominal) int8 {
-	for ct, n := range self.coinTypeCredit {
-		if n == nominal && ((1<<uint(ct))&self.coinTypeRouting != 0) {
+	for ct, n := range self.nominals {
+		if n == nominal && ((1<<uint(ct))&self.typeRouting != 0) {
 			return int8(ct)
 		}
 	}

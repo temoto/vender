@@ -31,25 +31,33 @@ func testCheckNominalGroup(t *testing.T, strategy ExpendStrategy) {
 	}
 
 	total1 := ng.Total()
-	if err := ng.Withdraw(17, strategy, false); err != nil {
+	if err := ng.Copy().Withdraw(nil, 17, strategy); err != nil {
 		t.Fatal(err)
 	}
 	total2 := ng.Total()
-	if err := ng.Withdraw(17, strategy, true); err != nil {
+	if err := ng.Withdraw(nil, 17, strategy); err != nil {
 		t.Fatal(err)
 	}
 	total3 := ng.Total()
-	if err := ng.Withdraw(100, strategy, true); err == nil {
+	if err := ng.Copy().Withdraw(nil, 100, strategy); err == nil {
 		t.Fatal("expected withdraw error")
 	}
 	total4 := ng.Total()
+	if err := ng.Withdraw(nil, 100, strategy); err == nil {
+		t.Fatal("expected withdraw error")
+	}
+	total5 := ng.Total()
 	const exptotal1 = 65
 	const exptotal2 = 48
+	const exptotal3 = 0
 	if total1 != exptotal1 || total2 != exptotal1 {
-		t.Fatalf("expected total1 (%d) == total2 (%d) == %d", total1, total2, exptotal1)
+		t.Fatalf("expected total1 %d == total2 %d == %d", total1, total2, exptotal1)
 	}
 	if total3 != exptotal2 || total4 != exptotal2 {
-		t.Fatalf("expected total3 (%d) == total4 (%d) == %d", total3, total4, exptotal2)
+		t.Fatalf("expected total3 %d == total4 %d == %d", total3, total4, exptotal2)
+	}
+	if total5 != exptotal3 {
+		t.Fatalf("expected total5 %d == %d", total5, exptotal3)
 	}
 }
 

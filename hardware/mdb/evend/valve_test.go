@@ -28,7 +28,7 @@ func TestValve(t *testing.T) {
 	e := engine.ContextValueEngine(ctx, engine.ContextKey)
 	d := new(DeviceValve)
 	// TODO make small delay default in tests
-	d.dev.DelayErr = 1
+	d.dev.DelayIdle = 1
 	d.dev.DelayNext = 1
 	d.dev.DelayReset = 1
 	err := d.Init(ctx)

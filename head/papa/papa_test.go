@@ -1,8 +1,6 @@
 package papa
 
 import (
-	"context"
-	"strings"
 	"testing"
 
 	"github.com/temoto/vender/head/state"
@@ -10,10 +8,7 @@ import (
 )
 
 func TestPapaStart(t *testing.T) {
-	ctx := context.Background()
-	log := log2.NewTest(t, log2.LDebug)
-	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	ctx = state.ContextWithConfig(ctx, state.MustReadConfig(strings.NewReader(""), log))
+	ctx := state.NewTestContext(t, "money { scale=100 }", log2.LDebug)
 	sys := PapaSystem{}
 	if err := sys.Start(ctx); err != nil {
 		t.Fatal(err)

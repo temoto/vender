@@ -14,8 +14,10 @@ import (
 
 type _PI = money.PollItem
 
-func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
-	ctx := state.NewTestContext(t, "", log2.LDebug)
+const testScalingFactor = 500 // FIXME put into SETUP response
+
+func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) (context.Context, *BillValidator) {
+	ctx := state.NewTestContext(t, "money { scale=100 }", log2.LDebug)
 
 	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
 	config := state.GetConfig(ctx)
@@ -27,7 +29,7 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 	go func() {
 		defer close(respCh)
 		// initer, SETUP
-		// TODO fill real response
+		// FIXME put testScalingFactor here
 		mdb.TestChanTx(t, reqCh, respCh, "31", "011810000a0000c8001fff01050a32640000000000000000000000")
 
 		// initer, EXPANSION IDENTIFICATION
@@ -37,41 +39,35 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) context.Context {
 		// initer, STACKER
 		mdb.TestChanTx(t, reqCh, respCh, "36", "000b")
 
-		// initer, BILL TYPE
-		mdb.TestChanTx(t, reqCh, respCh, "34ffff0000", "")
-
 		if replyFunc != nil {
 			replyFunc(t, reqCh, respCh)
 		}
 	}()
 
-	return ctx
+	bv := new(BillValidator)
+	bv.dev.DelayIdle = 1
+	bv.dev.DelayNext = 1
+	bv.dev.DelayReset = 1
+
+	return ctx, bv
 }
 
 func checkPoll(t *testing.T, input string, expected []_PI) {
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "33", input)
 	}
-	ctx := testMake(t, reply)
-	bv := new(BillValidator)
-	bv.dev.DelayErr = 1
-	bv.dev.DelayNext = 1
-	bv.dev.DelayIdle = 1
-	bv.dev.DelayReset = 1
+	ctx, bv := testMake(t, reply)
 	err := bv.Init(ctx)
 	if err != nil {
-		t.Fatalf("POLL err=%v", err)
+		t.Fatal(err)
 	}
-	bv.billNominals[0] = currency.Nominal(5)
-	bv.billNominals[1] = currency.Nominal(10)
-	bv.billNominals[2] = currency.Nominal(20)
 
 	pis := make([]_PI, 0, len(input)/2)
-	r := bv.dev.DoPollSync(ctx)
+	r := bv.dev.Tx(bv.dev.PacketPoll)
 	if r.E != nil {
 		t.Fatalf("POLL err=%v", r.E)
 	}
-	bv.newPoller(func(pi money.PollItem) { pis = append(pis, pi) })(r)
+	bv.pollFun(func(pi money.PollItem) bool { pis = append(pis, pi); return false })(r.P)
 	money.TestPollItemsEqual(t, pis, expected)
 }
 
@@ -85,15 +81,15 @@ func TestBillPoll(t *testing.T) {
 	cases := []Case{
 		Case{"empty", "", []_PI{}},
 		Case{"disabled", "09", []_PI{
-			_PI{Status: money.StatusDisabled},
+			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
 		Case{"reset,disabled", "0609", []_PI{
-			_PI{Status: money.StatusWasReset},
-			_PI{Status: money.StatusDisabled},
+			_PI{HardwareCode: 0x06, Status: money.StatusWasReset},
+			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
 		Case{"escrow", "9209", []_PI{
-			_PI{Status: money.StatusEscrow, DataNominal: 20},
-			_PI{Status: money.StatusDisabled},
+			_PI{HardwareCode: 0x90, Status: money.StatusEscrow, DataNominal: 20 * currency.Nominal(testScalingFactor), DataCount: 1},
+			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
 	}
 	helpers.RandUnix().Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
@@ -103,6 +99,20 @@ func TestBillPoll(t *testing.T) {
 			t.Parallel()
 			checkPoll(t, c.input, c.expect)
 		})
+	}
+}
+
+func TestBillAcceptMax(t *testing.T) {
+	t.Parallel()
+	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
+		mdb.TestChanTx(t, reqCh, respCh, "3400070000", "")
+	}
+	ctx, bv := testMake(t, reply)
+	if err := bv.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := bv.AcceptMax(10000).Do(ctx); err != nil {
+		t.Fatal(err)
 	}
 }
 
