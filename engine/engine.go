@@ -80,7 +80,7 @@ func (self *Engine) Execute(ctx context.Context, scenario *Scenario) error {
 		return errors.Trace(err)
 	}
 
-	tx, err := scenario.ToTransaction(ctx, func(action, nodeName string) Doer {
+	tx, err := scenario.ToTree(ctx, func(action, nodeName string) Doer {
 		return self.actions[action]
 	})
 	if err != nil {

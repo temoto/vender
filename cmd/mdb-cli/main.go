@@ -190,7 +190,7 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 		}
 	}
 
-	tx := engine.NewTransaction("input: " + line)
+	tx := engine.NewTree("input: " + line)
 	var tail *engine.Node = &tx.Root
 	for _, word := range wordsRest {
 		if strings.HasPrefix(word, "log=") && par {

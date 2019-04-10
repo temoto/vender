@@ -18,7 +18,7 @@ func Enum(ctx context.Context, fun func(d interface{})) {
 	}
 
 	go func() {
-		d := new(DeviceCoffee)
+		d := new(DeviceEspresso)
 		if err := d.Init(ctx); err == nil {
 			fun(d)
 		}

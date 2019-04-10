@@ -212,9 +212,9 @@ func (self *Scenario) Validate(ctx context.Context, resolve func(key string) boo
 	return helpers.FoldErrors(errs)
 }
 
-func (self *Scenario) ToTransaction(ctx context.Context, resolve func(action, nodeName string) Doer) (*Transaction, error) {
+func (self *Scenario) ToTree(ctx context.Context, resolve func(action, nodeName string) Doer) (*Tree, error) {
 	m := make(map[string]*Node)
-	tx := NewTransaction(self.name)
+	tx := NewTree(self.name)
 	// log.Printf("root s=%s tx=%s@%p", self.rootId, tx.Root.String(), &tx.Root)
 	errs := make([]error, 0, len(self.idMap))
 
@@ -230,7 +230,7 @@ func (self *Scenario) ToTransaction(ctx context.Context, resolve func(action, no
 				}
 			}
 			// default:
-			// log.Printf("ToTransaction node=%s kind=%s skip", node.id, node.Tag())
+			// log.Printf("ToTree node=%s kind=%s skip", node.id, node.Tag())
 		}
 		return d
 	}
@@ -238,7 +238,7 @@ func (self *Scenario) ToTransaction(ctx context.Context, resolve func(action, no
 	m[self.rootId] = tx.Root.Append(convert(self.Get(self.rootId)))
 
 	self.Walk(nil, func(head, tail *sNode) bool {
-		// log.Printf("ToTransaction edge %s -> %s", head.id, tail.id)
+		// log.Printf("ToTree edge %s -> %s", head.id, tail.id)
 		headNode := m[head.id]
 		if tailNode, ok := m[tail.id]; ok {
 			headNode.AppendNode(tailNode)

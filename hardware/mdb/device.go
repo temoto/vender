@@ -81,8 +81,12 @@ func (self *Device) Tx(request Packet) (r PacketError) {
 	return
 }
 
-func (self *Device) NewTx(request Packet) *DoRequest {
-	return &DoRequest{dev: self, request: request}
+func (self *Device) NewTx(name string, request Packet) *doRequest {
+	return &doRequest{
+		dev:     self,
+		str:     fmt.Sprintf("mdb.%s.%s/%x", self.Name, name, request.Bytes()),
+		request: request,
+	}
 }
 
 func (self *Device) NewReset() engine.Doer {
@@ -188,22 +192,20 @@ type PacketError struct {
 }
 
 // Doer wrap for mbder.Tx()
-type DoRequest struct {
+type doRequest struct {
 	dev     *Device
+	str     string
 	request Packet
 }
 
-func (self *DoRequest) Do(ctx context.Context) error {
+func (self *doRequest) Do(ctx context.Context) error {
 	r := self.dev.Tx(self.request)
 	return r.E
 }
-func (self *DoRequest) String() string {
-	return fmt.Sprintf("mdb.%s/%s", self.dev.Name, self.request.Format())
+func (self *doRequest) Validate() error {
+	if self.dev.txfun == nil {
+		return errors.Errorf("%s txfun=nil", self.str)
+	}
+	return nil
 }
-
-type DoPoll struct {
-	Dev *Device
-}
-
-func (self *DoPoll) Do(ctx context.Context) error { return nil }
-func (self *DoPoll) String() string               { return "TODO" }
+func (self *doRequest) String() string { return self.str }

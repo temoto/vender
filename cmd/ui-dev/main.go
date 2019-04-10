@@ -46,6 +46,14 @@ func main() {
 			time.Sleep(3 * time.Second)
 			return nil
 		}})
+	menuMap.Add(2, "coffee", config.ScaleU(5),
+		engine.Func0{F: func() error {
+			d.SetLines("спасибо", "готовим...")
+			time.Sleep(7 * time.Second)
+			d.SetLines("успех", "спасибо")
+			time.Sleep(3 * time.Second)
+			return nil
+		}})
 
 	for {
 		menu := ui.NewUIMenu(ctx, menuMap)

@@ -44,12 +44,7 @@ func TestConveyor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init err=%v", err)
 	}
-	err = e.Resolve("mdb.evend.conveyor_move_cup").Do(ctx)
-	if err != nil {
-		t.Fatalf("Move err=%v", err)
-	}
-	err = e.Resolve("mdb.evend.conveyor_move_elevator").Do(ctx)
-	if err != nil {
-		t.Fatalf("Move err=%v", err)
-	}
+
+	engine.DoCheckError(t, e.Resolve("mdb.evend.conveyor_move_cup"), ctx)
+	engine.DoCheckError(t, e.Resolve("mdb.evend.conveyor_move_elevator"), ctx)
 }

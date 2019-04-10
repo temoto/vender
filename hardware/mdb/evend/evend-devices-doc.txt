@@ -25,7 +25,7 @@ Two types of protocol has been observed:
   04 XX - error code XX
   05 0B - previous request was invalid. Does not respond (timeout) to actual invalid request.
   POLL does not indicate distinction between idle and busy state.
-- (type2) valve, conveyor, cup, coffee
+- (type2) valve, conveyor, cup, espresso
   During inactive state, action (base+2) commands respond with NAK.
   Invalid request (like garbage) responds with NAK, next POLL sets bit 20.
   Valid request with invalid arguments responds with ACK, next POLL sets bit 20.
@@ -143,7 +143,7 @@ Error codes:
 15 out of cups
 
 
-=== Coffee (espresso) (E8) ===
+=== Espresso (coffee) (E8) ===
 
 Protocol type2. Busy response is always 50, ignore bit 40.
 

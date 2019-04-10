@@ -91,17 +91,15 @@ func (self *Node) Collect(pout *[]*Node) {
 	if self == nil {
 		return
 	}
-	v := make(map[*Node]struct{})
-	self.walkCollect(v)
-	for n := range v {
-		*pout = append(*pout, n)
-	}
-}
-func (self *Node) walkCollect(v map[*Node]struct{}) {
-	v[self] = struct{}{}
-	for _, n := range self.children {
-		n.walkCollect(v)
-	}
+
+	visited := make(map[*Node]struct{})
+	walk(self, func(node *Node) bool {
+		if _, ok := visited[node]; !ok {
+			visited[node] = struct{}{}
+			*pout = append(*pout, node)
+		}
+		return false
+	})
 }
 
 func (self *Node) Dot(rankdir string) string {
@@ -177,5 +175,14 @@ func dotRanks(pout *[]string, items []*Node, visited map[edge]uint) {
 	for _, ns := range ranked {
 		sort.Strings(ns)
 		*pout = append(*pout, fmt.Sprintf("{ rank=same; %s }\n", strings.Join(ns, ", ")))
+	}
+}
+
+func walk(node *Node, fun func(*Node) bool) {
+	if fun(node) {
+		return
+	}
+	for _, child := range node.children {
+		walk(child, fun)
 	}
 }

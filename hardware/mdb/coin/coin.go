@@ -84,7 +84,7 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 		return errors.Annotate(err, tag)
 	}
 	// TODO read settings from config
-	self.dev.Init(m.Tx, config.Global().Log, 0x08, "coinacceptor", binary.BigEndian)
+	self.dev.Init(m.Tx, config.Global().Log, 0x08, "coin", binary.BigEndian)
 	self.dispenseTimeout = 5 * time.Second
 	self.scalingFactor = 1 // FIXME
 
@@ -195,7 +195,7 @@ func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 
 func (self *CoinAcceptor) newIniter() engine.Doer {
 	tag := self.dev.Name + ".initer"
-	tx := engine.NewTransaction(tag)
+	tx := engine.NewTree(tag)
 	tx.Root.
 		Append(self.doSetup).
 		Append(engine.Func0{Name: tag + "/expid-diag", F: func() error {
@@ -219,7 +219,7 @@ func (self *CoinAcceptor) newIniter() engine.Doer {
 }
 
 func (self *CoinAcceptor) Restarter() engine.Doer {
-	tx := engine.NewTransaction(self.dev.Name + ".restarter")
+	tx := engine.NewTree(self.dev.Name + ".restarter")
 	tx.Root.
 		Append(self.doReset).
 		Append(self.newIniter())
@@ -312,7 +312,7 @@ func (self *CoinAcceptor) NewCoinType(accept, dispense uint16) engine.Doer {
 	self.dev.ByteOrder.PutUint16(buf[1:], accept)
 	self.dev.ByteOrder.PutUint16(buf[3:], dispense)
 	request := mdb.MustPacketFromBytes(buf[:], true)
-	return self.dev.NewTx(request)
+	return self.dev.NewTx("CoinType", request)
 }
 
 func (self *CoinAcceptor) CommandExpansionIdentification() error {

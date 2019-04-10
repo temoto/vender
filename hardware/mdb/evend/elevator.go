@@ -25,27 +25,20 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 	self.timeout = 10 * time.Second
 	err := self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
-	engine := engine.ContextValueEngine(ctx, engine.ContextKey)
-	engine.Register("mdb.evend.elevator_move_conveyor", self.NewMoveSync(self.posConveyor))
-	engine.Register("mdb.evend.elevator_move_cup", self.NewMoveSync(self.posCup))
-	engine.Register("mdb.evend.elevator_move_ready", self.NewMoveSync(self.posReady))
+	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+	e.Register("mdb.evend.elevator_move_conveyor", self.NewMove(self.posConveyor))
+	e.Register("mdb.evend.elevator_move_cup", self.NewMove(self.posCup))
+	e.Register("mdb.evend.elevator_move_ready", self.NewMove(self.posReady))
 
 	return err
 }
 
 func (self *DeviceElevator) NewMove(position uint8) engine.Doer {
-	tag := fmt.Sprintf("%s.move:%d", self.dev.Name, position)
-	return engine.Func{Name: tag, F: func(ctx context.Context) error {
-		arg := []byte{0x03, position, 0}
-		return self.CommandAction(arg)
-	}}
-}
-func (self *DeviceElevator) NewMoveSync(position uint8) engine.Doer {
-	tag := fmt.Sprintf("%s.move_sync:%d", self.dev.Name, position)
-	tx := engine.NewTransaction(tag)
+	tag := fmt.Sprintf("mdb.evend.elevator.move:%d", position)
+	tx := engine.NewTree(tag)
 	tx.Root.
-		Append(self.DoWaitReady(tag)).
-		Append(self.NewMove(position)).
-		Append(self.DoWaitDone(tag, self.timeout))
+		Append(self.Generic.NewWaitReady(tag)).
+		Append(self.Generic.NewAction(tag, 0x03, position, 0)).
+		Append(self.Generic.NewWaitDone(tag, self.timeout))
 	return tx
 }

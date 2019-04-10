@@ -1,4 +1,4 @@
-// Package evend incapsulates common parts of MDB protocol for Evend machine
+// Package evend incapsulates common parts of MDB protocol for eVend machine
 // devices like conveyor, hopper, cup dispenser, elevator, etc.
 package evend
 
@@ -78,7 +78,12 @@ func (self *Generic) NewErrPollUnexpected(p mdb.Packet) error {
 	return errors.Errorf("%s POLL=%x unexpected", self.logPrefix, p.Bytes())
 }
 
-func (self *Generic) CommandAction(args []byte) error {
+func (self *Generic) NewAction(tag string, args ...byte) engine.Doer {
+	return engine.Func0{Name: tag, F: func() error {
+		return self.txAction(args)
+	}}
+}
+func (self *Generic) txAction(args []byte) error {
 	bs := make([]byte, len(args)+1)
 	bs[0] = self.dev.Address + 2
 	copy(bs[1:], args)
@@ -109,8 +114,8 @@ func (self *Generic) CommandErrorCode() (byte, error) {
 }
 
 // proto1/2 agnostic, use it before action
-func (self *Generic) DoWaitReady(tagPrefix string) engine.Doer {
-	tag := tagPrefix + "/wait-ready"
+func (self *Generic) NewWaitReady(tag string) engine.Doer {
+	tag += "/wait-ready"
 	switch self.proto {
 	case proto1:
 		fun := func(p mdb.Packet) (bool, error) {
@@ -123,53 +128,53 @@ func (self *Generic) DoWaitReady(tagPrefix string) engine.Doer {
 
 		return self.dev.NewPollLoop(tag, self.dev.PacketPoll, self.readyTimeout, fun)
 	case proto2:
-		return self.doProto2PollWait(tag, self.readyTimeout, genericPollMiss)
+		return self.newProto2PollWait(tag, self.readyTimeout, genericPollMiss)
 	default:
 		panic("code error")
 	}
 }
 
 // proto1/2 agnostic, use it after action
-func (self *Generic) DoWaitDone(tagPrefix string, timeout time.Duration) engine.Doer {
-	tag := tagPrefix + "/wait-done"
+func (self *Generic) NewWaitDone(tag string, timeout time.Duration) engine.Doer {
+	tag += "/wait-done"
 	switch self.proto {
 	case proto1:
-		return self.doProto1PollWaitSuccess(tag, timeout)
+		return self.newProto1PollWaitSuccess(tag, timeout)
 	case proto2:
-		return self.doProto2PollWait(tag, timeout, self.proto2BusyMask)
+		return self.newProto2PollWait(tag, timeout, self.proto2BusyMask)
 	default:
 		panic("code error")
 	}
 }
 
-func (self *Generic) doProto1PollWaitSuccess(tag string, timeout time.Duration) engine.Doer {
+func (self *Generic) newProto1PollWaitSuccess(tag string, timeout time.Duration) engine.Doer {
 	success := []byte{0x0d, 0x00}
 	fun := func(p mdb.Packet) (bool, error) {
 		bs := p.Bytes()
 		if len(bs) == 0 {
-			self.dev.Log.Debugf("device=%s POLL=empty", self.dev.Name)
+			self.dev.Log.Debugf("%s POLL=empty", tag)
 			return false, nil
-			// return true, errors.Errorf("device=%s POLL=%x -> expected non-empty", self.dev.Name, bs)
+			// return true, errors.Errorf("%s POLL=%x -> expected non-empty", tag, bs)
 		}
 		if bytes.Equal(bs, success) {
 			return true, nil
 		}
 		if bs[0] == 0x04 {
-			return true, errors.Errorf("tag=%s device=%s POLL=%x -> parsed error", tag, self.dev.Name, bs)
+			return true, errors.Errorf("%s device=%s POLL=%x -> parsed error", tag, self.dev.Name, bs)
 		}
 		return true, self.NewErrPollUnexpected(p)
 	}
 	return self.dev.NewPollLoop(tag, self.dev.PacketPoll, timeout, fun)
 }
 
-func (self *Generic) doProto2PollWait(tag string, timeout time.Duration, ignoreBits byte) engine.Doer {
+func (self *Generic) newProto2PollWait(tag string, timeout time.Duration, ignoreBits byte) engine.Doer {
 	fun := func(p mdb.Packet) (bool, error) {
 		bs := p.Bytes()
 		if len(bs) == 0 {
 			return true, nil
 		}
 		if len(bs) > 1 {
-			return true, errors.Errorf("%s POLL=%x -> too long", self.logPrefix, bs)
+			return true, errors.Errorf("%s POLL=%x -> too long", tag, bs)
 		}
 		value := bs[0]
 		value &^= self.proto2IgnoreMask
@@ -177,7 +182,7 @@ func (self *Generic) doProto2PollWait(tag string, timeout time.Duration, ignoreB
 			// FIXME
 			// 04 during WaitReady is "OK, poll few more"
 			// 04 during WaitDone is "oops, device reboot in operation"
-			return true, errors.Errorf("%s POLL=%x continous connection lost, (TODO decide reset?)", self.logPrefix, bs)
+			return true, errors.Errorf("%s POLL=%x continous connection lost, (TODO decide reset?)", tag, bs)
 		}
 		if value&genericPollProblem != 0 {
 			// err := self.NewErrPollProblem(r.P)
@@ -185,11 +190,11 @@ func (self *Generic) doProto2PollWait(tag string, timeout time.Duration, ignoreB
 			value &^= genericPollProblem
 			errCode, err := self.CommandErrorCode()
 			if err == nil {
-				err = errors.Errorf("%s POLL=%x errorcode=%[3]d %[3]02x", self.logPrefix, bs, errCode)
+				err = errors.Errorf("%s POLL=%x errorcode=%[3]d %[3]02x", tag, bs, errCode)
 			}
 			return true, errors.Annotate(err, tag)
 		}
-		self.dev.Log.Debugf("npw v=%02x i=%02x &=%02x", value, ignoreBits, value&^ignoreBits)
+		self.dev.Log.Debugf("%s npw v=%02x i=%02x &=%02x", tag, value, ignoreBits, value&^ignoreBits)
 		if value&^ignoreBits == 0 {
 			return false, nil
 		}

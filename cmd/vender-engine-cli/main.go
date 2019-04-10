@@ -172,7 +172,7 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 		}
 	}
 
-	tx := engine.NewTransaction("input: " + line)
+	tx := engine.NewTree("input: " + line)
 	var tail *engine.Node = &tx.Root
 	errs := make([]error, 0, 32)
 	for _, word := range wordsRest {

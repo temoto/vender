@@ -86,7 +86,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 	self.Log.Debugf("%s maxConfig=%s maxPrice=%s available=%s -> limit=%s",
 		tag, maxConfig.FormatCtx(ctx), maxPrice.FormatCtx(ctx), available.FormatCtx(ctx), limit.FormatCtx(ctx))
 
-	tx := engine.NewTransaction(fmt.Sprintf("money.AcceptCredit(%d)", limit))
+	tx := engine.NewTree(fmt.Sprintf("money.AcceptCredit(%d)", limit))
 	tx.Root.Append(self.bill.AcceptMax(limit))
 	tx.Root.Append(self.coin.AcceptMax(limit))
 	if err := tx.Do(ctx); err != nil {

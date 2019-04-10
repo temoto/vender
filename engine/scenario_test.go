@@ -67,7 +67,7 @@ Edge s2b -> end
 	}
 }
 
-func TestScenarioToTransaction(t *testing.T) {
+func TestScenarioToTree(t *testing.T) {
 	input := `digraph simple {
 begin[shape=point];
 end[shape=point];
@@ -89,7 +89,7 @@ begin -> n1 -> n2a -> n3 -> end;
 		atomic.AddInt32(&callCount, 1)
 		return nil
 	}
-	tx, err := s.ToTransaction(ctx, func(action, name string) Doer {
+	tx, err := s.ToTree(ctx, func(action, name string) Doer {
 		if action == "fun" {
 			return Func0{Name: name, F: actFun}
 		}
@@ -105,17 +105,17 @@ labelloc=top;
 label=simple;
 rankdir=LR;
 node [shape=plaintext];
-"Func=n1" -> "Func=n2a" [label=""];
-"Func=n1" -> "Func=n2b" [label=""];
-"Func=n2a" -> "Func=n3" [label=""];
-"Func=n2b" -> "Func=n3" [label=""];
-"Func=n3" -> end [label=""];
-begin -> "Func=n1" [label=""];
-{ rank=same; "Func=n1" }
-{ rank=same; "Func=n2a", "Func=n2b" }
-{ rank=same; "Func=n3" }
+begin -> n1 [label=""];
+n1 -> n2a [label=""];
+n1 -> n2b [label=""];
+n2a -> n3 [label=""];
+n2b -> n3 [label=""];
+n3 -> end [label=""];
 { rank=same; begin }
 { rank=same; end }
+{ rank=same; n1 }
+{ rank=same; n2a, n2b }
+{ rank=same; n3 }
 }
 `
 	expectLines := strings.Split(strings.TrimSpace(expect), "\n")
@@ -131,7 +131,7 @@ begin -> "Func=n1" [label=""];
 	}
 }
 
-func TestScenarioToTransactionPrototype(t *testing.T) {
+func TestScenarioToTreePrototype(t *testing.T) {
 	input, err := ioutil.ReadFile("../scenario/prototype.dot")
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestScenarioToTransactionPrototype(t *testing.T) {
 		atomic.AddInt32(&callCount, 1)
 		return nil
 	}
-	tx, err := s.ToTransaction(ctx, func(action, name string) Doer {
+	tx, err := s.ToTree(ctx, func(action, name string) Doer {
 		switch action {
 		case "":
 			return Nothing{name}

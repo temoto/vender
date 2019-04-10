@@ -97,6 +97,7 @@ func (self *CoinAcceptor) NewDispenseLeastOver(requestAmount currency.Amount, su
 				tag, requestAmount.FormatCtx(ctx), leftAmount.FormatCtx(ctx), namt.FormatCtx(ctx), payoutAmount.FormatCtx(ctx))
 			payed := success.Copy()
 			payed.Clear()
+			// TODO use DISPENSE
 			err = self.NewPayout(payoutAmount, payed).Do(ctx)
 			success.AddFrom(payed)
 			payedAmount := payed.Total()
@@ -268,7 +269,7 @@ func (self *CoinAcceptor) NewPayout(amount currency.Amount, success *currency.No
 		return nil
 	}}
 
-	tx := engine.NewTransaction(tag)
+	tx := engine.NewTree(tag)
 	tx.Root.
 		Append(doPayout).
 		Append(self.dev.NewPollLoop(tag, packetPayoutPoll, self.dispenseTimeout*4, payoutPollFun)).

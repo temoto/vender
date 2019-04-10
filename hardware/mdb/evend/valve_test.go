@@ -1,21 +1,24 @@
 package evend
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/helpers"
 )
 
 func TestValve(t *testing.T) {
 	t.Parallel()
+
 	init := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "c0", "")
 		mdb.TestChanTx(t, reqCh, respCh, "c1", "011810000a0000c8001fff01050a32640000000000000000000000")
 	}
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "c411", "17")
-		mdb.TestChanTx(t, reqCh, respCh, "c51046", "")
+		mdb.TestChanTx(t, reqCh, respCh, "c51049", "")
 
 		mdb.TestChanTx(t, reqCh, respCh, "c3", "44")
 		mdb.TestChanTx(t, reqCh, respCh, "c3", "04")
@@ -25,6 +28,7 @@ func TestValve(t *testing.T) {
 		mdb.TestChanTx(t, reqCh, respCh, "c3", "")
 	}
 	ctx := testMake(t, init, reply)
+	// config := state.GetConfig(ctx)
 	e := engine.ContextValueEngine(ctx, engine.ContextKey)
 	d := new(DeviceValve)
 	// TODO make small delay default in tests
@@ -36,17 +40,11 @@ func TestValve(t *testing.T) {
 		t.Fatalf("Init err=%v", err)
 	}
 
-	err = d.DoGetTempHot().Do(ctx)
-	if err != nil {
-		t.Fatalf("get_temp_hot err=%v", err)
-	}
-	err = d.DoSetTempHot(70).Do(ctx)
-	if err != nil {
-		t.Fatalf("set_temp_hot err=%v", err)
-	}
+	engine.DoCheckError(t, d.NewGetTempHot(), ctx)
+	engine.DoCheckError(t, d.NewSetTempHot().(engine.ArgApplier).Apply(73), ctx)
 
-	err = e.Resolve("mdb.evend.valve_pour_hot(120)").Do(ctx)
-	if err != nil {
-		t.Fatalf("pour_hot err=%v", err)
-	}
+	water := d.waterStock.Min() + rand.Int31() + 120
+	d.waterStock.Set(water)
+	engine.DoCheckError(t, e.Resolve("mdb.evend.valve_pour_hot(120)"), ctx)
+	helpers.AssertEqual(t, d.waterStock.Value(), water-120)
 }

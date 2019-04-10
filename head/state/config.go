@@ -17,6 +17,7 @@ import (
 	iodin "github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/engine/inventory"
 	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb"
@@ -82,6 +83,9 @@ type Global struct {
 			Client *mega.Client
 		}
 	}
+
+	Inventory inventory.Inventory
+
 	Log *log2.Log
 }
 
@@ -173,6 +177,7 @@ func (c *Config) requireMdber() error {
 }
 
 func (c *Config) Init(log *log2.Log) error {
+	c.g.Inventory.Init()
 	c.g.Log = log
 
 	if c.Hardware.HD44780.Enable {

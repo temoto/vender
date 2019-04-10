@@ -21,7 +21,7 @@ func (self Menu) Add(code uint16, name string, price currency.Amount, d engine.D
 func (self Menu) MaxPrice() currency.Amount {
 	max := currency.Amount(0)
 	for _, item := range self {
-		if item.Price > max {
+		if (item.D.Validate() == nil) && (item.Price > max) {
 			max = item.Price
 		}
 	}

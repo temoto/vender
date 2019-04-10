@@ -76,7 +76,7 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	}
 	// TODO read settings from config
 	self.configScaling = 100
-	self.dev.Init(m.Tx, config.Global().Log, 0x30, "billvalidator", binary.BigEndian)
+	self.dev.Init(m.Tx, config.Global().Log, 0x30, "bill", binary.BigEndian)
 
 	self.DoIniter = self.newIniter()
 
@@ -175,7 +175,7 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 }
 
 func (self *BillValidator) newIniter() engine.Doer {
-	tx := engine.NewTransaction(self.dev.Name + ".initer")
+	tx := engine.NewTree(self.dev.Name + ".initer")
 	tx.Root.
 		// TODO maybe execute Reset?
 		Append(engine.Func{Name: self.dev.Name + ".setup", F: self.CommandSetup}).
@@ -201,11 +201,11 @@ func (self *BillValidator) NewBillType(accept, escrow uint16) engine.Doer {
 	self.dev.ByteOrder.PutUint16(buf[1:], accept)
 	self.dev.ByteOrder.PutUint16(buf[3:], escrow)
 	request := mdb.MustPacketFromBytes(buf[:], true)
-	return self.dev.NewTx(request) // TODO readable Doer name
+	return self.dev.NewTx("BillType", request)
 }
 
 func (self *BillValidator) NewRestarter() engine.Doer {
-	tx := engine.NewTransaction(self.dev.Name + ".restarter")
+	tx := engine.NewTree(self.dev.Name + ".restarter")
 	tx.Root.
 		Append(self.dev.NewReset()).
 		Append(self.newIniter())

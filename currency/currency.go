@@ -2,11 +2,12 @@ package currency
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
 	"strings"
+
+	"github.com/juju/errors"
 )
 
 // Amount is integer counting lowest currency unit, e.g. $1.20 = 120
@@ -56,7 +57,7 @@ func (self *NominalGroup) SetValid(valid []Nominal) {
 
 func (self *NominalGroup) Add(n Nominal, count uint) error {
 	if _, ok := self.values[n]; !ok {
-		return ErrNominalInvalid
+		return errors.Annotatef(ErrNominalInvalid, "Add(n=%s, c=%d)", Amount(n).Format100I(), count)
 	}
 	self.values[n] += count
 	return nil

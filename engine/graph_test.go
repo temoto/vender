@@ -53,7 +53,7 @@ func TestNodeCollect(t *testing.T) {
 
 func TestDot(t *testing.T) {
 	t.Parallel()
-	tx := NewTransaction("check recipe")
+	tx := NewTree("check recipe")
 	nenumdev := NewNode(&Func{Name: "recipe.EnumDevices"}, &tx.Root)
 	ncheckConv := NewNode(&Func{Name: "check conveyor"})
 	ncheckConv.Append(&mockdo{name: "MDB da"})
@@ -68,14 +68,14 @@ labelloc=top;
 label="check recipe";
 rankdir=UD;
 node [shape=plaintext];
-"Func=check conveyor" -> "MDB da" [label=""];
-"Func=check cup" -> "Func=cup stock > 1?" [label=""];
-"Func=check cup" -> "MDB e3" [label=""];
-"Func=recipe.EnumDevices" -> "Func=check conveyor" [label=""];
-"Func=recipe.EnumDevices" -> "Func=check cup" [label=""];
-{ rank=same; "Func=check conveyor", "Func=check cup" }
-{ rank=same; "Func=cup stock > 1?", "MDB da", "MDB e3" }
-{ rank=same; "Func=recipe.EnumDevices" }
+"check conveyor" -> "MDB da" [label=""];
+"check cup" -> "MDB e3" [label=""];
+"check cup" -> "cup stock > 1?" [label=""];
+"recipe.EnumDevices" -> "check conveyor" [label=""];
+"recipe.EnumDevices" -> "check cup" [label=""];
+{ rank=same; "MDB da", "MDB e3", "cup stock > 1?" }
+{ rank=same; "check conveyor", "check cup" }
+{ rank=same; "recipe.EnumDevices" }
 }
 `
 	helpers.AssertEqual(t, dots, expect)
