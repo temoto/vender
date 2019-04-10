@@ -4,6 +4,24 @@ package money
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[statusZero-0]
+	_ = x[StatusInfo-1]
+	_ = x[StatusError-2]
+	_ = x[StatusFatal-3]
+	_ = x[StatusDisabled-4]
+	_ = x[StatusBusy-5]
+	_ = x[StatusWasReset-6]
+	_ = x[StatusCredit-7]
+	_ = x[StatusRejected-8]
+	_ = x[StatusEscrow-9]
+	_ = x[StatusReturnRequest-10]
+	_ = x[StatusDispensed-11]
+}
+
 const _PollItemStatus_name = "statusZeroInfoErrorFatalDisabledBusyWasResetCreditRejectedEscrowReturnRequestDispensed"
 
 var _PollItemStatus_index = [...]uint8{0, 10, 14, 19, 24, 32, 36, 44, 50, 58, 64, 77, 86}

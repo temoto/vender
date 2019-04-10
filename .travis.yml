@@ -5,18 +5,19 @@ cache:
   go: true
   directories:
   - $HOME/.cache
-  - $HOME/.rustup
   - $HOME/bin
 env:
   global:
   - "PATH=$PATH:$HOME/bin"
-  - protoc_version=3.1.0
+  - protoc_version=3.7.1
 language: go
 go: "1.11"
 matrix:
   include:
     - env: task=vender
       before_install: ./script/install-protoc $protoc_version
-      script: ./all.bash
+      script:
+        - GO111MODULE=on go mod tidy && git diff --exit-code
+        - ./all.bash
       before_cache: rm -f $HOME/.cache/go-build/log.txt
       after_success: bash <(curl -s https://codecov.io/bash)

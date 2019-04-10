@@ -73,21 +73,22 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 
 func TestBillPoll(t *testing.T) {
 	t.Parallel()
+
 	type Case struct {
 		name   string
 		input  string
 		expect []_PI
 	}
 	cases := []Case{
-		Case{"empty", "", []_PI{}},
-		Case{"disabled", "09", []_PI{
+		{"empty", "", []_PI{}},
+		{"disabled", "09", []_PI{
 			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
-		Case{"reset,disabled", "0609", []_PI{
+		{"reset,disabled", "0609", []_PI{
 			_PI{HardwareCode: 0x06, Status: money.StatusWasReset},
 			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
-		Case{"escrow", "9209", []_PI{
+		{"escrow", "9209", []_PI{
 			_PI{HardwareCode: 0x90, Status: money.StatusEscrow, DataNominal: 20 * currency.Nominal(testScalingFactor), DataCount: 1},
 			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
@@ -104,6 +105,7 @@ func TestBillPoll(t *testing.T) {
 
 func TestBillAcceptMax(t *testing.T) {
 	t.Parallel()
+
 	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
 		mdb.TestChanTx(t, reqCh, respCh, "3400070000", "")
 	}
@@ -119,7 +121,7 @@ func TestBillAcceptMax(t *testing.T) {
 // measure allocations by real Doer graph
 func BenchmarkNewIniter(b *testing.B) {
 	b.ReportAllocs()
-	ctx := state.NewTestContext(b, "", log2.LError)
+	ctx := state.NewTestContext(b, "money { scale=100 }", log2.LDebug)
 	bv := &BillValidator{}
 	bv.dev.Log = log2.ContextValueLogger(ctx, log2.ContextKey)
 

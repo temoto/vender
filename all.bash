@@ -8,10 +8,11 @@ main() {
 	rm -f $base/coverage.{info,txt} $base/*.gcda $base/*.gcno
 
 	if [[ "$build_go" != "0" ]] ; then
-		go get -t -v ./...
-		go get -v github.com/golang/protobuf/protoc-gen-go
+		export GO111MODULE=off
 		go get -v github.com/xlab/c-for-go
 		go get -v golang.org/x/tools/cmd/stringer
+		export GO111MODULE=on
+		go get -v github.com/golang/protobuf/protoc-gen-go
 		go generate ./...
 		go build ./...
 		# begin workaround cannot use test profile flag with multiple packages
@@ -23,7 +24,7 @@ main() {
 		# end workaround cannot use test profile flag with multiple packages
 
 		go test -bench=. ./...
-        go vet ./...
+		go vet ./...
 	fi
 
 	paths=$(find . -type d ! -path '.' ! -path '*/.*' ! -path './script*' ! -path './target*' ! -path './vendor*')

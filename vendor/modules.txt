@@ -9,7 +9,7 @@ github.com/awalterschulze/gographviz/internal/lexer
 github.com/c-bata/go-prompt
 # github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
 github.com/coreos/go-systemd/daemon
-# github.com/golang/protobuf v1.2.0
+# github.com/golang/protobuf v1.3.1
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any

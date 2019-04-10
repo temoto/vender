@@ -4,6 +4,16 @@ package coin
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[RoutingCashBox-0]
+	_ = x[RoutingTubes-1]
+	_ = x[RoutingNotUsed-2]
+	_ = x[RoutingReject-3]
+}
+
 const _CoinRouting_name = "CashBoxTubesNotUsedReject"
 
 var _CoinRouting_index = [...]uint8{0, 7, 12, 19, 25}

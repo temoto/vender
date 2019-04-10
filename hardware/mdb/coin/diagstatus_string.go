@@ -4,6 +4,45 @@ package coin
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[DiagPoweringUp-256]
+	_ = x[DiagPoweringDown-512]
+	_ = x[DiagOK-768]
+	_ = x[DiagKeypadShifted-1024]
+	_ = x[DiagManualActive-1296]
+	_ = x[DiagNewInventoryInformation-1312]
+	_ = x[DiagInhibited-1536]
+	_ = x[DiagGeneralError-4096]
+	_ = x[DiagGeneralChecksum1-4097]
+	_ = x[DiagGeneralChecksum2-4098]
+	_ = x[DiagGeneralVoltage-4099]
+	_ = x[DiagDiscriminatorError-4352]
+	_ = x[DiagDiscriminatorFlightOpen-4368]
+	_ = x[DiagDiscriminatorReturnOpen-4369]
+	_ = x[DiagDiscriminatorJam-4400]
+	_ = x[DiagDiscriminatorBelowStandard-4417]
+	_ = x[DiagDiscriminatorSensorA-4432]
+	_ = x[DiagDiscriminatorSensorB-4433]
+	_ = x[DiagDiscriminatorSensorC-4434]
+	_ = x[DiagDiscriminatorTemperature-4435]
+	_ = x[DiagDiscriminatorOptics-4436]
+	_ = x[DiagAccepterError-4608]
+	_ = x[DiagAccepterJam-4656]
+	_ = x[DiagAccepterAlarm-4657]
+	_ = x[DiagAccepterEmpty-4672]
+	_ = x[DiagAccepterExitBeforeEnter-4688]
+	_ = x[DiagSeparatorError-4864]
+	_ = x[DiagSeparatorSortSensor-4880]
+	_ = x[DiagDispenserError-5120]
+	_ = x[DiagStorageError-5376]
+	_ = x[DiagStorageCassetteRemoved-5378]
+	_ = x[DiagStorageCashboxSensor-5379]
+	_ = x[DiagStorageAmbientLight-5380]
+}
+
 const _DiagStatus_name = "PoweringUpPoweringDownOKKeypadShiftedManualActiveNewInventoryInformationInhibitedGeneralErrorGeneralChecksum1GeneralChecksum2GeneralVoltageDiscriminatorErrorDiscriminatorFlightOpenDiscriminatorReturnOpenDiscriminatorJamDiscriminatorBelowStandardDiscriminatorSensorADiscriminatorSensorBDiscriminatorSensorCDiscriminatorTemperatureDiscriminatorOpticsAccepterErrorAccepterJamAccepterAlarmAccepterEmptyAccepterExitBeforeEnterSeparatorErrorSeparatorSortSensorDispenserErrorStorageErrorStorageCassetteRemovedStorageCashboxSensorStorageAmbientLight"
 
 var _DiagStatus_map = map[DiagStatus]string{
