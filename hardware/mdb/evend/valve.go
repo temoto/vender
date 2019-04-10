@@ -85,9 +85,11 @@ func (self *DeviceValve) NewGetTempHot() engine.Doer {
 		if len(bs) != 1 {
 			return errors.NotValidf("%s response=%x", tag, bs)
 		}
+		self.tempHot = bs[0]
 		return nil
 	}}
 }
+
 func (self *DeviceValve) NewSetTempHot() engine.Doer {
 	const tag = "mdb.evend.valve.set_temp_hot"
 

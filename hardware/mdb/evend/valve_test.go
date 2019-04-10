@@ -40,7 +40,9 @@ func TestValve(t *testing.T) {
 		t.Fatalf("Init err=%v", err)
 	}
 
-	engine.DoCheckError(t, d.NewGetTempHot(), ctx)
+	engine.DoCheckError(t, e.Resolve("mdb.evend.valve_get_temp_hot"), ctx)
+	helpers.AssertEqual(t, d.tempHot, uint8(23))
+
 	engine.DoCheckError(t, d.NewSetTempHot().(engine.ArgApplier).Apply(73), ctx)
 
 	water := d.waterStock.Min() + rand.Int31() + 120
