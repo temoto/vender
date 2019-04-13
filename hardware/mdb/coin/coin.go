@@ -92,7 +92,7 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	self.doSetup = self.newSetuper()
 	self.DoTubeStatus = self.NewTubeStatus()
 
-	engine := engine.ContextValueEngine(ctx, engine.ContextKey)
+	engine := engine.GetEngine(ctx)
 	engine.Register("mdb.coin.restart", self.Restarter())
 
 	// TODO (Enum idea) no IO in Init(), call Restarter() outside

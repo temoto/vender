@@ -28,7 +28,7 @@ func (self *DeviceHopper) Init(ctx context.Context, addr uint8, nameSuffix strin
 
 	self.stock = config.Global().Inventory.Register(name, DefaultHopperRate)
 
-	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+	e := engine.GetEngine(ctx)
 	e.Register(fmt.Sprintf("mdb.evend.%s_run(1)", name), self.NewRun().(engine.ArgApplier).Apply(1))
 	e.Register(fmt.Sprintf("mdb.evend.%s_run(2)", name), self.NewRun().(engine.ArgApplier).Apply(2))
 

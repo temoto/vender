@@ -26,7 +26,7 @@ func (self *DeviceEspresso) Init(ctx context.Context) error {
 
 	self.coffeeStock = config.Global().Inventory.Register("coffee", DefaultCoffeeRate)
 
-	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+	e := engine.GetEngine(ctx)
 	e.Register("mdb.evend.espresso_grind", self.NewGrind())
 	e.Register("mdb.evend.espresso_press", self.NewPress())
 	e.Register("mdb.evend.espresso_dispose", self.NewRelease())

@@ -5,36 +5,37 @@ import (
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/head/state"
 )
 
 func TestConveyor(t *testing.T) {
 	t.Parallel()
 
-	init := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "d8", "")
-		mdb.TestChanTx(t, reqCh, respCh, "d9", "011810000a0000c8001fff01050a32640000000000000000000000")
-	}
-	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "db", "04")
-		mdb.TestChanTx(t, reqCh, respCh, "db", "04")
-		mdb.TestChanTx(t, reqCh, respCh, "db", "")
-		mdb.TestChanTx(t, reqCh, respCh, "da011806", "")
-		mdb.TestChanTx(t, reqCh, respCh, "db", "50")
-		mdb.TestChanTx(t, reqCh, respCh, "db", "50")
-		mdb.TestChanTx(t, reqCh, respCh, "db", "")
+	ctx := state.NewTestContext(t, "")
+	mock := mdb.MockFromContext(ctx)
+	defer mock.Close()
+	go mock.Expect([]mdb.MockR{
+		{"d8", ""},
+		{"d9", "011810000a0000c8001fff01050a32640000000000000000000000"},
 
-		mdb.TestChanTx(t, reqCh, respCh, "db", "")
-		mdb.TestChanTx(t, reqCh, respCh, "da016707", "")
-		mdb.TestChanTx(t, reqCh, respCh, "db", "50")
-		mdb.TestChanTx(t, reqCh, respCh, "db", "")
+		{"db", "04"},
+		{"db", "04"},
+		{"db", ""},
+		{"da011806", ""},
+		{"db", "50"},
+		{"db", "50"},
+		{"db", ""},
+
+		{"db", ""},
+		{"da016707", ""},
+		{"db", "50"},
+		{"db", ""},
 
 		// TODO test + handle it too
-		// mdb.TestChanTx(t, reqCh, respCh, "db", "")
-		// mdb.TestChanTx(t, reqCh, respCh, "da016707", "")
-		// mdb.TestChanTx(t, reqCh, respCh, "db", "54") // oops
-	}
-	ctx := testMake(t, init, reply)
-	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+		// {"db", ""},
+		// {"da016707", ""},
+		// {"db", "54"}, // oops
+	})
 	d := new(DeviceConveyor)
 	// TODO make small delay default in tests
 	d.dev.DelayIdle = 1
@@ -45,6 +46,6 @@ func TestConveyor(t *testing.T) {
 		t.Fatalf("Init err=%v", err)
 	}
 
-	engine.DoCheckError(t, e.Resolve("mdb.evend.conveyor_move_cup"), ctx)
-	engine.DoCheckError(t, e.Resolve("mdb.evend.conveyor_move_elevator"), ctx)
+	engine.TestDo(t, ctx, "mdb.evend.conveyor_move_cup")
+	engine.TestDo(t, ctx, "mdb.evend.conveyor_move_elevator")
 }

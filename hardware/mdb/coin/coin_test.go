@@ -15,43 +15,38 @@ import (
 	"github.com/temoto/vender/log2"
 )
 
-const testScalingFactor = 100
-
 type _PI = money.PollItem
 
-func mockContext(t testing.TB, replyFunc mdb.TestReplyFunc, logLevel log2.Level) context.Context {
-	ctx := state.NewTestContext(t, "money { scale=100 change_over_compensate=10 }", logLevel)
+const testScalingFactor = 100
+const testConfig = "money { scale=100 change_over_compensate=10 }"
 
-	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
-	config := state.GetConfig(ctx)
-	config.Global().Hardware.Mdb.Mdber = mdber
-	if _, err := config.Mdber(); err != nil {
-		t.Fatal(err)
-	}
-
-	go func() {
-		defer close(respCh)
+func mockInitRs() []mdb.MockR {
+	setupResponse := fmt.Sprintf("021643%02x0200170102050a0a1900000000000000000000", testScalingFactor)
+	return []mdb.MockR{
 		// initer, SETUP
-		setupResponse := fmt.Sprintf("021643%02x0200170102050a0a1900000000000000000000", testScalingFactor)
-		mdb.TestChanTx(t, reqCh, respCh, "09", setupResponse)
+		{"09", setupResponse},
 
 		// initer, EXPANSION IDENTIFICATION
-		mdb.TestChanTx(t, reqCh, respCh, "0f00", "434f47303030303030303030303030463030313230303120202020029000000003")
+		{"0f00", "434f47303030303030303030303030463030313230303120202020029000000003"},
 
 		// initer, FEATURE ENABLE
-		mdb.TestChanTx(t, reqCh, respCh, "0f0100000002", "")
+		{"0f0100000002", ""},
 
 		// initer, DIAG STATUS
-		mdb.TestChanTx(t, reqCh, respCh, "0f05", "01000600")
+		{"0f05", "01000600"},
 
 		// initer, TUBE STATUS
-		mdb.TestChanTx(t, reqCh, respCh, "0a", "0000110008")
+		{"0a", "0000110008"},
+	}
+}
 
-		if replyFunc != nil {
-			replyFunc(t, reqCh, respCh)
-		}
+func mockContext(t testing.TB, rs []mdb.MockR) context.Context {
+	ctx := state.NewTestContext(t, testConfig)
+	mock := mdb.MockFromContext(ctx)
+	go func() {
+		mock.Expect(mockInitRs())
+		mock.Expect(rs)
 	}()
-
 	return ctx
 }
 
@@ -69,11 +64,9 @@ func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
 }
 
 func checkPoll(t testing.TB, input string, expected []_PI) {
-	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "0b", input)
-	}
-	ctx := mockContext(t, reply, log2.LDebug)
+	ctx := mockContext(t, []mdb.MockR{{"0b", input}})
 	ca := newDevice(t, ctx)
+	defer mdb.MockFromContext(ctx).Close()
 	// ca.AcceptMax(ctx, 1000)
 	r := ca.dev.Tx(ca.dev.PacketPoll)
 	if r.E != nil {
@@ -121,13 +114,14 @@ func TestCoinPoll(t *testing.T) {
 func TestCoinPayout(t *testing.T) {
 	t.Parallel()
 
-	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "0f0207", "")
-		mdb.TestChanTx(t, reqCh, respCh, "0f04", "00")
-		mdb.TestChanTx(t, reqCh, respCh, "0f04", "")
-		mdb.TestChanTx(t, reqCh, respCh, "0f03", "07000000")
+	rs := []mdb.MockR{
+		{"0f0207", ""},
+		{"0f04", "00"},
+		{"0f04", ""},
+		{"0f03", "07000000"},
 	}
-	ctx := mockContext(t, reply, log2.LDebug)
+	ctx := mockContext(t, rs)
+	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 
 	dispensed := new(currency.NominalGroup)
@@ -142,10 +136,8 @@ func TestCoinPayout(t *testing.T) {
 func TestCoinAccept(t *testing.T) {
 	t.Parallel()
 
-	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "0c001fffff", "")
-	}
-	ctx := mockContext(t, reply, log2.LDebug)
+	ctx := mockContext(t, []mdb.MockR{{"0c001fffff", ""}})
+	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 
 	err := ca.AcceptMax(1000).Do(ctx)
@@ -165,19 +157,20 @@ func TestCoinDispenseSmart(t *testing.T) {
 	// }
 	// cases := []Case{
 	// }
-	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "0a", "00000003")
-		mdb.TestChanTx(t, reqCh, respCh, "0f0201", "")
-		mdb.TestChanTx(t, reqCh, respCh, "0f04", "")
-		mdb.TestChanTx(t, reqCh, respCh, "0f03", "00")
-		mdb.TestChanTx(t, reqCh, respCh, "0f0201", "")
-		mdb.TestChanTx(t, reqCh, respCh, "0f04", "")
-		mdb.TestChanTx(t, reqCh, respCh, "0f03", "00")
-		mdb.TestChanTx(t, reqCh, respCh, "0f0202", "")
-		mdb.TestChanTx(t, reqCh, respCh, "0f04", "")
-		mdb.TestChanTx(t, reqCh, respCh, "0f03", "0001")
+	rs := []mdb.MockR{
+		{"0a", "00000003"},
+		{"0f0201", ""},
+		{"0f04", ""},
+		{"0f03", "00"},
+		{"0f0201", ""},
+		{"0f04", ""},
+		{"0f03", "00"},
+		{"0f0202", ""},
+		{"0f04", ""},
+		{"0f03", "0001"},
 	}
-	ctx := mockContext(t, reply, log2.LDebug)
+	ctx := mockContext(t, rs)
+	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 
 	dispensed := new(currency.NominalGroup)
@@ -187,9 +180,6 @@ func TestCoinDispenseSmart(t *testing.T) {
 	}
 	helpers.AssertEqual(t, dispensed.String(), "2:1,total:2")
 }
-
-// func checkDispenseSmart(t testing.TB, input currency.Amount, over bool, expect *currency.NominalGroup) {
-// }
 
 func TestCoinDiag(t *testing.T) {
 	t.Parallel()
@@ -216,10 +206,9 @@ func TestCoinDiag(t *testing.T) {
 	}
 }
 func checkDiag(t testing.TB, input string, expected DiagResult) {
-	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "0f05", input)
-	}
-	ca := newDevice(t, mockContext(t, reply, log2.LDebug))
+	ctx := mockContext(t, []mdb.MockR{{"0f05", input}})
+	defer mdb.MockFromContext(ctx).Close()
+	ca := newDevice(t, ctx)
 	dr := new(DiagResult)
 	err := ca.CommandExpansionSendDiagStatus(dr)
 	if err != nil {
@@ -242,20 +231,26 @@ func BenchmarkCoinPoll(b *testing.B) {
 		input string
 	}
 	cases := []Case{
-		Case{"empty", ""},
-		Case{"reset", "0b"},
-		Case{"deposited-tube", "521e"},
+		{"empty", ""},
+		{"reset", "0b"},
+		{"deposited-tube", "521e"},
 	}
 	for _, c := range cases {
 		c := c
 		b.Run(c.name, func(b *testing.B) {
 			b.ReportAllocs()
-			reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-				for i := 1; i <= b.N; i++ {
-					mdb.TestChanTx(t, reqCh, respCh, "0b", c.input)
-				}
+			rs := make([]mdb.MockR, 0, b.N)
+			for i := 1; i <= b.N; i++ {
+				rs = append(rs, mdb.MockR{"0b", c.input})
 			}
-			ca := newDevice(b, mockContext(b, reply, log2.LError))
+			ctx := mockContext(b, rs)
+
+			log := log2.ContextValueLogger(ctx, log2.ContextKey)
+			log.SetLevel(log2.LError)
+			state.GetConfig(ctx).Global().Hardware.Mdb.Mdber.Log.SetLevel(log2.LError)
+
+			defer mdb.MockFromContext(ctx).Close()
+			ca := newDevice(b, ctx)
 			parse := ca.pollFun(func(money.PollItem) bool { return false })
 			b.SetBytes(int64(len(c.input) / 2))
 			b.ResetTimer()

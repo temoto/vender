@@ -63,7 +63,7 @@ func main() {
 }
 
 func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest {
-	eng := engine.ContextValueEngine(ctx, engine.ContextKey)
+	eng := engine.GetEngine(ctx)
 	actions := eng.List()
 	sort.Strings(actions)
 	suggests := make([]prompt.Suggest, 0, len(actions))
@@ -132,7 +132,7 @@ func newTx(request mdb.Packet) engine.Doer {
 func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 	config := state.GetConfig(ctx)
 	log := config.Global().Log
-	eng := engine.ContextValueEngine(ctx, engine.ContextKey)
+	eng := engine.GetEngine(ctx)
 
 	parts := strings.Split(line, " ")
 	words := make([]string, 0, len(parts))

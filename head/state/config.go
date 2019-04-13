@@ -280,12 +280,26 @@ func MustReadConfigFile(path string, log *log2.Log) *Config {
 	return c
 }
 
-func NewTestContext(t testing.TB, config string, logLevel log2.Level) context.Context {
+func NewTestContext(t testing.TB, confString string /* logLevel log2.Level*/) context.Context {
+	const defaultConfig = "money { scale=100 }"
+	if confString == "" {
+		confString = defaultConfig
+	}
+
 	ctx := context.Background()
-	log := log2.NewTest(t, logLevel)
+	log := log2.NewTest(t, log2.LDebug)
 	log.SetFlags(log2.LTestFlags)
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	ctx = ContextWithConfig(ctx, MustReadConfig(strings.NewReader(config), log))
+	config := MustReadConfig(strings.NewReader(confString), log)
+	ctx = ContextWithConfig(ctx, config)
 	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
+
+	mdber, mdbMock := mdb.NewTestMdber(t)
+	config.Global().Hardware.Mdb.Mdber = mdber
+	if _, err := config.Mdber(); err != nil {
+		t.Fatal(err)
+	}
+	ctx = context.WithValue(ctx, mdb.MockContextKey, mdbMock)
+
 	return ctx
 }

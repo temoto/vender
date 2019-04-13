@@ -25,7 +25,7 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 	self.timeout = 10 * time.Second
 	err := self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
-	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+	e := engine.GetEngine(ctx)
 	e.Register("mdb.evend.elevator_move_conveyor", self.NewMove(self.posConveyor))
 	e.Register("mdb.evend.elevator_move_cup", self.NewMove(self.posCup))
 	e.Register("mdb.evend.elevator_move_ready", self.NewMove(self.posReady))

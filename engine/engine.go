@@ -12,8 +12,6 @@ import (
 
 const ContextKey = "run/engine"
 
-var EngineStop = errors.New("")
-
 type Engine struct {
 	Log     *log2.Log
 	lk      sync.Mutex
@@ -21,15 +19,15 @@ type Engine struct {
 }
 
 // Context[key] -> *Engine or panic
-func ContextValueEngine(ctx context.Context, key interface{}) *Engine {
-	v := ctx.Value(key)
+func GetEngine(ctx context.Context) *Engine {
+	v := ctx.Value(ContextKey)
 	if v == nil {
-		panic(fmt.Errorf("context['%v'] is nil", key))
+		panic(fmt.Errorf("context['%v'] is nil", ContextKey))
 	}
 	if cfg, ok := v.(*Engine); ok {
 		return cfg
 	}
-	panic(fmt.Errorf("context['%v'] expected type *Engine", key))
+	panic(fmt.Errorf("context['%v'] expected type *Engine", ContextKey))
 }
 
 func NewEngine(ctx context.Context) *Engine {

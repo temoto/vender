@@ -6,30 +6,31 @@ import (
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/helpers"
 )
 
 func TestValve(t *testing.T) {
 	t.Parallel()
 
-	init := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "c0", "")
-		mdb.TestChanTx(t, reqCh, respCh, "c1", "011810000a0000c8001fff01050a32640000000000000000000000")
-	}
-	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "c411", "17")
-		mdb.TestChanTx(t, reqCh, respCh, "c51049", "")
+	ctx := state.NewTestContext(t, "")
+	mock := mdb.MockFromContext(ctx)
+	defer mock.Close()
+	go mock.Expect([]mdb.MockR{
+		{"c0", ""},
+		{"c1", "011810000a0000c8001fff01050a32640000000000000000000000"},
 
-		mdb.TestChanTx(t, reqCh, respCh, "c3", "44")
-		mdb.TestChanTx(t, reqCh, respCh, "c3", "04")
-		mdb.TestChanTx(t, reqCh, respCh, "c3", "")
-		mdb.TestChanTx(t, reqCh, respCh, "c2014e", "")
-		mdb.TestChanTx(t, reqCh, respCh, "c3", "10")
-		mdb.TestChanTx(t, reqCh, respCh, "c3", "")
-	}
-	ctx := testMake(t, init, reply)
-	// config := state.GetConfig(ctx)
-	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+		{"c411", "17"},
+		{"c51049", ""},
+
+		{"c3", "44"},
+		{"c3", "04"},
+		{"c3", ""},
+		{"c2014e", ""},
+		{"c3", "10"},
+		{"c3", ""},
+	})
+	e := engine.GetEngine(ctx)
 	d := new(DeviceValve)
 	// TODO make small delay default in tests
 	d.dev.DelayIdle = 1
@@ -40,7 +41,7 @@ func TestValve(t *testing.T) {
 		t.Fatalf("Init err=%v", err)
 	}
 
-	engine.DoCheckError(t, e.Resolve("mdb.evend.valve_get_temp_hot"), ctx)
+	engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
 	helpers.AssertEqual(t, d.tempHot, uint8(23))
 
 	engine.DoCheckError(t, d.NewSetTempHot().(engine.ArgApplier).Apply(73), ctx)

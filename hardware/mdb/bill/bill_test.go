@@ -9,39 +9,35 @@ import (
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/helpers"
-	"github.com/temoto/vender/log2"
 )
 
 type _PI = money.PollItem
 
+const testConfig = "money { scale=100 }"
 const testScalingFactor = 500 // FIXME put into SETUP response
 
-func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) (context.Context, *BillValidator) {
-	ctx := state.NewTestContext(t, "money { scale=100 }", log2.LDebug)
-
-	mdber, reqCh, respCh := mdb.NewTestMDBChan(t, ctx)
-	config := state.GetConfig(ctx)
-	config.Global().Hardware.Mdb.Mdber = mdber
-	if _, err := config.Mdber(); err != nil {
-		t.Fatal(err)
-	}
-
-	go func() {
-		defer close(respCh)
+func mockInitRs() []mdb.MockR {
+	return []mdb.MockR{
 		// initer, SETUP
 		// FIXME put testScalingFactor here
-		mdb.TestChanTx(t, reqCh, respCh, "31", "011810000a0000c8001fff01050a32640000000000000000000000")
+		{"31", "011810000a0000c8001fff01050a32640000000000000000000000"},
 
 		// initer, EXPANSION IDENTIFICATION
 		// TODO fill real response
-		mdb.TestChanTx(t, reqCh, respCh, "3700", "49435430303030303030303030303056372d5255523530303030300120")
+		{"3700", "49435430303030303030303030303056372d5255523530303030300120"},
 
 		// initer, STACKER
-		mdb.TestChanTx(t, reqCh, respCh, "36", "000b")
+		{"36", "000b"},
+	}
+}
 
-		if replyFunc != nil {
-			replyFunc(t, reqCh, respCh)
-		}
+func testMake(t testing.TB, rs []mdb.MockR) (context.Context, *BillValidator) {
+	ctx := state.NewTestContext(t, testConfig)
+
+	mock := mdb.MockFromContext(ctx)
+	go func() {
+		mock.Expect(mockInitRs())
+		mock.Expect(rs)
 	}()
 
 	bv := new(BillValidator)
@@ -53,10 +49,8 @@ func testMake(t testing.TB, replyFunc mdb.TestReplyFunc) (context.Context, *Bill
 }
 
 func checkPoll(t *testing.T, input string, expected []_PI) {
-	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "33", input)
-	}
-	ctx, bv := testMake(t, reply)
+	ctx, bv := testMake(t, []mdb.MockR{{"33", input}})
+	defer mdb.MockFromContext(ctx).Close()
 	err := bv.Init(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -106,27 +100,12 @@ func TestBillPoll(t *testing.T) {
 func TestBillAcceptMax(t *testing.T) {
 	t.Parallel()
 
-	reply := func(t testing.TB, reqCh <-chan mdb.Packet, respCh chan<- mdb.Packet) {
-		mdb.TestChanTx(t, reqCh, respCh, "3400070000", "")
-	}
-	ctx, bv := testMake(t, reply)
+	ctx, bv := testMake(t, []mdb.MockR{{"3400070000", ""}})
+	defer mdb.MockFromContext(ctx).Close()
 	if err := bv.Init(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := bv.AcceptMax(10000).Do(ctx); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// measure allocations by real Doer graph
-func BenchmarkNewIniter(b *testing.B) {
-	b.ReportAllocs()
-	ctx := state.NewTestContext(b, "money { scale=100 }", log2.LDebug)
-	bv := &BillValidator{}
-	bv.dev.Log = log2.ContextValueLogger(ctx, log2.ContextKey)
-
-	b.ResetTimer()
-	for i := 1; i <= b.N; i++ {
-		bv.newIniter()
 	}
 }

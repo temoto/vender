@@ -27,7 +27,7 @@ func (self *DeviceMixer) Init(ctx context.Context) error {
 	self.posShake = 100
 	err := self.Generic.Init(ctx, 0xc8, "mixer", proto1)
 
-	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+	e := engine.GetEngine(ctx)
 	e.Register("mdb.evend.mixer_shake_1", self.NewShake(1, 100))
 	e.Register("mdb.evend.mixer_shake_2", self.NewShake(2, 100))
 	e.Register("mdb.evend.mixer_shake_clean", self.NewShake(10, 15))

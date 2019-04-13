@@ -39,7 +39,7 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 
 	self.waterStock = config.Global().Inventory.Register("water", DefaultValveRateRev)
 
-	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+	e := engine.GetEngine(ctx)
 	e.Register("mdb.evend.valve_get_temp_hot", self.NewGetTempHot())
 	e.Register("mdb.evend.valve_set_temp_hot(70)", self.NewSetTempHot().(engine.ArgApplier).Apply(70))
 	e.Register("mdb.evend.valve_pour_coffee(120)", self.NewPourCoffee().(engine.ArgApplier).Apply(120))
@@ -112,7 +112,8 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 			ml := uint16(arg)
 			if ml > cautionPartMl {
 				cautionTimeout := self.MlToTimeout(cautionPartMl)
-				err := self.newCommand(tagPour, strconv.Itoa(int(cautionPartMl)), arg1, self.MlToUnit(cautionPartMl)).Do(ctx)
+				cautionPartUnit := uint8(self.waterStock.TranslateArg(cautionPartMl))
+				err := self.newCommand(tagPour, strconv.Itoa(int(cautionPartMl)), arg1, cautionPartUnit).Do(ctx)
 				if err != nil {
 					return err
 				}
@@ -123,7 +124,8 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 				}
 				ml -= cautionPartMl
 			}
-			err := self.newCommand(tagPour, strconv.Itoa(int(ml)), arg1, self.MlToUnit(ml)).Do(ctx)
+			units := uint8(self.waterStock.TranslateArg(engine.Arg(ml)))
+			err := self.newCommand(tagPour, strconv.Itoa(int(ml)), arg1, units).Do(ctx)
 			if err != nil {
 				return err
 			}

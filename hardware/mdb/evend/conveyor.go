@@ -32,7 +32,7 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 	self.posElevator = 1895
 	err := self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
 
-	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+	e := engine.GetEngine(ctx)
 	e.Register("mdb.evend.conveyor_move_zero", self.NewMove(0))
 	e.Register("mdb.evend.conveyor_move_mixer", self.NewMove(1))
 	e.Register("mdb.evend.conveyor_move_cup", self.NewMove(self.posCup))

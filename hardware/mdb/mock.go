@@ -2,10 +2,10 @@
 package mdb
 
 import (
-	"bufio"
 	"bytes"
 	"context"
-	"io"
+	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
@@ -13,235 +13,120 @@ import (
 	"github.com/temoto/vender/log2"
 )
 
-// Mock Uarter for tests
-type nullUart struct {
-	Log *log2.Log
-	src io.Reader
-	br  *bufio.Reader
-	w   io.Writer
+const MockTimeout = 5 * time.Second
+
+type MockR [2]string
+
+func (self MockR) String() string {
+	return fmt.Sprintf("expect=%s response=%s", self[0], self[1])
 }
 
-func NewNullUart(r io.Reader, w io.Writer, log *log2.Log) *nullUart {
-	return &nullUart{
-		Log: log,
-		src: r,
-		br:  bufio.NewReader(r),
-		w:   w,
+type MockUart struct {
+	t testing.TB
+	q chan MockR
+}
+
+func NewMockUart(t testing.TB) *MockUart {
+	self := &MockUart{
+		t: t,
+		q: make(chan MockR),
+	}
+	return self
+}
+
+func (self *MockUart) Open(path string) error { return nil }
+func (self *MockUart) Close() error {
+	select {
+	case _, ok := <-self.q:
+		err := errors.Errorf("mdb-mock: Close() with non-empty queue")
+		if !ok {
+			err = errors.Errorf("code error mdb-mock already closed")
+		}
+		// panic(err)
+		// self.t.Log(err)
+		self.t.Fatal(err)
+		return err
+	default:
+		close(self.q)
+		return nil
 	}
 }
 
-func (self *nullUart) Break(d, sleep time.Duration) error {
-	self.resetRead()
-	time.Sleep(d)
-	time.Sleep(sleep)
+func (self *MockUart) Break(d, sleep time.Duration) error {
+	runtime.Gosched()
 	return nil
 }
 
-func (self *nullUart) Close() error {
-	self.src = nil
-	self.w = nil
-	return nil
-}
+func (self *MockUart) Tx(request, response []byte) (n int, err error) {
+	self.t.Helper()
 
-func (self *nullUart) Open(path string) error { return nil }
-
-func (self *nullUart) Tx(request, response []byte) (n int, err error) {
-	if _, err = self.write9(request, true); err != nil {
+	var rr MockR
+	var ok bool
+	select {
+	case rr, ok = <-self.q:
+		if !ok {
+			err = errors.Errorf("mdb-mock: queue ended, received=%x", request)
+			self.t.Error(err)
+			return 0, err
+		}
+	case <-time.After(MockTimeout):
+		err = errors.Errorf("mdb-mock: queue timeout, received=%x", request)
+		self.t.Error(err)
 		return 0, err
 	}
-	if _, err = self.write9([]byte{checksum(request)}, false); err != nil {
+	expect := MustPacketFromHex(rr[0], true)
+
+	if !bytes.Equal(request, expect.Bytes()) {
+		err = errors.Errorf("mdb-mock: request expected=%x actual=%x", expect.Bytes(), request)
+		self.t.Error(err)
 		return 0, err
 	}
-	buf := [PacketMaxLength]byte{}
-	if n, err = self.ReadPacket(buf[:]); err != nil {
-		return n, err
-	}
-	chkin := response[n-1]
-	n--
-	chkcomp := checksum(response)
-	if chkin != chkcomp {
-		self.Log.Debugf("mdb.fileUart.Tx InvalidChecksum frompacket=%x actual=%x", chkin, chkcomp)
-		return n, errors.Trace(InvalidChecksum{Received: chkin, Actual: chkcomp})
-	}
-	n = copy(response, buf[:n])
-	if n > 0 {
-		_, err = self.write9(PacketNul1.b[:1], false)
-	}
+
+	// TODO support testing errors
+	// if rr.Rerr != nil {
+	// 	self.t.Logf("mdb-mock: Tx returns error=%v", rr.Rerr)
+	// 	return 0, rr.Rerr
+	// }
+
+	rp := MustPacketFromHex(rr[1], true)
+	n = copy(response, rp.Bytes())
 	return n, err
 }
 
-func (self *nullUart) ReadPacket(buf []byte) (n int, err error) {
-	var b byte
-	for {
-		b, err = self.br.ReadByte()
-		if err != nil {
-			return 0, err
-		}
-		if b != 0xff {
-			buf[n] = b
-			n++
-			continue
-		}
-		b, err = self.br.ReadByte() // after ff
-		if err != nil {
-			return 0, err
-		}
-		switch b {
-		case 0xff:
-			buf[n] = b
-			n++
-			continue
-		case 0x00:
-			b, err = self.br.ReadByte() // chk
-			if err != nil {
-				return 0, err
-			}
-			buf[n] = b
-			n++
-			return n, err
-		default:
-			err = errors.Errorf("ReadPacket unknown sequence ff %x", b)
-			return 0, err
+// usage:
+// m, mock:= NewTestMdber(t)
+// defer mock.Close()
+// go use_mdb(m)
+// mock.Expect(...)
+// go use_mdb(m)
+// mock.Expect(...)
+// wait use_mdb() to finish to catch all possible errors
+func (self *MockUart) Expect(rrs []MockR) {
+	self.t.Helper()
+
+	for _, rr := range rrs {
+		select {
+		case self.q <- rr:
+		case <-time.After(MockTimeout):
+			err := errors.Errorf("mdb-mock: background processing is too slow, timeout sending into mock queue rr=%s", rr)
+			self.t.Fatal(err)
 		}
 	}
 }
 
-func (self *nullUart) write9(p []byte, start9 bool) (int, error) {
-	return self.w.Write(p)
-}
-
-func (self *nullUart) resetRead() error {
-	self.br.Reset(self.src)
-	return nil
-}
-
-func NewTestMDBRaw(t testing.TB) (*Mdb, func([]byte), *bytes.Buffer) {
-	r := bytes.NewBuffer(nil)
-	w := bytes.NewBuffer(nil)
-	log := log2.NewTest(t, log2.LDebug)
-	uarter := NewNullUart(r, w, log)
-	m, err := NewMDB(uarter, "", log)
+func NewTestMdber(t testing.TB) (*Mdb, *MockUart) {
+	mock := NewMockUart(t)
+	m, err := NewMDB(mock, "", log2.NewTest(t, log2.LDebug))
 	if err != nil {
 		t.Fatal(err)
+		return nil, nil
 	}
-	mockRead := func(b []byte) {
-		if _, err := r.Write(b); err != nil {
-			t.Fatal(err)
-		}
-		uarter.resetRead()
-	}
-	return m, mockRead, w
+
+	return m, mock
 }
 
-type ChanIO struct {
-	r       chan []byte
-	w       chan []byte
-	timeout time.Duration
-	rtmr    *time.Timer
-	wtmr    *time.Timer
-}
+const MockContextKey = "test/mdb-mock"
 
-func (self *ChanIO) Read(p []byte) (int, error) {
-	if !self.rtmr.Stop() {
-		<-self.rtmr.C
-	}
-	self.rtmr.Reset(self.timeout)
-	select {
-	case b, ok := <-self.w:
-		if !ok {
-			return 0, io.EOF
-		}
-		copy(p, b)
-		return len(b), nil
-	case <-self.rtmr.C:
-		panic("mdb mock ChanIO.Read timeout guard. mdber.Tx() without corresponding Packet channel receive")
-	}
-}
-
-func (self *ChanIO) Write(p []byte) (int, error) {
-	if !self.wtmr.Stop() {
-		<-self.wtmr.C
-	}
-	self.wtmr.Reset(self.timeout - time.Second)
-	select {
-	case self.r <- p:
-		return len(p), nil
-	case <-self.wtmr.C:
-		panic("mdb mock ChanIO.Write timeout guard")
-	}
-}
-
-func NewChanIO(timeout time.Duration) *ChanIO {
-	c := &ChanIO{
-		r:       make(chan []byte),
-		w:       make(chan []byte),
-		timeout: timeout,
-		rtmr:    time.NewTimer(0),
-		wtmr:    time.NewTimer(0),
-	}
-	return c
-}
-
-func NewTestMDBChan(t testing.TB, ctx context.Context) (*Mdb, <-chan Packet, chan<- Packet) {
-	cio := NewChanIO(5 * time.Second)
-	log := log2.ContextValueLogger(ctx, log2.ContextKey)
-	uarter := NewNullUart(cio, cio, log)
-	m, err := NewMDB(uarter, "", log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reqCh := make(chan Packet)
-	respCh := make(chan Packet)
-
-	go func() {
-		for {
-			rb := make([]byte, 0, PacketMaxLength)
-			// first byte, 9bit=1
-			if rb1, ok := <-cio.r; !ok {
-				panic("code error")
-			} else {
-				rb = append(rb, rb1...)
-			}
-			// rest bytes, 9bit=0
-			if rb2, ok := <-cio.r; !ok {
-				panic("code error")
-			} else {
-				rb = append(rb, rb2...)
-			}
-			rb = rb[:len(rb)-1] // minus checksum
-			request, err := PacketFromBytes(rb, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-			reqCh <- request
-			response, ok := <-respCh
-			if ok {
-				cio.w <- response.Wire(true)
-				if response.Len() > 0 {
-					ackb := <-cio.r // ACK
-					if !(len(ackb) == 1 && ackb[0] == 0) {
-						t.Error("expected ACK")
-					}
-				}
-			} else {
-				close(cio.r)
-				close(cio.w)
-				return
-			}
-		}
-	}()
-	return m, reqCh, respCh
-}
-
-type TestReplyFunc func(t testing.TB, reqCh <-chan Packet, respCh chan<- Packet)
-
-func TestChanTx(t testing.TB, reqCh <-chan Packet, respCh chan<- Packet, expectRequestHex, responseHex string) {
-	request := <-reqCh
-	// log.Printf("chtx expect=%s request=%x", expectRequestHex,  request.Bytes())
-	request.TestHex(t, expectRequestHex)
-	response, err := PacketFromHex(responseHex, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	respCh <- response
-}
+// sorry for this ugly convolution
+// working around import cycle on a time budget
+func MockFromContext(ctx context.Context) *MockUart { return ctx.Value(MockContextKey).(*MockUart) }

@@ -84,7 +84,7 @@ func (self *BillValidator) Init(ctx context.Context) error {
 		return errors.Annotate(err, tag)
 	}
 
-	engine := engine.ContextValueEngine(ctx, engine.ContextKey)
+	engine := engine.GetEngine(ctx)
 	_ = engine
 
 	return nil

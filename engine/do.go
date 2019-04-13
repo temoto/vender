@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"testing"
 	"time"
 
 	"github.com/juju/errors"
@@ -301,18 +300,3 @@ func (self *mockdo) Do(ctx context.Context) error {
 	return self.err
 }
 func (self *mockdo) String() string { return self.name }
-
-func DoCheckError(t testing.TB, d Doer, ctx context.Context) error {
-	t.Helper()
-	if err := d.Do(ctx); err != nil {
-		t.Errorf("d=%s err=%v", d.String(), err)
-		return err
-	}
-	return nil
-}
-func DoCheckFatal(t testing.TB, d Doer, ctx context.Context) {
-	t.Helper()
-	if err := d.Do(ctx); err != nil {
-		t.Fatalf("d=%s err=%v", d.String(), err)
-	}
-}

@@ -63,6 +63,13 @@ func AssertEqual(t testing.TB, a, b interface{}) {
 	t.Fatalf("%s assert equal fail\na=%#v\nb=%#v", location, a, b)
 }
 
+func CheckErr(t testing.TB, err error) {
+	t.Helper()
+	if err != nil {
+		t.Errorf("unexpected error=%v", err)
+	}
+}
+
 func formatCaller(depth int) string {
 	_, file, line, ok := runtime.Caller(depth)
 	if !ok {

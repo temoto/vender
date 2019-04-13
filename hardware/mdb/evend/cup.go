@@ -30,7 +30,7 @@ func (self *DeviceCup) Init(ctx context.Context) error {
 
 	self.cupStock = config.Global().Inventory.Register("cup", 1)
 
-	e := engine.ContextValueEngine(ctx, engine.ContextKey)
+	e := engine.GetEngine(ctx)
 	e.Register("mdb.evend.cup_dispense_proper", self.NewDispenseProper())
 	e.Register("mdb.evend.cup_light_on", self.NewLight(true))
 	e.Register("mdb.evend.cup_light_off", self.NewLight(false))
