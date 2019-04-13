@@ -28,7 +28,7 @@ func (self *DeviceCup) Init(ctx context.Context) error {
 		return err
 	}
 
-	self.cupStock = config.Global().Inventory.Register("cup")
+	self.cupStock = config.Global().Inventory.Register("cup", 1)
 
 	e := engine.ContextValueEngine(ctx, engine.ContextKey)
 	e.Register("mdb.evend.cup_dispense_proper", self.NewDispenseProper())

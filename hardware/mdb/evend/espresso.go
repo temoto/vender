@@ -10,6 +10,8 @@ import (
 	"github.com/temoto/vender/head/state"
 )
 
+const DefaultCoffeeRate = 9
+
 type DeviceEspresso struct {
 	Generic
 
@@ -22,7 +24,7 @@ func (self *DeviceEspresso) Init(ctx context.Context) error {
 	self.timeout = 10 * time.Second
 	err := self.Generic.Init(ctx, 0xe8, "espresso", proto2)
 
-	self.coffeeStock = config.Global().Inventory.Register("coffee")
+	self.coffeeStock = config.Global().Inventory.Register("coffee", DefaultCoffeeRate)
 
 	e := engine.ContextValueEngine(ctx, engine.ContextKey)
 	e.Register("mdb.evend.espresso_grind", self.NewGrind())

@@ -10,6 +10,8 @@ import (
 	"github.com/temoto/vender/head/state"
 )
 
+const DefaultHopperRate = 10
+
 type DeviceHopper struct {
 	Generic
 
@@ -24,7 +26,7 @@ func (self *DeviceHopper) Init(ctx context.Context, addr uint8, nameSuffix strin
 	name := "hopper" + nameSuffix
 	err := self.Generic.Init(ctx, addr, name, proto2)
 
-	self.stock = config.Global().Inventory.Register(name)
+	self.stock = config.Global().Inventory.Register(name, DefaultHopperRate)
 
 	e := engine.ContextValueEngine(ctx, engine.ContextKey)
 	e.Register(fmt.Sprintf("mdb.evend.%s_run(1)", name), self.NewRun().(engine.ArgApplier).Apply(1))

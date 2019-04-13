@@ -3,7 +3,6 @@ package evend
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 	"time"
 
@@ -14,7 +13,8 @@ import (
 	"github.com/temoto/vender/head/state"
 )
 
-const VolUnitMl float32 = 1.538462
+const DefaultValveRate float32 = 1.538462
+const DefaultValveRateRev float32 = 1 / 1.538462
 
 const (
 	valvePollBusy   = 0x10
@@ -37,14 +37,14 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	self.proto2IgnoreMask = valvePollNotHot
 	err := self.Generic.Init(ctx, 0xc0, "valve", proto2)
 
-	self.waterStock = config.Global().Inventory.Register("water")
+	self.waterStock = config.Global().Inventory.Register("water", DefaultValveRateRev)
 
 	e := engine.ContextValueEngine(ctx, engine.ContextKey)
 	e.Register("mdb.evend.valve_get_temp_hot", self.NewGetTempHot())
 	e.Register("mdb.evend.valve_set_temp_hot(70)", self.NewSetTempHot().(engine.ArgApplier).Apply(70))
-	e.Register("mdb.evend.valve_pour_coffee(120)", self.NewPourCoffee(self.waterStock).(engine.ArgApplier).Apply(120))
-	e.Register("mdb.evend.valve_pour_cold(120)", self.NewPourCold(self.waterStock).(engine.ArgApplier).Apply(120))
-	e.Register("mdb.evend.valve_pour_hot(120)", self.NewPourHot(self.waterStock).(engine.ArgApplier).Apply(120))
+	e.Register("mdb.evend.valve_pour_coffee(120)", self.NewPourCoffee().(engine.ArgApplier).Apply(120))
+	e.Register("mdb.evend.valve_pour_cold(120)", self.NewPourCold().(engine.ArgApplier).Apply(120))
+	e.Register("mdb.evend.valve_pour_hot(120)", self.NewPourHot().(engine.ArgApplier).Apply(120))
 	e.Register("mdb.evend.valve_cold_open", self.NewValveCold(true))
 	e.Register("mdb.evend.valve_cold_close", self.NewValveCold(false))
 	e.Register("mdb.evend.valve_hot_open", self.NewValveHot(true))
@@ -59,11 +59,6 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	return err
 }
 
-func (self *DeviceValve) MlToUnit(ml uint16) byte {
-	x := float32(ml) / VolUnitMl
-	y := math.Round(float64(x))
-	return byte(y)
-}
 func (self *DeviceValve) MlToTimeout(ml uint16) time.Duration {
 	const min = 500 * time.Millisecond
 	const perMl = 50 * time.Millisecond // FIXME
@@ -143,29 +138,29 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 	return tx
 }
 
-func (self *DeviceValve) NewPourHot(stock *inventory.Stock) engine.Doer {
+func (self *DeviceValve) NewPourHot() engine.Doer {
 	tag := fmt.Sprintf("%s.pour_hot", self.dev.Name)
 	tx := engine.NewTree(tag)
 	tx.Root.
 		Append(self.NewWaitReady(tag)).
 		Append(self.newPour(tag, 0x01)).
 		Append(self.NewWaitDone(tag, self.pourTimeout))
-	return stock.WrapArg(tx)
+	return self.waterStock.WrapArg(tx)
 }
 
-func (self *DeviceValve) NewPourCold(stock *inventory.Stock) engine.Doer {
+func (self *DeviceValve) NewPourCold() engine.Doer {
 	tag := fmt.Sprintf("%s.pour_cold", self.dev.Name)
 	tx := engine.NewTree(tag)
 	tx.Root.
 		Append(self.NewWaitReady(tag)).
 		Append(self.newPour(tag, 0x02)).
 		Append(self.NewWaitDone(tag, self.pourTimeout))
-	return stock.WrapArg(tx)
+	return self.waterStock.WrapArg(tx)
 }
 
-func (self *DeviceValve) NewPourCoffee(stock *inventory.Stock) engine.Doer {
+func (self *DeviceValve) NewPourCoffee() engine.Doer {
 	tx := self.newPourCareful("coffee", 0x03, self.NewPumpCoffee(false))
-	return stock.WrapArg(tx)
+	return self.waterStock.WrapArg(tx)
 }
 
 func (self *DeviceValve) NewValveCold(open bool) engine.Doer {
@@ -208,8 +203,7 @@ func (self *DeviceValve) newPour(tag string, b1 byte) engine.Doer {
 	return engine.FuncArg{
 		Name: tag,
 		F: func(ctx context.Context, arg engine.Arg) error {
-			ml := uint16(arg)
-			bs := []byte{b1, self.MlToUnit(ml)}
+			bs := []byte{b1, uint8(self.waterStock.TranslateArg(arg))}
 			return self.txAction(bs)
 		},
 	}

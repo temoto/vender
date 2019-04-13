@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 
@@ -11,7 +12,7 @@ import (
 )
 
 var (
-	ErrEmpty = errors.New("Stock is too low")
+	ErrStockLow = errors.New("Stock is too low")
 )
 
 type Inventory struct {
@@ -25,7 +26,22 @@ func (self *Inventory) Init() {
 	self.mu.Unlock()
 }
 
-func (self *Inventory) Register(name string) *Stock {
+func (self *Inventory) EnableAll() {
+	self.mu.Lock()
+	for _, s := range self.m {
+		s.Enable()
+	}
+	self.mu.Unlock()
+}
+func (self *Inventory) DisableAll() {
+	self.mu.Lock()
+	for _, s := range self.m {
+		s.Disable()
+	}
+	self.mu.Unlock()
+}
+
+func (self *Inventory) Register(name string, rate float32) *Stock {
 	var s *Stock
 	self.mu.Lock()
 	if exist, ok := self.m[name]; ok {
@@ -33,9 +49,10 @@ func (self *Inventory) Register(name string) *Stock {
 	} else {
 		s = &Stock{
 			Name: name,
-			rate: 1.0,
+			rate: rate,
 			min:  1,
 		}
+		s.Enable()
 		self.m[name] = s
 	}
 	self.mu.Unlock()
@@ -43,31 +60,38 @@ func (self *Inventory) Register(name string) *Stock {
 }
 
 type Stock struct {
-	Name  string
-	rate  float32 // TODO table
-	min   int32
-	value int32
+	Name   string
+	enable uint32
+	rate   float32 // TODO table
+	min    int32
+	value  int32
 }
 
-func (self *Stock) Min() int32   { return atomic.LoadInt32(&self.min) }
+func (self *Stock) Enabled() bool { return atomic.LoadUint32(&self.enable) == 1 }
+func (self *Stock) Enable()       { atomic.StoreUint32(&self.enable, 1) }
+func (self *Stock) Disable()      { atomic.StoreUint32(&self.enable, 0) }
+
+func (self *Stock) Min() int32 { return atomic.LoadInt32(&self.min) }
+
+func (self *Stock) Rate() float32     { return self.rate }
+func (self *Stock) SetRate(r float32) { self.rate = r }
+
 func (self *Stock) Value() int32 { return atomic.LoadInt32(&self.value) }
 func (self *Stock) Set(v int32)  { atomic.StoreInt32(&self.value, v) }
 
-func (self *Stock) WrapConst(d engine.Doer, arg int32) engine.Doer {
-	return do{d: d, s: self, v: translateConst(arg, self.rate)}
-}
 func (self *Stock) Wrap1(d engine.Doer) engine.Doer {
-	return self.WrapConst(d, 1)
+	return do{d: d, s: self, v: self.TranslateArg(1)}
 }
 func (self *Stock) WrapArg(d engine.Doer) engine.Doer {
 	return do{d: d, s: self}
 }
 
-func translateConst(arg int32, rate float32) int32 {
+// Human units to hardware units
+func (self *Stock) TranslateArg(arg engine.Arg) int32 {
 	if arg == 0 {
 		return 0
 	}
-	result := int32(float32(arg) * rate)
+	result := int32(math.Round(float64(arg) * float64(self.Rate())))
 	if result == 0 {
 		return 1
 	}
@@ -90,13 +114,13 @@ func (self do) Validate() error {
 		// return engine.ErrArgNotApplied
 	}
 
-	if /*TODO spending validation disabled*/ false {
+	if !self.s.Enabled() {
 		return nil
 	}
 	min := self.s.Min()
 	value := self.s.Value()
 	if value-self.v < min {
-		return ErrEmpty
+		return ErrStockLow
 	}
 	return nil
 }
@@ -111,7 +135,7 @@ func (self do) Do(ctx context.Context) error {
 	if err := self.d.Do(ctx); err != nil {
 		return err
 	}
-	if /*TODO decrement disabled*/ false {
+	if !self.s.Enabled() {
 		return nil
 	}
 
