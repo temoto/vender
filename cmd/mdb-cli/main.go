@@ -13,12 +13,13 @@ import (
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/log2"
 )
 
 const usage = `syntax: commands separated by whitespace
 (main)
-- break    MDB bus reset (TX high for 200ms, wait for 500ms)
+- reset    MDB bus reset (TX high for 200ms, wait for 500ms)
 - sN       pause N milliseconds
 - @XX...   transmit MDB block from hex XX..., show response
 
@@ -42,6 +43,7 @@ func main() {
 	log.SetFlags(log2.LInteractiveFlags)
 
 	config := new(state.Config)
+	config.Money.Scale = 1 // XXX workaround required setting
 	config.Hardware.IodinPath = *iodinPath
 	config.Hardware.Mdb.UartDevice = *devicePath
 	config.Hardware.Mdb.UartDriver = *uarterName
@@ -59,12 +61,11 @@ func main() {
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = state.ContextWithConfig(ctx, config)
 
-	if err := doBreak.Do(ctx); err != nil {
+	if err := doBusReset.Do(ctx); err != nil {
 		log.Fatal(err)
 	}
 
-	// TODO OptionHistory
-	prompt.New(newExecutor(ctx), newCompleter(ctx)).Run()
+	cli.MainLoop("vender-mdb-cli", newExecutor(ctx), newCompleter(ctx))
 }
 
 var doUsage = engine.Func{F: func(ctx context.Context) error {
@@ -90,7 +91,7 @@ var doLogNo = engine.Func{Name: "log=no", F: func(ctx context.Context) error {
 	m.Log.SetLevel(log2.LError)
 	return nil
 }}
-var doBreak = engine.Func{Name: "break", F: func(ctx context.Context) error {
+var doBusReset = engine.Func{Name: "reset", F: func(ctx context.Context) error {
 	config := state.GetConfig(ctx)
 	m, err := config.Mdber()
 	if err != nil {
@@ -101,7 +102,7 @@ var doBreak = engine.Func{Name: "break", F: func(ctx context.Context) error {
 
 func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest {
 	suggests := []prompt.Suggest{
-		prompt.Suggest{Text: "break", Description: "MDB bus reset"},
+		prompt.Suggest{Text: "reset", Description: "MDB bus reset"},
 		prompt.Suggest{Text: "sN", Description: "pause for N ms"},
 		prompt.Suggest{Text: "loop=N", Description: "repeat line N times"},
 		prompt.Suggest{Text: "par", Description: "execute commands on line concurrently"},
@@ -224,8 +225,8 @@ func parseCommand(word string) (engine.Doer, error) {
 		return doLogYes, nil
 	case word == "log=no":
 		return doLogNo, nil
-	case word == "break":
-		return doBreak, nil
+	case word == "reset":
+		return doBusReset, nil
 	case word[0] == 's':
 		i, err := strconv.ParseUint(word[1:], 10, 32)
 		if err != nil {

@@ -16,6 +16,7 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/log2"
 )
 
@@ -23,7 +24,7 @@ const usage = `syntax: commands separated by whitespace
 (main)
 - sN       pause N milliseconds
 - @ACTION  execute engine action
-- mXX...   execute MDB sesuggestsion
+- mXX...   MDB send XX... in hex, receive
 
 (meta)
 - loop=N   repeat N times all commands on this line
@@ -47,19 +48,18 @@ func main() {
 	log.Debugf("config=%+v", config)
 	ctx = state.ContextWithConfig(ctx, config)
 
-	if err := doMdbBreak.Do(ctx); err != nil {
+	if err := doMdbBusReset.Do(ctx); err != nil {
 		log.Fatal(errors.ErrorStack(err))
 	}
 
-	eng.Register("break", doMdbBreak)
+	eng.Register("mdb.bus_reset", doMdbBusReset)
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
 	// right now Enum does IO implicitly
 	hardware.Enum(ctx, nil)
-
+	config.Global().Inventory.DisableAll()
 	log.Debugf("devices init complete")
 
-	// TODO OptionHistory
-	prompt.New(newExecutor(ctx), newCompleter(ctx)).Run()
+	cli.MainLoop("vender-engine-cli", newExecutor(ctx), newCompleter(ctx))
 }
 
 func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest {
@@ -93,7 +93,7 @@ func newExecutor(ctx context.Context) func(string) {
 	}
 }
 
-var doMdbBreak = engine.Func{Name: "mdb.break", F: func(ctx context.Context) error {
+var doMdbBusReset = engine.Func{Name: "mdb.bus_reset", F: func(ctx context.Context) error {
 	config := state.GetConfig(ctx)
 	m, err := config.Mdber()
 	if err != nil {

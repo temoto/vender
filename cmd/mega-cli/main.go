@@ -11,6 +11,7 @@ import (
 	"github.com/c-bata/go-prompt"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/mega-client"
+	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/log2"
 )
 
@@ -44,8 +45,7 @@ func main() {
 		}
 	}()
 
-	// TODO OptionHistory
-	prompt.New(newExecutor(client), newCompleter()).Run()
+	cli.MainLoop("vender-mega-cli", newExecutor(client), newCompleter())
 }
 
 func newCompleter() func(d prompt.Document) []prompt.Suggest {
