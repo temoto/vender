@@ -175,8 +175,7 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 }
 
 func (self *BillValidator) newIniter() engine.Doer {
-	tx := engine.NewTree(self.dev.Name + ".initer")
-	tx.Root.
+	return engine.NewSeq(self.dev.Name + ".initer").
 		// TODO maybe execute Reset?
 		Append(engine.Func{Name: self.dev.Name + ".setup", F: self.CommandSetup}).
 		Append(engine.Func0{Name: self.dev.Name + ".expid", F: func() error {
@@ -193,7 +192,6 @@ func (self *BillValidator) newIniter() engine.Doer {
 		}}).
 		Append(self.NewStacker()).
 		Append(engine.Sleep{Duration: self.dev.DelayNext})
-	return tx
 }
 
 func (self *BillValidator) NewBillType(accept, escrow uint16) engine.Doer {
@@ -205,11 +203,9 @@ func (self *BillValidator) NewBillType(accept, escrow uint16) engine.Doer {
 }
 
 func (self *BillValidator) NewRestarter() engine.Doer {
-	tx := engine.NewTree(self.dev.Name + ".restarter")
-	tx.Root.
+	return engine.NewSeq(self.dev.Name + ".restarter").
 		Append(self.dev.NewReset()).
 		Append(self.newIniter())
-	return tx
 }
 
 func (self *BillValidator) setEscrowBill(n currency.Nominal) {

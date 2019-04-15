@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -17,13 +18,13 @@ func TestTreeConcurrent(t *testing.T) {
 	tx := NewTree("tx1")
 	do1 := &Sleep{10 * time.Millisecond}
 	do2 := &Sleep{50 * time.Millisecond}
-	n11 := NewNode(do1, &tx.Root)
-	n12 := NewNode(do1, &tx.Root)
-	n13 := NewNode(do1, &tx.Root)
-	n21 := NewNode(do2, n11)
-	n22 := NewNode(do2, n12, n13)
-	n23 := NewNode(do2, n11, n13)
-	n3 := NewNode(&mockdo{name: "check"}, n21, n22, n23)
+	n11 := newNode(do1, &tx.Root)
+	n12 := newNode(do1, &tx.Root)
+	n13 := newNode(do1, &tx.Root)
+	n21 := newNode(do2, n11)
+	n22 := newNode(do2, n12, n13)
+	n23 := newNode(do2, n11, n13)
+	n3 := newNode(&mockdo{name: "check"}, n21, n22, n23)
 	// dots := tx.Root.Dot("UD")
 	// t.Logf("%s", dots)
 	tbegin := time.Now()
@@ -50,17 +51,17 @@ func TestTreeWide(t *testing.T) {
 	tx := NewTree("wide")
 	do1 := &mockdo{}
 	do2 := &mockdo{}
-	n11 := NewNode(do1, &tx.Root)
-	n12 := NewNode(do1, &tx.Root)
-	n13 := NewNode(do1, &tx.Root)
-	n14 := NewNode(do1, &tx.Root)
-	n15 := NewNode(do1, &tx.Root)
-	n21 := NewNode(do2, n11)
-	n22 := NewNode(do2, n11, n12)
-	n23 := NewNode(do2, n12, n13)
-	n24 := NewNode(do2, n13, n14)
-	n25 := NewNode(do2, n11, n13, n15)
-	n3 := NewNode(&mockdo{name: "check"}, n21, n22, n23, n24, n25)
+	n11 := newNode(do1, &tx.Root)
+	n12 := newNode(do1, &tx.Root)
+	n13 := newNode(do1, &tx.Root)
+	n14 := newNode(do1, &tx.Root)
+	n15 := newNode(do1, &tx.Root)
+	n21 := newNode(do2, n11)
+	n22 := newNode(do2, n11, n12)
+	n23 := newNode(do2, n12, n13)
+	n24 := newNode(do2, n13, n14)
+	n25 := newNode(do2, n11, n13, n15)
+	n3 := newNode(&mockdo{name: "check"}, n21, n22, n23, n24, n25)
 	// dots := tx.Root.Dot("UD")
 	// t.Logf("%s", dots)
 	ctx := context.Background()
@@ -153,4 +154,49 @@ func TestArg(t *testing.T) {
 	}
 	DoCheckFatal(t, applied, ctx)
 	helpers.AssertEqual(t, ok, true)
+}
+
+// Few actions in sequence is a common case worth optimizing.
+func BenchmarkSequentialDo(b *testing.B) {
+	mkbench := func(kind string, length int) func(b *testing.B) {
+		return func(b *testing.B) {
+			op := func(ctx context.Context) error { return nil }
+			ctx := context.Background()
+			log := log2.NewTest(b, log2.LError)
+			log.SetFlags(log2.LTestFlags)
+			ctx = context.WithValue(ctx, log2.ContextKey, log)
+
+			var tx Doer
+			switch kind {
+			case "tree":
+				t := NewTree(fmt.Sprintf("%s-%d", kind, length))
+				tail := &t.Root
+				for i := 1; i <= length; i++ {
+					tail = tail.Append(Func{Name: "stub-action", F: op})
+				}
+				tx = t
+			case "seq":
+				s := NewSeq(fmt.Sprintf("%s-%d", kind, length))
+				for i := 1; i <= length; i++ {
+					s.Append(Func{Name: "stub-action", F: op})
+				}
+				tx = s
+			default:
+				panic(kind)
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 1; i <= b.N; i++ {
+				if err := tx.Do(ctx); err != nil {
+					b.Fatal(err)
+				}
+			}
+		}
+	}
+
+	b.Run("tree-3", mkbench("tree", 3))
+	b.Run("tree-5", mkbench("tree", 5))
+	b.Run("seq-3", mkbench("seq", 3))
+	b.Run("seq-5", mkbench("seq", 5))
 }

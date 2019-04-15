@@ -10,9 +10,19 @@ import (
 	"github.com/temoto/vender/helpers"
 )
 
+// TODO remove this
+type ScenarioNodeKind uint8
+
+const (
+	NodeInvalid ScenarioNodeKind = iota
+	NodeDoer
+	NodeBlock
+	NodeSpecial
+)
+
 type sNode struct {
 	id     string
-	kind   NodeKind
+	kind   ScenarioNodeKind
 	parent string
 	edges  []string
 }

@@ -16,46 +16,30 @@ type Graph struct {
 	rootId string
 }
 
-type NodeKind uint8
-
-const (
-	NodeInvalid NodeKind = iota
-	NodeDoer
-	NodeBlock
-	NodeSpecial
-)
-
 type Node struct {
 	Doer
-	// id        string
-	// kind      NodeKind
-	// svalidate string
-	// srun      string
-	// run       Doer
 	parents  []*Node
 	children []*Node
 	done     msync.Signal // exec
 	callers  int32        // debug
 }
 
-func (self *Node) Clear() {
-	// help garbage collector
-	// TODO is it redundant?
-	for i := range self.parents {
-		self.parents[i] = nil
-	}
-	self.parents = nil
-	for i, n := range self.children {
-		n.Clear()
-		self.children[i] = nil // help GC
-	}
-	self.children = nil
-}
+// not used yet
+// func (self *Node) Clear() {
+// 	// help garbage collector
+// 	// TODO is it redundant?
+// 	for i := range self.parents {
+// 		self.parents[i] = nil
+// 	}
+// 	self.parents = nil
+// 	for i, n := range self.children {
+// 		n.Clear()
+// 		self.children[i] = nil // help GC
+// 	}
+// 	self.children = nil
+// }
 
-// func (self *Node) Do(ctx context.Context) error { return self.run.Do(ctx) }
-// func (self *Node) String() string               { return self.run.String() }
-
-func NewNode(d Doer, after ...*Node) *Node {
+func newNode(d Doer, after ...*Node) *Node {
 	node := &Node{
 		Doer:    d,
 		parents: make([]*Node, 0, 8),
@@ -68,7 +52,7 @@ func NewNode(d Doer, after ...*Node) *Node {
 func (self *Node) Append(d Doer, after ...*Node) *Node {
 	node, ok := d.(*Node)
 	if !ok {
-		node = NewNode(d)
+		node = newNode(d)
 	}
 	return self.AppendNode(node, after...)
 }
@@ -87,13 +71,22 @@ type edge struct {
 	to   *Node
 }
 
+func (self *Node) Walk(fun func(*Node) bool) {
+	if fun(self) {
+		return
+	}
+	for _, child := range self.children {
+		child.Walk(fun)
+	}
+}
+
 func (self *Node) Collect(pout *[]*Node) {
 	if self == nil {
 		return
 	}
 
 	visited := make(map[*Node]struct{})
-	walk(self, func(node *Node) bool {
+	self.Walk(func(node *Node) bool {
 		if _, ok := visited[node]; !ok {
 			visited[node] = struct{}{}
 			*pout = append(*pout, node)
@@ -175,14 +168,5 @@ func dotRanks(pout *[]string, items []*Node, visited map[edge]uint) {
 	for _, ns := range ranked {
 		sort.Strings(ns)
 		*pout = append(*pout, fmt.Sprintf("{ rank=same; %s }\n", strings.Join(ns, ", ")))
-	}
-}
-
-func walk(node *Node, fun func(*Node) bool) {
-	if fun(node) {
-		return
-	}
-	for _, child := range node.children {
-		walk(child, fun)
 	}
 }

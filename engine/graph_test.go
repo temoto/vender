@@ -16,18 +16,18 @@ func TestNodeCollect(t *testing.T) {
 	}
 	cases := []Case{
 		Case{"empty", func() *Node { return nil }, nil},
-		Case{"1", func() *Node { return NewNode(&mockdo{name: "1"}) }, []string{"1"}},
+		Case{"1", func() *Node { return newNode(&mockdo{name: "1"}) }, []string{"1"}},
 		Case{"triangle", func() *Node {
-			root := NewNode(&mockdo{name: "1"})
+			root := newNode(&mockdo{name: "1"})
 			root.Append(&mockdo{name: "2-left"})
 			root.Append(&mockdo{name: "3-right"})
 			return root
 		}, []string{"1", "2-left", "3-right"}},
 		Case{"diamond", func() *Node {
-			nbegin := NewNode(&mockdo{name: "1-begin"})
-			nleft := NewNode(&mockdo{name: "2-left"}, nbegin)
-			nright := NewNode(&mockdo{name: "3-right"}, nbegin)
-			NewNode(&mockdo{name: "4-end"}, nleft, nright)
+			nbegin := newNode(&mockdo{name: "1-begin"})
+			nleft := newNode(&mockdo{name: "2-left"}, nbegin)
+			nright := newNode(&mockdo{name: "3-right"}, nbegin)
+			newNode(&mockdo{name: "4-end"}, nleft, nright)
 			return nbegin
 		}, []string{"1-begin", "2-left", "3-right", "4-end"}},
 	}
@@ -54,8 +54,8 @@ func TestNodeCollect(t *testing.T) {
 func TestDot(t *testing.T) {
 	t.Parallel()
 	tx := NewTree("check recipe")
-	nenumdev := NewNode(&Func{Name: "recipe.EnumDevices"}, &tx.Root)
-	ncheckConv := NewNode(&Func{Name: "check conveyor"})
+	nenumdev := newNode(&Func{Name: "recipe.EnumDevices"}, &tx.Root)
+	ncheckConv := newNode(&Func{Name: "check conveyor"})
 	ncheckConv.Append(&mockdo{name: "MDB da"})
 	nenumdev.Append(ncheckConv)
 	ncheckCup := nenumdev.Append(&Func{Name: "check cup"})

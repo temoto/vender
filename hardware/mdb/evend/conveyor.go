@@ -47,8 +47,7 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 
 func (self *DeviceConveyor) NewMove(position uint16) engine.Doer {
 	tag := fmt.Sprintf("mdb.evend.conveyor.move:%d", position)
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		// exceptional byte order
 		Append(self.Generic.NewAction(tag, 0x01, byte(position&0xff), byte(position>>8))).
@@ -68,7 +67,6 @@ func (self *DeviceConveyor) NewMove(position uint16) engine.Doer {
 			self.currentPos = position
 			return nil
 		}})
-	return tx
 }
 
 func absDiffU16(a, b uint16) uint16 {

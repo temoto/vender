@@ -35,10 +35,8 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 
 func (self *DeviceElevator) NewMove(position uint8) engine.Doer {
 	tag := fmt.Sprintf("mdb.evend.elevator.move:%d", position)
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, position, 0)).
 		Append(self.Generic.NewWaitDone(tag, self.timeout))
-	return tx
 }

@@ -38,8 +38,7 @@ func (self *DeviceEspresso) Init(ctx context.Context) error {
 
 func (self *DeviceEspresso) NewGrind() engine.Doer {
 	const tag = "mdb.evend.espresso.grind"
-	tx := engine.NewTree(tag)
-	tx.Root.
+	tx := engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
 		Append(self.NewWaitDone(tag, self.timeout))
@@ -48,22 +47,18 @@ func (self *DeviceEspresso) NewGrind() engine.Doer {
 
 func (self *DeviceEspresso) NewPress() engine.Doer {
 	const tag = "mdb.evend.espresso.press"
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x02)).
 		Append(self.NewWaitDone(tag, self.timeout))
-	return tx
 }
 
 func (self *DeviceEspresso) NewRelease() engine.Doer {
 	const tag = "mdb.evend.espresso.release"
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03)).
 		Append(self.NewWaitDone(tag, self.timeout))
-	return tx
 }
 
 func (self *DeviceEspresso) NewHeat(on bool) engine.Doer {
@@ -72,9 +67,7 @@ func (self *DeviceEspresso) NewHeat(on bool) engine.Doer {
 	if !on {
 		arg = 0x06
 	}
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, arg))
-	return tx
 }

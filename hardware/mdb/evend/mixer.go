@@ -43,12 +43,10 @@ func (self *DeviceMixer) Init(ctx context.Context) error {
 // 1step = 100ms
 func (self *DeviceMixer) NewShake(steps uint8, speed uint8) engine.Doer {
 	tag := fmt.Sprintf("mdb.evend.mixer.shake:%d,%d", steps, speed)
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01, steps, speed)).
-		Append(self.NewWaitDone(tag, self.shakeTimeout*time.Duration(steps)))
-	return tx
+		Append(self.NewWaitDone(tag, self.shakeTimeout*time.Duration(1+steps)))
 }
 
 func (self *DeviceMixer) NewFan(on bool) engine.Doer {
@@ -62,10 +60,8 @@ func (self *DeviceMixer) NewFan(on bool) engine.Doer {
 
 func (self *DeviceMixer) NewMove(position uint8) engine.Doer {
 	tag := fmt.Sprintf("mdb.evend.mixer.move:%d", position)
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, position, 0x64)).
 		Append(self.NewWaitDone(tag, self.moveTimeout))
-	return tx
 }

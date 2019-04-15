@@ -133,17 +133,14 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 			return err
 		}}
 
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(doPour)
-	return tx
 }
 
 func (self *DeviceValve) NewPourHot() engine.Doer {
 	tag := fmt.Sprintf("%s.pour_hot", self.dev.Name)
-	tx := engine.NewTree(tag)
-	tx.Root.
+	tx := engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.newPour(tag, 0x01)).
 		Append(self.NewWaitDone(tag, self.pourTimeout))
@@ -152,8 +149,7 @@ func (self *DeviceValve) NewPourHot() engine.Doer {
 
 func (self *DeviceValve) NewPourCold() engine.Doer {
 	tag := fmt.Sprintf("%s.pour_cold", self.dev.Name)
-	tx := engine.NewTree(tag)
-	tx.Root.
+	tx := engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.newPour(tag, 0x02)).
 		Append(self.NewWaitDone(tag, self.pourTimeout))

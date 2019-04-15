@@ -269,12 +269,10 @@ func (self *CoinAcceptor) NewPayout(amount currency.Amount, success *currency.No
 		return nil
 	}}
 
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(doPayout).
 		Append(self.dev.NewPollLoop(tag, packetPayoutPoll, self.dispenseTimeout*4, payoutPollFun)).
 		Append(doStatus)
-	return tx
 }
 
 // 0FH 04H PAYOUT VALUE POLL

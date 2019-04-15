@@ -195,8 +195,7 @@ func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 
 func (self *CoinAcceptor) newIniter() engine.Doer {
 	tag := self.dev.Name + ".initer"
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.doSetup).
 		Append(engine.Func0{Name: tag + "/expid-diag", F: func() error {
 			var err error
@@ -215,15 +214,12 @@ func (self *CoinAcceptor) newIniter() engine.Doer {
 			return nil
 		}}).
 		Append(self.NewTubeStatus())
-	return tx
 }
 
 func (self *CoinAcceptor) Restarter() engine.Doer {
-	tx := engine.NewTree(self.dev.Name + ".restarter")
-	tx.Root.
+	return engine.NewSeq(self.dev.Name + ".restarter").
 		Append(self.doReset).
 		Append(self.newIniter())
-	return tx
 }
 
 func (self *CoinAcceptor) newSetuper() engine.Doer {

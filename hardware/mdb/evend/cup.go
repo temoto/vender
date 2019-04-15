@@ -41,17 +41,14 @@ func (self *DeviceCup) Init(ctx context.Context) error {
 
 func (self *DeviceCup) NewDispenseProper() engine.Doer {
 	const tag = "mdb.evend.cup.dispense_proper"
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.NewEnsure()).
 		Append(self.NewDispense())
-	return tx
 }
 
 func (self *DeviceCup) NewDispense() engine.Doer {
 	const tag = "mdb.evend.cup.dispense"
-	tx := engine.NewTree(tag)
-	tx.Root.
+	tx := engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
 		Append(engine.Func0{Name: tag + "/assert-busy", F: func() error {
@@ -85,10 +82,8 @@ func (self *DeviceCup) NewLight(on bool) engine.Doer {
 
 func (self *DeviceCup) NewEnsure() engine.Doer {
 	const tag = "mdb.evend.cup.ensure"
-	tx := engine.NewTree(tag)
-	tx.Root.
+	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x04)).
 		Append(self.Generic.NewWaitDone(tag, self.ensureTimeout))
-	return tx
 }
