@@ -21,16 +21,16 @@ type DeviceMixer struct {
 func (self *DeviceMixer) Init(ctx context.Context) error {
 	// TODO read config
 	self.moveTimeout = 10 * time.Second
-	self.shakeTimeout = 2 * 100 * time.Millisecond
+	self.shakeTimeout = 3 * 100 * time.Millisecond
 	self.posClean = 70
 	self.posReady = 0
 	self.posShake = 100
 	err := self.Generic.Init(ctx, 0xc8, "mixer", proto1)
 
 	e := engine.GetEngine(ctx)
-	e.Register("mdb.evend.mixer_shake_1", self.NewShake(1, 100))
-	e.Register("mdb.evend.mixer_shake_2", self.NewShake(2, 100))
-	e.Register("mdb.evend.mixer_shake_clean", self.NewShake(10, 15))
+	e.Register("mdb.evend.mixer_shake_1", self.NewShake(2, 15))
+	e.Register("mdb.evend.mixer_shake_2", self.NewShake(4, 15))
+	e.Register("mdb.evend.mixer_shake_clean", self.NewShake(1, 100))
 	e.Register("mdb.evend.mixer_fan_on", self.NewFan(true))
 	e.Register("mdb.evend.mixer_fan_off", self.NewFan(false))
 	e.Register("mdb.evend.mixer_move_clean", self.NewMove(self.posClean))
