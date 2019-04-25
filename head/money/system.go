@@ -30,23 +30,21 @@ type MoneySystem struct {
 	coinPoll   *alive.Alive
 }
 
-func (self *MoneySystem) String() string                     { return "money" }
-func (self *MoneySystem) Validate(ctx context.Context) error { return nil }
 func (self *MoneySystem) Start(ctx context.Context) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
 	if self.events != nil {
 		panic("double Start()")
 	}
-	self.Log = log2.ContextValueLogger(ctx, log2.ContextKey)
+	self.Log = log2.ContextValueLogger(ctx)
 
 	self.events = make(chan Event, 2)
 	// TODO determine if combination of errors is fatal for money subsystem
 	if err := self.billInit(ctx); err != nil {
-		self.Log.Errorf("money.Start bill error=%v", errors.ErrorStack(err))
+		self.Log.Errorf("money.Start bill err=%v", errors.ErrorStack(err))
 	}
 	if err := self.coinInit(ctx); err != nil {
-		self.Log.Errorf("money.Start coin error=%v", errors.ErrorStack(err))
+		self.Log.Errorf("money.Start coin err=%v", errors.ErrorStack(err))
 	}
 
 	return nil

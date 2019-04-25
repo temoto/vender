@@ -12,9 +12,9 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/log2"
+	"github.com/temoto/vender/state"
 )
 
 const usage = `syntax: commands separated by whitespace
@@ -42,6 +42,9 @@ func main() {
 	log := log2.NewStderr(log2.LDebug)
 	log.SetFlags(log2.LInteractiveFlags)
 
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, log2.ContextKey, log)
+
 	config := new(state.Config)
 	config.Money.Scale = 1 // XXX workaround required setting
 	config.Hardware.IodinPath = *iodinPath
@@ -49,16 +52,13 @@ func main() {
 	config.Hardware.Mdb.UartDriver = *uarterName
 	config.Hardware.Mega.Pin = *megaPin
 	config.Hardware.Mega.Spi = *megaSpi
-	if err := config.Init(log); err != nil {
+	if err := config.Init(ctx); err != nil {
 		log.Fatal(err)
 	}
 	if _, err := config.Mdber(); err != nil {
 		log.Fatal(err)
 	}
 	defer config.Global().Hardware.Mdb.Uarter.Close()
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = state.ContextWithConfig(ctx, config)
 
 	if err := doBusReset.Do(ctx); err != nil {
@@ -69,7 +69,7 @@ func main() {
 }
 
 var doUsage = engine.Func{F: func(ctx context.Context) error {
-	log := log2.ContextValueLogger(ctx, log2.ContextKey)
+	log := log2.ContextValueLogger(ctx)
 	log.Infof(usage)
 	return nil
 }}

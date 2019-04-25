@@ -14,10 +14,10 @@ import (
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/head/state"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/log2"
+	"github.com/temoto/vender/state"
 )
 
 const usage = `syntax: commands separated by whitespace
@@ -44,7 +44,7 @@ func main() {
 	eng := engine.NewEngine(ctx)
 	ctx = context.WithValue(ctx, engine.ContextKey, eng)
 
-	config := state.MustReadConfigFile(*flagConfig, log)
+	config := state.MustReadConfigFile(ctx, *flagConfig)
 	log.Debugf("config=%+v", config)
 	ctx = state.ContextWithConfig(ctx, config)
 

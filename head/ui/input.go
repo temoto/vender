@@ -5,7 +5,7 @@ import (
 	"time"
 
 	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
-	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/state"
 )
 
 type InputKind byte

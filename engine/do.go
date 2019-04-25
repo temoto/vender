@@ -55,7 +55,7 @@ type RepeatN struct {
 
 func (self RepeatN) Validate() error { return self.D.Validate() }
 func (self RepeatN) Do(ctx context.Context) error {
-	log := log2.ContextValueLogger(ctx, log2.ContextKey)
+	log := log2.ContextValueLogger(ctx)
 	var err error
 	for i := uint(1); i <= self.N && err == nil; i++ {
 		log.Debugf("engine loop %d/%d", i, self.N)

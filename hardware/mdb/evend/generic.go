@@ -12,7 +12,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/state"
 )
 
 // Mostly affects POLL response, see doc.

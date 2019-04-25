@@ -31,7 +31,7 @@ func GetEngine(ctx context.Context) *Engine {
 }
 
 func NewEngine(ctx context.Context) *Engine {
-	log := log2.ContextValueLogger(ctx, log2.ContextKey)
+	log := log2.ContextValueLogger(ctx)
 	self := &Engine{
 		Log:     log,
 		actions: make(map[string]Doer, 64),

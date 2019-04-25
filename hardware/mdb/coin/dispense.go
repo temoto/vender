@@ -11,7 +11,7 @@ import (
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
-	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/state"
 )
 
 // High-level coin dispense command. Handles:

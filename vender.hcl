@@ -57,7 +57,12 @@ money {
   change_over_compensate = 10
 }
 
-papa {
-  address = "127.0.0.1:50051"
-  enabled = false
+tele {
+  enable         = true
+  id             = "vmdev"
+  log_debug      = true
+  mqtt_log_debug = false
+  mqtt_broker    = "tls://adn:1884"
+  mqtt_password  = "vmdev"
+  tls_ca_file    = "/home/pi/vender-dev-ca.crt"
 }

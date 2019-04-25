@@ -31,7 +31,8 @@ const (
 	LTestFlags        int = Lshortfile | Lmicroseconds
 )
 
-func ContextValueLogger(ctx context.Context, key string) *Log {
+func ContextValueLogger(ctx context.Context) *Log {
+	const key = ContextKey
 	v := ctx.Value(key)
 	if v == nil {
 		// return nil
@@ -133,6 +134,10 @@ func (self *Log) Logf(level Level, format string, args ...interface{}) {
 		self.l.Output(3, fmt.Sprintf(format, args...))
 	}
 }
+
+// compatibility with eclipse.paho.mqtt
+func (self *Log) Printf(format string, args ...interface{}) { self.Logf(LInfo, format, args...) }
+func (self *Log) Println(args ...interface{})               { self.Log(LInfo, fmt.Sprint(args...)) }
 
 func (self *Log) Error(args ...interface{}) {
 	self.Log(LError, "error: "+fmt.Sprint(args...))

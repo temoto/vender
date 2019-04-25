@@ -12,19 +12,10 @@ import (
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
-	"github.com/temoto/vender/head/papa"
-	"github.com/temoto/vender/head/state"
-	"github.com/temoto/vender/head/telemetry"
 	"github.com/temoto/vender/head/ui"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
+	"github.com/temoto/vender/state"
 )
-
-type systems struct {
-	money     money.MoneySystem
-	papa      papa.PapaSystem
-	telemetry telemetry.TelemetrySystem
-}
 
 var log = log2.NewStderr(log2.LDebug)
 
@@ -41,27 +32,18 @@ func main() {
 	log.SetFlags(logFlags)
 	log.Debugf("hello")
 
-	a := alive.NewAlive()
-	lifecycle := state.NewLifecycle(log) // validate/start/stop events
-	sys := systems{}
-
-	lifecycle.RegisterSystem(&sys.money)
-	lifecycle.RegisterSystem(&sys.papa)
-	lifecycle.RegisterSystem(&sys.telemetry)
+	var money money.MoneySystem
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, "alive", a)
-	ctx = context.WithValue(ctx, "lifecycle", lifecycle)
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
 
-	config := state.MustReadConfigFile(*flagConfig, log)
+	config := state.MustReadConfigFile(ctx, *flagConfig)
 	log.Debugf("config=%+v", config)
 	ctx = state.ContextWithConfig(ctx, config)
-	if err := helpers.FoldErrors(lifecycle.OnValidate.Do(ctx)); err != nil {
-		log.Fatal(errors.ErrorStack(err))
-	}
 
+	a := alive.NewAlive()
+	config.Global().Alive = a
 	config.Global().Hardware.Mdb.Mdber.BusResetDefault()
 
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
@@ -69,27 +51,21 @@ func main() {
 	// FIXME hardware.Enum() but money system inits bill/coin devices explicitly
 	evend.Enum(ctx, nil)
 
-	if err := helpers.FoldErrors(lifecycle.OnStart.Do(ctx)); err != nil {
-		log.Fatal(err)
-	}
 	sdnotify(daemon.SdNotifyReady)
 
-	log.Debugf("systems init complete, running")
+	log.Debugf("vender init complete, running")
 	for a.IsRunning() {
-		uiStep(ctx, &sys, a.StopChan())
+		uiStep(ctx, &money, a.StopChan())
 	}
 
 	a.Wait()
 	// maybe these KeepAlive() are redundant
-	runtime.KeepAlive(a)
 	runtime.KeepAlive(ctx)
-	runtime.KeepAlive(lifecycle)
-	runtime.KeepAlive(&sys)
 }
 
-func uiStep(ctx context.Context, sys *systems, stopCh <-chan struct{}) {
+func uiStep(ctx context.Context, moneysys *money.MoneySystem, stopCh <-chan struct{}) {
 	menu := ui.NewUIMenu(ctx, nil)
-	menu.SetCredit(sys.money.Credit(ctx))
+	menu.SetCredit(moneysys.Credit(ctx))
 
 	endCh := make(chan struct{})
 	defer close(endCh)
@@ -100,15 +76,15 @@ func uiStep(ctx context.Context, sys *systems, stopCh <-chan struct{}) {
 				return
 			case <-stopCh:
 				return
-			case em := <-sys.money.Events():
+			case em := <-moneysys.Events():
 				log.Debugf("money event: %s", em.String())
 				switch em.Name() {
 				case money.EventCredit:
-					menu.SetCredit(sys.money.Credit(ctx))
+					menu.SetCredit(moneysys.Credit(ctx))
 				case money.EventAbort:
-					err := sys.money.Abort(ctx)
+					err := moneysys.Abort(ctx)
 					log.Infof("user requested abort err=%v", err)
-					menu.SetCredit(sys.money.Credit(ctx))
+					menu.SetCredit(moneysys.Credit(ctx))
 				default:
 					panic("head: unknown money event: " + em.String())
 				}

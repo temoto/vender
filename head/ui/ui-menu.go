@@ -12,7 +12,7 @@ import (
 	"github.com/temoto/vender/currency"
 	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
 	"github.com/temoto/vender/hardware/lcd"
-	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/state"
 )
 
 const (

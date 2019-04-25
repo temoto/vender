@@ -5,7 +5,7 @@ import (
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/state"
 )
 
 func TestConveyor(t *testing.T) {

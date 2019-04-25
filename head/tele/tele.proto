@@ -1,0 +1,42 @@
+syntax = "proto3";
+package tele;
+
+message Telemetry {
+  int32 vm_id = 1;
+  uint32 error_code = 2;
+  Inventory inventory = 3;
+  Money money = 4;
+
+  message Inventory {
+    int32 water = 1;
+    int32 coffee = 2;
+    int32 cup = 3;
+    repeated int32 hoppers = 4;
+  }
+
+  message Money {
+    uint32 total_bills = 1;
+    uint32 total_coins = 2;
+    repeated uint32 bills = 3;
+    repeated uint32 coins = 4;
+  }
+}
+
+message Command {
+  uint32 id = 1;
+  Task task = 2;
+  repeated string args = 3;
+  string reply_topic = 4;
+
+  enum Task {
+    Invalid = 0;
+    Report = 1;
+    MoneyAbort = 2;
+    MoneyDispense = 3;
+  }
+}
+message Response {
+  uint32 command_id = 1;
+  string error = 2;
+  string data = 3;
+}

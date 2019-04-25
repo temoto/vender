@@ -15,7 +15,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
-	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/state"
 )
 
 const (

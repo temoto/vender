@@ -87,7 +87,7 @@ subgraph cluster_s2 {
 				if expectErrContain != "" && strings.Contains(err.Error(), expectErrContain) {
 					return
 				}
-				t.Fatalf("unexpected error=%v", err)
+				t.Fatalf("unexpected err=%v", err)
 			} else if expectErrContain != "" {
 				t.Fatalf("error expected=*%v* actual=%v", expectErrContain, err)
 			}

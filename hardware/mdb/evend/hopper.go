@@ -7,7 +7,7 @@ import (
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
-	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/state"
 )
 
 const DefaultHopperRate = 10

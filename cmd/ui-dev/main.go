@@ -9,9 +9,10 @@ import (
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/head/money"
-	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/log2"
+	"github.com/temoto/vender/state"
 )
 
 var log = log2.NewStderr(log2.LDebug)
@@ -26,7 +27,7 @@ func main() {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
-	config := state.MustReadConfigFile(*flagConfig, log)
+	config := state.MustReadConfigFile(ctx, *flagConfig)
 	log.Debugf("config=%+v", config)
 	ctx = state.ContextWithConfig(ctx, config)
 
@@ -36,6 +37,7 @@ func main() {
 
 	moneysys := new(money.MoneySystem)
 	moneysys.Start(ctx)
+	telesys := config.Global().Tele
 
 	menuMap := make(ui.Menu)
 	menuMap.Add(1, "chai", config.ScaleU(3),
@@ -79,6 +81,15 @@ func main() {
 						moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 					default:
 						panic("head: unknown money event: " + em.String())
+					}
+				case cmd := <-telesys.CommandChan():
+					switch cmd.Task {
+					case tele.Command_MoneyAbort:
+						err := moneysys.Abort(ctx)
+						telesys.CommandReplyErr(&cmd, err)
+						log.Infof("admin requested abort err=%v", err)
+						menu.SetCredit(moneysys.Credit(ctx))
+						moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 					}
 				}
 			}

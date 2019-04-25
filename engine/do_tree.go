@@ -124,7 +124,7 @@ type treeExecState struct {
 }
 
 func treeWalkExec(ctx context.Context, node *Node, state *treeExecState) {
-	log := log2.ContextValueLogger(ctx, log2.ContextKey)
+	log := log2.ContextValueLogger(ctx)
 
 	defer state.wg.Done()
 	nc := atomic.AddInt32(&node.callers, 1)

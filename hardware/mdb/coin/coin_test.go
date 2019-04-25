@@ -10,7 +10,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
-	"github.com/temoto/vender/head/state"
+	"github.com/temoto/vender/state"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
@@ -245,7 +245,7 @@ func BenchmarkCoinPoll(b *testing.B) {
 			}
 			ctx := mockContext(b, rs)
 
-			log := log2.ContextValueLogger(ctx, log2.ContextKey)
+			log := log2.ContextValueLogger(ctx)
 			log.SetLevel(log2.LError)
 			state.GetConfig(ctx).Global().Hardware.Mdb.Mdber.Log.SetLevel(log2.LError)
 
