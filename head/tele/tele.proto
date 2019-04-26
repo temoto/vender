@@ -1,11 +1,20 @@
 syntax = "proto3";
 package tele;
 
+// Optimising for rare, bulk delivery on cell network.
+// "Touching network" is expensive, while 10 or 900 bytes is about same cost.
 message Telemetry {
   int32 vm_id = 1;
-  uint32 error_code = 2;
+  Error error = 2;
   Inventory inventory = 3;
   Money money = 4;
+  Transaction transaction = 5;
+
+  message Error {
+    uint32 code = 1;
+    string message = 2;
+    uint32 count = 3;
+  }
 
   message Inventory {
     int32 water = 1;
@@ -20,6 +29,20 @@ message Telemetry {
     repeated uint32 bills = 3;
     repeated uint32 coins = 4;
   }
+
+  message Transaction {
+    int32 code = 1;
+    repeated int32 options = 2;
+    uint32 price = 3;
+    PaymentMethod payment_method = 4;
+    uint32 credit_bills = 5;
+    uint32 credit_coins = 6;
+  }
+}
+enum PaymentMethod {
+  Nothing = 0;
+  Cash = 1;
+  Cashless = 2;
 }
 
 message Command {
@@ -31,7 +54,7 @@ message Command {
   enum Task {
     Invalid = 0;
     Report = 1;
-    MoneyAbort = 2;
+    Abort = 2;
     MoneyDispense = 3;
   }
 }

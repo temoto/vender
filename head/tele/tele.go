@@ -27,7 +27,8 @@ type Tele struct {
 	stopCh    chan struct{}
 	lastState State
 	stateCh   chan State
-	cmdCh     chan Command
+	cmdCh     chan *Command
+	tmCh      chan *Telemetry
 
 	stateInterval time.Duration
 
@@ -69,7 +70,7 @@ func (self *Tele) Init(ctx context.Context, tc Config) {
 
 	self.stopCh = make(chan struct{})
 	self.stateCh = make(chan State)
-	self.cmdCh = make(chan Command, 2)
+	self.cmdCh = make(chan *Command, 2)
 	log := log2.ContextValueLogger(ctx)
 	self.Log = log.Clone(log2.LInfo)
 	if tc.LogDebug {
@@ -145,8 +146,8 @@ func (self *Tele) Init(ctx context.Context, tc Config) {
 
 	t := self.m.Subscribe(self.topicCommand, 1, func(_ mqtt.Client, msg mqtt.Message) {
 		self.Log.Debugf("well command")
-		var c Command
-		err := proto.Unmarshal(msg.Payload(), &c)
+		c := new(Command)
+		err := proto.Unmarshal(msg.Payload(), c)
 		if err != nil {
 			self.Log.Errorf("command parse err=%v", err)
 			return
@@ -170,7 +171,7 @@ func (self *Tele) Stop() {
 	}
 }
 
-func (self *Tele) CommandChan() <-chan Command { return self.cmdCh }
+func (self *Tele) CommandChan() <-chan *Command { return self.cmdCh }
 func (self *Tele) CommandReplyErr(c *Command, e error) {
 	if c.ReplyTopic == "" {
 		self.Log.Errorf("CommandReplyErr with empty reply_topic")
@@ -204,6 +205,8 @@ func (self *Tele) worker() {
 	for self.isRunning() {
 		select {
 		case self.lastState = <-self.stateCh:
+		case tm := <-self.tmCh:
+			self.sendTelemetry(tm)
 		case <-time.After(self.stateInterval):
 		}
 		self.sendState(self.lastState)
@@ -214,6 +217,16 @@ func (self *Tele) sendState(s State) {
 	payload := []byte{byte(s)}
 	t := self.m.Publish(self.topicState, 1, true, payload)
 	self.tokenWait(t, "publish state")
+}
+
+func (self *Tele) sendTelemetry(tm *Telemetry) {
+	payload, err := proto.Marshal(tm)
+	if err != nil {
+		self.Log.Errorf("CRITICAL telemetry Marshal tm=%v err=%v", tm, err)
+		return
+	}
+	t := self.m.Publish(self.topicTelemetry, 1, true, payload)
+	self.tokenWait(t, "publish telemetry")
 }
 
 func (self *Tele) tokenWait(t mqtt.Token, tag string) error {

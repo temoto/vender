@@ -15,7 +15,8 @@ go: "1.11"
 matrix:
   include:
     - env: task=vender
-      before_install: ./script/install-protoc $protoc_version
+      install:
+        - ./script/install-protoc $protoc_version
       script:
         - GO111MODULE=on go mod tidy && git diff --exit-code
         - ./all.bash

@@ -58,8 +58,8 @@ money {
 }
 
 tele {
-  enable         = true
-  id             = "vmdev"
+  enable         = false
+  vm_id          = -1
   log_debug      = true
   mqtt_log_debug = false
   mqtt_broker    = "tls://TODO_EDIT:8884"

@@ -1,5 +1,7 @@
 module github.com/temoto/vender
 
+go 1.11
+
 require (
 	github.com/awalterschulze/gographviz v0.0.0-20190221210632-1e9ccb565bca
 	github.com/c-bata/go-prompt v0.2.3

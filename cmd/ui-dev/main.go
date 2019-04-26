@@ -84,9 +84,9 @@ func main() {
 					}
 				case cmd := <-telesys.CommandChan():
 					switch cmd.Task {
-					case tele.Command_MoneyAbort:
+					case tele.Command_Abort:
 						err := moneysys.Abort(ctx)
-						telesys.CommandReplyErr(&cmd, err)
+						telesys.CommandReplyErr(cmd, err)
 						log.Infof("admin requested abort err=%v", err)
 						menu.SetCredit(moneysys.Credit(ctx))
 						moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
