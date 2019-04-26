@@ -1,7 +1,6 @@
 package keyboard
 
 import (
-	"sync"
 	"time"
 
 	"github.com/temoto/vender/hardware/mega-client"
@@ -23,7 +22,7 @@ const (
 )
 
 type Keyboard struct {
-	mu     sync.Mutex
+	// mu     sync.Mutex
 	c      *mega.Client
 	source <-chan uint16
 	// pressed [128]bool

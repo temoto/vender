@@ -62,7 +62,7 @@ tele {
   id             = "vmdev"
   log_debug      = true
   mqtt_log_debug = false
-  mqtt_broker    = "tls://adn:1884"
-  mqtt_password  = "vmdev"
-  tls_ca_file    = "/home/pi/vender-dev-ca.crt"
+  mqtt_broker    = "tls://TODO_EDIT:8884"
+  mqtt_password  = "TODO_EDIT"
+  tls_ca_file    = "TODO_EDIT"
 }

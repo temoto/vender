@@ -43,7 +43,7 @@ github.com/pkg/term/termios
 github.com/temoto/alive
 # github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 github.com/temoto/iodin/client/go-iodin
-# golang.org/x/net v0.0.0-20180826012351-8a410e7b638d
+# golang.org/x/net v0.0.0-20190311183353-d8887717615a
 golang.org/x/net/proxy
 golang.org/x/net/websocket
 golang.org/x/net/internal/socks

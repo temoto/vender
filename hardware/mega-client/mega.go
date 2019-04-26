@@ -315,6 +315,9 @@ func (self *Client) readParse(f *Frame) error {
 	if remoteLength == 0 {
 		return ErrResponseEmpty
 	}
+	if err != nil {
+		return err
+	}
 
 	var buf [BUFFER_SIZE + totalOverheads]byte
 	bs := buf[:remoteLength+totalOverheads]
@@ -352,11 +355,11 @@ func (self *Client) ack(f *Frame) error {
 	// self.Log.Debugf("%s ack out=%x", modName, buf)
 	err := self.spiConn.Tx(buf[:], buf[:])
 	// self.Log.Debugf("%s ack -in=%x err=%v", modName, buf, err)
-
-	if _, _, err = parsePadding(buf[:], true); err != nil {
+	if err != nil {
 		return err
 	}
 
+	_, _, err = parsePadding(buf[:], true)
 	return err
 }
 

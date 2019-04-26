@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
@@ -276,36 +275,4 @@ func (self stringSet) Add(s string) bool {
 	}
 	self[s] = struct{}{}
 	return true
-}
-
-type syncStringSet struct {
-	lk sync.Mutex
-	ss stringSet
-}
-
-func newSyncStringSet() *syncStringSet { return &syncStringSet{ss: newStringSet()} }
-
-func (self *syncStringSet) Has(s string) bool {
-	self.lk.Lock()
-	_, ok := self.ss[s]
-	self.lk.Unlock()
-	return ok
-}
-func (self *syncStringSet) Add(s string) bool {
-	self.lk.Lock()
-	_, ok := self.ss[s]
-	if !ok {
-		self.ss[s] = struct{}{}
-	}
-	self.lk.Unlock()
-	return !ok
-}
-func (self *syncStringSet) Delete(s string) bool {
-	self.lk.Lock()
-	_, ok := self.ss[s]
-	if ok {
-		delete(self.ss, s)
-	}
-	self.lk.Unlock()
-	return ok
 }

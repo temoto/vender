@@ -13,18 +13,19 @@ main() {
 		go get -v golang.org/x/tools/cmd/stringer
 		export GO111MODULE=on
 		go get -v github.com/golang/protobuf/protoc-gen-go
+		go get -v honnef.co/go/tools/cmd/staticcheck
 		go generate ./...
 		go build ./...
 		# begin workaround cannot use test profile flag with multiple packages
 		for d in $(go list ./...) ; do
-			go test -timeout 3m -race -coverprofile=$base/coverage-$(basename $d).txt -covermode=atomic $d
+			go test -mod=vendor -timeout 3m -race -coverprofile=$base/coverage-$(basename $d).txt -covermode=atomic $d
 		done
 		cat $base/coverage-*.txt >>$base/coverage.txt
 		rm $base/coverage-*.txt
 		# end workaround cannot use test profile flag with multiple packages
 
-		go test -bench=. ./...
-		go vet ./...
+		go test -bench=. -mod=vendor -vet= ./...
+		staticcheck -fail=inherit,-SA4003 ./...
 	fi
 
 	paths=$(find . -type d ! -path '.' ! -path '*/.*' ! -path './script*' ! -path './target*' ! -path './vendor*')

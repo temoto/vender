@@ -20,7 +20,7 @@ func MainLoop(tag string, exec func(line string), complete func(d prompt.Documen
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 	go func() {
-		for _ = range signalCh {
+		for range signalCh {
 			// TODO engine.Interrupt()
 			// if s == syscall.SIGINT { }
 			os.Exit(1)

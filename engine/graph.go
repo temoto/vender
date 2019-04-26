@@ -9,13 +9,6 @@ import (
 	"github.com/temoto/vender/helpers/msync"
 )
 
-type Graph struct {
-	name   string
-	idMap  map[string]*Node
-	root   *Node
-	rootId string
-}
-
 type Node struct {
 	Doer
 	parents  []*Node

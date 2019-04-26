@@ -128,7 +128,7 @@ func BenchmarkLog2(b *testing.B) {
 				b.StopTimer()
 
 				if b.N == 1 && dest == "buffer" && !strings.Contains(c.name, "skip") {
-					written := string(buf.Bytes())
+					written := buf.String()
 					total := len(written)
 					if total != expectTotal {
 						b.Logf("expect='%s' buf='%s'", helpers.HexSpecialString(result), helpers.HexSpecialString(written))

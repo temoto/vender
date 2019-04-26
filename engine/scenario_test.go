@@ -95,6 +95,9 @@ begin -> n1 -> n2a -> n3 -> end;
 		}
 		panic("unknown action=" + action)
 	})
+	if err != nil {
+		t.Fatalf("ToTree err=%v", err)
+	}
 
 	txDot := tx.Root.Dot("")
 	t.Logf("result dot:\n%s", txDot)
@@ -158,6 +161,9 @@ func TestScenarioToTreePrototype(t *testing.T) {
 		}
 		panic("unknown action=" + action)
 	})
+	if err != nil {
+		t.Fatalf("ToTree err=%v", err)
+	}
 	txDot := tx.Root.Dot("")
 	actualLines := strings.Split(txDot, "\n")
 	expect := `

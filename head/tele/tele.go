@@ -20,12 +20,6 @@ const (
 	defaultStateInterval  = 5 * time.Minute
 )
 
-const (
-	topicState     = "w/s1"
-	topicTelemetry = "w/t1"
-	topicCommand   = "r/c"
-)
-
 type Tele struct {
 	Log       *log2.Log
 	m         mqtt.Client

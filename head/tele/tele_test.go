@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"testing"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
@@ -19,15 +18,15 @@ func NewTestContext(t testing.TB, logLevel log2.Level) context.Context {
 	return ctx
 }
 
-func TokenAssert(t testing.TB, tok mqtt.Token) {
-	t.Helper()
-	if !tok.Wait() {
-		t.Errorf("timeout")
-	}
-	if err := tok.Error(); err != nil {
-		t.Error(err)
-	}
-}
+// func TokenAssert(t testing.TB, tok mqtt.Token) {
+// 	t.Helper()
+// 	if !tok.Wait() {
+// 		t.Errorf("timeout")
+// 	}
+// 	if err := tok.Error(); err != nil {
+// 		t.Error(err)
+// 	}
+// }
 
 func TestCommand(t *testing.T) {
 	t.Parallel()

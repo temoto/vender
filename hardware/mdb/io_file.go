@@ -236,40 +236,46 @@ func (self *fileUart) resetRead() (err error) {
 }
 
 const (
-	cBOTHER            = 0x1000
-	cCMSPAR            = 0x40000000
-	cFIONREAD          = 0x541b
+	//lint:ignore U1000 unused
+	cBOTHER = 0x1000
+	cCMSPAR = 0x40000000
+
 	cNCCS              = 19
-	cTCSBRKP           = 0x5425
-	cTCSETS2           = 0x402c542b
-	cTCSETSW2          = 0x402c542c // flush output TODO verify
-	cTCSETSF2          = 0x402c542d // flush both input,output TODO verify
 	cASYNC_LOW_LATENCY = 1 << 13
-	cTIOCGSERIAL       = 0x541E
-	cTIOCSSERIAL       = 0x541F
+
+	cFIONREAD    = 0x541b
+	cTCSBRKP     = 0x5425
+	cTIOCGSERIAL = 0x541E
+	cTIOCSSERIAL = 0x541F
+	cTCSETS2     = 0x402c542b
+	//lint:ignore U1000 unused
+	cTCSETSW2 = 0x402c542c // flush output TODO verify
+	cTCSETSF2 = 0x402c542d // flush both input,output TODO verify
 )
 
 type cc_t byte
 type speed_t uint32
 type tcflag_t uint32
 type termios2 struct {
-	c_iflag  tcflag_t    // input mode flags
-	c_oflag  tcflag_t    // output mode flags
-	c_cflag  tcflag_t    // control mode flags
-	c_lflag  tcflag_t    // local mode flags
+	c_iflag tcflag_t // input mode flags
+	//lint:ignore U1000 unused
+	c_oflag tcflag_t // output mode flags
+	c_cflag tcflag_t // control mode flags
+	c_lflag tcflag_t // local mode flags
+	//lint:ignore U1000 unused
 	c_line   cc_t        // line discipline
 	c_cc     [cNCCS]cc_t // control characters
 	c_ispeed speed_t     // input speed
 	c_ospeed speed_t     // output speed
 }
 type serial_info struct {
-	_type          int32
-	line           int32
-	port           uint32
-	irq            int32
+	_type          int32  //lint:ignore U1000 unused
+	line           int32  //lint:ignore U1000 unused
+	port           uint32 //lint:ignore U1000 unused
+	irq            int32  //lint:ignore U1000 unused
 	flags          int32
-	xmit_fifo_size int32
-	_pad           [200]byte
+	xmit_fifo_size int32     //lint:ignore U1000 unused
+	_pad           [200]byte //lint:ignore U1000 unused
 }
 
 type fdReader struct {
@@ -296,9 +302,9 @@ func ioctl(fd uintptr, op, arg uintptr) (err error) {
 	} else if r != 0 {
 		err = errors.New("unknown error from SYS_IOCTL")
 	}
-	if err != nil {
-		// self.Log.Debugf("mdb.ioctl op=%x arg=%x err=%s", op, arg, err)
-	}
+	// if err != nil {
+	// 	log.Printf("mdb.ioctl op=%x arg=%x err=%s", op, arg, err)
+	// }
 	return errors.Annotate(err, "ioctl")
 }
 

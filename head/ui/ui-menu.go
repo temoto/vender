@@ -256,24 +256,28 @@ func (self *UIMenu) handleCreamSugar(mode string, key keyboard.Key) string {
 	case keyboard.KeyCreamLess:
 		if self.result.Cream > 0 {
 			self.result.Cream--
+			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
 	case keyboard.KeyCreamMore:
 		if self.result.Cream < MaxCream {
 			self.result.Cream++
+			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
 	case keyboard.KeySugarLess:
 		if self.result.Sugar > 0 {
 			self.result.Sugar--
+			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
 	case keyboard.KeySugarMore:
 		if self.result.Sugar < MaxSugar {
 			self.result.Sugar++
+			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
