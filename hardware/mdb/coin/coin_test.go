@@ -10,9 +10,9 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
-	"github.com/temoto/vender/state"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
+	"github.com/temoto/vender/state"
 )
 
 type _PI = money.PollItem
@@ -73,7 +73,10 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 		t.Fatalf("POLL err=%v", r.E)
 	}
 	pis := make([]_PI, 0, len(input)/2)
-	ca.pollFun(func(pi money.PollItem) bool { pis = append(pis, pi); return false })(r.P)
+	poll := ca.pollFun(func(pi money.PollItem) bool { pis = append(pis, pi); return false })
+	if _, err := poll(r.P); err != nil {
+		t.Fatal(err)
+	}
 	money.TestPollItemsEqual(t, pis, expected)
 }
 
@@ -255,7 +258,10 @@ func BenchmarkCoinPoll(b *testing.B) {
 			b.SetBytes(int64(len(c.input) / 2))
 			b.ResetTimer()
 			for i := 1; i <= b.N; i++ {
-				parse(ca.dev.Tx(ca.dev.PacketPoll).P)
+				_, err := parse(ca.dev.Tx(ca.dev.PacketPoll).P)
+				if err != nil {
+					b.Fatal(err)
+				}
 			}
 		})
 	}

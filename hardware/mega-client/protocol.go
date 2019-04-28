@@ -48,10 +48,10 @@ func parsePadding(b []byte, requireOK bool) (start int, code Errcode_t, err erro
 }
 
 type Frame struct {
+	Fields  Fields
 	buf     [BUFFER_SIZE]byte
 	Version byte
 	Flag    byte
-	Fields  Fields
 	crc     uint8
 	Errcode Errcode_t
 	plen    uint8
@@ -165,21 +165,22 @@ const (
 	ResetFlagWatchdog
 )
 
+// Sorry for inhumane field order, it's used often and probably worth align optimisation.
 type Fields struct {
-	Len             uint8
-	tagOrder        [32]Field_t
-	FirmwareVersion uint16
-	Clock10u        uint32
-	Mcusr           byte
 	ErrorNs         [][]byte
 	Error2s         []uint16
+	MdbData         []byte
+	TwiData         []byte
+	tagOrder        [32]Field_t
+	Clock10u        uint32
+	MdbDuration     uint32
+	FirmwareVersion uint16
+	Len             uint8
+	Mcusr           byte
 	MdbResult       Mdb_result_t
 	MdbError        byte
-	MdbData         []byte
-	MdbDuration     uint32
 	MdbLength       uint8
 	TwiAddr         byte
-	TwiData         []byte
 }
 
 func (self *Fields) Parse(b []byte) error {

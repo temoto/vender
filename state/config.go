@@ -32,7 +32,7 @@ import (
 type Config struct {
 	g        Global
 	Hardware struct {
-		HD44780 struct {
+		HD44780 struct { //nolint:maligned
 			Enable        bool       `hcl:"enable"`
 			Codepage      string     `hcl:"codepage"`
 			Pinmap        lcd.PinMap `hcl:"pinmap"`

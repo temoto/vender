@@ -138,11 +138,16 @@ func TestUarterTx(t *testing.T) {
 
 func BenchmarkFileUartTx(b *testing.B) {
 	b.ReportAllocs()
-	u := testFileUart(b, bytes.NewBufferString(""), bytes.NewBuffer(nil))
+	mr := parseMockReader(strings.Repeat("bff0000 ", b.N))
+	mw := bytes.NewBuffer(nil)
+	u := testFileUart(b, mr, mw)
 	u.Log = nil
 	response := [PacketMaxLength]byte{}
 	b.ResetTimer()
 	for i := 1; i <= b.N; i++ {
-		u.Tx(PacketNul1.Bytes(), response[:])
+		_, err := u.Tx(PacketNul1.Bytes(), response[:])
+		if err != nil {
+			b.Fatal(errors.ErrorStack(err))
+		}
 	}
 }

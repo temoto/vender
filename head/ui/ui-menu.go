@@ -63,8 +63,8 @@ type UIMenu struct {
 }
 
 type UIMenuResult struct {
-	Confirm bool
 	Item    MenuItem
+	Confirm bool
 	Cream   uint8
 	Sugar   uint8
 }

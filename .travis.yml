@@ -1,24 +1,24 @@
 sudo: false
 cache:
   apt: true
-  ccache: true
   go: true
   directories:
   - $HOME/.cache
   - $HOME/bin
+  - $HOME/gopath/pkg/mod
 env:
   global:
-  - "PATH=$PATH:$HOME/bin"
-  - protoc_version=3.7.1
+    - GO111MODULE=on
+    - "PATH=$PATH:$HOME/bin"
+    - protoc_version=3.7.1
 language: go
 go: "1.11"
-matrix:
-  include:
-    - env: task=vender
-      install:
-        - ./script/install-protoc $protoc_version
-      script:
-        - GO111MODULE=on go mod tidy && git diff --exit-code
-        - ./all.bash
-      before_cache: rm -f $HOME/.cache/go-build/log.txt
-      after_success: bash <(curl -s https://codecov.io/bash)
+
+install:
+  - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b $GOPATH/bin v1.16.0
+  - ./script/install-protoc $protoc_version
+script:
+  - go mod tidy && git diff --exit-code
+  - ./all.bash
+before_cache: rm -f $HOME/.cache/go-build/log.txt
+after_success: bash <(curl -s https://codecov.io/bash)

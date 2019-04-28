@@ -7,8 +7,8 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
-	"github.com/temoto/vender/state"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/state"
 )
 
 type _PI = money.PollItem
@@ -61,7 +61,13 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 	if r.E != nil {
 		t.Fatalf("POLL err=%v", r.E)
 	}
-	bv.pollFun(func(pi money.PollItem) bool { pis = append(pis, pi); return false })(r.P)
+	poll := bv.pollFun(func(pi money.PollItem) bool {
+		pis = append(pis, pi)
+		return false
+	})
+	if _, err = poll(r.P); err != nil {
+		t.Fatal(err)
+	}
 	money.TestPollItemsEqual(t, pis, expected)
 }
 

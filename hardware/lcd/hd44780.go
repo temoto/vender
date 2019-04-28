@@ -88,12 +88,13 @@ func (self *LCD) Init(pinmap PinMap) error {
 	return nil
 }
 
-func setPinBool(pin gpio.PinOut, b bool) error {
+func setPinBool(pin gpio.PinOut, b bool) {
 	level := gpio.Low
 	if b {
 		level = gpio.High
 	}
-	return pin.Out(level)
+	// FIXME check error
+	pin.Out(level) //nolint:errcheck
 }
 
 func (self *LCD) setAllPins(b bool) {
@@ -107,9 +108,11 @@ func (self *LCD) setAllPins(b bool) {
 }
 
 func (self *LCD) blinkE() {
-	self.pin_e.Out(gpio.High)
+	// FIXME check error
+	self.pin_e.Out(gpio.High) //nolint:errcheck
 	time.Sleep(1 * time.Microsecond)
-	self.pin_e.Out(gpio.Low)
+	// FIXME check error
+	self.pin_e.Out(gpio.Low) //nolint:errcheck
 	time.Sleep(1 * time.Microsecond)
 }
 

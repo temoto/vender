@@ -28,9 +28,9 @@ const (
 type PollItem struct {
 	// TODO avoid time.Time for easy GC (contains pointer)
 	// Time        time.Time
-	Status       PollItemStatus
 	Error        error
 	DataNominal  currency.Nominal
+	Status       PollItemStatus
 	DataCount    uint8
 	DataCashbox  bool
 	HardwareCode byte

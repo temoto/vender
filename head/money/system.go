@@ -109,8 +109,8 @@ func (self *MoneySystem) coinInit(ctx context.Context) error {
 		switch pi.Status {
 		case money.StatusDispensed:
 			self.Log.Debugf("%s manual dispense: %s", tag, pi.String())
-			self.coin.DoTubeStatus.Do(ctx)
-			self.coin.CommandExpansionSendDiagStatus(nil)
+			_ = self.coin.DoTubeStatus.Do(ctx)
+			_ = self.coin.CommandExpansionSendDiagStatus(nil)
 			// TODO telemetry
 		case money.StatusReturnRequest:
 			self.events <- Event{created: itemTime, name: EventAbort}
@@ -121,8 +121,8 @@ func (self *MoneySystem) coinInit(ctx context.Context) error {
 			if err != nil {
 				self.Log.Errorf("%s credit.Add n=%v c=%d err=%v", tag, pi.DataNominal, pi.DataCount, err)
 			}
-			self.coin.DoTubeStatus.Do(ctx)
-			self.coin.CommandExpansionSendDiagStatus(nil)
+			_ = self.coin.DoTubeStatus.Do(ctx)
+			_ = self.coin.CommandExpansionSendDiagStatus(nil)
 			self.dirty += pi.Amount()
 			self.events <- Event{created: itemTime, name: EventCredit, amount: pi.Amount()}
 		default:

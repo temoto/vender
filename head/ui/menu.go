@@ -8,14 +8,19 @@ import (
 type Menu map[uint16]MenuItem
 
 type MenuItem struct {
-	Code  uint16
 	Name  string
-	Price currency.Amount
 	D     engine.Doer
+	Price currency.Amount
+	Code  uint16
 }
 
 func (self Menu) Add(code uint16, name string, price currency.Amount, d engine.Doer) {
-	self[code] = MenuItem{code, name, price, d}
+	self[code] = MenuItem{
+		Code:  code,
+		Name:  name,
+		Price: price,
+		D:     d,
+	}
 }
 
 func (self Menu) MaxPrice() currency.Amount {

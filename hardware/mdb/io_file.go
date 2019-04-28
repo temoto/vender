@@ -96,7 +96,7 @@ func (self *fileUart) Close() error {
 	self.f = nil
 	self.r = nil
 	self.w = nil
-	return self.f.Close()
+	return errors.Trace(self.f.Close())
 }
 
 func (self *fileUart) Open(path string) (err error) {
@@ -194,7 +194,8 @@ func bufferReadPacket(src *bufio.Reader, dst []byte) (n int, err error) {
 	var part []byte
 
 	for {
-		if part, err = src.ReadSlice(0xff); err != nil {
+		part, err = src.ReadSlice(0xff)
+		if (err == io.EOF && len(part) == 0) || err != nil {
 			return n, errors.Trace(err)
 		}
 		// self.Log.Debugf("bufferReadPacket readFF=%x", part)
@@ -289,7 +290,11 @@ func (self fdReader) Read(p []byte) (n int, err error) {
 		return 0, errors.Trace(err)
 	}
 	// TODO bench optimist read, then io_wait if needed
-	return syscall.Read(int(self.fd), p)
+	n, err = syscall.Read(int(self.fd), p)
+	if err != nil {
+		err = errors.Trace(err)
+	}
+	return n, err
 }
 
 func ioctl(fd uintptr, op, arg uintptr) (err error) {

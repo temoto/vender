@@ -6,8 +6,8 @@ import (
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/state"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/state"
 )
 
 func TestValve(t *testing.T) {

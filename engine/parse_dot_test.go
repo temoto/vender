@@ -25,22 +25,22 @@ func TestParseDot(t *testing.T) {
 		Case{"node-comment-invalid-value", `digraph { boot[comment="something"]; }`, func(s *Scenario) string { return "not valid" }},
 		Case{"node-comment-invalid-part", `digraph { boot[comment="/v1/gar=bage"]; }`, func(s *Scenario) string { return "not valid" }},
 		Case{"node-v1-r", `digraph { boot[comment="/v1/r=foo"]; }`, func(s *Scenario) string {
-			s.Add(&sNode{id: "boot", kind: NodeDoer})
+			testerr(t, s.Add(&sNode{id: "boot", kind: NodeDoer}))
 			s.SetRun("boot", "foo")
 			return ""
 		}},
 		Case{"node-v1-all-attrs", `digraph { boot[comment="/v1/v=val:se=subent:r=run"]; }`, func(s *Scenario) string {
-			s.Add(&sNode{id: "boot", kind: NodeDoer})
+			testerr(t, s.Add(&sNode{id: "boot", kind: NodeDoer}))
 			s.AddEnter("", "subent")
 			s.SetValidate("boot", "val")
 			s.SetRun("boot", "run")
 			return ""
 		}},
 		Case{"subgraph", `digraph { subgraph sg { x -> y; } }`, func(s *Scenario) string {
-			s.Add(&sNode{id: "sg", kind: NodeBlock})
-			s.Add(&sNode{id: "x", kind: NodeDoer, parent: "sg"})
-			s.Add(&sNode{id: "y", kind: NodeDoer, parent: "sg"})
-			s.Edge("x", "y")
+			testerr(t, s.Add(&sNode{id: "sg", kind: NodeBlock}))
+			testerr(t, s.Add(&sNode{id: "x", kind: NodeDoer, parent: "sg"}))
+			testerr(t, s.Add(&sNode{id: "y", kind: NodeDoer, parent: "sg"}))
+			testerr(t, s.Edge("x", "y"))
 			return ""
 		}},
 		Case{"complex", `digraph complex {
@@ -56,20 +56,20 @@ subgraph cluster_s2 {
 };
 }`, func(s *Scenario) string {
 			s.name = "complex"
-			s.Add(&sNode{id: "boot", kind: NodeDoer})
-			s.Add(&sNode{id: "s1", kind: NodeBlock})
-			s.Add(&sNode{id: "s2", kind: NodeBlock})
-			s.Add(&sNode{id: "end", kind: NodeDoer})
-			s.Add(&sNode{id: "s1x", kind: NodeDoer, parent: "s1"})
-			s.Add(&sNode{id: "s1y", kind: NodeDoer, parent: "s1"})
-			s.Add(&sNode{id: "s2a", kind: NodeDoer, parent: "s2"})
-			s.Add(&sNode{id: "s2b", kind: NodeDoer, parent: "s2"})
-			s.Edge("boot", "s1x")
-			s.Edge("boot", "s2a")
-			s.Edge("s1x", "s1y")
-			s.Edge("s2a", "s2b")
-			s.Edge("s1y", "end")
-			s.Edge("s2b", "end")
+			testerr(t, s.Add(&sNode{id: "boot", kind: NodeDoer}))
+			testerr(t, s.Add(&sNode{id: "s1", kind: NodeBlock}))
+			testerr(t, s.Add(&sNode{id: "s2", kind: NodeBlock}))
+			testerr(t, s.Add(&sNode{id: "end", kind: NodeDoer}))
+			testerr(t, s.Add(&sNode{id: "s1x", kind: NodeDoer, parent: "s1"}))
+			testerr(t, s.Add(&sNode{id: "s1y", kind: NodeDoer, parent: "s1"}))
+			testerr(t, s.Add(&sNode{id: "s2a", kind: NodeDoer, parent: "s2"}))
+			testerr(t, s.Add(&sNode{id: "s2b", kind: NodeDoer, parent: "s2"}))
+			testerr(t, s.Edge("boot", "s1x"))
+			testerr(t, s.Edge("boot", "s2a"))
+			testerr(t, s.Edge("s1x", "s1y"))
+			testerr(t, s.Edge("s2a", "s2b"))
+			testerr(t, s.Edge("s1y", "end"))
+			testerr(t, s.Edge("s2b", "end"))
 			s.SetValidate("boot", "val")
 			s.AddLeave("s1", "s1x_leaving_s1")
 			return ""
@@ -121,6 +121,13 @@ subgraph cluster_s2 {
 				}
 			}
 		})
+	}
+}
+
+func testerr(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Error(err)
 	}
 }
 

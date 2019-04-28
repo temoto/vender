@@ -118,10 +118,13 @@ func (self *CoinAcceptor) dispenseSmartManual(ctx context.Context, amount curren
 	const tag = "mdb.coin.dispense-smart/manual"
 	var err error
 
-	self.DoTubeStatus.Do(ctx)
+	if err = self.DoTubeStatus.Do(ctx); err != nil {
+		return err
+	}
 	tubeCoins := self.Tubes()
 	if tubeCoins.Total() < amount {
-		return nil
+		self.dev.Log.Errorf("%s not enough coins in tubes for amount=%s", tag, amount.FormatCtx(ctx))
+		return nil // TODO more sensible error
 	}
 
 	config := state.GetConfig(ctx)
@@ -162,8 +165,7 @@ func (self *CoinAcceptor) dispenseGroup(ctx context.Context, request, success *c
 			self.dev.Log.Errorf("%s nominal=%s count=%d err=%v", tag, currency.Amount(nominal).FormatCtx(ctx), count, err)
 			return errors.Annotate(err, tag)
 		}
-		success.Add(nominal, count)
-		return nil
+		return success.Add(nominal, count)
 	})
 }
 
@@ -229,7 +231,7 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 		if err = self.DoTubeStatus.Do(ctx); err != nil {
 			return errors.Annotate(err, tag)
 		}
-		self.CommandExpansionSendDiagStatus(nil)
+		_ = self.CommandExpansionSendDiagStatus(nil)
 		tubesAfter := self.Tubes()
 		var countAfter uint
 		if countAfter, err = tubesAfter.Get(nominal); err != nil {

@@ -38,7 +38,7 @@ const (
 	FeatureFTL
 )
 
-type CoinAcceptor struct {
+type CoinAcceptor struct { //nolint:maligned
 	dev             mdb.Device
 	dispenseTimeout time.Duration
 	pollmu          sync.Mutex // isolate active/idle polling
@@ -287,9 +287,11 @@ func (self *CoinAcceptor) NewTubeStatus() engine.Doer {
 			if full && counts[i] == 0 {
 				// TODO telemetry
 				self.dev.Log.Errorf("%s tube=%d problem (jam/sensor/etc)", tag, i+1)
-			} else {
+			} else if counts[i] != 0 {
 				nominal := self.coinTypeNominal(i)
-				self.tubes.Add(nominal, uint(counts[i]))
+				if err := self.tubes.Add(nominal, uint(counts[i])); err != nil {
+					return err
+				}
 			}
 		}
 		self.dev.Log.Debugf("%s tubes=%s", tag, self.tubes.String())

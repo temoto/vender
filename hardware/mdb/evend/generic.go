@@ -31,9 +31,9 @@ const (
 
 type Generic struct {
 	dev          mdb.Device
-	proto        evendProtocol
 	logPrefix    string
 	readyTimeout time.Duration
+	proto        evendProtocol
 
 	// For most devices 0x50 = busy
 	// valve 0x10 = busy, 0x40 = hot water is colder than configured

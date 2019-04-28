@@ -12,13 +12,12 @@ func TestDo(t testing.TB, ctx context.Context, name string) {
 	DoCheckError(t, d, ctx)
 }
 
-func DoCheckError(t testing.TB, d Doer, ctx context.Context) error {
+func DoCheckError(t testing.TB, d Doer, ctx context.Context) {
 	t.Helper()
-	if err := d.Do(ctx); err != nil {
+	err := d.Do(ctx)
+	if err != nil {
 		t.Errorf("d=%s err=%v", d.String(), err)
-		return err
 	}
-	return nil
 }
 func DoCheckFatal(t testing.TB, d Doer, ctx context.Context) {
 	t.Helper()

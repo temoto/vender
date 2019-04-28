@@ -119,7 +119,7 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 				}
 				err = self.NewWaitDone(tag, cautionTimeout).Do(ctx)
 				if err != nil {
-					abort.Do(ctx)
+					_ = abort.Do(ctx)
 					return err
 				}
 				ml -= cautionPartMl

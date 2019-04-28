@@ -11,8 +11,8 @@ import (
 type DeviceConveyor struct {
 	Generic
 
-	minSpeed     uint16
 	calibTimeout time.Duration
+	minSpeed     uint16
 	posCup       uint16
 	posHoppers   [16]uint16
 	posElevator  uint16

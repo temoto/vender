@@ -19,9 +19,9 @@ func NewIodinUart(c *iodin.Client) *iodinUart {
 }
 
 func (self *iodinUart) Close() error {
-	self.c.DecRef("mdb")
+	err := self.c.DecRef("mdb")
 	self.c = nil
-	return nil
+	return err
 }
 
 func (self *iodinUart) Break(d, sleep time.Duration) error {

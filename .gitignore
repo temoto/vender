@@ -13,17 +13,11 @@
 /.tags*
 /.vagrant
 /build
-/cover.out
-/coverage*.info
-/coverage*.txt
-/hardware/mega-client/mega
 /mdb-cli
-/mdbr/target
 /mega-cli
 /ui-dev
 /vender
 /vender-engine-cli
-/vender.sublime-*
 _cgo_defun.c
 _cgo_export.*
 _cgo_gotypes.go
@@ -35,3 +29,7 @@ cmd/mega-cli/mega-cli
 cmd/ui-dev/ui-dev
 cmd/vender-engine-cli/vender-engine-cli
 cmd/vender/vender
+cover.out
+coverage*.info
+coverage*.txt
+vender.sublime-*

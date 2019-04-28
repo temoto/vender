@@ -48,7 +48,7 @@ const (
 	StateProblem
 )
 
-type Config struct {
+type Config struct { //nolint:maligned
 	ConnectTimeoutSec int    `hcl:"connect_timeout_sec"`
 	Enabled           bool   `hcl:"enable"`
 	Id                string `hcl:"id"`
@@ -216,7 +216,7 @@ func (self *Tele) worker() {
 func (self *Tele) sendState(s State) {
 	payload := []byte{byte(s)}
 	t := self.m.Publish(self.topicState, 1, true, payload)
-	self.tokenWait(t, "publish state")
+	_ = self.tokenWait(t, "publish state")
 }
 
 func (self *Tele) sendTelemetry(tm *Telemetry) {
@@ -226,7 +226,7 @@ func (self *Tele) sendTelemetry(tm *Telemetry) {
 		return
 	}
 	t := self.m.Publish(self.topicTelemetry, 1, true, payload)
-	self.tokenWait(t, "publish telemetry")
+	_ = self.tokenWait(t, "publish telemetry")
 }
 
 func (self *Tele) tokenWait(t mqtt.Token, tag string) error {

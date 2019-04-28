@@ -1,0 +1,27 @@
+linters:
+  enable:
+    - goconst
+    - gofmt
+    - gosec
+    - maligned
+    - prealloc
+    - staticcheck
+  disable:
+    - deadcode
+    - structcheck
+    - varcheck
+
+linters-settings:
+  gofmt:
+    simplify: false # TODO enable
+  govet:
+    check-shadowing: true
+    settings:
+      printf: # analyzer name, run `go tool vet help` to see all analyzers
+        funcs: # run `go tool vet help printf` to see available settings for `printf` analyzer
+          - (github.com/temoto/vender/log2.Log).Infof
+          - (github.com/temoto/vender/log2.Log).Warnf
+          - (github.com/temoto/vender/log2.Log).Errorf
+          - (github.com/temoto/vender/log2.Log).Fatalf
+  maligned:
+    suggest-new: true

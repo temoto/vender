@@ -19,7 +19,7 @@ const MaxWidth = 40
 
 var spaceBytes = bytes.Repeat([]byte{' '}, MaxWidth)
 
-type TextDisplay struct {
+type TextDisplay struct { //nolint:maligned
 	alive *alive.Alive
 	mu    sync.Mutex
 	dev   Devicer

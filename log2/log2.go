@@ -126,12 +126,12 @@ func (self *Log) Enabled(level Level) bool {
 
 func (self *Log) Log(level Level, s string) {
 	if self.Enabled(level) {
-		self.l.Output(3, s)
+		_ = self.l.Output(3, s)
 	}
 }
 func (self *Log) Logf(level Level, format string, args ...interface{}) {
 	if self.Enabled(level) {
-		self.l.Output(3, fmt.Sprintf(format, args...))
+		_ = self.l.Output(3, fmt.Sprintf(format, args...))
 	}
 }
 
