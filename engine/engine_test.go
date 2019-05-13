@@ -13,6 +13,7 @@ import (
 
 func TestEngineExecute(t *testing.T) {
 	t.Parallel()
+
 	type Case struct {
 		name  string
 		input string
@@ -65,5 +66,32 @@ boot -> n1 -> n2;
 				t.Fatalf("timeout")
 			}
 		})
+	}
+}
+
+func TestResolveLazyArg(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
+	e := NewEngine(ctx)
+	ctx = context.WithValue(ctx, ContextKey, e)
+
+	// lazy reference simple(?) before register
+	e.RegisterNewSeq("@complex(?)", e.MustResolveOrLazy("simple(?)"))
+
+	success := false
+	simple := FuncArg{Name: "simple", F: func(ctx context.Context, arg Arg) error {
+		if arg == 42 {
+			success = true
+			return nil
+		}
+		return errors.Errorf("unexpected arg=%v", arg)
+	}}
+	e.Register("simple(?)", simple)
+
+	TestDo(t, ctx, "@complex(42)")
+	if !success {
+		t.Error("!success")
 	}
 }

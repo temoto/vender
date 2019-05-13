@@ -22,13 +22,13 @@ import (
 
 const usage = `syntax: commands separated by whitespace
 (main)
-- sN       pause N milliseconds
-- @ACTION  execute engine action
-- mXX...   MDB send XX... in hex, receive
+- ACTION   execute engine action
+- /sN      pause N milliseconds
+- /mXX...  MDB send XX... in hex, receive
 
 (meta)
-- loop=N   repeat N times all commands on this line
-- par      execute concurrently all commands on this line
+- /loop=N  repeat N times all commands on this line
+- /par     execute concurrently all commands on this line
 `
 
 func main() {
@@ -54,6 +54,10 @@ func main() {
 	}
 
 	eng.Register("mdb.bus_reset", doMdbBusReset)
+	eng.Register("@ponr", engine.Func0{Name: "@ponr", F: func() error {
+		eng.Log.Infof("- Point Of No Return")
+		return nil
+	}})
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
 	// right now Enum does IO implicitly
 	hardware.Enum(ctx, nil)
@@ -69,7 +73,7 @@ func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest 
 	sort.Strings(actions)
 	suggests := make([]prompt.Suggest, 0, len(actions))
 	for _, a := range actions {
-		suggests = append(suggests, prompt.Suggest{Text: "@" + a})
+		suggests = append(suggests, prompt.Suggest{Text: a})
 	}
 
 	return func(d prompt.Document) []prompt.Suggest {
@@ -156,10 +160,12 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 	for _, word := range words {
 		switch {
 		case word == "help":
+			fallthrough
+		case word == "/help":
 			return doUsage, nil
-		case word == "par":
+		case word == "/par":
 			par = true
-		case strings.HasPrefix(word, "loop="):
+		case strings.HasPrefix(word, "/loop="):
 			if loopn != 0 {
 				return nil, errors.Errorf("multiple loop commands, expected at most one")
 			}
@@ -177,7 +183,7 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 	var tail *engine.Node = &tx.Root
 	errs := make([]error, 0, 32)
 	for _, word := range wordsRest {
-		if strings.HasPrefix(word, "log=") && par {
+		if strings.HasPrefix(word, "/log=") && par {
 			log.Errorf("warning: log with par will produce unpredictable output, likely not what you want")
 		}
 
@@ -207,26 +213,23 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 
 func parseCommand(eng *engine.Engine, word string) (engine.Doer, error) {
 	switch {
-	case word[0] == 'm':
-		request, err := mdb.PacketFromHex(word[1:], true)
+	case strings.HasPrefix(word, "/m"):
+		request, err := mdb.PacketFromHex(word[2:], true)
 		if err != nil {
 			return nil, err
 		}
 		return newTx(request), nil
-	case word[0] == 's':
-		i, err := strconv.ParseUint(word[1:], 10, 32)
+	case strings.HasPrefix(word, "/s"):
+		i, err := strconv.ParseUint(word[2:], 10, 32)
 		if err != nil {
 			return nil, errors.Annotatef(err, "word=%s", word)
 		}
 		return engine.Sleep{Duration: time.Duration(i) * time.Millisecond}, nil
-	case strings.HasPrefix(word, "@"):
-		arg := word[1:]
-		d := eng.Resolve(arg)
+	default:
+		d := eng.Resolve(word)
 		if d == nil {
-			return nil, errors.Errorf("action='%s' is not registered", arg)
+			return nil, errors.Errorf("action='%s' is not registered", word)
 		}
 		return d, nil
-	default:
-		return nil, errors.Errorf("invalid command: '%s'", word)
 	}
 }

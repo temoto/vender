@@ -26,7 +26,7 @@ func TestValve(t *testing.T) {
 		{"c3", "44"},
 		{"c3", "04"},
 		{"c3", ""},
-		{"c2014e", ""},
+		{"c2013a", ""},
 		{"c3", "10"},
 		{"c3", ""},
 	})
@@ -44,10 +44,11 @@ func TestValve(t *testing.T) {
 	engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
 	helpers.AssertEqual(t, d.tempHot, uint8(23))
 
-	engine.DoCheckError(t, d.NewSetTempHot().(engine.ArgApplier).Apply(73), ctx)
+	engine.DoCheckError(t, engine.ArgApply(d.NewSetTempHot(), 73), ctx)
 
-	water := d.waterStock.Min() + rand.Int31() + 120
+	water := d.waterStock.Min() + rand.Int31() + 90
+	t.Logf("water before=%d", water)
 	d.waterStock.Set(water)
-	engine.DoCheckError(t, e.Resolve("mdb.evend.valve_pour_hot(120)"), ctx)
-	helpers.AssertEqual(t, d.waterStock.Value(), water-120)
+	engine.DoCheckError(t, e.Resolve("mdb.evend.valve_pour_hot(90)"), ctx)
+	helpers.AssertEqual(t, d.waterStock.Value(), water-90)
 }

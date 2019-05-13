@@ -80,7 +80,7 @@ func (self *Stock) Value() int32 { return atomic.LoadInt32(&self.value) }
 func (self *Stock) Set(v int32)  { atomic.StoreInt32(&self.value, v) }
 
 func (self *Stock) Wrap1(d engine.Doer) engine.Doer {
-	return do{d: d, s: self, v: self.TranslateArg(1)}
+	return do{d: d, s: self, v: self.TranslateArg(1), vset: true}
 }
 func (self *Stock) WrapArg(d engine.Doer) engine.Doer {
 	return do{d: d, s: self}

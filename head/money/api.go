@@ -62,6 +62,7 @@ func (self *MoneySystem) locked_credit(includeEscrow bool) currency.Amount {
 	}
 	result += self.billCredit.Total()
 	result += self.coinCredit.Total()
+	result += self.giftCredit
 	return result
 }
 
@@ -100,6 +101,17 @@ func (self *MoneySystem) Credit(ctx context.Context) currency.Amount {
 	return self.locked_credit(true)
 }
 
+func (self *MoneySystem) SetGiftCredit(ctx context.Context, value currency.Amount) {
+	const tag = "money.set-gift-credit"
+
+	self.lk.Lock()
+	// copy both values to release lock ASAP
+	before, after := self.giftCredit, value
+	self.giftCredit = after
+	self.lk.Unlock()
+	self.Log.Infof("%s before=%s after=%s", tag, before.FormatCtx(ctx), after.FormatCtx(ctx))
+}
+
 func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Amount) error {
 	const tag = "money.withdraw-prepare"
 
@@ -119,13 +131,17 @@ func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Am
 		defer self.lk.Unlock()
 
 		if err := self.locked_payout(ctx, change); err != nil {
-			// TODO telemetry
+			err = errors.Annotate(err, tag)
 			self.Log.Errorf("%s CRITICAL change err=%v", tag, err)
+			state.GetGlobal(ctx).Tele.Error(err)
 		}
 
 		billEscrowAmount := self.bill.EscrowAmount()
 		if billEscrowAmount != 0 {
 			if err := self.bill.NewEscrow(true).Do(ctx); err != nil {
+				err = errors.Annotate(err, tag)
+				self.Log.Errorf("%s CRITICAL escrow release err=%v", tag, err)
+				state.GetGlobal(ctx).Tele.Error(err)
 			} else {
 				self.dirty += billEscrowAmount
 			}
@@ -153,6 +169,33 @@ func (self *MoneySystem) WithdrawCommit(ctx context.Context, amount currency.Amo
 	self.dirty = 0
 	self.billCredit.Clear()
 	self.coinCredit.Clear()
+	self.giftCredit = 0
+
+	return nil
+}
+
+// Release bill escrow + inserted coins
+// returns error *only* if unable to return all money
+func (self *MoneySystem) Abort(ctx context.Context) error {
+	const tag = "money-abort"
+	self.lk.Lock()
+	defer self.lk.Unlock()
+
+	total := self.locked_credit(true)
+
+	if err := self.locked_payout(ctx, total); err != nil {
+		err = errors.Annotate(err, tag)
+		state.GetGlobal(ctx).Tele.Error(err)
+		return err
+	}
+
+	if self.dirty != 0 {
+		self.Log.Errorf("%s CRITICAL (debt or code error) dirty=%s", tag, self.dirty.FormatCtx(ctx))
+	}
+	self.dirty = 0
+	self.billCredit.Clear()
+	self.coinCredit.Clear()
+	self.giftCredit = 0
 
 	return nil
 }
@@ -180,8 +223,8 @@ func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amou
 	dispensedAmount := dispensed.Total()
 	self.Log.Debugf("%s coin total dispensed=%s", tag, dispensedAmount.FormatCtx(ctx))
 	if dispensedAmount < amount {
-		// TODO telemetry
-		self.Log.Errorf("%s debt=%s", tag, (amount - dispensedAmount).FormatCtx(ctx))
+		debt := amount - dispensedAmount
+		err = errors.Annotatef(err, "debt=%s", debt.FormatCtx(ctx))
 	}
 	if dispensedAmount <= amount {
 		self.dirty -= dispensedAmount
@@ -189,27 +232,4 @@ func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amou
 		self.dirty -= amount
 	}
 	return err
-}
-
-// Release bill escrow + inserted coins
-// returns error *only* if unable to return all money
-func (self *MoneySystem) Abort(ctx context.Context) error {
-	const tag = "money-abort"
-	self.lk.Lock()
-	defer self.lk.Unlock()
-
-	var err error
-	total := self.locked_credit(true)
-
-	if err = self.locked_payout(ctx, total); err != nil {
-		return errors.Annotate(err, tag)
-	}
-
-	if self.dirty != 0 {
-		self.Log.Errorf("%s CRITICAL (debt or code error) dirty=%s", tag, self.dirty.FormatCtx(ctx))
-	}
-	self.dirty = 0
-	self.billCredit.Clear()
-	self.coinCredit.Clear()
-	return nil
 }

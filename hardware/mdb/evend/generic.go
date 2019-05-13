@@ -190,7 +190,7 @@ func (self *Generic) newProto2PollWait(tag string, timeout time.Duration, ignore
 			value &^= genericPollProblem
 			errCode, err := self.CommandErrorCode()
 			if err == nil {
-				err = errors.Errorf("%s POLL=%x errorcode=%[3]d %[3]02x", tag, bs, errCode)
+				err = errors.Errorf("%s POLL=%x errorcode=%[3]d %02[3]x", tag, bs, errCode)
 			}
 			return true, errors.Annotate(err, tag)
 		}

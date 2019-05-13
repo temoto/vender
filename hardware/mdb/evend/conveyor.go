@@ -36,10 +36,7 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 	e.Register("mdb.evend.conveyor_move_zero", self.NewMove(0))
 	e.Register("mdb.evend.conveyor_move_mixer", self.NewMove(1))
 	e.Register("mdb.evend.conveyor_move_cup", self.NewMove(self.posCup))
-	// TODO single action with parameter hopper index
-	for i, value := range self.posHoppers {
-		e.Register(fmt.Sprintf("mdb.evend.conveyor_move_hopper(%d)", i+1), self.NewMove(value))
-	}
+	e.Register("mdb.evend.conveyor_move_hopper(?)", self.NewMoveHopper())
 	e.Register("mdb.evend.conveyor_move_elevator", self.NewMove(self.posElevator))
 
 	return err
@@ -47,26 +44,41 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 
 func (self *DeviceConveyor) NewMove(position uint16) engine.Doer {
 	tag := fmt.Sprintf("mdb.evend.conveyor.move:%d", position)
-	return engine.NewSeq(tag).
-		Append(self.Generic.NewWaitReady(tag)).
-		// exceptional byte order
-		Append(self.Generic.NewAction(tag, 0x01, byte(position&0xff), byte(position>>8))).
-		Append(engine.Func{Name: tag + "/custom-wait-done", F: func(ctx context.Context) error {
-			var timeout time.Duration
-			if position == 0 {
-				timeout = self.calibTimeout
-			} else {
-				distance := absDiffU16(self.currentPos, position)
-				eta := time.Duration(float32(distance)/float32(self.minSpeed)*1000) * time.Millisecond
-				timeout = eta * 2
-			}
-			self.dev.Log.Debugf("%s position current=%d target=%d timeout=%s", tag, self.currentPos, position, timeout)
-			if err := self.Generic.NewWaitDone(tag, timeout).Do(ctx); err != nil {
-				return err
-			}
-			self.currentPos = position
-			return nil
-		}})
+	return engine.Func{Name: tag, F: func(ctx context.Context) error { return self.move(ctx, position) }}
+}
+
+func (self *DeviceConveyor) NewMoveHopper() engine.Doer {
+	const tag = "mdb.evend.conveyor.move_hopper"
+	return engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
+		position := self.posHoppers[arg-1]
+		return self.move(ctx, position)
+	}}
+}
+
+func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
+	tag := fmt.Sprintf("mdb.evend.conveyor.move:%d", position)
+
+	if err := self.Generic.NewWaitReady(tag).Do(ctx); err != nil {
+		return err
+	}
+	if err := self.Generic.NewAction(tag, 0x01, byte(position&0xff), byte(position>>8)).Do(ctx); err != nil {
+		return err
+	}
+
+	var timeout time.Duration
+	if position == 0 {
+		timeout = self.calibTimeout
+	} else {
+		distance := absDiffU16(self.currentPos, position)
+		eta := time.Duration(float32(distance)/float32(self.minSpeed)*1000) * time.Millisecond
+		timeout = eta * 2
+	}
+	self.dev.Log.Debugf("%s position current=%d target=%d timeout=%s", tag, self.currentPos, position, timeout)
+	if err := self.Generic.NewWaitDone(tag, timeout).Do(ctx); err != nil {
+		return err
+	}
+	self.currentPos = position
+	return nil
 }
 
 func absDiffU16(a, b uint16) uint16 {

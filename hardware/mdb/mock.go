@@ -4,8 +4,10 @@ package mdb
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,8 +24,10 @@ func (self MockR) String() string {
 }
 
 type MockUart struct {
-	t testing.TB
-	q chan MockR
+	t  testing.TB
+	mu sync.Mutex
+	m  map[string]string
+	q  chan MockR
 }
 
 func NewMockUart(t testing.TB) *MockUart {
@@ -36,6 +40,8 @@ func NewMockUart(t testing.TB) *MockUart {
 
 func (self *MockUart) Open(path string) error { return nil }
 func (self *MockUart) Close() error {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 	select {
 	case _, ok := <-self.q:
 		err := errors.Errorf("mdb-mock: Close() with non-empty queue")
@@ -59,7 +65,35 @@ func (self *MockUart) Break(d, sleep time.Duration) error {
 
 func (self *MockUart) Tx(request, response []byte) (n int, err error) {
 	self.t.Helper()
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	if self.m != nil {
+		if len(self.m) == 0 {
+			err = errors.Errorf("mdb-mock: map ended, received=%x", request)
+			self.t.Error(err)
+			return 0, err
+		}
+		return self.txMap(request, response)
+	}
+	return self.txQueue(request, response)
+}
 
+// ExpectMap() in random order
+func (self *MockUart) txMap(request, response []byte) (n int, err error) {
+	requestHex := hex.EncodeToString(request)
+	responseHex, found := self.m[requestHex]
+	if !found {
+		// must not call self.t.Error() here
+		return 0, errors.Timeoutf("mdb-mock: emulating") // "... timeout" word is appended
+	}
+	delete(self.m, requestHex)
+	rp := MustPacketFromHex(responseHex, true)
+	n = copy(response, rp.Bytes())
+	return n, err
+}
+
+// Expect() requests in defined order
+func (self *MockUart) txQueue(request, response []byte) (n int, err error) {
 	var rr MockR
 	var ok bool
 	select {
@@ -112,6 +146,20 @@ func (self *MockUart) Expect(rrs []MockR) {
 			self.t.Fatal(err)
 		}
 	}
+}
+
+func (self *MockUart) ExpectMap(rrs map[string]string) {
+	self.t.Helper()
+	self.mu.Lock()
+	if rrs == nil {
+		self.m = nil
+	} else {
+		self.m = make(map[string]string)
+		for k := range rrs {
+			self.m[k] = rrs[k]
+		}
+	}
+	self.mu.Unlock()
 }
 
 func NewTestMdber(t testing.TB) (*Mdb, *MockUart) {

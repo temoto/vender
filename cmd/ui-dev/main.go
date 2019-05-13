@@ -38,7 +38,7 @@ func main() {
 
 	moneysys := new(money.MoneySystem)
 	moneysys.Start(ctx)
-	telesys := config.Global().Tele
+	telesys := &config.Global().Tele
 
 	menuMap := make(ui.Menu)
 	menuMap.Add(1, "chai", config.ScaleU(3),
@@ -84,10 +84,10 @@ func main() {
 						panic("head: unknown money event: " + em.String())
 					}
 				case cmd := <-telesys.CommandChan():
-					switch cmd.Task {
-					case tele.Command_Abort:
+					switch cmd.Task.(type) {
+					case *tele.Command_Abort:
 						err := moneysys.Abort(ctx)
-						telesys.CommandReplyErr(cmd, err)
+						telesys.CommandReplyErr(&cmd, err)
 						log.Infof("admin requested abort err=%v", err)
 						menu.SetCredit(moneysys.Credit(ctx))
 						moneysys.AcceptCredit(ctx, menuMap.MaxPrice())

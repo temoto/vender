@@ -97,7 +97,7 @@ func (self *Tree) Apply(arg Arg) Doer {
 	if found == nil {
 		panic(fmt.Sprintf("code error Tree.Apply: no arg placeholders in %s", self.String()))
 	}
-	found.Doer = found.Doer.(ArgApplier).Apply(arg)
+	found.Doer = ArgApply(found.Doer, arg)
 
 	return self
 }

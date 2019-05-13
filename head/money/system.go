@@ -11,8 +11,10 @@ import (
 	"github.com/temoto/vender/hardware/mdb/bill"
 	"github.com/temoto/vender/hardware/mdb/coin"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
+	"github.com/temoto/vender/state"
 )
 
 type MoneySystem struct {
@@ -28,6 +30,8 @@ type MoneySystem struct {
 	coin       coin.CoinAcceptor
 	coinCredit currency.NominalGroup
 	coinPoll   *alive.Alive
+
+	giftCredit currency.Amount
 }
 
 func (self *MoneySystem) Start(ctx context.Context) error {
@@ -111,11 +115,10 @@ func (self *MoneySystem) coinInit(ctx context.Context) error {
 			self.Log.Debugf("%s manual dispense: %s", tag, pi.String())
 			_ = self.coin.DoTubeStatus.Do(ctx)
 			_ = self.coin.CommandExpansionSendDiagStatus(nil)
-			// TODO telemetry
 		case money.StatusReturnRequest:
 			self.events <- Event{created: itemTime, name: EventAbort}
 		case money.StatusRejected:
-			// TODO telemetry
+			state.GetGlobal(ctx).Tele.StatModify(func(s *tele.Stat) { s.CoinRejected[uint32(pi.DataNominal)] += uint32(pi.DataCount) })
 		case money.StatusCredit:
 			err := self.coinCredit.Add(pi.DataNominal, uint(pi.DataCount))
 			if err != nil {

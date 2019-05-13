@@ -250,7 +250,7 @@ func BenchmarkCoinPoll(b *testing.B) {
 
 			log := log2.ContextValueLogger(ctx)
 			log.SetLevel(log2.LError)
-			state.GetConfig(ctx).Global().Hardware.Mdb.Mdber.Log.SetLevel(log2.LError)
+			state.GetGlobal(ctx).Hardware.Mdb.Mdber.Log.SetLevel(log2.LError)
 
 			defer mdb.MockFromContext(ctx).Close()
 			ca := newDevice(b, ctx)

@@ -80,6 +80,55 @@ func (self Fail) Validate() error              { return self.E }
 func (self Fail) Do(ctx context.Context) error { return self.E }
 func (self Fail) String() string               { return self.E.Error() }
 
+type LazyResolve struct {
+	Name  string
+	mu    sync.Mutex
+	r     func(string) Doer
+	cache Doer
+}
+
+const errLazyNotResolved = "lazy action=%s not resolved"
+
+func (self *LazyResolve) Resolve() Doer {
+	self.mu.Lock()
+	d := self.cache
+	if d == nil {
+		d = self.r(self.Name)
+		if d != nil {
+			self.cache = d
+		}
+	}
+	self.mu.Unlock()
+	return d
+}
+
+func (self *LazyResolve) Validate() error {
+	if d := self.Resolve(); d != nil {
+		return d.Validate()
+	}
+	return errors.Errorf(errLazyNotResolved, self.Name)
+}
+func (self *LazyResolve) Do(ctx context.Context) error {
+	if d := self.Resolve(); d != nil {
+		return d.Do(ctx)
+	}
+	return errors.Errorf(errLazyNotResolved, self.Name)
+}
+func (self *LazyResolve) String() string { return self.Name }
+func (self *LazyResolve) Apply(a Arg) Doer {
+	if d := self.Resolve(); d != nil {
+		return ArgApply(d, a)
+	}
+	// TODO maybe return self ?
+	return Fail{errors.Errorf(errLazyNotResolved, self.Name)}
+}
+func (self *LazyResolve) Applied() bool {
+	if d := self.Resolve(); d != nil {
+		return d.(ArgApplier).Applied()
+	}
+	return false
+}
+
 var ErrArgNotApplied = errors.Errorf("Argument is not applied")
 var ErrArgOverwrite = errors.Errorf("Argument already applied")
 

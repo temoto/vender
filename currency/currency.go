@@ -36,6 +36,8 @@ type NominalGroup struct {
 	values map[Nominal]uint
 }
 
+func (self *NominalGroup) Len() uint { return uint(len(self.values)) }
+
 func (self *NominalGroup) Copy() *NominalGroup {
 	ng2 := &NominalGroup{
 		values: make(map[Nominal]uint, len(self.values)),

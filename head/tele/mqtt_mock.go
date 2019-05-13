@@ -14,6 +14,7 @@ type MqttMock struct {
 	Opt  *mqtt.ClientOptions
 	Pub  chan MockMsg
 	subs []MockSub
+	t    testing.TB
 }
 type MockSub struct {
 	Pattern string
@@ -21,10 +22,11 @@ type MockSub struct {
 	Handler mqtt.MessageHandler
 }
 
-func NewMqttMock() *MqttMock {
+func NewMqttMock(t testing.TB) *MqttMock {
 	return &MqttMock{
 		Pub:  make(chan MockMsg, 32),
 		subs: make([]MockSub, 0, 16),
+		t:    t,
 	}
 }
 
@@ -62,6 +64,7 @@ func (self *MqttMock) IsConnectionOpen() bool { return true }
 func (self *MqttMock) Connect() mqtt.Token { return mockToken{nil} }
 
 func (self *MqttMock) Publish(topic string, qos byte, retain bool, payload interface{}) mqtt.Token {
+	self.TestPublish(self.t, topic, payload.([]byte))
 	return mockToken{nil}
 }
 

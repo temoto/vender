@@ -1,6 +1,14 @@
 syntax = "proto3";
 package tele;
 
+enum State {
+  Invalid = 0;
+  Boot = 1;
+  Work = 2;
+  Disconnected = 3;
+  Problem = 4;
+}
+
 // Optimising for rare, bulk delivery on cell network.
 // "Touching network" is expensive, while 10 or 900 bytes is about same cost.
 message Telemetry {
@@ -9,6 +17,7 @@ message Telemetry {
   Inventory inventory = 3;
   Money money = 4;
   Transaction transaction = 5;
+  Stat stat = 6;
 
   message Error {
     uint32 code = 1;
@@ -38,6 +47,11 @@ message Telemetry {
     uint32 credit_bills = 5;
     uint32 credit_coins = 6;
   }
+
+  message Stat {
+    map<uint32,uint32> bill_rejected = 16;
+    map<uint32,uint32> coin_rejected = 17;
+  }
 }
 enum PaymentMethod {
   Nothing = 0;
@@ -47,16 +61,18 @@ enum PaymentMethod {
 
 message Command {
   uint32 id = 1;
-  Task task = 2;
-  repeated string args = 3;
-  string reply_topic = 4;
-
-  enum Task {
-    Invalid = 0;
-    Report = 1;
-    Abort = 2;
-    MoneyDispense = 3;
+  string reply_topic = 2;
+  oneof task {
+    ArgReport report = 3;
+    ArgAbort abort = 4;
+    ArgDispense dispense = 5;
+    ArgSetGiftCredit set_gift_credit = 6;
   }
+
+  message ArgReport {}
+  message ArgAbort {}
+  message ArgDispense { uint32 amount = 1; }
+  message ArgSetGiftCredit { uint32 amount = 1; }
 }
 message Response {
   uint32 command_id = 1;

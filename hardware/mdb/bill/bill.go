@@ -157,6 +157,7 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 			case money.StatusInfo:
 				self.dev.Log.Infof("%s/info: %s", tag, pi.String())
 				// TODO telemetry
+				// state.GetGlobal(ctx)
 			case money.StatusError:
 				self.dev.Log.Errorf("%s/error: %v", tag, pi.Error)
 				// TODO telemetry

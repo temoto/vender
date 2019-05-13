@@ -20,38 +20,10 @@ const (
 	defaultStateInterval  = 5 * time.Minute
 )
 
-type Tele struct {
-	Log       *log2.Log
-	m         mqtt.Client
-	mopt      *mqtt.ClientOptions
-	stopCh    chan struct{}
-	lastState State
-	stateCh   chan State
-	cmdCh     chan *Command
-	tmCh      chan *Telemetry
-
-	stateInterval time.Duration
-
-	topicPrefix    string
-	topicState     string
-	topicTelemetry string
-	topicCommand   string
-}
-
-type State byte
-
-const (
-	StateInvalid State = iota
-	StateBoot
-	StateWork
-	StateDisconnected
-	StateProblem
-)
-
 type Config struct { //nolint:maligned
 	ConnectTimeoutSec int    `hcl:"connect_timeout_sec"`
 	Enabled           bool   `hcl:"enable"`
-	Id                string `hcl:"id"`
+	VmId              int    `hcl:"vm_id"`
 	LogDebug          bool   `hcl:"log_debug"`
 	MqttBroker        string `hcl:"mqtt_broker"`
 	MqttKeepaliveSec  int    `hcl:"keepalive_sec"`
@@ -62,6 +34,26 @@ type Config struct { //nolint:maligned
 	TlsPsk            string `hcl:"tls_psk"` // secret
 }
 
+type Tele struct {
+	Log       *log2.Log
+	m         mqtt.Client
+	mopt      *mqtt.ClientOptions
+	stopCh    chan struct{}
+	lastState State
+	stateCh   chan State
+	cmdCh     chan Command
+	tmCh      chan Telemetry
+	vmId      int32
+	stat      Stat
+
+	stateInterval time.Duration
+
+	topicPrefix    string
+	topicState     string
+	topicTelemetry string
+	topicCommand   string
+}
+
 func (self *Tele) Init(ctx context.Context, tc Config) {
 	// by default disabled
 	if !tc.Enabled {
@@ -70,7 +62,8 @@ func (self *Tele) Init(ctx context.Context, tc Config) {
 
 	self.stopCh = make(chan struct{})
 	self.stateCh = make(chan State)
-	self.cmdCh = make(chan *Command, 2)
+	self.cmdCh = make(chan Command, 2)
+	self.tmCh = make(chan Telemetry)
 	log := log2.ContextValueLogger(ctx)
 	self.Log = log.Clone(log2.LInfo)
 	if tc.LogDebug {
@@ -85,20 +78,24 @@ func (self *Tele) Init(ctx context.Context, tc Config) {
 		mqtt.DEBUG = mqttLog
 	}
 
-	self.topicPrefix = tc.Id
-	self.topicState = fmt.Sprintf("%s/w/s1", self.topicPrefix)
-	self.topicTelemetry = fmt.Sprintf("%s/w/t1", self.topicPrefix)
+	mqttClientId := fmt.Sprintf("vm%d", tc.VmId)
+	credFun := func() (string, string) {
+		return mqttClientId, tc.MqttPassword
+	}
+
+	self.vmId = int32(tc.VmId)
+	self.topicPrefix = mqttClientId // coincidence
+	self.topicState = fmt.Sprintf("%s/w/1s", self.topicPrefix)
+	self.topicTelemetry = fmt.Sprintf("%s/w/1t", self.topicPrefix)
 	self.topicCommand = fmt.Sprintf("%s/r/c", self.topicPrefix)
 
-	willPayload := []byte{byte(StateDisconnected)}
-	credFun := func() (string, string) { return tc.Id, tc.MqttPassword }
-	connectTimeout := intSecondDefault(tc.ConnectTimeoutSec, defaultConnectTimeout)
+	connectTimeout := helpers.IntSecondDefault(tc.ConnectTimeoutSec, defaultConnectTimeout)
 	keepaliveTimeout := connectTimeout / 2
 	networkTimeout := keepaliveTimeout / 4
 	if networkTimeout < 1*time.Second {
 		networkTimeout = 1 * time.Second
 	}
-	self.stateInterval = intSecondDefault(tc.StateIntervalSec, defaultStateInterval)
+	self.stateInterval = helpers.IntSecondDefault(tc.StateIntervalSec, defaultStateInterval)
 
 	defaultHandler := func(_ mqtt.Client, msg mqtt.Message) {
 		self.Log.Errorf("unexpected mqtt message: %v", msg)
@@ -116,12 +113,13 @@ func (self *Tele) Init(ctx context.Context, tc Config) {
 	if tc.TlsPsk != "" {
 		copy(tlsconf.SessionTicketKey[:], helpers.MustHex(tc.TlsPsk))
 	}
+	willPayload := []byte{byte(State_Disconnected)}
 	self.mopt = mqtt.NewClientOptions().
 		AddBroker(tc.MqttBroker).
 		SetAutoReconnect(true).
 		SetBinaryWill(self.topicState, willPayload, 1, true).
 		SetCleanSession(false).
-		SetClientID(tc.Id).
+		SetClientID(mqttClientId).
 		SetConnectTimeout(connectTimeout).
 		SetCredentialsProvider(credFun).
 		SetDefaultPublishHandler(defaultHandler).
@@ -144,22 +142,12 @@ func (self *Tele) Init(ctx context.Context, tc Config) {
 		return
 	}
 
-	t := self.m.Subscribe(self.topicCommand, 1, func(_ mqtt.Client, msg mqtt.Message) {
-		self.Log.Debugf("well command")
-		c := new(Command)
-		err := proto.Unmarshal(msg.Payload(), c)
-		if err != nil {
-			self.Log.Errorf("command parse err=%v", err)
-			return
-		}
-		self.cmdCh <- c
-		msg.Ack()
-	})
+	t := self.m.Subscribe(self.topicCommand, 1, self.mqttSubCommand)
 	if self.tokenWait(t, "subscribe:"+self.topicCommand) != nil {
 		return
 	}
 
-	self.lastState = StateBoot
+	self.lastState = State_Boot
 	self.sendState(self.lastState)
 	go self.worker()
 }
@@ -171,7 +159,7 @@ func (self *Tele) Stop() {
 	}
 }
 
-func (self *Tele) CommandChan() <-chan *Command { return self.cmdCh }
+func (self *Tele) CommandChan() <-chan Command { return self.cmdCh }
 func (self *Tele) CommandReplyErr(c *Command, e error) {
 	if c.ReplyTopic == "" {
 		self.Log.Errorf("CommandReplyErr with empty reply_topic")
@@ -183,12 +171,44 @@ func (self *Tele) CommandReplyErr(c *Command, e error) {
 	}
 	b, err := proto.Marshal(&r)
 	if err != nil {
+		// TODO panic?
 		self.Log.Errorf("CommandReplyErr proto.Marshal err=%v")
 		return
 	}
 
 	topic := fmt.Sprintf("%s/%s", self.topicPrefix, c.ReplyTopic)
 	self.m.Publish(topic, 1, false, b)
+}
+
+func (self *Tele) StatModify(fun func(s *Stat)) {
+	self.stat.Lock()
+	fun(&self.stat)
+	self.stat.Unlock()
+}
+
+func (self *Tele) Error(err error) {
+	self.stateCh <- State_Problem
+}
+
+func (self *Tele) mqttSubCommand(_ mqtt.Client, msg mqtt.Message) {
+	payload := msg.Payload()
+	c := new(Command)
+	err := proto.Unmarshal(payload, c)
+	if err != nil {
+		self.Log.Errorf("command parse raw=%x err=%v", payload, err)
+		return
+	}
+	self.Log.Debugf("command raw=%x parsed=%#v", payload, c)
+
+	switch c.Task.(type) {
+	case *Command_Report:
+		// TODO construct Telemetry
+		tm := Telemetry{}
+		self.tmCh <- tm
+	default:
+		self.cmdCh <- *c
+	}
+	msg.Ack()
 }
 
 func (self *Tele) isRunning() bool {
@@ -206,7 +226,7 @@ func (self *Tele) worker() {
 		select {
 		case self.lastState = <-self.stateCh:
 		case tm := <-self.tmCh:
-			self.sendTelemetry(tm)
+			self.sendTelemetry(&tm)
 		case <-time.After(self.stateInterval):
 		}
 		self.sendState(self.lastState)
@@ -220,8 +240,13 @@ func (self *Tele) sendState(s State) {
 }
 
 func (self *Tele) sendTelemetry(tm *Telemetry) {
+	if tm.VmId == 0 {
+		tm.VmId = self.vmId
+	}
+	self.Log.Debugf("sendTelemetry tm=%#v", tm)
 	payload, err := proto.Marshal(tm)
 	if err != nil {
+		// TODO panic?
 		self.Log.Errorf("CRITICAL telemetry Marshal tm=%v err=%v", tm, err)
 		return
 	}
@@ -241,11 +266,4 @@ func (self *Tele) tokenWait(t mqtt.Token, tag string) error {
 		return err
 	}
 	return nil
-}
-
-func intSecondDefault(x int, def time.Duration) time.Duration {
-	if x == 0 {
-		return def
-	}
-	return time.Duration(x) * time.Second
 }
