@@ -32,4 +32,5 @@ cmd/vender/vender
 cover.out
 coverage*.info
 coverage*.txt
+local.hcl
 vender.sublime-*

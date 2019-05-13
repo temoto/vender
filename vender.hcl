@@ -21,16 +21,17 @@ hardware {
 
   keyboard {
     enable = true
+
+    // TODO listen_addr = 0x78
   }
 
-  iodin_path = "target/release/iodin"
-
-  // TODO keyboard_listen_addr = 0x78
+  iodin_path = "TODO_EDIT"
 
   mega {
     spi = ""
     pin = "25"
   }
+
   mdb {
     // log_debug = true
     log_debug = false
@@ -43,6 +44,12 @@ hardware {
     #uart_driver = "iodin"
     #uart_device = "\x0f\x0e"
   }
+}
+
+menu {
+  msg_intro = "TODO_EDIT showed after successful boot"
+
+  reset_sec = 180
 }
 
 money {
@@ -65,4 +72,8 @@ tele {
   mqtt_broker    = "tls://TODO_EDIT:8884"
   mqtt_password  = "TODO_EDIT"
   tls_ca_file    = "TODO_EDIT"
+}
+
+include "local.hcl" {
+  optional = true
 }

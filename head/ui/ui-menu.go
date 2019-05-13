@@ -12,6 +12,7 @@ import (
 	"github.com/temoto/vender/currency"
 	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
 	"github.com/temoto/vender/hardware/lcd"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
@@ -24,7 +25,6 @@ const (
 
 // TODO extract text messages to catalog
 const (
-	msgIntro  = "ох уж эта длинная рекламная строка"
 	msgError  = "Ошибка"
 	msgCream  = "Сливки"
 	msgSugar  = "Сахар"
@@ -33,6 +33,8 @@ const (
 	msgMenuCodeEmpty          = "нажимайте цифры"
 	msgMenuCodeInvalid        = "проверьте код"
 	msgMenuInsufficientCredit = "добавьте денег"
+
+	msgInputCode = "код:%s\x00"
 )
 
 const (
@@ -42,7 +44,6 @@ const (
 )
 
 const modCreamSugarTimeout = 3 * time.Second
-const resetTimeout = 11 * time.Second
 
 var ScaleAlpha = []byte{
 	0x94, // empty
@@ -53,6 +54,11 @@ var ScaleAlpha = []byte{
 }
 
 type UIMenu struct {
+	// config
+	config       *state.Config
+	resetTimeout time.Duration
+
+	// state
 	alive     *alive.Alive
 	menu      Menu
 	credit    atomic.Value
@@ -70,12 +76,10 @@ type UIMenuResult struct {
 }
 
 func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
-	config := state.GetConfig(ctx)
-
 	self := &UIMenu{
+		config:    state.GetConfig(ctx),
 		alive:     alive.NewAlive(),
 		menu:      menu,
-		display:   config.Global().Hardware.HD44780.Display,
 		refreshCh: make(chan struct{}),
 		result: UIMenuResult{
 			// TODO read config
@@ -83,6 +87,8 @@ func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
 			Sugar: DefaultSugar,
 		},
 	}
+	self.display = self.config.Global().Hardware.HD44780.Display
+	self.resetTimeout = helpers.IntSecondDefault(self.config.Menu.ResetTimeoutSec, 0)
 	self.inputCh = InputEvents(ctx, self.alive.StopChan())
 	self.SetCredit(0)
 
@@ -125,13 +131,13 @@ init:
 		credit := self.credit.Load().(currency.Amount)
 		switch mode {
 		case modeMenuStatus:
-			l1 := self.display.Translate(msgIntro)
+			l1 := self.display.Translate(self.config.Menu.MsgIntro)
 			// TODO write state flags such as "no hot water" on line2
 			l2 := self.display.Translate("")
 			if (credit != 0) || (len(inputBuf) > 0) {
 				// l1 = self.display.Translate(msgCredit + credit.FormatCtx(ctx))
 				l1 = self.display.Translate(msgCredit + credit.Format100I())
-				l2 = self.display.Translate(fmt.Sprintf("код:%s\x00", string(inputBuf)))
+				l2 = self.display.Translate(fmt.Sprintf(msgInputCode, string(inputBuf)))
 			}
 			self.display.SetLinesBytes(l1, l2)
 		}
@@ -152,8 +158,7 @@ init:
 				lastActivity = time.Now()
 				mode = modeMenuStatus // "return to previous mode"
 				goto handleEnd
-			case inactive >= resetTimeout:
-				log.Printf("reset timeout")
+			case inactive >= self.resetTimeout:
 				goto init
 			default:
 				goto waitInput

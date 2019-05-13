@@ -9,19 +9,30 @@ import (
 )
 
 func FoldErrors(errs []error) error {
+	// common fast path
 	if len(errs) == 0 {
 		return nil
 	}
-	ss := make([]string, 0, len(errs))
+
+	ss := make([]string, 0, 1+len(errs))
 	for _, e := range errs {
 		if e != nil {
-			ss = append(ss, e.Error())
+			// ss = append(ss, e.Error())
+			ss = append(ss, errors.ErrorStack(e))
+			// ss = append(ss, errors.Details(e))
 		}
 	}
-	if len(ss) == 0 {
+	switch len(ss) {
+	case 0:
 		return nil
+	case 1:
+		return fmt.Errorf(ss[0])
+	default:
+		ss = append(ss, "")
+		copy(ss[1:], ss[0:])
+		ss[0] = "multiple errors:"
+		return fmt.Errorf(strings.Join(ss, "\n- "))
 	}
-	return errors.New(strings.Join(ss, "\n"))
 }
 
 func HexSpecialBytes(input []byte) string {

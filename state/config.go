@@ -3,12 +3,6 @@ package state
 import (
 	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -26,11 +20,18 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	mega "github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/head/tele"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
 
 type Config struct {
-	g        Global
+	g Global
+
+	// includeSeen contains absolute paths to prevent include loops
+	includeSeen map[string]struct{}
+	// Include is only used for Unmarshal
+	Include []ConfigSource `hcl:"include"`
+
 	Hardware struct {
 		HD44780 struct { //nolint:maligned
 			Enable        bool       `hcl:"enable"`
@@ -56,6 +57,11 @@ type Config struct {
 			Pin string `hcl:"pin"`
 		}
 	}
+	Menu struct {
+		MsgIntro        string      `hcl:"msg_intro"`
+		ResetTimeoutSec int         `hcl:"reset_sec"`
+		Items           []*MenuItem `hcl:"item"`
+	}
 	Money struct {
 		Scale                int `hcl:"scale"`
 		CreditMax            int `hcl:"credit_max"`
@@ -63,6 +69,23 @@ type Config struct {
 	}
 	Tele tele.Config
 }
+
+type ConfigSource struct {
+	Name     string `hcl:"name,key"`
+	Optional bool   `hcl:"optional"`
+}
+
+type MenuItem struct {
+	Code      string `hcl:"code,key"`
+	Name      string `hcl:"name"`
+	XXX_Price int    `hcl:"price"` // use scaled `Price`, this is for decoding config only
+	Scenario  string `hcl:"scenario"`
+
+	Price currency.Amount `hcl:"-"`
+	Doer  engine.Doer     `hcl:"-"`
+}
+
+func (self *MenuItem) String() string { return fmt.Sprintf("menu.%s %s", self.Code, self.Name) }
 
 type Global struct {
 	lk sync.Mutex
@@ -110,6 +133,7 @@ func ContextWithConfig(ctx context.Context, config *Config) context.Context {
 
 func (c *Config) Global() *Global { return &c.g }
 
+// TODO move to Global? but it needs c.Hardware
 func (c *Config) Mdber() (*mdb.Mdb, error) {
 	if c.g.Hardware.Mdb.Mdber != nil {
 		return c.g.Hardware.Mdb.Mdber, nil
@@ -156,7 +180,7 @@ func (c *Config) ScaleU(u uint32) currency.Amount          { return currency.Amo
 func (c *Config) ScaleA(a currency.Amount) currency.Amount { return a * currency.Amount(c.Money.Scale) }
 
 func (c *Config) Init(ctx context.Context) error {
-	c.g.Log = log2.ContextValueLogger(ctx)
+	errs := make([]error, 0)
 	c.g.Inventory.Init()
 	c.g.Tele.Init(ctx, c.Tele)
 
@@ -201,64 +225,101 @@ func (c *Config) Init(ctx context.Context) error {
 	}
 
 	if c.Money.Scale == 0 {
-		return errors.NotValidf("config: money.scale is not set")
+		err := errors.NotValidf("config: money.scale is not set")
+		errs = append(errs, err)
 	} else if c.Money.Scale < 0 {
-		return errors.NotValidf("config: money.scale < 0")
+		err := errors.NotValidf("config: money.scale < 0")
+		errs = append(errs, err)
 	}
 	c.Money.CreditMax *= c.Money.Scale
 	c.Money.ChangeOverCompensate *= c.Money.Scale
 
-	return nil
+	e := engine.GetEngine(ctx)
+	for _, x := range c.Menu.Items {
+		var err error
+		x.Price = c.ScaleI(x.XXX_Price)
+		x.Doer, err = e.ParseText(x.Name, x.Scenario)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		e.Register("menu."+x.Code, x.Doer)
+	}
+
+	return helpers.FoldErrors(errs)
 }
-
-func ReadConfig(ctx context.Context, r io.Reader) (*Config, error) {
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-	c := new(Config)
-	err = hcl.Unmarshal(b, c)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = c.Init(ctx); err != nil {
-		return nil, err
-	}
-
-	return c, nil
-}
-
-func ReadConfigFile(ctx context.Context, path string) (*Config, error) {
+func (c *Config) MustInit(ctx context.Context) {
 	log := log2.ContextValueLogger(ctx)
-	if pathAbs, err := filepath.Abs(path); err != nil {
-		log.Errorf("filepath.Abs(%s) err=%v", path, err)
-	} else {
-		path = pathAbs
-	}
-	log.Debugf("reading config file %s", path)
-
-	f, err := os.Open(path)
+	err := c.Init(ctx)
 	if err != nil {
-		return nil, err
+		log.Fatal(errors.ErrorStack(err))
 	}
-	defer f.Close()
-	return ReadConfig(ctx, f)
 }
 
-func MustReadConfig(ctx context.Context, r io.Reader) *Config {
-	c, err := ReadConfig(ctx, r)
-	if err != nil {
-		log := log2.ContextValueLogger(ctx)
-		log.Fatal(err)
+func (c *Config) read(fs FullReader, source ConfigSource, errs *[]error) {
+	c.g.Log.Debugf("config reading source='%s'", source.Name)
+	norm := fs.Normalize(source.Name)
+	if _, ok := c.includeSeen[norm]; ok {
+		c.g.Log.Fatalf("config duplicate source=%s", source.Name)
 	}
-	return c
+	c.includeSeen[source.Name] = struct{}{}
+	c.includeSeen[norm] = struct{}{}
+
+	bs, err := fs.ReadAll(norm)
+	if bs == nil && err == nil {
+		if !source.Optional {
+			err = errors.NotFoundf("config required source=%s", source.Name)
+			*errs = append(*errs, err)
+			return
+		}
+	}
+	if err != nil {
+		*errs = append(*errs, errors.Annotatef(err, "config source=%s", source.Name))
+		return
+	}
+
+	err = hcl.Unmarshal(bs, c)
+	if err != nil {
+		err = errors.Annotatef(err, "config unmarshal source=%s content='%s'", source.Name, string(bs))
+		*errs = append(*errs, err)
+		return
+	}
+
+	var includes []ConfigSource
+	includes, c.Include = c.Include, nil
+	for _, include := range includes {
+		includeNorm := fs.Normalize(include.Name)
+		if _, ok := c.includeSeen[includeNorm]; ok {
+			err = errors.Errorf("config include loop: from=%s include=%s", source.Name, include.Name)
+			*errs = append(*errs, err)
+			continue
+		}
+		c.read(fs, include, errs)
+	}
 }
 
-func MustReadConfigFile(ctx context.Context, path string) *Config {
-	c, err := ReadConfigFile(ctx, path)
+func ReadConfig(ctx context.Context, fs FullReader, names ...string) (*Config, error) {
+	log := log2.ContextValueLogger(ctx)
+	if len(names) == 0 {
+		log.Fatal("code error [Must]ReadConfig() without names")
+	}
+
+	c := &Config{
+		includeSeen: make(map[string]struct{}),
+	}
+	c.g.Log = log
+	errs := make([]error, 0, 8)
+	for _, name := range names {
+		c.read(fs, ConfigSource{Name: name}, &errs)
+	}
+	return c, helpers.FoldErrors(errs)
+}
+
+func MustReadConfig(ctx context.Context, fs FullReader, names ...string) *Config {
+	log := log2.ContextValueLogger(ctx)
+	c, err := ReadConfig(ctx, fs, names...)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 	return c
 }
@@ -289,14 +350,18 @@ func NewTestContext(t testing.TB, confString string /* logLevel log2.Level*/) co
 	if confString == "" {
 		confString = defaultConfig
 	}
+	fs := NewMockFullReader(map[string]string{
+		"test-inline": confString,
+	})
 
 	ctx := context.Background()
 	log := log2.NewTest(t, log2.LDebug)
 	log.SetFlags(log2.LTestFlags)
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	config := MustReadConfig(ctx, strings.NewReader(confString))
-	ctx = ContextWithConfig(ctx, config)
 	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
+	config := MustReadConfig(ctx, fs, "test-inline")
+	config.MustInit(ctx)
+	ctx = ContextWithConfig(ctx, config)
 
 	mdber, mdbMock := mdb.NewTestMdber(t)
 	config.Global().Hardware.Mdb.Mdber = mdber
