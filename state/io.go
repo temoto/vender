@@ -19,20 +19,37 @@ type OsFullReader struct {
 	base string
 }
 
-func NewOsFullReader(basePath string) *OsFullReader {
-	abs, err := filepath.Abs(basePath)
+func NewOsFullReader() *OsFullReader {
+	return &OsFullReader{}
+}
+
+func (self *OsFullReader) SetBase(path string) {
+	abs, err := filepath.Abs(path)
 	if err != nil {
-		err = errors.Annotatef(err, "filepath.Abs() path=%s", basePath)
+		err = errors.Annotatef(err, "filepath.Abs() path=%s", path)
 		log.Fatal(errors.ErrorStack(err))
 	}
-	return &OsFullReader{base: abs}
+	self.base = filepath.Clean(abs)
 }
 
 func (self OsFullReader) Normalize(path string) string {
-	return filepath.Clean(filepath.Join(self.base, path))
+	if self.base == "" {
+		log.Fatal("config.OsFullReader base is not set")
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(self.base, path)
+	}
+	return filepath.Clean(path)
 }
 
-func (OsFullReader) ReadAll(path string) ([]byte, error) {
+func (self *OsFullReader) ReadAll(path string) ([]byte, error) {
+	if self.base == "" {
+		log.Fatal("config.OsFullReader base is not set")
+	}
+	if !filepath.IsAbs(path) {
+		log.Fatalf("config.ReadAll path=%s must Normalize()", path)
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {

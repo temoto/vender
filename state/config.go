@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -257,10 +258,11 @@ func (c *Config) MustInit(ctx context.Context) {
 }
 
 func (c *Config) read(fs FullReader, source ConfigSource, errs *[]error) {
-	c.g.Log.Debugf("config reading source='%s'", source.Name)
 	norm := fs.Normalize(source.Name)
 	if _, ok := c.includeSeen[norm]; ok {
 		c.g.Log.Fatalf("config duplicate source=%s", source.Name)
+	} else {
+		c.g.Log.Debugf("config reading source='%s' path=%s", source.Name, norm)
 	}
 	c.includeSeen[source.Name] = struct{}{}
 	c.includeSeen[norm] = struct{}{}
@@ -268,7 +270,7 @@ func (c *Config) read(fs FullReader, source ConfigSource, errs *[]error) {
 	bs, err := fs.ReadAll(norm)
 	if bs == nil && err == nil {
 		if !source.Optional {
-			err = errors.NotFoundf("config required source=%s", source.Name)
+			err = errors.NotFoundf("config required name=%s path=%s", source.Name, norm)
 			*errs = append(*errs, err)
 			return
 		}
@@ -304,6 +306,11 @@ func ReadConfig(ctx context.Context, fs FullReader, names ...string) (*Config, e
 		log.Fatal("code error [Must]ReadConfig() without names")
 	}
 
+	if osfs, ok := fs.(*OsFullReader); ok {
+		dir, name := filepath.Split(names[0])
+		osfs.SetBase(dir)
+		names[0] = name
+	}
 	c := &Config{
 		includeSeen: make(map[string]struct{}),
 	}

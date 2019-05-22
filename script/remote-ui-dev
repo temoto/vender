@@ -10,6 +10,5 @@ echo "- run tests" >&2
 set -x
 go test ./... >/dev/null || go test -v ./...
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
-rsync -a $base/$target $base/vender.hcl $remote:~/bin/
-rsync -a $base/vender.hcl $remote:~/
+rsync -a $base/$target $base/*.hcl $remote:~/bin/
 ssh -t $remote time sudo -n chrt --fifo 99 \~/bin/ui-dev

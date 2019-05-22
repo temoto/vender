@@ -43,7 +43,7 @@ func main() {
 	eng := engine.NewEngine(ctx)
 	ctx = context.WithValue(ctx, engine.ContextKey, eng)
 
-	config := state.MustReadConfig(ctx, state.NewOsFullReader(""), *flagConfig)
+	config := state.MustReadConfig(ctx, state.NewOsFullReader(), *flagConfig)
 	config.MustInit(ctx)
 	log.Debugf("config=%+v", config)
 	ctx = state.ContextWithConfig(ctx, config)

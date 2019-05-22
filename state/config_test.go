@@ -110,7 +110,7 @@ func TestFunctionalBundled(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
-	_, err := ReadConfig(ctx, NewOsFullReader(".."), "vender.hcl")
+	_, err := ReadConfig(ctx, NewOsFullReader(), "../vender.hcl")
 	if err != nil {
 		t.Error(err)
 	}
