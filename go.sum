@@ -1,5 +1,3 @@
-github.com/awalterschulze/gographviz v0.0.0-20190221210632-1e9ccb565bca h1:xwIXr1FpA2XBoohlpvgb11No/zbsh5Clm/98PWPcHVA=
-github.com/awalterschulze/gographviz v0.0.0-20190221210632-1e9ccb565bca/go.mod h1:GEV5wmg4YquNw7v1kkyoX9etIk8yVmXj+AkDHuuETHs=
 github.com/c-bata/go-prompt v0.2.3 h1:jjCS+QhG/sULBhAaBdjb2PlMRVaKXQgn+4yzaauvs2s=
 github.com/c-bata/go-prompt v0.2.3/go.mod h1:VzqtzE2ksDBcdln8G7mk2RX9QyGjH+OVqOCSiVIqS34=
 github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76 h1:FE783w8WFh+Rvg+7bZ5g8p7gP4SeVS4AoNwkvazlsBg=

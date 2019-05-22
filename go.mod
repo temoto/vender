@@ -3,7 +3,6 @@ module github.com/temoto/vender
 go 1.11
 
 require (
-	github.com/awalterschulze/gographviz v0.0.0-20190221210632-1e9ccb565bca
 	github.com/c-bata/go-prompt v0.2.3
 	github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
 	github.com/eclipse/paho.mqtt.golang v1.2.0

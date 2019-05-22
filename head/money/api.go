@@ -14,7 +14,6 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
-	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/state"
 )
 
@@ -87,11 +86,11 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 	self.Log.Debugf("%s maxConfig=%s maxPrice=%s available=%s -> limit=%s",
 		tag, maxConfig.FormatCtx(ctx), maxPrice.FormatCtx(ctx), available.FormatCtx(ctx), limit.FormatCtx(ctx))
 
-	tx := engine.NewTree(fmt.Sprintf("money.AcceptCredit(%d)", limit))
-	tx.Root.Append(self.bill.AcceptMax(limit))
-	tx.Root.Append(self.coin.AcceptMax(limit))
-	if err := tx.Do(ctx); err != nil {
-		self.Log.Errorf("AcceptCredit err=%v", err)
+	if err := self.bill.AcceptMax(limit).Do(ctx); err != nil {
+		self.Log.Errorf("bill.AcceptMax err=%v", err)
+	}
+	if err := self.coin.AcceptMax(limit).Do(ctx); err != nil {
+		self.Log.Errorf("coin.AcceptMax err=%v", err)
 	}
 }
 

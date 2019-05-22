@@ -1,10 +1,3 @@
-# github.com/awalterschulze/gographviz v0.0.0-20190221210632-1e9ccb565bca
-github.com/awalterschulze/gographviz
-github.com/awalterschulze/gographviz/ast
-github.com/awalterschulze/gographviz/internal/parser
-github.com/awalterschulze/gographviz/internal/token
-github.com/awalterschulze/gographviz/internal/errors
-github.com/awalterschulze/gographviz/internal/lexer
 # github.com/c-bata/go-prompt v0.2.3
 github.com/c-bata/go-prompt
 # github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76

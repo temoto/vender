@@ -27,7 +27,6 @@ const usage = `syntax: commands separated by whitespace
 - log=yes  enable debug logging
 - log=no   disable debug logging
 - loop=N   repeat N times all commands on this line
-- par      execute concurrently all commands on this line
 `
 
 func main() {
@@ -105,7 +104,6 @@ func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest 
 		prompt.Suggest{Text: "reset", Description: "MDB bus reset"},
 		prompt.Suggest{Text: "sN", Description: "pause for N ms"},
 		prompt.Suggest{Text: "loop=N", Description: "repeat line N times"},
-		prompt.Suggest{Text: "par", Description: "execute commands on line concurrently"},
 		prompt.Suggest{Text: "@XX", Description: "transmit MDB block, show response"},
 	}
 
@@ -168,15 +166,12 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 	}
 
 	// pre-parse special commands
-	par := false
 	loopn := uint(0)
 	wordsRest := make([]string, 0, len(words))
 	for _, word := range words {
 		switch {
 		case word == "help":
 			return doUsage, nil
-		case word == "par":
-			par = true
 		case strings.HasPrefix(word, "loop="):
 			if loopn != 0 {
 				return nil, errors.Errorf("multiple loop commands, expected at most one")
@@ -191,13 +186,8 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 		}
 	}
 
-	tx := engine.NewTree("input: " + line)
-	var tail *engine.Node = &tx.Root
+	tx := engine.NewSeq("input:" + line)
 	for _, word := range wordsRest {
-		if strings.HasPrefix(word, "log=") && par {
-			log.Errorf("warning: log with par will produce unpredictable output, likely not what you want")
-		}
-
 		d, err := parseCommand(word)
 		if d == nil && err == nil {
 			log.Fatalf("code error parseCommand word='%s' both doer and err are nil", word)
@@ -206,11 +196,7 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 			// TODO accumulate errors into list
 			return nil, err
 		}
-		if !par {
-			tail = tail.Append(d)
-		} else {
-			tail.Append(d)
-		}
+		tx.Append(d)
 	}
 
 	if loopn != 0 {

@@ -28,7 +28,6 @@ const usage = `syntax: commands separated by whitespace
 
 (meta)
 - /loop=N  repeat N times all commands on this line
-- /par     execute concurrently all commands on this line
 `
 
 func main() {
@@ -154,7 +153,6 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 	}
 
 	// pre-parse special commands
-	par := false
 	loopn := uint(0)
 	wordsRest := make([]string, 0, len(words))
 	for _, word := range words {
@@ -163,13 +161,11 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 			fallthrough
 		case word == "/help":
 			return doUsage, nil
-		case word == "/par":
-			par = true
 		case strings.HasPrefix(word, "/loop="):
 			if loopn != 0 {
 				return nil, errors.Errorf("multiple loop commands, expected at most one")
 			}
-			i, err := strconv.ParseUint(word[5:], 10, 32)
+			i, err := strconv.ParseUint(word[6:], 10, 32)
 			if err != nil {
 				return nil, errors.Annotatef(err, "word=%s", word)
 			}
@@ -179,24 +175,15 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 		}
 	}
 
-	tx := engine.NewTree("input: " + line)
-	var tail *engine.Node = &tx.Root
+	tx := engine.NewSeq("input: " + line)
 	errs := make([]error, 0, 32)
 	for _, word := range wordsRest {
-		if strings.HasPrefix(word, "/log=") && par {
-			log.Errorf("warning: log with par will produce unpredictable output, likely not what you want")
-		}
-
 		d, err := parseCommand(eng, word)
 		if d == nil && err == nil {
 			log.Fatalf("code error parseCommand word='%s' both doer and err are nil", word)
 		}
 		if err == nil {
-			if !par {
-				tail = tail.Append(d)
-			} else {
-				tail.Append(d)
-			}
+			tx.Append(d)
 		} else {
 			errs = append(errs, err)
 		}
