@@ -75,6 +75,7 @@ func (self *megaUart) Tx(request, response []byte) (int, error) {
 	var err error
 	n := 0
 	for retry := 1; retry <= 3; retry++ {
+		time.Sleep(1 * time.Millisecond)
 		f, err = self.c.DoMdbTxSimple(request)
 		// self.c.Log.Debugf("mdb/mega/txsimple request=%x p=%s err=%v", request, p.String(), err)
 		if err != nil {

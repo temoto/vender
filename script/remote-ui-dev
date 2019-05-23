@@ -11,4 +11,4 @@ set -x
 go test ./... >/dev/null || go test -v ./...
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
 rsync -a $base/$target $base/*.hcl $remote:~/bin/
-ssh -t $remote time sudo -n chrt --fifo 99 \~/bin/ui-dev
+ssh -t $remote time sudo -n chrt --fifo 99 \~/bin/ui-dev -config \~/bin/vender.hcl

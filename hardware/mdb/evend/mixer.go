@@ -13,24 +13,29 @@ type DeviceMixer struct {
 
 	moveTimeout  time.Duration
 	shakeTimeout time.Duration
-	posClean     uint8
-	posReady     uint8
-	posShake     uint8
+
+	shakeSpeedNormal uint8
+	shakeSpeedClean  uint8
+
+	posClean uint8
+	posReady uint8
+	posShake uint8
 }
 
 func (self *DeviceMixer) Init(ctx context.Context) error {
 	// TODO read config
 	self.moveTimeout = 10 * time.Second
 	self.shakeTimeout = 3 * 100 * time.Millisecond
+	self.shakeSpeedClean = 100
+	self.shakeSpeedNormal = 15
 	self.posClean = 70
 	self.posReady = 0
 	self.posShake = 100
 	err := self.Generic.Init(ctx, 0xc8, "mixer", proto1)
 
 	e := engine.GetEngine(ctx)
-	e.Register("mdb.evend.mixer_shake_1", self.NewShake(2, 15))
-	e.Register("mdb.evend.mixer_shake_2", self.NewShake(4, 15))
-	e.Register("mdb.evend.mixer_shake_clean", self.NewShake(1, 100))
+	e.Register("mdb.evend.mixer_shake_normal(?)", self.NewShakeNormal())
+	e.Register("mdb.evend.mixer_shake_clean(?)", self.NewShakeClean())
 	e.Register("mdb.evend.mixer_fan_on", self.NewFan(true))
 	e.Register("mdb.evend.mixer_fan_off", self.NewFan(false))
 	e.Register("mdb.evend.mixer_move_clean", self.NewMove(self.posClean))
@@ -47,6 +52,18 @@ func (self *DeviceMixer) NewShake(steps uint8, speed uint8) engine.Doer {
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01, steps, speed)).
 		Append(self.NewWaitDone(tag, self.shakeTimeout*time.Duration(1+steps)))
+}
+func (self *DeviceMixer) NewShakeNormal() engine.Doer {
+	const tag = "mdb.evend.mixer.shake_normal"
+	return engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
+		return self.NewShake(uint8(arg), self.shakeSpeedNormal).Do(ctx)
+	}}
+}
+func (self *DeviceMixer) NewShakeClean() engine.Doer {
+	const tag = "mdb.evend.mixer.shake_clean"
+	return engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
+		return self.NewShake(uint8(arg), self.shakeSpeedClean).Do(ctx)
+	}}
 }
 
 func (self *DeviceMixer) NewFan(on bool) engine.Doer {
