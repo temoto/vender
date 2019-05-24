@@ -16,7 +16,7 @@ var (
 )
 
 type Inventory struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 	m  map[string]*Stock
 }
 
@@ -26,20 +26,8 @@ func (self *Inventory) Init() {
 	self.mu.Unlock()
 }
 
-func (self *Inventory) EnableAll() {
-	self.mu.Lock()
-	for _, s := range self.m {
-		s.Enable()
-	}
-	self.mu.Unlock()
-}
-func (self *Inventory) DisableAll() {
-	self.mu.Lock()
-	for _, s := range self.m {
-		s.Disable()
-	}
-	self.mu.Unlock()
-}
+func (self *Inventory) EnableAll()  { self.Iter(func(s *Stock) { s.Enable() }) }
+func (self *Inventory) DisableAll() { self.Iter(func(s *Stock) { s.Disable() }) }
 
 func (self *Inventory) Register(name string, rate float32) *Stock {
 	var s *Stock
@@ -59,10 +47,18 @@ func (self *Inventory) Register(name string, rate float32) *Stock {
 	return s
 }
 
+func (self *Inventory) Iter(fun func(s *Stock)) {
+	self.mu.RLock()
+	for _, s := range self.m {
+		fun(s)
+	}
+	self.mu.RUnlock()
+}
+
 type Stock struct {
 	Name   string
 	enable uint32
-	rate   float32 // TODO table
+	rate   float32 // TODO table // FIXME concurrency
 	min    int32
 	value  int32
 }
@@ -73,6 +69,7 @@ func (self *Stock) Disable()      { atomic.StoreUint32(&self.enable, 0) }
 
 func (self *Stock) Min() int32 { return atomic.LoadInt32(&self.min) }
 
+// FIXME concurrency
 func (self *Stock) Rate() float32     { return self.rate }
 func (self *Stock) SetRate(r float32) { self.rate = r }
 
