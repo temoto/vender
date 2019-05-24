@@ -26,8 +26,21 @@ func TestRegister(t *testing.T) {
 
 	mock.ExpectMap(nil)
 	go mock.Expect([]mdb.MockR{
-		{"db", ""}, {"da01fa00", ""}, {"db", ""},
-		{"43", ""}, {"420a", ""}, {"43", ""},
+		{"db", ""}, {"da010000", ""}, {"db", ""}, // conveyor calibrate
+		{"db", ""}, {"da01fa00", ""}, {"db", ""}, // conveyor move to hopper
+		{"43", ""}, {"420a", ""}, {"43", ""}, // hopper run
 	})
+
+	e := engine.GetEngine(ctx)
+	if err := e.RegisterParse("@hopper1(?)", "mdb.evend.conveyor_move(250) mdb.evend.hopper1_run(?)"); err != nil {
+		t.Error(err)
+	}
+	if err := e.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"); err != nil {
+		t.Error(err)
+	}
+	if err := e.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"); err != nil {
+		t.Error(err)
+	}
+
 	engine.TestDo(t, ctx, "@hopper1(10)")
 }

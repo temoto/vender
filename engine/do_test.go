@@ -11,11 +11,6 @@ import (
 
 // compile-time test interface is implemented
 var _ = ArgApplier(new(FuncArg))
-var _ = ArgApplier(new(Seq))
-
-// var _ = ArgApplier(new(Tree))
-
-func argnew(n string, f ArgFunc) FuncArg { return FuncArg{Name: n, F: f} }
 
 func TestArg(t *testing.T) {
 	t.Parallel()
@@ -31,11 +26,11 @@ func TestArg(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
-	var action Doer = argnew("worker", worker)
+	var action Doer = FuncArg{Name: "worker", F: worker}
 	seq := NewSeq("complex_seq").Append(action)
 	// tx := NewTree("complex_tree")
 	// tx.Root.Append(Nothing{"prepare"}).Append(action).Append(Nothing{"cleanup"})
-	var applied Doer = seq.Apply(42)
+	var applied Doer = ArgApply(seq, 42)
 	if err := applied.Validate(); err != nil {
 		t.Fatal(err)
 	}

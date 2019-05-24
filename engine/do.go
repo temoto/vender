@@ -80,7 +80,7 @@ func (self Fail) Validate() error              { return self.E }
 func (self Fail) Do(ctx context.Context) error { return self.E }
 func (self Fail) String() string               { return self.E.Error() }
 
-type LazyResolve struct {
+type Lazy struct {
 	Name  string
 	mu    sync.Mutex
 	r     func(string) Doer
@@ -89,7 +89,7 @@ type LazyResolve struct {
 
 const errLazyNotResolved = "lazy action=%s not resolved"
 
-func (self *LazyResolve) Resolve() Doer {
+func (self *Lazy) Resolve() Doer {
 	self.mu.Lock()
 	d := self.cache
 	if d == nil {
@@ -102,78 +102,26 @@ func (self *LazyResolve) Resolve() Doer {
 	return d
 }
 
-func (self *LazyResolve) Validate() error {
+func (self *Lazy) Validate() error {
 	if d := self.Resolve(); d != nil {
 		return d.Validate()
 	}
 	return errors.Errorf(errLazyNotResolved, self.Name)
 }
-func (self *LazyResolve) Do(ctx context.Context) error {
+func (self *Lazy) Do(ctx context.Context) error {
 	if d := self.Resolve(); d != nil {
 		return d.Do(ctx)
 	}
 	return errors.Errorf(errLazyNotResolved, self.Name)
 }
-func (self *LazyResolve) String() string { return self.Name }
-func (self *LazyResolve) Apply(a Arg) Doer {
-	if d := self.Resolve(); d != nil {
-		return ArgApply(d, a)
-	}
-	// TODO maybe return self ?
-	return Fail{errors.Errorf(errLazyNotResolved, self.Name)}
-}
-func (self *LazyResolve) Applied() bool {
-	if d := self.Resolve(); d != nil {
-		return d.(ArgApplier).Applied()
-	}
-	return false
-}
+func (self *Lazy) String() string { return self.Name }
 
-var ErrArgNotApplied = errors.Errorf("Argument is not applied")
-var ErrArgOverwrite = errors.Errorf("Argument already applied")
-
-type Arg int32 // maybe interface{}
-type ArgFunc func(context.Context, Arg) error
-type ArgApplier interface {
-	Apply(a Arg) Doer
-	Applied() bool
-}
-type FuncArg struct {
-	Name string
-	F    func(context.Context, Arg) error
-	arg  Arg
-	set  bool
-}
-
-func (self FuncArg) Validate() error {
-	if !self.set {
-		return ErrArgNotApplied
+func ForceLazy(d Doer) Doer {
+	if lazy, ok := d.(*Lazy); ok {
+		return lazy.Resolve()
 	}
-	return nil
+	return d
 }
-func (self FuncArg) Do(ctx context.Context) error {
-	if !self.set {
-		return ErrArgNotApplied
-	}
-	return self.F(ctx, self.arg)
-}
-func (self FuncArg) String() string {
-	if !self.set {
-		return fmt.Sprintf("%s:Arg?", self.Name)
-	}
-	return fmt.Sprintf("%s:%v", self.Name, self.arg)
-}
-func (self FuncArg) Apply(a Arg) Doer {
-	if self.set {
-		return Fail{E: ErrArgOverwrite}
-	}
-	self.arg = a
-	self.set = true
-	return self
-}
-func (self FuncArg) Applied() bool { return self.set }
-
-func ArgApply(d Doer, a Arg) Doer { return d.(ArgApplier).Apply(a) }
 
 type mockdo struct {
 	name   string

@@ -10,11 +10,11 @@ import (
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
-const DefaultValveRate float32 = 1.538462
-const DefaultValveRateRev float32 = 1 / 1.538462
+const DefaultValveRate float32 = 1 / 1.538462
 
 const (
 	valvePollBusy   = 0x10
@@ -24,24 +24,35 @@ const (
 type DeviceValve struct {
 	Generic
 
-	pourTimeout time.Duration
-	tempHot     uint8
-	waterStock  *inventory.Stock
+	cautionPartMl uint16
+	pourTimeout   time.Duration
+	tempHot       uint8
+	waterStock    *inventory.Stock
 }
 
 func (self *DeviceValve) Init(ctx context.Context) error {
 	config := state.GetConfig(ctx)
-	// TODO read config
-	self.pourTimeout = 30 * time.Second
+	valveConfig := &config.Hardware.Evend.Valve
+	self.cautionPartMl = uint16(valveConfig.CautionPartMl)
+	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, 30*time.Second)
 	self.proto2BusyMask = valvePollBusy
 	self.proto2IgnoreMask = valvePollNotHot
 	err := self.Generic.Init(ctx, 0xc0, "valve", proto2)
 
-	self.waterStock = config.Global().Inventory.Register("water", DefaultValveRateRev)
+	rate := valveConfig.WaterStockRate
+	if rate == 0 {
+		rate = DefaultValveRate
+	}
+	self.waterStock = config.Global().Inventory.Register("water", rate)
 
 	e := engine.GetEngine(ctx)
+	doSetTempHot := self.NewSetTempHot()
 	e.Register("mdb.evend.valve_get_temp_hot", self.NewGetTempHot())
-	e.Register("mdb.evend.valve_set_temp_hot(?)", self.NewSetTempHot())
+	e.Register("mdb.evend.valve_set_temp_hot(?)", doSetTempHot)
+	// e.Register("mdb.evend.valve_set_temp_hot_config", engine.Func{F: func(ctx context.Context) error {
+	// 	cfg := &state.GetConfig(ctx).Hardware.Evend.Valve
+	// 	return engine.ArgApply(doSetTempHot, engine.Arg(cfg.TemperatureHot)).Do(ctx)
+	// }})
 	e.Register("mdb.evend.valve_pour_coffee(?)", self.NewPourCoffee())
 	e.Register("mdb.evend.valve_pour_cold(?)", self.NewPourCold())
 	e.Register("mdb.evend.valve_pour_hot(?)", self.NewPourHot())
@@ -104,16 +115,15 @@ func (self *DeviceValve) NewSetTempHot() engine.Doer {
 func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doer) engine.Doer {
 	tagPour := "pour_" + name
 	tag := "mdb.evend.valve.%s" + tagPour
-	const cautionPartMl = 20
 
 	doPour := engine.FuncArg{
 		Name: tag + "/careful",
 		F: func(ctx context.Context, arg engine.Arg) error {
 			ml := uint16(arg)
-			if ml > cautionPartMl {
-				cautionTimeout := self.MlToTimeout(cautionPartMl)
-				cautionPartUnit := uint8(self.waterStock.TranslateArg(cautionPartMl))
-				err := self.newCommand(tagPour, strconv.Itoa(int(cautionPartMl)), arg1, cautionPartUnit).Do(ctx)
+			if ml > self.cautionPartMl {
+				cautionTimeout := self.MlToTimeout(self.cautionPartMl)
+				cautionPartUnit := uint8(self.waterStock.TranslateArg(engine.Arg(self.cautionPartMl)))
+				err := self.newCommand(tagPour, strconv.Itoa(int(self.cautionPartMl)), arg1, cautionPartUnit).Do(ctx)
 				if err != nil {
 					return err
 				}
@@ -122,7 +132,7 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 					_ = abort.Do(ctx)
 					return err
 				}
-				ml -= cautionPartMl
+				ml -= self.cautionPartMl
 			}
 			units := uint8(self.waterStock.TranslateArg(engine.Arg(ml)))
 			err := self.newCommand(tagPour, strconv.Itoa(int(ml)), arg1, units).Do(ctx)
@@ -139,7 +149,7 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 }
 
 func (self *DeviceValve) NewPourHot() engine.Doer {
-	tag := fmt.Sprintf("%s.pour_hot", self.dev.Name)
+	const tag = "mdb.evend.valve.pour_hot"
 	tx := engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.newPour(tag, 0x01)).
@@ -148,7 +158,7 @@ func (self *DeviceValve) NewPourHot() engine.Doer {
 }
 
 func (self *DeviceValve) NewPourCold() engine.Doer {
-	tag := fmt.Sprintf("%s.pour_cold", self.dev.Name)
+	const tag = "mdb.evend.valve.pour_cold"
 	tx := engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.newPour(tag, 0x02)).

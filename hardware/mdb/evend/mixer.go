@@ -6,64 +6,55 @@ import (
 	"time"
 
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/state"
 )
 
-type DeviceMixer struct {
+const DefaultShakeSpeed uint8 = 100
+
+type DeviceMixer struct { //nolint:maligned
 	Generic
 
+	calibrated   bool
 	moveTimeout  time.Duration
 	shakeTimeout time.Duration
-
-	shakeSpeedNormal uint8
-	shakeSpeedClean  uint8
-
-	posClean uint8
-	posReady uint8
-	posShake uint8
+	shakeSpeed   uint8
 }
 
 func (self *DeviceMixer) Init(ctx context.Context) error {
-	// TODO read config
-	self.moveTimeout = 10 * time.Second
-	self.shakeTimeout = 3 * 100 * time.Millisecond
-	self.shakeSpeedClean = 100
-	self.shakeSpeedNormal = 15
-	self.posClean = 70
-	self.posReady = 0
-	self.posShake = 100
+	self.calibrated = false
+	self.shakeSpeed = DefaultShakeSpeed
+	config := &state.GetConfig(ctx).Hardware.Evend.Mixer
+	self.moveTimeout = helpers.IntSecondDefault(config.MoveTimeoutSec, 10*time.Second)
+	self.shakeTimeout = helpers.IntMillisecondDefault(config.ShakeTimeoutMs, 300*time.Millisecond)
 	err := self.Generic.Init(ctx, 0xc8, "mixer", proto1)
 
 	e := engine.GetEngine(ctx)
-	e.Register("mdb.evend.mixer_shake_normal(?)", self.NewShakeNormal())
-	e.Register("mdb.evend.mixer_shake_clean(?)", self.NewShakeClean())
+	doCalibrate := engine.Func{Name: "mdb.evend.mixer_calibrate", F: self.calibrate}
+	doMove := engine.FuncArg{Name: "mdb.evend.mixer_move", F: func(ctx context.Context, arg engine.Arg) error { return self.move(uint8(arg)).Do(ctx) }}
+	e.Register("mdb.evend.mixer_shake(?)",
+		engine.FuncArg{Name: "mdb.evend.mixer_shake", F: func(ctx context.Context, arg engine.Arg) error {
+			return self.shake(uint8(arg)).Do(ctx)
+		}})
 	e.Register("mdb.evend.mixer_fan_on", self.NewFan(true))
 	e.Register("mdb.evend.mixer_fan_off", self.NewFan(false))
-	e.Register("mdb.evend.mixer_move_clean", self.NewMove(self.posClean))
-	e.Register("mdb.evend.mixer_move_ready", self.NewMove(self.posReady))
-	e.Register("mdb.evend.mixer_move_shake", self.NewMove(self.posShake))
+	e.RegisterNewSeq("mdb.evend.mixer_move(?)", doCalibrate, doMove)
+	e.Register("mdb.evend.mixer_shake_set_speed(?)",
+		engine.FuncArg{Name: "mdb.evend.mixer.shake_set_speed", F: func(ctx context.Context, arg engine.Arg) error {
+			self.shakeSpeed = uint8(arg)
+			return nil
+		}})
 
 	return err
 }
 
 // 1step = 100ms
-func (self *DeviceMixer) NewShake(steps uint8, speed uint8) engine.Doer {
-	tag := fmt.Sprintf("mdb.evend.mixer.shake:%d,%d", steps, speed)
+func (self *DeviceMixer) shake(steps uint8) engine.Doer {
+	tag := fmt.Sprintf("mdb.evend.mixer.shake:%d,%d", steps, self.shakeSpeed)
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
-		Append(self.Generic.NewAction(tag, 0x01, steps, speed)).
+		Append(self.Generic.NewAction(tag, 0x01, steps, self.shakeSpeed)).
 		Append(self.NewWaitDone(tag, self.shakeTimeout*time.Duration(1+steps)))
-}
-func (self *DeviceMixer) NewShakeNormal() engine.Doer {
-	const tag = "mdb.evend.mixer.shake_normal"
-	return engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
-		return self.NewShake(uint8(arg), self.shakeSpeedNormal).Do(ctx)
-	}}
-}
-func (self *DeviceMixer) NewShakeClean() engine.Doer {
-	const tag = "mdb.evend.mixer.shake_clean"
-	return engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
-		return self.NewShake(uint8(arg), self.shakeSpeedClean).Do(ctx)
-	}}
 }
 
 func (self *DeviceMixer) NewFan(on bool) engine.Doer {
@@ -75,7 +66,18 @@ func (self *DeviceMixer) NewFan(on bool) engine.Doer {
 	return self.Generic.NewAction(tag, 0x02, arg, 0x00)
 }
 
-func (self *DeviceMixer) NewMove(position uint8) engine.Doer {
+func (self *DeviceMixer) calibrate(ctx context.Context) error {
+	if self.calibrated {
+		return nil
+	}
+	err := self.move(0).Do(ctx)
+	if err == nil {
+		self.calibrated = true
+	}
+	return err
+}
+
+func (self *DeviceMixer) move(position uint8) engine.Doer {
 	tag := fmt.Sprintf("mdb.evend.mixer.move:%d", position)
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).

@@ -7,26 +7,23 @@ import (
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
+
+const DefaultCupAssertBusyDelay = 30 * time.Millisecond
+const DefaultCupDispenseTimeout = 10 * time.Second
+const DefaultCupEnsureTimeout = 70 * time.Second
 
 type DeviceCup struct {
 	Generic
 
-	cupStock        *inventory.Stock
-	dispenseTimeout time.Duration
-	ensureTimeout   time.Duration
+	cupStock *inventory.Stock
 }
 
 func (self *DeviceCup) Init(ctx context.Context) error {
 	config := state.GetConfig(ctx)
-	// TODO read config
-	self.dispenseTimeout = 5 * time.Second
-	self.ensureTimeout = 70 * time.Second
 	err := self.Generic.Init(ctx, 0xe0, "cup", proto2)
-	if err != nil {
-		return err
-	}
 
 	self.cupStock = config.Global().Inventory.Register("cup", 1)
 
@@ -51,8 +48,9 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 	tx := engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
-		Append(engine.Func0{Name: tag + "/assert-busy", F: func() error {
-			time.Sleep(30 * time.Millisecond) // TODO tune
+		Append(engine.Func{Name: tag + "/assert-busy", F: func(ctx context.Context) error {
+			cupConfig := &state.GetConfig(ctx).Hardware.Evend.Cup
+			time.Sleep(helpers.IntMillisecondDefault(cupConfig.AssertBusyDelayMs, DefaultCupAssertBusyDelay))
 			r := self.dev.Tx(self.dev.PacketPoll)
 			if r.E != nil {
 				return r.E
@@ -67,7 +65,13 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 			}
 			return nil
 		}}).
-		Append(self.Generic.NewWaitDone(tag, self.dispenseTimeout))
+		Append(engine.Func{
+			F: func(ctx context.Context) error {
+				cupConfig := &state.GetConfig(ctx).Hardware.Evend.Cup
+				dispenseTimeout := helpers.IntSecondDefault(cupConfig.DispenseTimeoutSec, DefaultCupDispenseTimeout)
+				return self.Generic.NewWaitDone(tag, dispenseTimeout).Do(ctx)
+			},
+		})
 	return self.cupStock.Wrap1(tx)
 }
 
@@ -85,5 +89,11 @@ func (self *DeviceCup) NewEnsure() engine.Doer {
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x04)).
-		Append(self.Generic.NewWaitDone(tag, self.ensureTimeout))
+		Append(engine.Func{
+			F: func(ctx context.Context) error {
+				cupConfig := &state.GetConfig(ctx).Hardware.Evend.Cup
+				ensureTimeout := helpers.IntSecondDefault(cupConfig.EnsureTimeoutSec, DefaultCupEnsureTimeout)
+				return self.Generic.NewWaitDone(tag, ensureTimeout).Do(ctx)
+			},
+		})
 }

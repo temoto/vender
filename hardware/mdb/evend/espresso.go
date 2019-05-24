@@ -7,10 +7,12 @@ import (
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
 const DefaultCoffeeRate = 9
+const DefaultEspressoTimeout = 10 * time.Second
 
 type DeviceEspresso struct {
 	Generic
@@ -21,7 +23,8 @@ type DeviceEspresso struct {
 
 func (self *DeviceEspresso) Init(ctx context.Context) error {
 	config := state.GetConfig(ctx)
-	self.timeout = 10 * time.Second
+	espressoConfig := &config.Hardware.Evend.Espresso
+	self.timeout = helpers.IntSecondDefault(espressoConfig.TimeoutSec, DefaultEspressoTimeout)
 	err := self.Generic.Init(ctx, 0xe8, "espresso", proto2)
 
 	self.coffeeStock = config.Global().Inventory.Register("coffee", DefaultCoffeeRate)

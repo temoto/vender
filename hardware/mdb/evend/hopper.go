@@ -7,26 +7,30 @@ import (
 
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
 const DefaultHopperRate = 10
+const DefaultHopperRunTimeout = 200 * time.Millisecond
 
 type DeviceHopper struct {
 	Generic
 
-	runTimeout time.Duration
-	stock      *inventory.Stock
+	stock *inventory.Stock
 }
 
 func (self *DeviceHopper) Init(ctx context.Context, addr uint8, nameSuffix string) error {
 	config := state.GetConfig(ctx)
-	// TODO read config
-	self.runTimeout = 200 * time.Millisecond
+	hopperConfig := &config.Hardware.Evend.Hopper
 	name := "hopper" + nameSuffix
 	err := self.Generic.Init(ctx, addr, name, proto2)
 
-	self.stock = config.Global().Inventory.Register(name, DefaultHopperRate)
+	rate := hopperConfig.DefaultStockRate
+	if rate == 0 {
+		rate = DefaultHopperRate
+	}
+	self.stock = config.Global().Inventory.Register(name, rate)
 
 	e := engine.GetEngine(ctx)
 	e.Register(fmt.Sprintf("mdb.evend.%s_run(?)", name), self.NewRun())
@@ -38,6 +42,7 @@ func (self *DeviceHopper) NewRun() engine.Doer {
 	tag := fmt.Sprintf("mdb.evend.%s.run", self.dev.Name)
 
 	do := engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
+		hopperConfig := &state.GetConfig(ctx).Hardware.Evend.Hopper
 		units := uint8(arg)
 
 		if err := self.Generic.NewWaitReady(tag).Do(ctx); err != nil {
@@ -48,7 +53,8 @@ func (self *DeviceHopper) NewRun() engine.Doer {
 			return err
 		}
 
-		return self.Generic.NewWaitDone(tag, self.runTimeout*time.Duration(units)).Do(ctx)
+		runTimeout := helpers.IntMillisecondDefault(hopperConfig.RunTimeoutMs, DefaultHopperRunTimeout)
+		return self.Generic.NewWaitDone(tag, runTimeout*time.Duration(units)).Do(ctx)
 	}}
 
 	return self.stock.WrapArg(do)

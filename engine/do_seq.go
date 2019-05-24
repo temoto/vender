@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
@@ -52,40 +51,4 @@ func (self *Seq) Do(ctx context.Context) error {
 
 func (self *Seq) String() string {
 	return self.name
-}
-
-func (self *Seq) Apply(arg Arg) Doer {
-	result := &Seq{
-		name:  self.name,
-		items: make([]Doer, len(self.items)),
-	}
-
-	found := -1
-	for i, child := range self.items {
-		result.items[i] = child
-		if x, ok := child.(ArgApplier); !ok || x.Applied() {
-			continue
-		}
-		if found == -1 {
-			found = i
-			result.items[i] = self.items[i].(ArgApplier).Apply(arg)
-		} else {
-			panic(fmt.Sprintf("code error Seq.Apply: multiple arg placeholders in %s", self.String()))
-		}
-	}
-	if found == -1 {
-		panic(fmt.Sprintf("code error Seq.Apply: no arg placeholders in %s", self.String()))
-	}
-
-	return result
-}
-func (self *Seq) Applied( /*TODO arg name?*/ ) bool {
-	result := true
-	for _, d := range self.items {
-		if x, ok := d.(ArgApplier); ok && !x.Applied() {
-			result = false
-			return true
-		}
-	}
-	return result
 }

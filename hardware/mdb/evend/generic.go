@@ -27,6 +27,7 @@ const (
 	genericPollBusy    = 0x50
 
 	DefaultReadyTimeout = 5 * time.Second
+	DefaultResetDelay   = 2100 * time.Millisecond
 )
 
 type Generic struct {
@@ -54,7 +55,7 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 	self.proto = proto
 
 	if self.dev.DelayReset == 0 {
-		self.dev.DelayReset = 2100 * time.Millisecond
+		self.dev.DelayReset = DefaultResetDelay
 	}
 	config := state.GetConfig(ctx)
 	m, err := config.Mdber()

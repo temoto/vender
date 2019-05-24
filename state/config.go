@@ -19,6 +19,7 @@ import (
 	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb"
+	evend_config "github.com/temoto/vender/hardware/mdb/evend/config"
 	mega "github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/helpers"
@@ -34,7 +35,8 @@ type Config struct {
 	Include []ConfigSource `hcl:"include"`
 
 	Hardware struct {
-		HD44780 struct { //nolint:maligned
+		Evend   evend_config.Config `hcl:"evend"`
+		HD44780 struct {            //nolint:maligned
 			Enable        bool       `hcl:"enable"`
 			Codepage      string     `hcl:"codepage"`
 			Pinmap        lcd.PinMap `hcl:"pinmap"`

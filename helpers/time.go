@@ -2,9 +2,15 @@ package helpers
 
 import "time"
 
-func IntSecondDefault(x int, def time.Duration) time.Duration {
+func intDurationDefault(x int, scale time.Duration, def time.Duration) time.Duration {
 	if x == 0 {
 		return def
 	}
-	return time.Duration(x) * time.Second
+	return time.Duration(x) * scale
+}
+func IntMillisecondDefault(x int, def time.Duration) time.Duration {
+	return intDurationDefault(x, time.Millisecond, def)
+}
+func IntSecondDefault(x int, def time.Duration) time.Duration {
+	return intDurationDefault(x, time.Second, def)
 }

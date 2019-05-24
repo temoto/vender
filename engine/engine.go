@@ -56,6 +56,16 @@ func (self *Engine) RegisterNewSeq(name string, ds ...Doer) {
 	self.Register(name, tx)
 }
 
+func (self *Engine) RegisterParse(name, scenario string) error {
+	d, err := self.ParseText(name, scenario)
+	if err != nil {
+		err = errors.Annotatef(err, "engine.RegisterParse() name=%s scenario=%s", name, scenario)
+		return err
+	}
+	self.Register(name, d)
+	return nil
+}
+
 var reActionArg = regexp.MustCompile(`^(.+)\((\d+)\)$`)
 
 func (self *Engine) resolve(action string) Doer {
@@ -115,13 +125,7 @@ func (self *Engine) ResolveOrLazy(action string) (Doer, error) {
 		return Sleep{duration}, nil
 	}
 
-	// aliases are not subject to lazy proxy
-	// FIXME
-	// if strings.HasPrefix(action, "@") {
-	// 	return nil, errors.Errorf("alias=%s not resolved", action)
-	// }
-
-	return &LazyResolve{Name: action, r: self.resolve}, nil
+	return &Lazy{Name: action, r: self.resolve}, nil
 }
 func (self *Engine) MustResolveOrLazy(action string) Doer {
 	d, err := self.ResolveOrLazy(action)

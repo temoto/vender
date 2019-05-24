@@ -46,8 +46,6 @@ type BillValidator struct {
 	escrowBill   currency.Nominal // assume only one bill may be in escrow position
 	stackerFull  bool
 	stackerCount uint32
-
-	DoIniter engine.Doer
 }
 
 var (
@@ -78,14 +76,10 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	self.configScaling = 100
 	self.dev.Init(m.Tx, config.Global().Log, 0x30, "bill", binary.BigEndian)
 
-	self.DoIniter = self.newIniter()
-
-	if err = self.DoIniter.Do(ctx); err != nil {
+	doInit := self.newIniter()
+	if err = doInit.Do(ctx); err != nil {
 		return errors.Annotate(err, tag)
 	}
-
-	engine := engine.GetEngine(ctx)
-	_ = engine
 
 	return nil
 }

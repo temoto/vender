@@ -18,6 +18,11 @@ func TestConveyor(t *testing.T) {
 		{"d8", ""},
 		{"d9", "011810000a0000c8001fff01050a32640000000000000000000000"},
 
+		// calibrate
+		{"db", ""},
+		{"da010000", ""},
+		{"db", ""},
+		// cup
 		{"db", "04"},
 		{"db", "04"},
 		{"db", ""},
@@ -46,6 +51,13 @@ func TestConveyor(t *testing.T) {
 		t.Fatalf("Init err=%v", err)
 	}
 
-	engine.TestDo(t, ctx, "mdb.evend.conveyor_move_cup")
-	engine.TestDo(t, ctx, "mdb.evend.conveyor_move_elevator")
+	e := engine.GetEngine(ctx)
+	if err := e.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"); err != nil {
+		t.Error(err)
+	}
+	if err := e.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"); err != nil {
+		t.Error(err)
+	}
+	engine.TestDo(t, ctx, "@conveyor_move_cup")
+	engine.TestDo(t, ctx, "@conveyor_move_elevator")
 }

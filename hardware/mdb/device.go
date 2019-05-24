@@ -22,7 +22,10 @@ const (
 type Device struct {
 	cmdLk   sync.Mutex // TODO explore if chan approach is better
 	txfun   TxFunc
-	lastOff time.Time // unused yet TODO self.lastOff.IsZero()
+	lastOff time.Time
+
+	// "ready for useful work", with RESET, configure, calibration done.
+	// ready bool
 
 	Log           *log2.Log
 	Address       uint8
@@ -65,6 +68,13 @@ func (self *Device) Init(txfun TxFunc, log *log2.Log, addr uint8, name string, b
 	self.PacketReset = MustPacketFromBytes([]byte{self.Address + 0}, true)
 	self.PacketSetup = MustPacketFromBytes([]byte{self.Address + 1}, true)
 	self.PacketPoll = MustPacketFromBytes([]byte{self.Address + 3}, true)
+}
+
+func (self *Device) ValidateOnline() error {
+	if !self.lastOff.IsZero() {
+		return nil
+	}
+	return errors.Errorf("mdb.dev.%s offline", self.Name)
 }
 
 func (self *Device) Tx(request Packet) (r PacketError) {
