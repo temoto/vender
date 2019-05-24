@@ -131,11 +131,11 @@ func (self *Engine) MustResolveOrLazy(action string) Doer {
 	return d
 }
 
-var reSpace = regexp.MustCompile(`\s+`)
+var reNotSpace = regexp.MustCompile(`\S+`)
 
 func (self *Engine) ParseText(tag, text string) (Doer, error) {
 	errs := make([]error, 0)
-	words := reSpace.Split(text, -1)
+	words := reNotSpace.FindAllString(text, -1)
 
 	tx := NewSeq(tag)
 	for _, word := range words {
