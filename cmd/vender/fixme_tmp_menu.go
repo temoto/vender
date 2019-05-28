@@ -13,10 +13,9 @@ func menuInit(ctx context.Context, menuMap ui.Menu) error {
 	config := state.GetConfig(ctx)
 
 	errs := make([]error, 0, 16)
-	for _, x := range config.Menu.Items {
-		price := config.ScaleU(uint32(x.Price))
+	for _, x := range config.Engine.Menu.Items {
 		codeInt, _ := strconv.Atoi(x.Code)
-		menuMap.Add(uint16(codeInt), x.Name, price, x.Doer)
+		menuMap.Add(uint16(codeInt), x.Name, x.Price, x.Doer)
 	}
 	return helpers.FoldErrors(errs)
 }

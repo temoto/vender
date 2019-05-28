@@ -2,12 +2,14 @@ package money
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
+	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb/bill"
 	"github.com/temoto/vender/hardware/mdb/coin"
 	"github.com/temoto/vender/hardware/money"
@@ -20,7 +22,8 @@ import (
 type MoneySystem struct {
 	Log    *log2.Log
 	lk     sync.Mutex
-	events chan Event
+	subs   []EventFunc
+	subsLk sync.Mutex
 	dirty  currency.Amount // uncommited
 
 	bill       bill.BillValidator
@@ -37,12 +40,8 @@ type MoneySystem struct {
 func (self *MoneySystem) Start(ctx context.Context) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
-	if self.events != nil {
-		panic("double Start()")
-	}
 	self.Log = log2.ContextValueLogger(ctx)
 
-	self.events = make(chan Event, 2)
 	// TODO determine if combination of errors is fatal for money subsystem
 	if err := self.billInit(ctx); err != nil {
 		self.Log.Errorf("money.Start bill err=%v", errors.ErrorStack(err))
@@ -50,6 +49,16 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	if err := self.coinInit(ctx); err != nil {
 		self.Log.Errorf("money.Start coin err=%v", errors.ErrorStack(err))
 	}
+
+	ponr := engine.Func{
+		Name: "@money.ponr",
+		F: func(ctx context.Context) error {
+			curPrice := GetCurrentPrice(ctx)
+			err := self.WithdrawCommit(ctx, curPrice)
+			return errors.Annotatef(err, "curPrice=%s", curPrice.FormatCtx(ctx))
+		},
+	}
+	engine.GetEngine(ctx).Register("@money.ponr", ponr)
 
 	return nil
 }
@@ -64,6 +73,22 @@ func (self *MoneySystem) Stop(ctx context.Context) error {
 	self.billPoll.Wait()
 	self.coinPoll.Wait()
 	return helpers.FoldErrors(errs)
+}
+
+const currentPriceKey = "run/current-price"
+
+func GetCurrentPrice(ctx context.Context) currency.Amount {
+	v := ctx.Value(currentPriceKey)
+	if v == nil {
+		panic("code error ctx[currentPriceKey]=nil")
+	}
+	if p, ok := v.(currency.Amount); ok {
+		return p
+	}
+	panic(fmt.Sprintf("code error ctx[currentPriceKey] expected=currency.Amount actual=%#v", v))
+}
+func SetCurrentPrice(ctx context.Context, p currency.Amount) context.Context {
+	return context.WithValue(ctx, currentPriceKey, p)
 }
 
 func (self *MoneySystem) billInit(ctx context.Context) error {
@@ -87,7 +112,7 @@ func (self *MoneySystem) billInit(ctx context.Context) error {
 			self.Log.Debugf("money.bill credit amount=%s bill=%s total=%s",
 				pi.Amount().FormatCtx(ctx), self.billCredit.Total().FormatCtx(ctx), self.locked_credit(true).FormatCtx(ctx))
 			self.dirty += pi.Amount()
-			self.events <- Event{created: itemTime, name: EventCredit, amount: pi.Amount()}
+			self.EventFire(Event{created: itemTime, name: EventCredit, amount: pi.Amount()})
 			// maybe TODO escrow?
 		}
 		return false
@@ -116,7 +141,7 @@ func (self *MoneySystem) coinInit(ctx context.Context) error {
 			_ = self.coin.DoTubeStatus.Do(ctx)
 			_ = self.coin.CommandExpansionSendDiagStatus(nil)
 		case money.StatusReturnRequest:
-			self.events <- Event{created: itemTime, name: EventAbort}
+			self.EventFire(Event{created: itemTime, name: EventAbort})
 		case money.StatusRejected:
 			state.GetGlobal(ctx).Tele.StatModify(func(s *tele.Stat) { s.CoinRejected[uint32(pi.DataNominal)] += uint32(pi.DataCount) })
 		case money.StatusCredit:
@@ -127,7 +152,7 @@ func (self *MoneySystem) coinInit(ctx context.Context) error {
 			_ = self.coin.DoTubeStatus.Do(ctx)
 			_ = self.coin.CommandExpansionSendDiagStatus(nil)
 			self.dirty += pi.Amount()
-			self.events <- Event{created: itemTime, name: EventCredit, amount: pi.Amount()}
+			self.EventFire(Event{created: itemTime, name: EventCredit, amount: pi.Amount()})
 		default:
 			panic("unhandled coin POLL item: " + pi.String())
 		}

@@ -45,8 +45,25 @@ func (e *Event) String() string {
 	return fmt.Sprintf("money.Event<name=%s err='%s' created=%s amount=%s>", e.name, e.Error(), e.created.Format(time.RFC3339Nano), e.amount.Format100I())
 }
 
-func (self *MoneySystem) Events() <-chan Event {
-	return self.events
+type EventFunc func(Event)
+
+func (self *MoneySystem) EventFire(e Event) {
+	// built-in handlers
+	switch e.name {
+	case EventAbort:
+	}
+
+	self.subsLk.Lock()
+	for _, fun := range self.subs {
+		fun(e)
+	}
+	self.subsLk.Unlock()
+}
+
+func (self *MoneySystem) EventSubscribe(fun EventFunc) {
+	self.subsLk.Lock()
+	self.subs = append(self.subs, fun)
+	self.subsLk.Unlock()
 }
 
 var (
@@ -68,15 +85,14 @@ func (self *MoneySystem) locked_credit(includeEscrow bool) currency.Amount {
 func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amount) {
 	const tag = "money.accept-credit"
 
-	self.lk.Lock()
-	defer self.lk.Unlock()
-
 	config := state.GetConfig(ctx)
 	maxConfig := currency.Amount(config.Money.CreditMax)
 	// Accept limit = lesser of: configured max credit or highest menu price.
 	limit := maxConfig
 
+	self.lk.Lock()
 	available := self.locked_credit(true)
+	self.lk.Unlock()
 	if available != 0 && limit >= available {
 		limit -= available
 	}
@@ -109,6 +125,7 @@ func (self *MoneySystem) SetGiftCredit(ctx context.Context, value currency.Amoun
 	self.giftCredit = after
 	self.lk.Unlock()
 	self.Log.Infof("%s before=%s after=%s", tag, before.FormatCtx(ctx), after.FormatCtx(ctx))
+	go self.EventFire(Event{name: EventCredit, amount: value})
 }
 
 func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Amount) error {
@@ -169,6 +186,7 @@ func (self *MoneySystem) WithdrawCommit(ctx context.Context, amount currency.Amo
 	self.billCredit.Clear()
 	self.coinCredit.Clear()
 	self.giftCredit = 0
+	go self.EventFire(Event{name: EventCredit})
 
 	return nil
 }
@@ -195,6 +213,8 @@ func (self *MoneySystem) Abort(ctx context.Context) error {
 	self.billCredit.Clear()
 	self.coinCredit.Clear()
 	self.giftCredit = 0
+	go self.EventFire(Event{name: EventAbort})
+	go self.EventFire(Event{name: EventCredit})
 
 	return nil
 }

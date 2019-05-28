@@ -58,43 +58,37 @@ func main() {
 			return nil
 		}})
 
-	for {
-		menu := ui.NewUIMenu(ctx, menuMap)
+	menu := ui.NewUIMenu(ctx, menuMap)
+	moneysys.EventSubscribe(func(em money.Event) {
 		menu.SetCredit(moneysys.Credit(ctx))
+		log.Debugf("money event: %s", em.String())
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
+	})
 
-		stopCh := menu.StopChan()
-		go func() {
-			for {
-				select {
-				case <-stopCh:
-					return
-				case em := <-moneysys.Events():
-					log.Debugf("money event: %s", em.String())
-					switch em.Name() {
-					case money.EventCredit:
-						menu.SetCredit(moneysys.Credit(ctx))
-						moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
-					case money.EventAbort:
-						err := moneysys.Abort(ctx)
-						log.Infof("user requested abort err=%v", err)
-						menu.SetCredit(moneysys.Credit(ctx))
-						moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
-					default:
-						panic("head: unknown money event: " + em.String())
-					}
-				case cmd := <-telesys.CommandChan():
-					switch cmd.Task.(type) {
-					case *tele.Command_Abort:
-						err := moneysys.Abort(ctx)
-						telesys.CommandReplyErr(&cmd, err)
-						log.Infof("admin requested abort err=%v", err)
-						menu.SetCredit(moneysys.Credit(ctx))
-						moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
-					}
+	telesys := &config.Global().Tele
+	go func() {
+		stopCh := a.StopChan()
+		for {
+			select {
+			case <-stopCh:
+				return
+			case cmd := <-telesys.CommandChan():
+				switch cmd.Task.(type) {
+				case *tele.Command_Abort:
+					err := moneysys.Abort(ctx)
+					telesys.CommandReplyErr(&cmd, err)
+					log.Infof("admin requested abort err=%v", err)
+					menu.SetCredit(moneysys.Credit(ctx))
+					moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 				}
 			}
-		}()
+		}
+	}()
+
+	log.Debugf("vender-ui-dev init complete, running")
+	for a.IsRunning() {
+		menu.SetCredit(moneysys.Credit(ctx))
+		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 
 		result := menu.Run()
 		log.Debugf("result=%#v", result)

@@ -65,82 +65,63 @@ func main() {
 	if err = menuInit(ctx, menuMap); err != nil {
 		log.Fatalf("menu: %v", errors.ErrorStack(err))
 	}
-
-	log.Debugf("vender init complete, running")
-	for a.IsRunning() {
-		uiStep(ctx, moneysys, menuMap, a.StopChan())
-	}
-
-	a.Wait()
-}
-
-func uiStep(ctx context.Context, moneysys *money.MoneySystem, menuMap ui.Menu, stopCh <-chan struct{}) {
-	telesys := &state.GetGlobal(ctx).Tele
+	log.Debugf("menu len=%d", len(menuMap))
 
 	menu := ui.NewUIMenu(ctx, menuMap)
-	menu.SetCredit(moneysys.Credit(ctx))
-	moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
+	moneysys.EventSubscribe(func(em money.Event) {
+		menu.SetCredit(moneysys.Credit(ctx))
 
-	moneyUpdateCh := make(chan struct{})
-	defer close(moneyUpdateCh)
-	endCh := make(chan struct{})
-	defer close(endCh)
-	go func() { // propagate stopch to close(endch) to stop utility goroutines below
-		select {
-		case <-stopCh:
-			return
+		log.Debugf("money event: %s", em.String())
+		switch em.Name() {
+		case money.EventCredit:
+		case money.EventAbort:
+		default:
+			panic("head: unknown money event: " + em.String())
 		}
-	}()
+	})
+	telesys := &state.GetGlobal(ctx).Tele
 	go func() {
+		stopCh := a.StopChan()
 		for {
 			select {
-			case <-endCh:
+			case <-stopCh:
 				return
-			case em := <-moneysys.Events():
-				log.Debugf("money event: %s", em.String())
-				switch em.Name() {
-				case money.EventCredit:
-					moneyUpdateCh <- struct{}{}
-				case money.EventAbort:
-					err := moneysys.Abort(ctx)
-					log.Infof("user requested abort err=%v", err)
-					moneyUpdateCh <- struct{}{}
-				default:
-					panic("head: unknown money event: " + em.String())
-				}
 			case cmd := <-telesys.CommandChan():
 				switch cmd.Task.(type) {
 				case *tele.Command_Abort:
 					err := moneysys.Abort(ctx)
 					telesys.CommandReplyErr(&cmd, err)
 					log.Infof("admin requested abort err=%v", err)
-					moneyUpdateCh <- struct{}{}
 				case *tele.Command_SetGiftCredit:
 					moneysys.SetGiftCredit(ctx, currency.Amount(cmd.GetSetGiftCredit().Amount))
-					moneyUpdateCh <- struct{}{}
 				}
 			}
 		}
 	}()
-	go func() {
-		for {
-			select {
-			case <-endCh:
-				return
-			case <-moneyUpdateCh:
-				menu.SetCredit(moneysys.Credit(ctx))
-				moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
+
+	config.Global().Inventory.DisableAll()
+	log.Debugf("vender init complete, running")
+	// TODO listen /dev/input/event0 switch to AdminUI()
+	for a.IsRunning() {
+		menu.SetCredit(moneysys.Credit(ctx))
+		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
+
+		menuResult := menu.Run()
+		log.Debugf("menu result=%#v", menuResult)
+		if menuResult.Confirm {
+			itemCtx := money.SetCurrentPrice(ctx, menuResult.Item.Price)
+			err := menuResult.Item.D.Do(itemCtx)
+			if err == nil {
+				// telesys.
+			} else {
+				err = errors.Annotatef(err, "execute %s", menuResult.Item.String())
+				log.Errorf(errors.ErrorStack(err))
+				telesys.Error(err)
 			}
 		}
-	}()
-
-	menuResult := menu.Run()
-	log.Debugf("menu result=%#v", menuResult)
-	if !menuResult.Confirm {
-		return
 	}
 
-	menuResult.Item.D.Do(ctx)
+	a.Wait()
 }
 
 func sdnotify(s string) bool {

@@ -6,10 +6,14 @@ import (
 )
 
 func TestEvents01(t *testing.T) {
-	ms := MoneySystem{events: make(chan Event, 1)}
-	go func() { ms.events <- Event{name: EventPing} }()
+	ms := MoneySystem{}
+	received := make(chan Event, 1)
+	ms.EventSubscribe(func(ev Event) {
+		received <- ev
+	})
+	ms.EventFire(Event{name: EventPing})
 	select {
-	case e := <-ms.Events():
+	case e := <-received:
 		if e.Name() != EventPing {
 			t.Fatalf("Invalid event received: %s", e.String())
 		}
