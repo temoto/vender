@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-func TestDo(t testing.TB, ctx context.Context, name string) {
+func (e *Engine) TestDo(t testing.TB, ctx context.Context, name string) {
 	t.Helper()
-	e := GetEngine(ctx)
 	d := e.Resolve(name)
 	DoCheckError(t, d, ctx)
 }

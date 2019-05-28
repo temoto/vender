@@ -177,4 +177,6 @@ const MockContextKey = "test/mdb-mock"
 
 // sorry for this ugly convolution
 // working around import cycle on a time budget
-func MockFromContext(ctx context.Context) *MockUart { return ctx.Value(MockContextKey).(*MockUart) }
+func MockFromContext(ctx context.Context) *MockUart {
+	return ctx.Value(MockContextKey).(*MockUart)
+}

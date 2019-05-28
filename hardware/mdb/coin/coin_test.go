@@ -41,7 +41,7 @@ func mockInitRs() []mdb.MockR {
 }
 
 func mockContext(t testing.TB, rs []mdb.MockR) context.Context {
-	ctx := state.NewTestContext(t, testConfig)
+	ctx, _ := state.NewTestContext(t, testConfig)
 	mock := mdb.MockFromContext(ctx)
 	go func() {
 		mock.Expect(mockInitRs())
@@ -248,9 +248,9 @@ func BenchmarkCoinPoll(b *testing.B) {
 			}
 			ctx := mockContext(b, rs)
 
-			log := log2.ContextValueLogger(ctx)
-			log.SetLevel(log2.LError)
-			state.GetGlobal(ctx).Hardware.Mdb.Mdber.Log.SetLevel(log2.LError)
+			g := state.GetGlobal(ctx)
+			g.Log.SetLevel(log2.LError)
+			g.Hardware.Mdb.Mdber.Log.SetLevel(log2.LError)
 
 			defer mdb.MockFromContext(ctx).Close()
 			ca := newDevice(b, ctx)

@@ -11,6 +11,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
+	tele_config "github.com/temoto/vender/head/tele/config"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
@@ -19,20 +20,6 @@ const (
 	defaultConnectTimeout = 10 * time.Minute
 	defaultStateInterval  = 5 * time.Minute
 )
-
-type Config struct { //nolint:maligned
-	ConnectTimeoutSec int    `hcl:"connect_timeout_sec"`
-	Enabled           bool   `hcl:"enable"`
-	VmId              int    `hcl:"vm_id"`
-	LogDebug          bool   `hcl:"log_debug"`
-	MqttBroker        string `hcl:"mqtt_broker"`
-	MqttKeepaliveSec  int    `hcl:"keepalive_sec"`
-	MqttLogDebug      bool   `hcl:"mqtt_log_debug"`
-	MqttPassword      string `hcl:"mqtt_password"` // secret
-	StateIntervalSec  int    `hcl:"state_interval_sec"`
-	TlsCaFile         string `hcl:"tls_ca_file"`
-	TlsPsk            string `hcl:"tls_psk"` // secret
-}
 
 type Tele struct {
 	Log       *log2.Log
@@ -54,9 +41,9 @@ type Tele struct {
 	topicCommand   string
 }
 
-func (self *Tele) Init(ctx context.Context, tc Config) {
+func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config) {
 	// by default disabled
-	if !tc.Enabled {
+	if !teleConfig.Enabled {
 		return
 	}
 
@@ -64,9 +51,8 @@ func (self *Tele) Init(ctx context.Context, tc Config) {
 	self.stateCh = make(chan State)
 	self.cmdCh = make(chan Command, 2)
 	self.tmCh = make(chan Telemetry)
-	log := log2.ContextValueLogger(ctx)
 	self.Log = log.Clone(log2.LInfo)
-	if tc.LogDebug {
+	if teleConfig.LogDebug {
 		self.Log.SetLevel(log2.LDebug)
 	}
 	mqttLog := self.Log.Clone(log2.LDebug)
@@ -74,48 +60,48 @@ func (self *Tele) Init(ctx context.Context, tc Config) {
 	mqtt.CRITICAL = mqttLog
 	mqtt.ERROR = mqttLog
 	mqtt.WARN = mqttLog
-	if tc.MqttLogDebug {
+	if teleConfig.MqttLogDebug {
 		mqtt.DEBUG = mqttLog
 	}
 
-	mqttClientId := fmt.Sprintf("vm%d", tc.VmId)
+	mqttClientId := fmt.Sprintf("vm%d", teleConfig.VmId)
 	credFun := func() (string, string) {
-		return mqttClientId, tc.MqttPassword
+		return mqttClientId, teleConfig.MqttPassword
 	}
 
-	self.vmId = int32(tc.VmId)
+	self.vmId = int32(teleConfig.VmId)
 	self.topicPrefix = mqttClientId // coincidence
 	self.topicState = fmt.Sprintf("%s/w/1s", self.topicPrefix)
 	self.topicTelemetry = fmt.Sprintf("%s/w/1t", self.topicPrefix)
 	self.topicCommand = fmt.Sprintf("%s/r/c", self.topicPrefix)
 
-	connectTimeout := helpers.IntSecondDefault(tc.ConnectTimeoutSec, defaultConnectTimeout)
+	connectTimeout := helpers.IntSecondDefault(teleConfig.ConnectTimeoutSec, defaultConnectTimeout)
 	keepaliveTimeout := connectTimeout / 2
 	networkTimeout := keepaliveTimeout / 4
 	if networkTimeout < 1*time.Second {
 		networkTimeout = 1 * time.Second
 	}
-	self.stateInterval = helpers.IntSecondDefault(tc.StateIntervalSec, defaultStateInterval)
+	self.stateInterval = helpers.IntSecondDefault(teleConfig.StateIntervalSec, defaultStateInterval)
 
 	defaultHandler := func(_ mqtt.Client, msg mqtt.Message) {
 		self.Log.Errorf("unexpected mqtt message: %v", msg)
 	}
 
 	tlsconf := new(tls.Config)
-	if tc.TlsCaFile != "" {
+	if teleConfig.TlsCaFile != "" {
 		tlsconf.RootCAs = x509.NewCertPool()
-		cabytes, err := ioutil.ReadFile(tc.TlsCaFile)
+		cabytes, err := ioutil.ReadFile(teleConfig.TlsCaFile)
 		if err != nil {
 			panic(err)
 		}
 		tlsconf.RootCAs.AppendCertsFromPEM(cabytes)
 	}
-	if tc.TlsPsk != "" {
-		copy(tlsconf.SessionTicketKey[:], helpers.MustHex(tc.TlsPsk))
+	if teleConfig.TlsPsk != "" {
+		copy(tlsconf.SessionTicketKey[:], helpers.MustHex(teleConfig.TlsPsk))
 	}
 	willPayload := []byte{byte(State_Disconnected)}
 	self.mopt = mqtt.NewClientOptions().
-		AddBroker(tc.MqttBroker).
+		AddBroker(teleConfig.MqttBroker).
 		SetAutoReconnect(true).
 		SetBinaryWill(self.topicState, willPayload, 1, true).
 		SetCleanSession(false).
@@ -130,7 +116,7 @@ func (self *Tele) Init(ctx context.Context, tc Config) {
 		SetPingTimeout(networkTimeout).
 		SetTLSConfig(tlsconf).
 		SetWriteTimeout(networkTimeout)
-	if tc.MqttBroker == "mock" {
+	if teleConfig.MqttBroker == "mock" {
 		mock := GetMqttMock(ctx)
 		mock.MockNew(self.mopt)
 		self.m = mock

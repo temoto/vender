@@ -21,18 +21,18 @@ type DeviceConveyor struct {
 func (self *DeviceConveyor) Init(ctx context.Context) error {
 	self.calibrated = false
 	self.currentPos = 0
-	config := &state.GetConfig(ctx).Hardware.Evend.Conveyor
-	self.maxTimeout = speedDistanceDuration(float32(config.MinSpeed), uint(config.PositionMax))
-	self.minSpeed = uint16(config.MinSpeed)
+	g := state.GetGlobal(ctx)
+	devConfig := &g.Config().Hardware.Evend.Conveyor
+	self.maxTimeout = speedDistanceDuration(float32(devConfig.MinSpeed), uint(devConfig.PositionMax))
+	self.minSpeed = uint16(devConfig.MinSpeed)
 	if self.minSpeed == 0 {
 		self.minSpeed = 200
 	}
 	err := self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
 
-	e := engine.GetEngine(ctx)
 	doCalibrate := engine.Func{Name: "mdb.evend.conveyor.calibrate", F: self.calibrate}
 	doMove := engine.FuncArg{Name: "mdb.evend.conveyor.move", F: func(ctx context.Context, arg engine.Arg) error { return self.move(ctx, uint16(arg)) }}
-	e.RegisterNewSeq("mdb.evend.conveyor_move(?)", doCalibrate, doMove)
+	g.Engine.RegisterNewSeq("mdb.evend.conveyor_move(?)", doCalibrate, doMove)
 
 	return err
 }

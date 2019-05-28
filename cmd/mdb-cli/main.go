@@ -29,6 +29,8 @@ const usage = `syntax: commands separated by whitespace
 - loop=N   repeat N times all commands on this line
 `
 
+var log = log2.NewStderr(log2.LDebug)
+
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	devicePath := cmdline.String("device", "/dev/ttyAMA0", "")
@@ -38,11 +40,7 @@ func main() {
 	uarterName := cmdline.String("io", "file", "file|iodin|mega")
 	cmdline.Parse(os.Args[1:])
 
-	log := log2.NewStderr(log2.LDebug)
 	log.SetFlags(log2.LInteractiveFlags)
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log)
 
 	config := new(state.Config)
 	config.Money.Scale = 1 // XXX workaround required setting
@@ -51,14 +49,13 @@ func main() {
 	config.Hardware.Mdb.UartDriver = *uarterName
 	config.Hardware.Mega.Pin = *megaPin
 	config.Hardware.Mega.Spi = *megaSpi
-	if err := config.Init(ctx); err != nil {
+
+	ctx, g := state.NewContext(log)
+	g.MustInit(ctx, config)
+	if _, err := g.Mdber(); err != nil {
 		log.Fatal(err)
 	}
-	if _, err := config.Mdber(); err != nil {
-		log.Fatal(err)
-	}
-	defer config.Global().Hardware.Mdb.Uarter.Close()
-	ctx = state.ContextWithConfig(ctx, config)
+	defer g.Hardware.Mdb.Uarter.Close()
 
 	if err := doBusReset.Do(ctx); err != nil {
 		log.Fatal(err)
@@ -68,13 +65,12 @@ func main() {
 }
 
 var doUsage = engine.Func{F: func(ctx context.Context) error {
-	log := log2.ContextValueLogger(ctx)
 	log.Infof(usage)
 	return nil
 }}
 var doLogYes = engine.Func{Name: "log=yes", F: func(ctx context.Context) error {
-	config := state.GetConfig(ctx)
-	m, err := config.Mdber()
+	g := state.GetGlobal(ctx)
+	m, err := g.Mdber()
 	if err != nil {
 		return err
 	}
@@ -82,8 +78,8 @@ var doLogYes = engine.Func{Name: "log=yes", F: func(ctx context.Context) error {
 	return nil
 }}
 var doLogNo = engine.Func{Name: "log=no", F: func(ctx context.Context) error {
-	config := state.GetConfig(ctx)
-	m, err := config.Mdber()
+	g := state.GetGlobal(ctx)
+	m, err := g.Mdber()
 	if err != nil {
 		return err
 	}
@@ -91,8 +87,8 @@ var doLogNo = engine.Func{Name: "log=no", F: func(ctx context.Context) error {
 	return nil
 }}
 var doBusReset = engine.Func{Name: "reset", F: func(ctx context.Context) error {
-	config := state.GetConfig(ctx)
-	m, err := config.Mdber()
+	g := state.GetGlobal(ctx)
+	m, err := g.Mdber()
 	if err != nil {
 		return err
 	}
@@ -113,45 +109,40 @@ func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest 
 }
 
 func newExecutor(ctx context.Context) func(string) {
-	config := state.GetConfig(ctx)
-	log := config.Global().Log
+	g := state.GetGlobal(ctx)
 	return func(line string) {
 		d, err := parseLine(ctx, line)
 		if err != nil {
-			log.Errorf(errors.ErrorStack(err))
+			g.Log.Errorf(errors.ErrorStack(err))
 			// TODO continue when input is interactive (tty)
 			return
 		}
 		err = d.Do(ctx)
 		if err != nil {
-			log.Errorf(errors.ErrorStack(err))
+			g.Log.Errorf(errors.ErrorStack(err))
 		}
 	}
 }
 
 func newTx(request mdb.Packet) engine.Doer {
 	return engine.Func{Name: "mdb:" + request.Format(), F: func(ctx context.Context) error {
-		config := state.GetConfig(ctx)
-		log := config.Global().Log
-		m, err := config.Mdber()
+		g := state.GetGlobal(ctx)
+		m, err := g.Mdber()
 		if err != nil {
 			return err
 		}
 		response := new(mdb.Packet)
 		err = m.Tx(request, response)
 		if err != nil {
-			log.Errorf(errors.ErrorStack(err))
+			g.Log.Errorf(errors.ErrorStack(err))
 		} else {
-			log.Infof("< %s", response.Format())
+			g.Log.Infof("< %s", response.Format())
 		}
 		return err
 	}}
 }
 
 func parseLine(ctx context.Context, line string) (engine.Doer, error) {
-	config := state.GetConfig(ctx)
-	log := config.Global().Log
-
 	words := strings.Split(line, " ")
 	empty := true
 	for i, w := range words {

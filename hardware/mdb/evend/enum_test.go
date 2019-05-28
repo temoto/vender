@@ -3,7 +3,6 @@ package evend
 import (
 	"testing"
 
-	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/state"
 )
@@ -11,7 +10,7 @@ import (
 func TestRegister(t *testing.T) {
 	t.Parallel()
 
-	ctx := state.NewTestContext(t, "")
+	ctx, g := state.NewTestContext(t, "")
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{
@@ -31,16 +30,15 @@ func TestRegister(t *testing.T) {
 		{"43", ""}, {"420a", ""}, {"43", ""}, // hopper run
 	})
 
-	e := engine.GetEngine(ctx)
-	if err := e.RegisterParse("@hopper1(?)", "mdb.evend.conveyor_move(250) mdb.evend.hopper1_run(?)"); err != nil {
+	if err := g.Engine.RegisterParse("@hopper1(?)", "mdb.evend.conveyor_move(250) mdb.evend.hopper1_run(?)"); err != nil {
 		t.Error(err)
 	}
-	if err := e.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"); err != nil {
+	if err := g.Engine.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"); err != nil {
 		t.Error(err)
 	}
-	if err := e.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"); err != nil {
+	if err := g.Engine.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"); err != nil {
 		t.Error(err)
 	}
 
-	engine.TestDo(t, ctx, "@hopper1(10)")
+	g.Engine.TestDo(t, ctx, "@hopper1(10)")
 }

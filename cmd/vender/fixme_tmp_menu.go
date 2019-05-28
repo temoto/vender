@@ -10,7 +10,7 @@ import (
 )
 
 func menuInit(ctx context.Context, menuMap ui.Menu) error {
-	config := state.GetConfig(ctx)
+	config := state.GetGlobal(ctx).Config()
 
 	errs := make([]error, 0, 16)
 	for _, x := range config.Engine.Menu.Items {

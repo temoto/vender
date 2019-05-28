@@ -78,13 +78,13 @@ var (
 func (self *CoinAcceptor) Init(ctx context.Context) error {
 	const tag = "mdb.coin.Init"
 
-	config := state.GetConfig(ctx)
-	m, err := config.Mdber()
+	g := state.GetGlobal(ctx)
+	m, err := g.Mdber()
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
 	// TODO read settings from config
-	self.dev.Init(m.Tx, config.Global().Log, 0x08, "coin", binary.BigEndian)
+	self.dev.Init(m.Tx, g.Log, 0x08, "coin", binary.BigEndian)
 	self.dispenseTimeout = 5 * time.Second
 	self.scalingFactor = 1 // FIXME
 
@@ -92,7 +92,7 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	self.doSetup = self.newSetuper()
 	self.DoTubeStatus = self.NewTubeStatus()
 
-	engine := engine.GetEngine(ctx)
+	engine := state.GetGlobal(ctx).Engine
 	engine.Register("mdb.coin.restart", self.Restarter())
 
 	// TODO (Enum idea) no IO in Init(), call Restarter() outside

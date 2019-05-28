@@ -40,7 +40,8 @@ type MoneySystem struct {
 func (self *MoneySystem) Start(ctx context.Context) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
-	self.Log = log2.ContextValueLogger(ctx)
+	g := state.GetGlobal(ctx)
+	self.Log = g.Log
 
 	// TODO determine if combination of errors is fatal for money subsystem
 	if err := self.billInit(ctx); err != nil {
@@ -58,7 +59,7 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 			return errors.Annotatef(err, "curPrice=%s", curPrice.FormatCtx(ctx))
 		},
 	}
-	engine.GetEngine(ctx).Register("@money.ponr", ponr)
+	g.Engine.Register("@money.ponr", ponr)
 
 	return nil
 }

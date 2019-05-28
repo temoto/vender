@@ -24,10 +24,10 @@ type InputEvent struct {
 }
 
 func InputEvents(ctx context.Context, stopch <-chan struct{}) <-chan InputEvent {
-	config := state.GetConfig(ctx)
+	g := state.GetGlobal(ctx)
 
 	// support more input sources here
-	kb := config.Global().Hardware.Keyboard.Device
+	kb := g.Hardware.Keyboard.Device
 	kb.Drain()
 
 	ch := make(chan InputEvent)

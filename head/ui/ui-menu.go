@@ -55,10 +55,10 @@ var ScaleAlpha = []byte{
 
 type UIMenu struct {
 	// config
-	config       *state.Config
 	resetTimeout time.Duration
 
 	// state
+	g         *state.Global
 	alive     *alive.Alive
 	menu      Menu
 	credit    atomic.Value
@@ -77,7 +77,7 @@ type UIMenuResult struct {
 
 func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
 	self := &UIMenu{
-		config:    state.GetConfig(ctx),
+		g:         state.GetGlobal(ctx),
 		alive:     alive.NewAlive(),
 		menu:      menu,
 		refreshCh: make(chan struct{}),
@@ -87,8 +87,8 @@ func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
 			Sugar: DefaultSugar,
 		},
 	}
-	self.display = self.config.Global().Hardware.HD44780.Display
-	self.resetTimeout = helpers.IntSecondDefault(self.config.Engine.Menu.ResetTimeoutSec, 0)
+	self.display = self.g.Hardware.HD44780.Display
+	self.resetTimeout = helpers.IntSecondDefault(self.g.Config().Engine.Menu.ResetTimeoutSec, 0)
 	self.inputCh = InputEvents(ctx, self.alive.StopChan())
 	self.SetCredit(0)
 
@@ -127,7 +127,7 @@ init:
 		credit := self.credit.Load().(currency.Amount)
 		switch mode {
 		case modeMenuStatus:
-			l1 := self.display.Translate(self.config.Engine.Menu.MsgIntro)
+			l1 := self.display.Translate(self.g.Config().Engine.Menu.MsgIntro)
 			// TODO write state flags such as "no hot water" on line2
 			l2 := self.display.Translate("")
 			if (credit != 0) || (len(inputBuf) > 0) {

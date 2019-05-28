@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"os"
 
@@ -9,7 +8,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
-	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/tele"
@@ -33,25 +31,20 @@ func main() {
 	log.SetFlags(logFlags)
 	log.Debugf("hello")
 
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
-
-	config := state.MustReadConfig(ctx, state.NewOsFullReader(), *flagConfig)
-	config.MustInit(ctx)
-	log.Debugf("config=%+v", config)
-	ctx = state.ContextWithConfig(ctx, config)
+	ctx, g := state.NewContext(log)
+	g.MustInit(ctx, state.MustReadConfig(log, state.NewOsFullReader(), *flagConfig))
+	log.Debugf("config=%+v", g.Config())
 
 	moneysys := new(money.MoneySystem)
 	moneysys.Start(ctx)
 
-	mdber, err := config.Mdber()
+	mdber, err := g.Mdber()
 	if err != nil {
 		log.Fatalf("mdb init err=%v", errors.ErrorStack(err))
 	}
 
 	a := alive.NewAlive()
-	config.Global().Alive = a
+	g.Alive = a
 	mdber.BusResetDefault()
 
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
@@ -99,7 +92,7 @@ func main() {
 		}
 	}()
 
-	config.Global().Inventory.DisableAll()
+	g.Inventory.DisableAll()
 	log.Debugf("vender init complete, running")
 	// TODO listen /dev/input/event0 switch to AdminUI()
 	for a.IsRunning() {

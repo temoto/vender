@@ -2,12 +2,10 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"os"
 	"time"
 
-	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/tele"
@@ -25,25 +23,19 @@ func main() {
 
 	log.SetFlags(log2.LInteractiveFlags)
 
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
-	config := state.MustReadConfig(ctx, state.NewOsFullReader(), *flagConfig)
-	config.MustInit(ctx)
-	log.Debugf("config=%+v", config)
-	ctx = state.ContextWithConfig(ctx, config)
-	a := alive.NewAlive()
-	config.Global().Alive = a
+	ctx, g := state.NewContext(log)
+	g.MustInit(ctx, state.MustReadConfig(log, state.NewOsFullReader(), *flagConfig))
+	log.Debugf("config=%+v", g.Config())
 
 	log.Debugf("Init display")
-	d := config.Global().Hardware.HD44780.Display
+	d := g.Hardware.HD44780.Display
 	d.SetLine1("loaded")
 
 	moneysys := new(money.MoneySystem)
 	moneysys.Start(ctx)
 
 	menuMap := make(ui.Menu)
-	menuMap.Add(1, "chai", config.ScaleU(3),
+	menuMap.Add(1, "chai", g.Config().ScaleU(3),
 		engine.Func0{F: func() error {
 			d.SetLines("спасибо", "готовим...")
 			time.Sleep(7 * time.Second)
@@ -51,7 +43,7 @@ func main() {
 			time.Sleep(3 * time.Second)
 			return nil
 		}})
-	menuMap.Add(2, "coffee", config.ScaleU(5),
+	menuMap.Add(2, "coffee", g.Config().ScaleU(5),
 		engine.Func0{F: func() error {
 			d.SetLines("спасибо", "готовим...")
 			time.Sleep(7 * time.Second)
@@ -67,9 +59,9 @@ func main() {
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 	})
 
-	telesys := &config.Global().Tele
+	telesys := &g.Tele
 	go func() {
-		stopCh := a.StopChan()
+		stopCh := g.Alive.StopChan()
 		for {
 			select {
 			case <-stopCh:
@@ -88,7 +80,7 @@ func main() {
 	}()
 
 	log.Debugf("vender-ui-dev init complete, running")
-	for a.IsRunning() {
+	for g.Alive.IsRunning() {
 		menu.SetCredit(moneysys.Credit(ctx))
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 

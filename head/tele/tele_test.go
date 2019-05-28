@@ -7,14 +7,15 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	proto "github.com/golang/protobuf/proto"
+	tele_config "github.com/temoto/vender/head/tele/config"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
 
-func NewTestContext(t testing.TB, logLevel log2.Level) context.Context {
+func NewTestContext(t testing.TB, log *log2.Log) context.Context {
 	broker := NewMqttMock(t)
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, logLevel))
+	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = ContextWithMqttMock(ctx, broker)
 	return ctx
 }
@@ -39,12 +40,13 @@ func TestCommandReport(t *testing.T) {
 	topicCommand := fmt.Sprintf("vm%d/r/c", vmId)
 	topicState := fmt.Sprintf("vm%d/w/1s", vmId)
 	topicTelemetry := fmt.Sprintf("vm%d/w/1t", vmId)
-	conf := Config{
+	conf := tele_config.Config{
 		Enabled:    true,
 		VmId:       int(vmId),
 		MqttBroker: "mock",
 	}
-	ctx := NewTestContext(t, log2.LDebug)
+	log := log2.NewTest(t, log2.LDebug)
+	ctx := NewTestContext(t, log)
 	broker := GetMqttMock(ctx)
 	result := make(chan Telemetry)
 	broker.Subscribe(topicState, 0, func(_ mqtt.Client, msg mqtt.Message) {})
@@ -57,7 +59,7 @@ func TestCommandReport(t *testing.T) {
 		result <- *srvTm
 	})
 
-	tele.Init(ctx, conf)
+	tele.Init(ctx, log, conf)
 	outCmd := Command{
 		Id:   rand.Uint32(),
 		Task: &Command_Report{&Command_ArgReport{}},
@@ -84,16 +86,17 @@ func TestCommandSetGiftCredit(t *testing.T) {
 	vmId := -rand.Int31()
 	topicCommand := fmt.Sprintf("vm%d/r/c", vmId)
 	topicState := fmt.Sprintf("vm%d/w/1s", vmId)
-	conf := Config{
+	conf := tele_config.Config{
 		Enabled:    true,
 		VmId:       int(vmId),
 		MqttBroker: "mock",
 	}
-	ctx := NewTestContext(t, log2.LDebug)
+	log := log2.NewTest(t, log2.LDebug)
+	ctx := NewTestContext(t, log)
 	broker := GetMqttMock(ctx)
 	broker.Subscribe(topicState, 0, func(_ mqtt.Client, msg mqtt.Message) {})
 
-	tele.Init(ctx, conf)
+	tele.Init(ctx, log, conf)
 	outAmount := uint32(rand.Int31())
 	outCmd := Command{
 		Id:   rand.Uint32(),

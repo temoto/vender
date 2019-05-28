@@ -32,7 +32,7 @@ func mockInitRs() []mdb.MockR {
 }
 
 func testMake(t testing.TB, rs []mdb.MockR) (context.Context, *BillValidator) {
-	ctx := state.NewTestContext(t, testConfig)
+	ctx, _ := state.NewTestContext(t, testConfig)
 
 	mock := mdb.MockFromContext(ctx)
 	go func() {

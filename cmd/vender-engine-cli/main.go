@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"log"
 	"os"
 	"sort"
 	"strconv"
@@ -38,37 +39,31 @@ func main() {
 	log := log2.NewStderr(log2.LDebug)
 	log.SetFlags(log2.LInteractiveFlags)
 
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	eng := engine.NewEngine(ctx)
-	ctx = context.WithValue(ctx, engine.ContextKey, eng)
-
-	config := state.MustReadConfig(ctx, state.NewOsFullReader(), *flagConfig)
-	config.MustInit(ctx)
-	log.Debugf("config=%+v", config)
-	ctx = state.ContextWithConfig(ctx, config)
+	ctx, g := state.NewContext(log)
+	g.MustInit(ctx, state.MustReadConfig(log, state.NewOsFullReader(), *flagConfig))
+	log.Debugf("config=%+v", g.Config())
 
 	if err := doMdbBusReset.Do(ctx); err != nil {
 		log.Fatal(errors.ErrorStack(err))
 	}
 
-	eng.Register("mdb.bus_reset", doMdbBusReset)
-	eng.Register("@ponr", engine.Func0{Name: "@ponr", F: func() error {
-		eng.Log.Infof("- Point Of No Return")
+	g.Engine.Register("mdb.bus_reset", doMdbBusReset)
+	g.Engine.Register("@ponr", engine.Func0{Name: "@ponr", F: func() error {
+		g.Engine.Log.Infof("- Point Of No Return")
 		return nil
 	}})
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
 	// right now Enum does IO implicitly
 	hardware.Enum(ctx, nil)
-	config.Global().Inventory.DisableAll()
+	g.Inventory.DisableAll()
 	log.Debugf("devices init complete")
 
 	cli.MainLoop("vender-engine-cli", newExecutor(ctx), newCompleter(ctx))
 }
 
 func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest {
-	eng := engine.GetEngine(ctx)
-	actions := eng.List()
+	g := state.GetGlobal(ctx)
+	actions := g.Engine.List()
 	sort.Strings(actions)
 	suggests := make([]prompt.Suggest, 0, len(actions))
 	for _, a := range actions {
@@ -81,25 +76,24 @@ func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest 
 }
 
 func newExecutor(ctx context.Context) func(string) {
-	config := state.GetConfig(ctx)
-	log := config.Global().Log
+	g := state.GetGlobal(ctx)
 
 	return func(line string) {
 		d, err := parseLine(ctx, line)
 		if err != nil {
-			log.Errorf(errors.ErrorStack(err))
+			g.Log.Errorf(errors.ErrorStack(err))
 			return
 		}
 		err = d.Do(ctx)
 		if err != nil {
-			log.Errorf(errors.ErrorStack(err))
+			g.Log.Errorf(errors.ErrorStack(err))
 		}
 	}
 }
 
 var doMdbBusReset = engine.Func{Name: "mdb.bus_reset", F: func(ctx context.Context) error {
-	config := state.GetConfig(ctx)
-	m, err := config.Mdber()
+	g := state.GetGlobal(ctx)
+	m, err := g.Mdber()
 	if err != nil {
 		return err
 	}
@@ -107,17 +101,15 @@ var doMdbBusReset = engine.Func{Name: "mdb.bus_reset", F: func(ctx context.Conte
 }}
 
 var doUsage = engine.Func{F: func(ctx context.Context) error {
-	config := state.GetConfig(ctx)
-	log := config.Global().Log
-	log.Infof(usage)
+	g := state.GetGlobal(ctx)
+	g.Log.Infof(usage)
 	return nil
 }}
 
 func newTx(request mdb.Packet) engine.Doer {
 	return engine.Func{Name: "mdb:" + request.Format(), F: func(ctx context.Context) error {
-		config := state.GetConfig(ctx)
-		log := config.Global().Log
-		m, err := config.Mdber()
+		g := state.GetGlobal(ctx)
+		m, err := g.Mdber()
 		if err != nil {
 			return err
 		}
@@ -125,18 +117,16 @@ func newTx(request mdb.Packet) engine.Doer {
 		response := new(mdb.Packet)
 		err = m.Tx(request, response)
 		if err != nil {
-			log.Errorf(errors.ErrorStack(err))
+			g.Log.Errorf(errors.ErrorStack(err))
 		} else {
-			log.Infof("< %s", response.Format())
+			g.Log.Infof("< %s", response.Format())
 		}
 		return err
 	}}
 }
 
 func parseLine(ctx context.Context, line string) (engine.Doer, error) {
-	config := state.GetConfig(ctx)
-	log := config.Global().Log
-	eng := engine.GetEngine(ctx)
+	g := state.GetGlobal(ctx)
 
 	parts := strings.Split(line, " ")
 	words := make([]string, 0, len(parts))
@@ -178,7 +168,7 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 	tx := engine.NewSeq("input: " + line)
 	errs := make([]error, 0, 32)
 	for _, word := range wordsRest {
-		d, err := parseCommand(eng, word)
+		d, err := parseCommand(g.Engine, word)
 		if d == nil && err == nil {
 			log.Fatalf("code error parseCommand word='%s' both doer and err are nil", word)
 		}

@@ -21,11 +21,14 @@ func TestReadConfig(t *testing.T) {
 		expectErr string
 	}
 	cases := []Case{
-		{"empty", "", nil, "money.scale is not set"},
+		{"empty", "", func(t testing.TB, ctx context.Context) {
+			// c := GetConfig(ctx)
+			// TODO check defaults
+		}, ""},
 		{"mdb",
 			`hardware { mdb { uart_device = "/dev/shmoo" } } money { scale = 1 }`,
 			func(t testing.TB, ctx context.Context) {
-				c := GetConfig(ctx)
+				c := GetGlobal(ctx).Config()
 				helpers.AssertEqual(t, c.Hardware.Mdb.UartDevice, "/dev/shmoo")
 			},
 			"",
@@ -34,10 +37,9 @@ func TestReadConfig(t *testing.T) {
 engine {
 	alias "simple(?)" { scenario = "mock1 mock2(?)" }
 	alias "complex" { scenario = "simple(1) simple(2)" }
-}
-money { scale = 10 }`,
+}`,
 			func(t testing.TB, ctx context.Context) {
-				e := engine.GetEngine(ctx)
+				e := GetGlobal(ctx).Engine
 				mock1calls, mock2calls, mockArg := 0, 0, 0
 				e.Register("mock1", engine.Func0{F: func() error { mock1calls++; return nil }})
 				e.Register("mock2(?)", engine.FuncArg{F: func(_ context.Context, arg engine.Arg) error {
@@ -63,7 +65,7 @@ engine { menu {
 } }
 money { scale = 10 }`,
 			func(t testing.TB, ctx context.Context) {
-				c := GetConfig(ctx)
+				c := GetGlobal(ctx).Config()
 				items := c.Engine.Menu.Items
 				ok := len(items) == 2 &&
 					items[0].Name == "first" &&
@@ -90,33 +92,30 @@ include "./empty" {}`,
 include "money-scale-7" {}
 include "non-exist" { optional = true }`,
 			func(t testing.TB, ctx context.Context) {
-				c := GetConfig(ctx)
+				c := GetGlobal(ctx).Config()
 				helpers.AssertEqual(t, c.Money.Scale, 7)
 			}, ""},
 		{"include-overwrites", `
 money { scale = 1 }
 include "money-scale-7" {}`,
 			func(t testing.TB, ctx context.Context) {
-				c := GetConfig(ctx)
+				c := GetGlobal(ctx).Config()
 				helpers.AssertEqual(t, c.Money.Scale, 7)
 			}, ""},
 	}
 	mkCheck := func(c Case) func(*testing.T) {
 		return func(t *testing.T) {
 			log := log2.NewTest(t, log2.LDebug)
-			ctx := context.Background()
-			ctx = context.WithValue(ctx, log2.ContextKey, log)
-			ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
+			ctx, g := NewContext(log)
 			fs := NewMockFullReader(map[string]string{
 				"test-inline":   c.input,
 				"empty":         "",
 				"money-scale-7": "money{scale=7}",
 			})
-			cfg, err := ReadConfig(ctx, fs, "test-inline")
+			cfg, err := ReadConfig(log, fs, "test-inline")
 			if err == nil {
-				err = cfg.Init(ctx)
+				err = g.Init(ctx, cfg)
 			}
-			ctx = ContextWithConfig(ctx, cfg)
 			if c.expectErr == "" {
 				if err != nil {
 					t.Fatalf("error expected=nil actual='%v'", errors.ErrorStack(err))
@@ -137,13 +136,9 @@ include "money-scale-7" {}`,
 }
 
 func TestFunctionalBundled(t *testing.T) {
+	// not Parallel
 	t.Logf("this test needs OS open|read|stat access to file `../vender.hcl`")
+
 	log := log2.NewTest(t, log2.LDebug)
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	ctx = context.WithValue(ctx, engine.ContextKey, engine.NewEngine(ctx))
-	_, err := ReadConfig(ctx, NewOsFullReader(), "../vender.hcl")
-	if err != nil {
-		t.Error(err)
-	}
+	MustReadConfig(log, NewOsFullReader(), "../vender.hcl")
 }

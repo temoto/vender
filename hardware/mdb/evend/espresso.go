@@ -22,19 +22,18 @@ type DeviceEspresso struct {
 }
 
 func (self *DeviceEspresso) Init(ctx context.Context) error {
-	config := state.GetConfig(ctx)
-	espressoConfig := &config.Hardware.Evend.Espresso
+	g := state.GetGlobal(ctx)
+	espressoConfig := &g.Config().Hardware.Evend.Espresso
 	self.timeout = helpers.IntSecondDefault(espressoConfig.TimeoutSec, DefaultEspressoTimeout)
 	err := self.Generic.Init(ctx, 0xe8, "espresso", proto2)
 
-	self.coffeeStock = config.Global().Inventory.Register("coffee", DefaultCoffeeRate)
+	self.coffeeStock = g.Inventory.Register("coffee", DefaultCoffeeRate)
 
-	e := engine.GetEngine(ctx)
-	e.Register("mdb.evend.espresso_grind", self.NewGrind())
-	e.Register("mdb.evend.espresso_press", self.NewPress())
-	e.Register("mdb.evend.espresso_dispose", self.NewRelease())
-	e.Register("mdb.evend.espresso_heat_on", self.NewHeat(true))
-	e.Register("mdb.evend.espresso_heat_off", self.NewHeat(false))
+	g.Engine.Register("mdb.evend.espresso_grind", self.NewGrind())
+	g.Engine.Register("mdb.evend.espresso_press", self.NewPress())
+	g.Engine.Register("mdb.evend.espresso_dispose", self.NewRelease())
+	g.Engine.Register("mdb.evend.espresso_heat_on", self.NewHeat(true))
+	g.Engine.Register("mdb.evend.espresso_heat_off", self.NewHeat(false))
 
 	return err
 }

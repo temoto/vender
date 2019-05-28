@@ -13,9 +13,7 @@ func TestResolveLazyArg(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
-	e := NewEngine(ctx)
-	ctx = context.WithValue(ctx, ContextKey, e)
+	e := NewEngine(log2.NewTest(t, log2.LDebug))
 
 	// lazy reference simple(?) before register
 	e.RegisterNewSeq("@complex_seq(?)", e.MustResolveOrLazy("simple(?)"))
@@ -33,10 +31,10 @@ func TestResolveLazyArg(t *testing.T) {
 	}}
 	e.Register("simple(?)", simple)
 
-	TestDo(t, ctx, "@complex_seq(42)")
-	TestDo(t, ctx, "@complex_seq(42)") // same arg again
-	// TestDo(t, ctx, "@complex_tree(43)")
-	// TestDo(t, ctx, "@complex_tree(43)") // same arg again
+	e.TestDo(t, ctx, "@complex_seq(42)")
+	e.TestDo(t, ctx, "@complex_seq(42)") // same arg again
+	// e.TestDo(t, ctx, "@complex_tree(43)")
+	// e.TestDo(t, ctx, "@complex_tree(43)") // same arg again
 	// if success != 4 {
 	if success != 2 {
 		t.Errorf("success=%d", success)
@@ -46,10 +44,7 @@ func TestResolveLazyArg(t *testing.T) {
 func TestParseText(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
-	e := NewEngine(ctx)
-	// ctx = context.WithValue(ctx, ContextKey, e)
+	e := NewEngine(log2.NewTest(t, log2.LDebug))
 	action1, action2 := &mockdo{}, &mockdo{}
 	e.Register("hello", action1) // eager register
 

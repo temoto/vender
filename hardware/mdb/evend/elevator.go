@@ -19,11 +19,11 @@ type DeviceElevator struct {
 
 func (self *DeviceElevator) Init(ctx context.Context) error {
 	self.calibrated = false
-	config := &state.GetConfig(ctx).Hardware.Evend.Elevator
+	g := state.GetGlobal(ctx)
+	config := &g.Config().Hardware.Evend.Elevator
 	self.timeout = helpers.IntSecondDefault(config.TimeoutSec, 10*time.Second)
 	err := self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
-	e := engine.GetEngine(ctx)
 	doCalibrate := engine.Func{
 		Name: "mdb.evend.elevator.calibrate",
 		F:    self.calibrate,
@@ -45,7 +45,7 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 			return nil
 		},
 	}
-	e.RegisterNewSeq("mdb.evend.elevator_move(?)", doCalibrate, doMove)
+	g.Engine.RegisterNewSeq("mdb.evend.elevator_move(?)", doCalibrate, doMove)
 
 	return err
 }

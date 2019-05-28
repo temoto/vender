@@ -31,8 +31,8 @@ type DeviceValve struct {
 }
 
 func (self *DeviceValve) Init(ctx context.Context) error {
-	config := state.GetConfig(ctx)
-	valveConfig := &config.Hardware.Evend.Valve
+	g := state.GetGlobal(ctx)
+	valveConfig := &g.Config().Hardware.Evend.Valve
 	self.cautionPartMl = uint16(valveConfig.CautionPartMl)
 	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, 30*time.Second)
 	self.proto2BusyMask = valvePollBusy
@@ -43,29 +43,28 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	if rate == 0 {
 		rate = DefaultValveRate
 	}
-	self.waterStock = config.Global().Inventory.Register("water", rate)
+	self.waterStock = g.Inventory.Register("water", rate)
 
-	e := engine.GetEngine(ctx)
 	doSetTempHot := self.NewSetTempHot()
-	e.Register("mdb.evend.valve_get_temp_hot", self.NewGetTempHot())
-	e.Register("mdb.evend.valve_set_temp_hot(?)", doSetTempHot)
-	// e.Register("mdb.evend.valve_set_temp_hot_config", engine.Func{F: func(ctx context.Context) error {
+	g.Engine.Register("mdb.evend.valve_get_temp_hot", self.NewGetTempHot())
+	g.Engine.Register("mdb.evend.valve_set_temp_hot(?)", doSetTempHot)
+	// g.Engine.Register("mdb.evend.valve_set_temp_hot_config", engine.Func{F: func(ctx context.Context) error {
 	// 	cfg := &state.GetConfig(ctx).Hardware.Evend.Valve
 	// 	return engine.ArgApply(doSetTempHot, engine.Arg(cfg.TemperatureHot)).Do(ctx)
 	// }})
-	e.Register("mdb.evend.valve_pour_coffee(?)", self.NewPourCoffee())
-	e.Register("mdb.evend.valve_pour_cold(?)", self.NewPourCold())
-	e.Register("mdb.evend.valve_pour_hot(?)", self.NewPourHot())
-	e.Register("mdb.evend.valve_cold_open", self.NewValveCold(true))
-	e.Register("mdb.evend.valve_cold_close", self.NewValveCold(false))
-	e.Register("mdb.evend.valve_hot_open", self.NewValveHot(true))
-	e.Register("mdb.evend.valve_hot_close", self.NewValveHot(false))
-	e.Register("mdb.evend.valve_boiler_open", self.NewValveBoiler(true))
-	e.Register("mdb.evend.valve_boiler_close", self.NewValveBoiler(false))
-	e.Register("mdb.evend.valve_pump_coffee_start", self.NewPumpCoffee(true))
-	e.Register("mdb.evend.valve_pump_coffee_stop", self.NewPumpCoffee(false))
-	e.Register("mdb.evend.valve_pump_start", self.NewPump(true))
-	e.Register("mdb.evend.valve_pump_stop", self.NewPump(false))
+	g.Engine.Register("mdb.evend.valve_pour_coffee(?)", self.NewPourCoffee())
+	g.Engine.Register("mdb.evend.valve_pour_cold(?)", self.NewPourCold())
+	g.Engine.Register("mdb.evend.valve_pour_hot(?)", self.NewPourHot())
+	g.Engine.Register("mdb.evend.valve_cold_open", self.NewValveCold(true))
+	g.Engine.Register("mdb.evend.valve_cold_close", self.NewValveCold(false))
+	g.Engine.Register("mdb.evend.valve_hot_open", self.NewValveHot(true))
+	g.Engine.Register("mdb.evend.valve_hot_close", self.NewValveHot(false))
+	g.Engine.Register("mdb.evend.valve_boiler_open", self.NewValveBoiler(true))
+	g.Engine.Register("mdb.evend.valve_boiler_close", self.NewValveBoiler(false))
+	g.Engine.Register("mdb.evend.valve_pump_coffee_start", self.NewPumpCoffee(true))
+	g.Engine.Register("mdb.evend.valve_pump_coffee_stop", self.NewPumpCoffee(false))
+	g.Engine.Register("mdb.evend.valve_pump_start", self.NewPump(true))
+	g.Engine.Register("mdb.evend.valve_pump_stop", self.NewPump(false))
 
 	return err
 }

@@ -24,22 +24,22 @@ type DeviceMixer struct { //nolint:maligned
 func (self *DeviceMixer) Init(ctx context.Context) error {
 	self.calibrated = false
 	self.shakeSpeed = DefaultShakeSpeed
-	config := &state.GetConfig(ctx).Hardware.Evend.Mixer
+	g := state.GetGlobal(ctx)
+	config := &g.Config().Hardware.Evend.Mixer
 	self.moveTimeout = helpers.IntSecondDefault(config.MoveTimeoutSec, 10*time.Second)
 	self.shakeTimeout = helpers.IntMillisecondDefault(config.ShakeTimeoutMs, 300*time.Millisecond)
 	err := self.Generic.Init(ctx, 0xc8, "mixer", proto1)
 
-	e := engine.GetEngine(ctx)
 	doCalibrate := engine.Func{Name: "mdb.evend.mixer_calibrate", F: self.calibrate}
 	doMove := engine.FuncArg{Name: "mdb.evend.mixer_move", F: func(ctx context.Context, arg engine.Arg) error { return self.move(uint8(arg)).Do(ctx) }}
-	e.Register("mdb.evend.mixer_shake(?)",
+	g.Engine.Register("mdb.evend.mixer_shake(?)",
 		engine.FuncArg{Name: "mdb.evend.mixer_shake", F: func(ctx context.Context, arg engine.Arg) error {
 			return self.shake(uint8(arg)).Do(ctx)
 		}})
-	e.Register("mdb.evend.mixer_fan_on", self.NewFan(true))
-	e.Register("mdb.evend.mixer_fan_off", self.NewFan(false))
-	e.RegisterNewSeq("mdb.evend.mixer_move(?)", doCalibrate, doMove)
-	e.Register("mdb.evend.mixer_shake_set_speed(?)",
+	g.Engine.Register("mdb.evend.mixer_fan_on", self.NewFan(true))
+	g.Engine.Register("mdb.evend.mixer_fan_off", self.NewFan(false))
+	g.Engine.RegisterNewSeq("mdb.evend.mixer_move(?)", doCalibrate, doMove)
+	g.Engine.Register("mdb.evend.mixer_shake_set_speed(?)",
 		engine.FuncArg{Name: "mdb.evend.mixer.shake_set_speed", F: func(ctx context.Context, arg engine.Arg) error {
 			self.shakeSpeed = uint8(arg)
 			return nil

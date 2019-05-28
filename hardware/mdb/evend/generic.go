@@ -57,12 +57,12 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 	if self.dev.DelayReset == 0 {
 		self.dev.DelayReset = DefaultResetDelay
 	}
-	config := state.GetConfig(ctx)
-	m, err := config.Mdber()
+	g := state.GetGlobal(ctx)
+	m, err := g.Mdber()
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	self.dev.Init(m.Tx, config.Global().Log, address, name, binary.BigEndian)
+	self.dev.Init(m.Tx, g.Log, address, name, binary.BigEndian)
 
 	// FIXME Enum, remove IO from Init
 	if err = self.dev.NewReset().Do(ctx); err != nil {

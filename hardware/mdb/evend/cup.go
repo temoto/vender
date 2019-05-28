@@ -22,16 +22,15 @@ type DeviceCup struct {
 }
 
 func (self *DeviceCup) Init(ctx context.Context) error {
-	config := state.GetConfig(ctx)
+	g := state.GetGlobal(ctx)
 	err := self.Generic.Init(ctx, 0xe0, "cup", proto2)
 
-	self.cupStock = config.Global().Inventory.Register("cup", 1)
+	self.cupStock = g.Inventory.Register("cup", 1)
 
-	e := engine.GetEngine(ctx)
-	e.Register("mdb.evend.cup_dispense_proper", self.NewDispenseProper())
-	e.Register("mdb.evend.cup_light_on", self.NewLight(true))
-	e.Register("mdb.evend.cup_light_off", self.NewLight(false))
-	e.Register("mdb.evend.cup_ensure", self.NewEnsure())
+	g.Engine.Register("mdb.evend.cup_dispense_proper", self.NewDispenseProper())
+	g.Engine.Register("mdb.evend.cup_light_on", self.NewLight(true))
+	g.Engine.Register("mdb.evend.cup_light_off", self.NewLight(false))
+	g.Engine.Register("mdb.evend.cup_ensure", self.NewEnsure())
 
 	return err
 }
@@ -49,7 +48,7 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
 		Append(engine.Func{Name: tag + "/assert-busy", F: func(ctx context.Context) error {
-			cupConfig := &state.GetConfig(ctx).Hardware.Evend.Cup
+			cupConfig := &state.GetGlobal(ctx).Config().Hardware.Evend.Cup
 			time.Sleep(helpers.IntMillisecondDefault(cupConfig.AssertBusyDelayMs, DefaultCupAssertBusyDelay))
 			r := self.dev.Tx(self.dev.PacketPoll)
 			if r.E != nil {
@@ -67,7 +66,7 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 		}}).
 		Append(engine.Func{
 			F: func(ctx context.Context) error {
-				cupConfig := &state.GetConfig(ctx).Hardware.Evend.Cup
+				cupConfig := &state.GetGlobal(ctx).Config().Hardware.Evend.Cup
 				dispenseTimeout := helpers.IntSecondDefault(cupConfig.DispenseTimeoutSec, DefaultCupDispenseTimeout)
 				return self.Generic.NewWaitDone(tag, dispenseTimeout).Do(ctx)
 			},
@@ -91,7 +90,7 @@ func (self *DeviceCup) NewEnsure() engine.Doer {
 		Append(self.Generic.NewAction(tag, 0x04)).
 		Append(engine.Func{
 			F: func(ctx context.Context) error {
-				cupConfig := &state.GetConfig(ctx).Hardware.Evend.Cup
+				cupConfig := &state.GetGlobal(ctx).Config().Hardware.Evend.Cup
 				ensureTimeout := helpers.IntSecondDefault(cupConfig.EnsureTimeoutSec, DefaultCupEnsureTimeout)
 				return self.Generic.NewWaitDone(tag, ensureTimeout).Do(ctx)
 			},

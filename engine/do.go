@@ -55,6 +55,7 @@ type RepeatN struct {
 
 func (self RepeatN) Validate() error { return self.D.Validate() }
 func (self RepeatN) Do(ctx context.Context) error {
+	// FIXME solve import cycle, use GetGlobal(ctx).Log
 	log := log2.ContextValueLogger(ctx)
 	var err error
 	for i := uint(1); i <= self.N && err == nil; i++ {

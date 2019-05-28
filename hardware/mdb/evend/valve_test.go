@@ -13,7 +13,7 @@ import (
 func TestValve(t *testing.T) {
 	t.Parallel()
 
-	ctx := state.NewTestContext(t, "")
+	ctx, g := state.NewTestContext(t, "")
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{
@@ -30,7 +30,6 @@ func TestValve(t *testing.T) {
 		{"c3", "10"},
 		{"c3", ""},
 	})
-	e := engine.GetEngine(ctx)
 	d := new(DeviceValve)
 	// TODO make small delay default in tests
 	d.dev.DelayIdle = 1
@@ -41,7 +40,7 @@ func TestValve(t *testing.T) {
 		t.Fatalf("Init err=%v", err)
 	}
 
-	engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
+	g.Engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
 	helpers.AssertEqual(t, d.tempHot, uint8(23))
 
 	engine.DoCheckError(t, engine.ArgApply(d.NewSetTempHot(), 73), ctx)
@@ -49,6 +48,6 @@ func TestValve(t *testing.T) {
 	water := d.waterStock.Min() + rand.Int31() + 90
 	t.Logf("water before=%d", water)
 	d.waterStock.Set(water)
-	engine.DoCheckError(t, e.Resolve("mdb.evend.valve_pour_hot(90)"), ctx)
+	engine.DoCheckError(t, g.Engine.Resolve("mdb.evend.valve_pour_hot(90)"), ctx)
 	helpers.AssertEqual(t, d.waterStock.Value(), water-90)
 }

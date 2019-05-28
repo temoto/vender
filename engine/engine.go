@@ -1,8 +1,6 @@
 package engine
 
 import (
-	"context"
-	"fmt"
 	"regexp"
 	"strconv"
 	"sync"
@@ -13,28 +11,13 @@ import (
 	"github.com/temoto/vender/log2"
 )
 
-const ContextKey = "run/engine"
-
 type Engine struct {
 	Log     *log2.Log
 	lk      sync.Mutex
 	actions map[string]Doer
 }
 
-// Context[key] -> *Engine or panic
-func GetEngine(ctx context.Context) *Engine {
-	v := ctx.Value(ContextKey)
-	if v == nil {
-		panic(fmt.Errorf("context['%v'] is nil", ContextKey))
-	}
-	if cfg, ok := v.(*Engine); ok {
-		return cfg
-	}
-	panic(fmt.Errorf("context['%v'] expected type *Engine", ContextKey))
-}
-
-func NewEngine(ctx context.Context) *Engine {
-	log := log2.ContextValueLogger(ctx)
+func NewEngine(log *log2.Log) *Engine {
 	self := &Engine{
 		Log:     log,
 		actions: make(map[string]Doer, 64),

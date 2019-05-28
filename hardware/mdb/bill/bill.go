@@ -67,14 +67,14 @@ var (
 func (self *BillValidator) Init(ctx context.Context) error {
 	const tag = "mdb.bill.Init"
 
-	config := state.GetConfig(ctx)
-	m, err := config.Mdber()
+	g := state.GetGlobal(ctx)
+	m, err := g.Mdber()
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
 	// TODO read settings from config
 	self.configScaling = 100
-	self.dev.Init(m.Tx, config.Global().Log, 0x30, "bill", binary.BigEndian)
+	self.dev.Init(m.Tx, g.Log, 0x30, "bill", binary.BigEndian)
 
 	doInit := self.newIniter()
 	if err = doInit.Do(ctx); err != nil {
