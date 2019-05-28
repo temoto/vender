@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/tele"
@@ -31,6 +32,8 @@ func main() {
 	config.MustInit(ctx)
 	log.Debugf("config=%+v", config)
 	ctx = state.ContextWithConfig(ctx, config)
+	a := alive.NewAlive()
+	config.Global().Alive = a
 
 	log.Debugf("Init display")
 	d := config.Global().Hardware.HD44780.Display
@@ -38,7 +41,6 @@ func main() {
 
 	moneysys := new(money.MoneySystem)
 	moneysys.Start(ctx)
-	telesys := &config.Global().Tele
 
 	menuMap := make(ui.Menu)
 	menuMap.Add(1, "chai", config.ScaleU(3),

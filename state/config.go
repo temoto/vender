@@ -60,11 +60,16 @@ type Config struct {
 			Pin string `hcl:"pin"`
 		}
 	}
-	Menu struct {
-		MsgIntro        string      `hcl:"msg_intro"`
-		ResetTimeoutSec int         `hcl:"reset_sec"`
-		Items           []*MenuItem `hcl:"item"`
+
+	Engine struct {
+		Aliases []Alias `hcl:"alias"`
+		Menu    struct {
+			MsgIntro        string      `hcl:"msg_intro"`
+			ResetTimeoutSec int         `hcl:"reset_sec"`
+			Items           []*MenuItem `hcl:"item"`
+		}
 	}
+
 	Money struct {
 		Scale                int `hcl:"scale"`
 		CreditMax            int `hcl:"credit_max"`
@@ -76,6 +81,13 @@ type Config struct {
 type ConfigSource struct {
 	Name     string `hcl:"name,key"`
 	Optional bool   `hcl:"optional"`
+}
+
+type Alias struct {
+	Name     string `hcl:"name,key"`
+	Scenario string `hcl:"scenario"`
+
+	Doer engine.Doer `hcl:"-"`
 }
 
 type MenuItem struct {
@@ -237,8 +249,9 @@ func (c *Config) Init(ctx context.Context) error {
 	c.Money.CreditMax *= c.Money.Scale
 	c.Money.ChangeOverCompensate *= c.Money.Scale
 
+	// log := log2.ContextValueLogger(ctx)
 	e := engine.GetEngine(ctx)
-	for _, x := range c.Menu.Items {
+	for _, x := range c.Engine.Menu.Items {
 		var err error
 		x.Price = c.ScaleI(x.XXX_Price)
 		x.Doer, err = e.ParseText(x.Name, x.Scenario)
@@ -246,7 +259,18 @@ func (c *Config) Init(ctx context.Context) error {
 			errs = append(errs, err)
 			continue
 		}
+		// log.Debugf("config.engine.menu %s pxxx=%d ps=%d", x.String(), x.XXX_Price, x.Price)
 		e.Register("menu."+x.Code, x.Doer)
+	}
+	for _, x := range c.Engine.Aliases {
+		var err error
+		x.Doer, err = e.ParseText(x.Name, x.Scenario)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		// log.Debugf("config.engine.alias name=%s scenario=%s", x.Name, x.Scenario)
+		e.Register(x.Name, x.Doer)
 	}
 
 	return helpers.FoldErrors(errs)

@@ -88,7 +88,7 @@ func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
 		},
 	}
 	self.display = self.config.Global().Hardware.HD44780.Display
-	self.resetTimeout = helpers.IntSecondDefault(self.config.Menu.ResetTimeoutSec, 0)
+	self.resetTimeout = helpers.IntSecondDefault(self.config.Engine.Menu.ResetTimeoutSec, 0)
 	self.inputCh = InputEvents(ctx, self.alive.StopChan())
 	self.SetCredit(0)
 
@@ -105,14 +105,10 @@ func (self *UIMenu) SetCredit(a currency.Amount) {
 
 func (self *UIMenu) StopChan() <-chan struct{} { return self.alive.StopChan() }
 
-// func (self *UIMenu) Run(ctx context.Context) UIMenuResult {
 func (self *UIMenu) Run() UIMenuResult {
 	if !self.alive.IsRunning() {
-		panic("code error")
+		panic("code error UIMenu.alive stopped")
 	}
-
-	// wasted in rare case external stop
-	defer self.alive.Stop()
 
 	timer := time.NewTicker(200 * time.Millisecond)
 	inputBuf := make([]byte, 0, 32)
@@ -131,7 +127,7 @@ init:
 		credit := self.credit.Load().(currency.Amount)
 		switch mode {
 		case modeMenuStatus:
-			l1 := self.display.Translate(self.config.Menu.MsgIntro)
+			l1 := self.display.Translate(self.config.Engine.Menu.MsgIntro)
 			// TODO write state flags such as "no hot water" on line2
 			l2 := self.display.Translate("")
 			if (credit != 0) || (len(inputBuf) > 0) {

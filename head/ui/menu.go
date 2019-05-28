@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"fmt"
+	"log"
+
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 )
@@ -12,6 +15,10 @@ type MenuItem struct {
 	D     engine.Doer
 	Price currency.Amount
 	Code  uint16
+}
+
+func (self *MenuItem) String() string {
+	return fmt.Sprintf("menu code=%d price=%d(raw) name='%s'", self.Code, self.Price, self.Name)
 }
 
 func (self Menu) Add(code uint16, name string, price currency.Amount, d engine.Doer) {
@@ -26,7 +33,9 @@ func (self Menu) Add(code uint16, name string, price currency.Amount, d engine.D
 func (self Menu) MaxPrice() currency.Amount {
 	max := currency.Amount(0)
 	for _, item := range self {
-		if (item.D.Validate() == nil) && (item.Price > max) {
+		valErr := item.D.Validate()
+		log.Printf("val=%v %s", valErr, item.String())
+		if (valErr == nil) && (item.Price > max) {
 			max = item.Price
 		}
 	}
