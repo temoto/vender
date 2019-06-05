@@ -49,39 +49,10 @@ func TestWrap(t *testing.T) {
 	}
 }
 
-type MockDevicer struct {
-	l1   []byte
-	l2   []byte
-	c    Control
-	y, x uint8
-}
-
-func (self *MockDevicer) Clear()                       { self.l1 = nil; self.l2 = nil }
-func (self *MockDevicer) Control() Control             { return self.c }
-func (self *MockDevicer) SetControl(c Control) Control { old := self.c; self.c = c; return old }
-func (self *MockDevicer) CursorYX(y, x uint8) bool     { self.y, self.x = y, x; return true }
-func (self *MockDevicer) Write(b []byte) {
-	switch self.y {
-	case 1:
-		self.l1 = b
-	case 2:
-		self.l2 = b
-	}
-	// self.b = append(self.b, b...)
-}
-func (self *MockDevicer) String() string {
-	return fmt.Sprintf("%s\n%s", string(self.l1), string(self.l2))
-}
-
 func TestMessage(t *testing.T) {
 	t.Parallel()
 
-	mock := new(MockDevicer)
-	d, err := NewTextDisplay(8, "", 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	d.dev = mock
+	d, mock := NewMockTextDisplay(8, "", 0)
 	d.SetLines("hello", "cursor\x00")
 	helpers.AssertEqual(t, "hello   \ncursor", mock.String())
 	d.Message("padded", "msg", func() {
@@ -92,6 +63,7 @@ func TestMessage(t *testing.T) {
 
 func TestJustCenter(t *testing.T) {
 	t.Parallel()
+
 	d, err := NewTextDisplay(8, "", 0)
 	if err != nil {
 		t.Fatal(err)

@@ -6,8 +6,23 @@ import (
 	proto "github.com/golang/protobuf/proto"
 )
 
-func (self *Tele) CommandChan() <-chan Command { return self.cmdCh }
+const logMsgDisabled = "tele disabled"
+
+func (self *Tele) CommandChan() <-chan Command {
+	if !self.Enabled {
+		self.Log.Errorf(logMsgDisabled)
+		return nil
+	}
+
+	return self.cmdCh
+}
+
 func (self *Tele) CommandReplyErr(c *Command, e error) {
+	if !self.Enabled {
+		self.Log.Errorf(logMsgDisabled)
+		return
+	}
+
 	if c.ReplyTopic == "" {
 		self.Log.Errorf("CommandReplyErr with empty reply_topic")
 		return
@@ -28,14 +43,42 @@ func (self *Tele) CommandReplyErr(c *Command, e error) {
 }
 
 func (self *Tele) StatModify(fun func(s *Stat)) {
+	if !self.Enabled {
+		self.Log.Errorf(logMsgDisabled)
+		return
+	}
+
 	self.stat.Lock()
 	fun(&self.stat)
 	self.stat.Unlock()
 }
 
 func (self *Tele) Transaction() {
+	if !self.Enabled {
+		self.Log.Errorf(logMsgDisabled)
+		return
+	}
+
 }
 
 func (self *Tele) Error(err error) {
+	if !self.Enabled {
+		self.Log.Errorf(logMsgDisabled)
+		return
+	}
+
 	self.stateCh <- State_Problem
+	// FIXME send err
+	self.Log.Errorf("tele.Error err=%v", err)
+}
+
+func (self *Tele) Service(msg string) {
+	if !self.Enabled {
+		self.Log.Errorf(logMsgDisabled)
+		return
+	}
+
+	self.stateCh <- State_Service
+	// FIXME send msg
+	self.Log.Infof("tele.Service msg=%s", msg)
 }

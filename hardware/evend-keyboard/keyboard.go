@@ -8,7 +8,7 @@ import (
 
 const KeyMaskUp = 0x80
 
-type Key byte
+type Key uint16
 
 const (
 	KeyInvalid   Key = 0
@@ -20,6 +20,11 @@ const (
 	KeySugarMore Key = 'D'
 	KeyDot       Key = 'E'
 )
+
+type Inputer interface {
+	Drain()
+	Wait(timeout time.Duration) (bool, Key)
+}
 
 type Keyboard struct {
 	// mu     sync.Mutex
@@ -52,6 +57,27 @@ func (self *Keyboard) Drain() {
 	}
 }
 
+func (self *Keyboard) Wait(timeout time.Duration) (bool, Key) {
+	v, ok := self.wait(timeout)
+	if !ok {
+		return false, KeyInvalid
+	}
+	return self.parse(v)
+}
+
+func WaitUp(kb Inputer, timeout time.Duration) Key {
+	for {
+		up, key := kb.Wait(timeout)
+		// log.Printf("keyboard.WaitUp=%t,%x", up, key)
+		if key == KeyInvalid {
+			return KeyInvalid
+		}
+		if up {
+			return key
+		}
+	}
+}
+
 func (self *Keyboard) parse(v16 uint16) (bool, Key) {
 	value := Key(v16)
 	up := value&KeyMaskUp != 0
@@ -68,25 +94,5 @@ func (self *Keyboard) wait(timeout time.Duration) (uint16, bool) {
 		return v, true
 	case <-time.After(timeout):
 		return 0, false
-	}
-}
-
-func (self *Keyboard) Wait(timeout time.Duration) (bool, Key) {
-	v, ok := self.wait(timeout)
-	if !ok {
-		return false, KeyInvalid
-	}
-	return self.parse(v)
-}
-
-func (self *Keyboard) WaitUp(timeout time.Duration) Key {
-	for {
-		up, key := self.Wait(timeout)
-		if key == KeyInvalid {
-			return KeyInvalid
-		}
-		if up {
-			return key
-		}
 	}
 }

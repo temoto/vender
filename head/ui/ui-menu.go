@@ -59,11 +59,10 @@ type UIMenu struct {
 
 	// state
 	g         *state.Global
-	alive     *alive.Alive
 	menu      Menu
 	credit    atomic.Value
-	display   *lcd.TextDisplay
-	inputCh   <-chan InputEvent
+	display   *lcd.TextDisplay // FIXME
+	inputCh   <-chan state.InputEvent
 	refreshCh chan struct{}
 	result    UIMenuResult
 }
@@ -78,7 +77,6 @@ type UIMenuResult struct {
 func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
 	self := &UIMenu{
 		g:         state.GetGlobal(ctx),
-		alive:     alive.NewAlive(),
 		menu:      menu,
 		refreshCh: make(chan struct{}),
 		result: UIMenuResult{
@@ -88,8 +86,8 @@ func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
 		},
 	}
 	self.display = self.g.Hardware.HD44780.Display
+	self.inputCh = self.g.InputChan()
 	self.resetTimeout = helpers.IntSecondDefault(self.g.Config().Engine.Menu.ResetTimeoutSec, 0)
-	self.inputCh = InputEvents(ctx, self.alive.StopChan())
 	self.SetCredit(0)
 
 	return self
@@ -103,13 +101,12 @@ func (self *UIMenu) SetCredit(a currency.Amount) {
 	}
 }
 
-func (self *UIMenu) StopChan() <-chan struct{} { return self.alive.StopChan() }
+// func (self *UIMenu) StopChan() <-chan struct{} { return self.alive.StopChan() }
 
-func (self *UIMenu) Run() UIMenuResult {
-	if !self.alive.IsRunning() {
-		panic("code error UIMenu.alive stopped")
-	}
+func (self *UIMenu) Run(alive *alive.Alive) UIMenuResult {
+	defer alive.Stop()
 
+	state.InputDrain(self.inputCh)
 	timer := time.NewTicker(200 * time.Millisecond)
 	inputBuf := make([]byte, 0, 32)
 
@@ -122,7 +119,7 @@ init:
 	mode := modeMenuStatus
 	lastActivity := time.Now()
 
-	for self.alive.IsRunning() {
+	for alive.IsRunning() {
 		// step 1: refresh display
 		credit := self.credit.Load().(currency.Amount)
 		switch mode {
@@ -140,7 +137,7 @@ init:
 
 		// step 2: wait for input/timeout
 	waitInput:
-		var e InputEvent
+		var e state.InputEvent
 		select {
 		case e = <-self.inputCh:
 			lastActivity = time.Now()
@@ -163,18 +160,18 @@ init:
 
 		// step 3: handle input/timeout
 		switch e.Kind {
-		case InputOther:
+		case state.InputOther:
 			mode = self.handleCreamSugar(mode, e.Key)
 			goto handleEnd
-		case InputNothing:
-			panic("code error InputNothing")
+		case state.InputNothing:
+			panic("code error state.InputNothing")
 		}
 		switch mode {
 		case modeMenuStatus:
 			switch e.Kind {
-			case InputNormal:
+			case state.InputNormal:
 				inputBuf = append(inputBuf, byte(e.Key))
-			case InputReject:
+			case state.InputReject:
 				// backspace semantic
 				if len(inputBuf) > 0 {
 					inputBuf = inputBuf[:len(inputBuf)-1]
@@ -183,7 +180,7 @@ init:
 
 				self.result = UIMenuResult{Confirm: false}
 				return self.result
-			case InputAccept:
+			case state.InputAccept:
 				if len(inputBuf) == 0 {
 					self.ConveyError(msgMenuCodeEmpty)
 					break
@@ -211,15 +208,11 @@ init:
 				self.result.Confirm = true
 				self.result.Item = mitem
 
-				// debug
-				self.ConveyText("debug", fmt.Sprintf("%s +%d +%d",
-					self.result.Item.Name, self.result.Cream, self.result.Sugar))
-
 				return self.result
 			}
 		case modeMenuCream, modeMenuSugar:
 			switch e.Kind {
-			case InputReject, InputAccept:
+			case state.InputReject, state.InputAccept:
 				mode = modeMenuStatus // "return to previous mode"
 			}
 		}
@@ -239,15 +232,6 @@ func (self *UIMenu) ConveyError(text string) {
 		case <-self.refreshCh:
 		case <-self.inputCh:
 		case <-time.After(timeout):
-		}
-	})
-}
-
-func (self *UIMenu) ConveyText(line1, line2 string) {
-	self.display.Message(line1, line2, func() {
-		select {
-		case <-self.refreshCh:
-		case <-self.inputCh:
 		}
 	})
 }

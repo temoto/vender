@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/juju/errors"
+	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/tele"
@@ -30,6 +32,7 @@ func main() {
 	log.Debugf("Init display")
 	d := g.Hardware.HD44780.Display
 	d.SetLine1("loaded")
+	d.SetLine2("test long wrap bla bla hello world")
 
 	moneysys := new(money.MoneySystem)
 	moneysys.Start(ctx)
@@ -52,9 +55,11 @@ func main() {
 			return nil
 		}})
 
-	menu := ui.NewUIMenu(ctx, menuMap)
+	uiClient := ui.NewUIMenu(ctx, menuMap)
+	uiService := ui.NewUIService(ctx)
+
 	moneysys.EventSubscribe(func(em money.Event) {
-		menu.SetCredit(moneysys.Credit(ctx))
+		uiClient.SetCredit(moneysys.Credit(ctx))
 		log.Debugf("money event: %s", em.String())
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 	})
@@ -72,7 +77,7 @@ func main() {
 					err := moneysys.Abort(ctx)
 					telesys.CommandReplyErr(&cmd, err)
 					log.Infof("admin requested abort err=%v", err)
-					menu.SetCredit(moneysys.Credit(ctx))
+					uiClient.SetCredit(moneysys.Credit(ctx))
 					moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 				}
 			}
@@ -80,28 +85,40 @@ func main() {
 	}()
 
 	log.Debugf("vender-ui-dev init complete, running")
-	for g.Alive.IsRunning() {
-		menu.SetCredit(moneysys.Credit(ctx))
+	runUiClient := func(uia *alive.Alive) {
+		uiClient.SetCredit(moneysys.Credit(ctx))
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
-
-		result := menu.Run()
-		log.Debugf("result=%#v", result)
-		if !result.Confirm {
-			continue
-		}
-
-		err := moneysys.WithdrawPrepare(ctx, result.Item.Price)
-		if err == money.ErrNeedMoreMoney {
-			log.Errorf("menuitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
-		} else if err == nil {
-			if err = result.Item.D.Do(ctx); err != nil {
-				log.Errorf("menuitem=%v execute err=%v", result.Item, err)
-				moneysys.Abort(ctx)
+		result := uiClient.Run(uia)
+		log.Debugf("uiClient result=%#v", result)
+		if result.Confirm {
+			itemCtx := money.SetCurrentPrice(ctx, result.Item.Price)
+			err := result.Item.D.Do(itemCtx)
+			if err == nil {
+				// telesys.
 			} else {
-				moneysys.WithdrawCommit(ctx, result.Item.Price)
+				err = errors.Annotatef(err, "execute %s", result.Item.String())
+				log.Errorf(errors.ErrorStack(err))
+				telesys.Error(err)
 			}
-		} else {
-			log.Errorf("menuitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
 		}
+	}
+	// TODO listen /dev/input/event0 switch to service UI
+	_ = uiService
+
+	for g.Alive.IsRunning() {
+		g.UISwitch(state.FuncRunner(runUiClient), false)
+		// err := moneysys.WithdrawPrepare(ctx, result.Item.Price)
+		// if err == money.ErrNeedMoreMoney {
+		// 	log.Errorf("uiClientitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
+		// } else if err == nil {
+		// 	if err = result.Item.D.Do(ctx); err != nil {
+		// 		log.Errorf("uiClientitem=%v execute err=%v", result.Item, err)
+		// 		moneysys.Abort(ctx)
+		// 	} else {
+		// 		moneysys.WithdrawCommit(ctx, result.Item.Price)
+		// 	}
+		// } else {
+		// 	log.Errorf("uiClientitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
+		// }
 	}
 }

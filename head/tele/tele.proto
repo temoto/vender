@@ -7,6 +7,7 @@ enum State {
   Work = 2;
   Disconnected = 3;
   Problem = 4;
+  Service = 5;
 }
 
 // Optimising for rare, bulk delivery on cell network.

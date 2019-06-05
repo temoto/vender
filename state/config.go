@@ -67,6 +67,17 @@ type Config struct {
 	}
 	Tele tele_config.Config
 
+	UI struct {
+		Service struct {
+			Auth struct {
+				Enable    bool     `hcl:"enable"`
+				Passwords []string `hcl:"passwords"`
+			}
+			MsgAuth         string `hcl:"msg_auth"`
+			ResetTimeoutSec int    `hcl:"reset_sec"`
+		}
+	}
+
 	_unused_copy_guard sync.Mutex
 }
 

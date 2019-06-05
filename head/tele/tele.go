@@ -22,6 +22,7 @@ const (
 )
 
 type Tele struct {
+	Enabled   bool
 	Log       *log2.Log
 	m         mqtt.Client
 	mopt      *mqtt.ClientOptions
@@ -42,8 +43,12 @@ type Tele struct {
 }
 
 func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config) {
-	// by default disabled
-	if !teleConfig.Enabled {
+	self.Enabled = teleConfig.Enabled
+	self.Log = log.Clone(log2.LInfo)
+	if teleConfig.LogDebug {
+		self.Log.SetLevel(log2.LDebug)
+	}
+	if !self.Enabled {
 		return
 	}
 
@@ -51,10 +56,6 @@ func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	self.stateCh = make(chan State)
 	self.cmdCh = make(chan Command, 2)
 	self.tmCh = make(chan Telemetry)
-	self.Log = log.Clone(log2.LInfo)
-	if teleConfig.LogDebug {
-		self.Log.SetLevel(log2.LDebug)
-	}
 	mqttLog := self.Log.Clone(log2.LDebug)
 	// TODO wrap with level filter and prefix "tele.mqtt critical/error/warn/debug"
 	mqtt.CRITICAL = mqttLog

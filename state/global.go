@@ -23,8 +23,9 @@ import (
 )
 
 type Global struct {
-	c  *Config
-	lk sync.Mutex
+	c    *Config
+	inch <-chan InputEvent
+	lk   sync.Mutex
 
 	Alive    *alive.Alive
 	Engine   *engine.Engine
@@ -34,7 +35,7 @@ type Global struct {
 			Display *lcd.TextDisplay
 		}
 		Keyboard struct {
-			Device *keyboard.Keyboard
+			Device keyboard.Inputer
 		}
 		Mdb struct {
 			Mdber  *mdb.Mdb
@@ -42,6 +43,11 @@ type Global struct {
 		}
 		Iodin atomic.Value // *iodin.Client
 		Mega  atomic.Value // *mega.Client
+	}
+	UI struct {
+		// lk sync.RWMutex
+		// currentName  string
+		currentAlive atomic.Value // *alive.Alive
 	}
 
 	Inventory *inventory.Inventory
@@ -259,6 +265,15 @@ func (g *Global) Mega() (*mega.Client, error) {
 	g.Hardware.Mega.Store(client)
 
 	return client, nil
+}
+
+func (g *Global) InputChan() <-chan InputEvent {
+	g.lk.Lock()
+	if g.inch == nil {
+		g.inch = newInputEvents(g, g.Alive.StopChan())
+	}
+	g.lk.Unlock()
+	return g.inch
 }
 
 func NewTestContext(t testing.TB, confString string /* logLevel log2.Level*/) (context.Context, *Global) {

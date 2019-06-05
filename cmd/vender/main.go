@@ -43,8 +43,6 @@ func main() {
 		log.Fatalf("mdb init err=%v", errors.ErrorStack(err))
 	}
 
-	a := alive.NewAlive()
-	g.Alive = a
 	mdber.BusResetDefault()
 
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
@@ -55,14 +53,16 @@ func main() {
 	sdnotify(daemon.SdNotifyReady)
 
 	menuMap := make(ui.Menu)
-	if err = menuInit(ctx, menuMap); err != nil {
-		log.Fatalf("menu: %v", errors.ErrorStack(err))
+	if err = menuMap.Init(ctx); err != nil {
+		log.Fatalf("uiClient: %v", errors.ErrorStack(err))
 	}
-	log.Debugf("menu len=%d", len(menuMap))
+	log.Debugf("uiClient len=%d", len(menuMap))
 
-	menu := ui.NewUIMenu(ctx, menuMap)
+	uiClient := ui.NewUIMenu(ctx, menuMap)
+	uiService := ui.NewUIService(ctx)
+
 	moneysys.EventSubscribe(func(em money.Event) {
-		menu.SetCredit(moneysys.Credit(ctx))
+		uiClient.SetCredit(moneysys.Credit(ctx))
 
 		log.Debugf("money event: %s", em.String())
 		switch em.Name() {
@@ -74,7 +74,7 @@ func main() {
 	})
 	telesys := &state.GetGlobal(ctx).Tele
 	go func() {
-		stopCh := a.StopChan()
+		stopCh := g.Alive.StopChan()
 		for {
 			select {
 			case <-stopCh:
@@ -94,13 +94,12 @@ func main() {
 
 	g.Inventory.DisableAll()
 	log.Debugf("vender init complete, running")
-	// TODO listen /dev/input/event0 switch to AdminUI()
-	for a.IsRunning() {
-		menu.SetCredit(moneysys.Credit(ctx))
-		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 
-		menuResult := menu.Run()
-		log.Debugf("menu result=%#v", menuResult)
+	runUiClient := func(uia *alive.Alive) {
+		uiClient.SetCredit(moneysys.Credit(ctx))
+		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
+		menuResult := uiClient.Run(uia)
+		log.Debugf("uiClient result=%#v", menuResult)
 		if menuResult.Confirm {
 			itemCtx := money.SetCurrentPrice(ctx, menuResult.Item.Price)
 			err := menuResult.Item.D.Do(itemCtx)
@@ -113,8 +112,13 @@ func main() {
 			}
 		}
 	}
+	// TODO listen /dev/input/event0 switch to service UI
+	_ = uiService
 
-	a.Wait()
+	for g.Alive.IsRunning() {
+		g.UISwitch(state.FuncRunner(runUiClient), false)
+	}
+	g.Alive.Wait()
 }
 
 func sdnotify(s string) bool {
