@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
+	gpio "github.com/temoto/gpio-cdev-go"
 	"github.com/temoto/vender/log2"
-	"periph.io/x/periph/conn/gpio"
-	"periph.io/x/periph/conn/gpio/gpioreg"
 	"periph.io/x/periph/conn/physic"
 	"periph.io/x/periph/conn/spi"
 	"periph.io/x/periph/conn/spi/spireg"
@@ -23,14 +23,15 @@ const modName string = "mega-client"
 const DefaultTimeout = 100 * time.Millisecond
 
 var ErrResponseEmpty = errors.New("mega response empty")
+var ErrRequestBusy = errors.New("mega request busy")
 
 type Client struct {
 	Log      *log2.Log
 	TwiChan  chan uint16
 	txlk     sync.Mutex
+	readCh   chan FrameError
 	spiPort  spi.Port
 	spiConn  spi.Conn
-	pin      gpio.PinIO
 	refcount int32
 	alive    *alive.Alive
 	stat     Stat
@@ -42,8 +43,18 @@ type Stat struct {
 	Reset     uint32
 }
 
-func NewClient(bus string, notifyPinName string, log *log2.Log) (*Client, error) {
-	if _, err := host.Init(); err != nil {
+type FrameError struct {
+	f Frame
+	e error
+}
+
+func NewClient(bus string, notifyPinChip, notifyPinName string, log *log2.Log) (*Client, error) {
+	notifyPinLine, err := strconv.ParseUint(notifyPinName, 10, 16)
+	if err != nil {
+		return nil, errors.Annotate(err, "notify pin must be number TODO implement name lookup")
+	}
+
+	if _, err = host.Init(); err != nil {
 		return nil, errors.Annotate(err, "periph/init")
 	}
 
@@ -51,7 +62,7 @@ func NewClient(bus string, notifyPinName string, log *log2.Log) (*Client, error)
 	if err != nil {
 		return nil, errors.Annotate(err, "SPI Open")
 	}
-	spiSpeed := 400 * physic.KiloHertz
+	spiSpeed := 200 * physic.KiloHertz
 	spiMode := spi.Mode(0)
 	spiConn, err := spiPort.Connect(spiSpeed, spiMode, 8)
 	if err != nil {
@@ -59,43 +70,46 @@ func NewClient(bus string, notifyPinName string, log *log2.Log) (*Client, error)
 		return nil, errors.Annotate(err, "SPI Connect")
 	}
 
-	pin := gpioreg.ByName(notifyPinName)
-	if pin == nil {
-		spiPort.Close()
-		return nil, errors.Annotate(err, "notify pin open")
-	}
-	err = pin.In(gpio.PullDown, gpio.RisingEdge)
+	pinChip, err := gpio.Open(notifyPinChip, "vender-mega")
 	if err != nil {
 		spiPort.Close()
-		return nil, errors.Annotate(err, "notify pin setup")
+		return nil, errors.Annotatef(err, "notify pin open chip=%s", notifyPinChip)
 	}
 
 	self := &Client{
 		Log:     log,
 		spiPort: spiPort,
 		spiConn: spiConn,
-		pin:     pin,
+		readCh:  make(chan FrameError),
 		alive:   alive.NewAlive(),
 		TwiChan: make(chan uint16, TWI_LISTEN_MAX_LENGTH/2),
 	}
 
+	pinev, err := pinChip.GetLineEvent(uint32(notifyPinLine), 0,
+		gpio.GPIOEVENT_REQUEST_RISING_EDGE, "vender-mega")
+	if err != nil {
+		log.Error(errors.Annotate(err, "gpio.EventLoop"))
+		self.alive.Stop()
+	}
+
+	go self.readLoop(pinev)
+
 	// try to read RESET
-	f := new(Frame)
-	err = self.readParse(f)
+	var frame Frame
+	err = self.Tx(nil, &frame, 0)
 	switch err {
 	case ErrResponseEmpty:
 		// mega was reset at other time and RESET was read
 	case nil:
 		// TODO header==RESET -> OK, other -> log error
-		if f.ResponseKind() != RESPONSE_RESET {
-			self.Log.Errorf("first frame not reset: %s", f.ResponseString())
+		if frame.ResponseKind() != RESPONSE_RESET {
+			self.Log.Errorf("first frame not reset: %s", frame.ResponseString())
 		}
 	default:
 		self.Close()
+		err = errors.Annotatef(err, "mega init RESET frame read")
 		return nil, err
 	}
-
-	go self.pinLoop()
 
 	return self, nil
 }
@@ -154,9 +168,8 @@ func (self *Client) Tx(send, recv *Frame, timeout time.Duration) error {
 	self.txlk.Lock()
 	defer self.txlk.Unlock()
 
-	var err error
 	if send != nil {
-		err = self.write(send)
+		err := self.write(send)
 		if err != nil {
 			atomic.AddUint32(&self.stat.Error, 1)
 			return err
@@ -168,41 +181,35 @@ func (self *Client) Tx(send, recv *Frame, timeout time.Duration) error {
 		return nil
 	}
 
-	var timeoutErr error
-
-wait:
-	if self.pin.Read() == gpio.High {
-		goto read
-	}
-	if timeout > 0 {
-		edge := self.pin.WaitForEdge(timeout)
-		if edge || (self.pin.Read() == gpio.High) {
-			goto read
-		}
-		timeoutErr = errors.Timeoutf("mega-client Tx() send=%x response timeout=%s", send.Bytes(), timeout)
-	}
-
-read:
-	err = self.readParse(recv)
-	switch err {
-	case ErrResponseEmpty:
-		// wait again
-	case nil:
-		switch recv.ResponseKind() {
-		case RESPONSE_TWI_LISTEN, RESPONSE_RESET:
-			goto wait
-		}
-		return nil
-	default:
-		return err
-	}
+	// Duplicate select here is valid, or at least, following naive single is not correct.
+	// select { case <-readCh | case <-timeout }
+	// For timeout=0 case, per Go spec, select would pick any case.
+	// What we actually want with timeout=0 is strong preference to readCh, if available.
 	if timeout == 0 {
-		return err
+		select {
+		case fe := <-self.readCh:
+			if fe.e != nil {
+				return fe.e
+			}
+			*recv = fe.f
+			return nil
+		default:
+			return ErrResponseEmpty
+		}
+	} else {
+		tmr := time.NewTimer(timeout)
+		defer tmr.Stop()
+		select {
+		case fe := <-self.readCh:
+			if fe.e != nil {
+				return fe.e
+			}
+			*recv = fe.f
+			return nil
+		case <-tmr.C:
+			return errors.Timeoutf("mega-client Tx() send=%x response timeout=%s", send.Bytes(), timeout)
+		}
 	}
-	if timeoutErr != nil {
-		return timeoutErr
-	}
-	goto wait
 }
 
 func (self *Client) write(f *Frame) error {
@@ -230,13 +237,7 @@ func (self *Client) write(f *Frame) error {
 		switch errcode {
 		case 0:
 		case ERROR_REQUEST_OVERWRITE:
-			tmp := Frame{}
-			err = self.readParse(&tmp)
-			if err != nil {
-				self.Log.Errorf("stray read err=%v", err)
-				return err
-			}
-			self.Log.Debugf("stray read frame=%s", tmp.ResponseString())
+			return ErrRequestBusy
 		default:
 			return errors.Errorf("FIXME %x", buf)
 		}
@@ -262,37 +263,46 @@ func (self *Client) write(f *Frame) error {
 	return nil
 }
 
-func (self *Client) pinLoop() {
-	const edgeTimeout = 1 * time.Second
-	const expectLevel = gpio.High
-	var err error
-	var pinFrame Frame
-	for {
-		edge := self.pin.WaitForEdge(edgeTimeout)
-		if !self.alive.IsRunning() {
-			break
-		}
-		if !(edge || (self.pin.Read() == expectLevel)) {
-			continue
+func (self *Client) readLoop(pinev *gpio.LineEventHandle) {
+	// const edgeTimeout = 1 * time.Second
+	for self.alive.IsRunning() {
+		if pinvalue, _ := pinev.Read(); pinvalue == 0 {
+			edge, err := pinev.Wait( /*edgeTimeout*/ )
+			if err != nil {
+				self.Log.Errorf("%s readLoop() Wait()", modName)
+				break
+			}
+			if !self.alive.IsRunning() {
+				break
+			}
+			if edge.ID != gpio.GPIOEVENT_EVENT_RISING_EDGE {
+				continue
+			}
 		}
 
-		// re-read pin with lock to skip reads intended for concurrent Tx()
-		self.txlk.Lock()
-		shouldRead := self.pin.Read() == expectLevel
-		if shouldRead {
-			err = self.readParse(&pinFrame)
-		}
-		self.txlk.Unlock()
-		if !shouldRead {
-			break
+		frame, err := self.readParse()
+		if err == nil && frame == nil {
+			panic("code error")
 		}
 		switch err {
 		case ErrResponseEmpty:
-			// pinLoop expects "side" frames (twi,reset) only and they are hidden by readParse()
+			// self.Log.Errorf("%s readLoop err=%v", modName, err)
 		case nil:
-			self.Log.Errorf("%s pinLoop() CRITICAL stray packet=%s debug=%x", modName, pinFrame.ResponseString(), pinFrame.Bytes())
+			isasync := false
+			if frame != nil {
+				switch frame.ResponseKind() {
+				case RESPONSE_TWI_LISTEN, RESPONSE_RESET:
+					isasync = true
+				}
+			}
+			if !isasync {
+				// Correct path, send response to Tx()
+				self.readCh <- FrameError{f: *frame}
+			} else {
+				self.Log.Errorf("%s stray async during Tx frame=%s", modName, frame.ResponseString())
+			}
 		default:
-			self.Log.Errorf("%s pinLoop() read err=%v", modName, err)
+			self.readCh <- FrameError{e: err}
 		}
 	}
 }
@@ -310,13 +320,13 @@ func (self *Client) poll() (uint8, error) {
 	return buf[1], nil
 }
 
-func (self *Client) readParse(f *Frame) error {
+func (self *Client) readParse() (*Frame, error) {
 	remoteLength, err := self.poll()
 	if remoteLength == 0 {
-		return ErrResponseEmpty
+		return nil, ErrResponseEmpty
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var buf [BUFFER_SIZE + totalOverheads]byte
@@ -326,23 +336,19 @@ func (self *Client) readParse(f *Frame) error {
 	err = self.spiConn.Tx(bs, bs)
 	// self.Log.Debugf("%s read -in=%x err=%v", modName, bs, err)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = self.parse(bs, f)
+	var frame Frame
+	err = self.parse(bs, &frame)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	err = self.ack(f)
+	err = self.ack(&frame)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	switch f.ResponseKind() {
-	case RESPONSE_TWI_LISTEN, RESPONSE_RESET:
-		// consume asynchronous frames
-		return ErrResponseEmpty
-	}
-	return nil
+	return &frame, nil
 }
 
 func (self *Client) ack(f *Frame) error {

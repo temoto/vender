@@ -28,8 +28,9 @@ hardware {
   iodin_path = "TODO_EDIT"
 
   mega {
-    spi = ""
-    pin = "25"
+    spi      = ""
+    pin_chip = "/dev/gpiochip0"
+    pin      = "25"
   }
 
   mdb {

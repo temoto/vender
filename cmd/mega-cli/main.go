@@ -29,12 +29,13 @@ var log = log2.NewStderr(log2.LDebug)
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	spiPort := cmdline.String("spi", "", "")
+	gpiochip := cmdline.String("dev", "/dev/gpiochip0", "")
 	pin := cmdline.String("pin", "25", "")
 	cmdline.Parse(os.Args[1:])
 
 	log.SetFlags(log2.LInteractiveFlags)
 
-	client, err := mega.NewClient(*spiPort, *pin, log)
+	client, err := mega.NewClient(*spiPort, *gpiochip, *pin, log)
 	if err != nil {
 		log.Fatal(errors.ErrorStack(errors.Trace(err)))
 	}

@@ -1,13 +1,10 @@
 package lcd
 
 import (
+	"strconv"
 	"time"
 
-	"github.com/juju/errors"
-	"github.com/temoto/vender/helpers"
-	"periph.io/x/periph/conn/gpio"
-	"periph.io/x/periph/conn/gpio/gpioreg"
-	"periph.io/x/periph/host"
+	"github.com/temoto/gpio-cdev-go"
 )
 
 type Command byte
@@ -30,13 +27,15 @@ const ddramWidth = 0x40
 
 type LCD struct {
 	control Control
-	pin_rs  gpio.PinIO // command/data, aliases: A0, RS
-	pin_rw  gpio.PinIO // read/write
-	pin_e   gpio.PinIO // enable
-	pin_db4 gpio.PinIO
-	pin_db5 gpio.PinIO
-	pin_db6 gpio.PinIO
-	pin_db7 gpio.PinIO
+	pinChip *gpio.Chip
+	pins    *gpio.LinesHandle
+	pin_rs  gpio.LineSetFunc // command/data, aliases: A0, RS
+	pin_rw  gpio.LineSetFunc // read/write
+	pin_e   gpio.LineSetFunc // enable
+	pin_d4  gpio.LineSetFunc
+	pin_d5  gpio.LineSetFunc
+	pin_d6  gpio.LineSetFunc
+	pin_d7  gpio.LineSetFunc
 }
 
 type PinMap struct {
@@ -49,80 +48,67 @@ type PinMap struct {
 	D7 string `hcl:"d7"`
 }
 
-func openPin(tag, name string, errs *[]error) gpio.PinIO {
-	if name == "" {
-		*errs = append(*errs, errors.Errorf("LCD/init %s pin is not configured", tag))
-		return nil
-	}
-	p := gpioreg.ByName(name)
-	if p == nil {
-		*errs = append(*errs, errors.Errorf("LCD/init %s pin=%s invalid", tag, name))
-		return nil
-	}
-	if err := p.Out(gpio.Low); err != nil {
-		*errs = append(*errs, errors.Annotatef(err, "LCD/init pin.Out() %s pin=%s", tag, name))
-		return nil
-	}
-	return p
-}
-
-func (self *LCD) Init(pinmap PinMap) error {
-	if _, err := host.Init(); err != nil {
-		return errors.Annotate(err, "periph/init")
-	}
-
-	errs := make([]error, 0, 8)
-	self.pin_rs = openPin("RS/A0", pinmap.RS, &errs)
-	self.pin_rw = openPin("RW", pinmap.RW, &errs)
-	self.pin_e = openPin("E", pinmap.E, &errs)
-	self.pin_db4 = openPin("D4", pinmap.D4, &errs)
-	self.pin_db5 = openPin("D5", pinmap.D5, &errs)
-	self.pin_db6 = openPin("D6", pinmap.D6, &errs)
-	self.pin_db7 = openPin("D7", pinmap.D7, &errs)
-
-	if err := helpers.FoldErrors(errs); err != nil {
+func (self *LCD) Init(chipName string, pinmap PinMap) error {
+	var err error
+	self.pinChip, err = gpio.Open(chipName, "lcd")
+	if err != nil {
 		return err
 	}
+	nRS := mustAtou32(pinmap.RS)
+	nRW := mustAtou32(pinmap.RW)
+	nE := mustAtou32(pinmap.E)
+	nD4 := mustAtou32(pinmap.D4)
+	nD5 := mustAtou32(pinmap.D5)
+	nD6 := mustAtou32(pinmap.D6)
+	nD7 := mustAtou32(pinmap.D7)
+	self.pins, err = self.pinChip.OpenLines(
+		gpio.GPIOHANDLE_REQUEST_OUTPUT, "lcd",
+		nRS, nRW, nE, nD4, nD5, nD6, nD7,
+	)
+	if err != nil {
+		return err
+	}
+	self.pin_rs = self.pins.SetFunc(nRS)
+	self.pin_rw = self.pins.SetFunc(nRW)
+	self.pin_e = self.pins.SetFunc(nE)
+	self.pin_d4 = self.pins.SetFunc(nD4)
+	self.pin_d5 = self.pins.SetFunc(nD5)
+	self.pin_d6 = self.pins.SetFunc(nD6)
+	self.pin_d7 = self.pins.SetFunc(nD7)
 
 	self.init4()
 	return nil
 }
 
-func setPinBool(pin gpio.PinOut, b bool) {
-	level := gpio.Low
-	if b {
-		level = gpio.High
-	}
-	// FIXME check error
-	pin.Out(level) //nolint:errcheck
-}
-
-func (self *LCD) setAllPins(b bool) {
-	setPinBool(self.pin_rs, b)
-	setPinBool(self.pin_rw, b)
-	setPinBool(self.pin_e, b)
-	setPinBool(self.pin_db4, b)
-	setPinBool(self.pin_db5, b)
-	setPinBool(self.pin_db6, b)
-	setPinBool(self.pin_db7, b)
+func (self *LCD) setAllPins(b byte) {
+	self.pin_rs(b)
+	self.pin_rw(b)
+	self.pin_e(b)
+	self.pin_d4(b)
+	self.pin_d5(b)
+	self.pin_d6(b)
+	self.pin_d7(b)
+	self.pins.Flush() //nolint:errcheck
 }
 
 func (self *LCD) blinkE() {
+	self.pin_e(1)
 	// FIXME check error
-	self.pin_e.Out(gpio.High) //nolint:errcheck
+	self.pins.Flush() //nolint:errcheck
 	time.Sleep(1 * time.Microsecond)
+	self.pin_e(0)
 	// FIXME check error
-	self.pin_e.Out(gpio.Low) //nolint:errcheck
+	self.pins.Flush() //nolint:errcheck
 	time.Sleep(1 * time.Microsecond)
 }
 
-func (self *LCD) send4(rs, db4, db5, db6, db7 bool) {
-	// log.Printf("sn4 %v %v %v %v %v\n", rs, db7, db6, db5, db4)
-	setPinBool(self.pin_rs, rs)
-	setPinBool(self.pin_db4, db4)
-	setPinBool(self.pin_db5, db5)
-	setPinBool(self.pin_db6, db6)
-	setPinBool(self.pin_db7, db7)
+func (self *LCD) send4(rs, d4, d5, d6, d7 byte) {
+	// log.Printf("sn4 %v %v %v %v %v\n", rs, d7, d6, d5, d4)
+	self.pin_rs(rs)
+	self.pin_d4(d4)
+	self.pin_d5(d5)
+	self.pin_d6(d6)
+	self.pin_d7(d7)
 	self.blinkE()
 }
 
@@ -140,22 +126,30 @@ func (self *LCD) init4() {
 	self.SetEntryMode(true, false)
 }
 
-func (self *LCD) Command(b Command) {
+func bb(b, bit byte) byte {
+	if b&(1<<bit) == 0 {
+		return 0
+	}
+	return 1
+}
+
+func (self *LCD) Command(c Command) {
+	b := byte(c)
 	// log.Printf("cmd %0x\n", b)
-	self.send4(false, b&(1<<4) != 0, b&(1<<5) != 0, b&(1<<6) != 0, b&(1<<7) != 0)
-	self.send4(false, b&(1<<0) != 0, b&(1<<1) != 0, b&(1<<2) != 0, b&(1<<3) != 0)
+	self.send4(0, bb(b, 4), bb(b, 5), bb(b, 6), bb(b, 7))
+	self.send4(0, bb(b, 0), bb(b, 1), bb(b, 2), bb(b, 3))
 	// TODO poll busy flag
 	time.Sleep(40 * time.Microsecond)
-	self.setAllPins(false)
+	self.setAllPins(0)
 }
 
 func (self *LCD) Data(b byte) {
 	// log.Printf("dat %0x\n", b)
-	self.send4(true, b&(1<<4) != 0, b&(1<<5) != 0, b&(1<<6) != 0, b&(1<<7) != 0)
-	self.send4(true, b&(1<<0) != 0, b&(1<<1) != 0, b&(1<<2) != 0, b&(1<<3) != 0)
+	self.send4(1, bb(b, 4), bb(b, 5), bb(b, 6), bb(b, 7))
+	self.send4(1, bb(b, 0), bb(b, 1), bb(b, 2), bb(b, 3))
 	// TODO poll busy flag
 	time.Sleep(40 * time.Microsecond)
-	self.setAllPins(false)
+	self.setAllPins(0)
 }
 
 func (self *LCD) Write(bs []byte) {
@@ -216,4 +210,12 @@ func (self *LCD) CursorYX(row uint8, column uint8) bool {
 	addr := (row-1)*ddramWidth + (column - 1)
 	self.Command(CommandAddress | Command(addr))
 	return true
+}
+
+func mustAtou32(s string) uint32 {
+	x, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		panic(err)
+	}
+	return uint32(x)
 }

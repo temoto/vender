@@ -30,6 +30,7 @@ type TextDisplay struct { //nolint:maligned
 
 	tickd time.Duration
 	tick  uint16
+	upd   chan<- struct{}
 }
 
 type Devicer interface {
@@ -226,6 +227,10 @@ func (self *TextDisplay) Translate(s string) []byte {
 	return result
 }
 
+func (self *TextDisplay) SetUpdateChan(ch chan<- struct{}) {
+	self.upd = ch
+}
+
 func (self *TextDisplay) flush() {
 	var buf1 [MaxWidth]byte
 	var buf2 [MaxWidth]byte
@@ -258,6 +263,10 @@ func (self *TextDisplay) flush() {
 	if len(self.line2) > 0 {
 		self.dev.CursorYX(2, 1)
 		self.dev.Write(b2[:n2])
+	}
+
+	if self.upd != nil {
+		self.upd <- struct{}{}
 	}
 }
 

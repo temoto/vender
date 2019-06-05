@@ -32,7 +32,7 @@ github.com/paulrosania/go-charset/charset
 github.com/paulrosania/go-charset/data
 # github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942
 github.com/pkg/term/termios
-# github.com/temoto/alive v1.0.1
+# github.com/temoto/alive v1.0.2
 github.com/temoto/alive
 # github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 github.com/temoto/iodin/client/go-iodin

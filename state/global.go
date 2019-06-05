@@ -101,7 +101,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 
 	if g.c.Hardware.HD44780.Enable {
 		dev := new(lcd.LCD)
-		if err := dev.Init(g.c.Hardware.HD44780.Pinmap); err != nil {
+		if err := dev.Init(g.c.Hardware.HD44780.PinChip, g.c.Hardware.HD44780.Pinmap); err != nil {
 			return errors.Annotatef(err, "config: %#v", g.c.Hardware)
 		}
 		ctrl := lcd.ControlOn
@@ -252,7 +252,7 @@ func (g *Global) Mega() (*mega.Client, error) {
 	}
 
 	mcfg := &g.c.Hardware.Mega
-	client, err := mega.NewClient(mcfg.Spi, mcfg.Pin, g.Log)
+	client, err := mega.NewClient(mcfg.Spi, mcfg.PinChip, mcfg.Pin, g.Log)
 	if err != nil {
 		return nil, errors.Annotatef(err, "config: mega=%#v", mcfg)
 	}

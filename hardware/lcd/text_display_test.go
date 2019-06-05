@@ -1,7 +1,6 @@
 package lcd
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 

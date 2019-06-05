@@ -27,6 +27,7 @@ type Config struct {
 		HD44780 struct {            //nolint:maligned
 			Enable        bool       `hcl:"enable"`
 			Codepage      string     `hcl:"codepage"`
+			PinChip       string     `hcl:"pin_chip"`
 			Pinmap        lcd.PinMap `hcl:"pinmap"`
 			Width         int        `hcl:"width"`
 			ControlBlink  bool       `hcl:"blink"`
@@ -44,8 +45,9 @@ type Config struct {
 			UartDriver string `hcl:"uart_driver"` // file|mega|iodin
 		}
 		Mega struct {
-			Spi string `hcl:"spi"`
-			Pin string `hcl:"pin"`
+			Spi     string `hcl:"spi"`
+			PinChip string `hcl:"pin_chip"`
+			Pin     string `hcl:"pin"`
 		}
 	}
 
