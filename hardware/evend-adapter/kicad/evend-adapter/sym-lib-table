@@ -1,0 +1,8 @@
+(sym_lib_table
+  (lib (name evend-adapter-rescue)(type Legacy)(uri ${KIPRJMOD}/evend-adapter-rescue.lib)(options "")(descr ""))
+  (lib (name arduino_pro_mini)(type Legacy)(uri C:/GitHub/vender/hardware/evend-adapter/kicad/arduino_pro_mini.lib)(options "")(descr ""))
+  (lib (name dc24-dc5-module)(type Legacy)(uri C:/Download/kicad/RPi_Zero_pHat_Template-master/symbols/dc24-dc5-module.lib)(options "")(descr ""))
+  (lib (name rc1602a)(type Legacy)(uri C:/Download/kicad/RPi_Zero_pHat_Template-master/symbols/rc1602a.lib)(options "")(descr ""))
+  (lib (name orange_pi_lite)(type Legacy)(uri C:/Download/kicad/RPi_Zero_pHat_Template-master/symbols/orange_pi_lite.lib)(options "")(descr ""))
+  (lib (name conn_01x01_female)(type Legacy)(uri C:/Download/kicad/RPi_Zero_pHat_Template-master/symbols/conn_01x01_female.lib)(options "")(descr ""))
+)

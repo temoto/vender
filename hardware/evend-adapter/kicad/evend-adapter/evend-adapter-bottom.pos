@@ -1,0 +1,32 @@
+### Module positions - created on 06/06/19 16:59:49 ###
+### Printed by Pcbnew version kicad (5.1.2)-1
+## Unit = mm, Angle = deg.
+## Side : bottom
+# Ref     Val       Package                    PosX       PosY       Rot  Side
+D1        B260      D_1206                 -33.0200  -133.3500  270.0000  bottom
+Q2        BC807     SOT-23                 -39.3700  -143.5100  270.0000  bottom
+Q3        BC807     SOT-23                 -38.1000  -147.3200  270.0000  bottom
+Q4        2N7002    SOT-23                 -80.0100  -152.4000  270.0000  bottom
+Q5        2N7002    SOT-23                 -78.7400  -142.2400  270.0000  bottom
+Q6        2N7002    SOT-23                 -71.1200  -166.3700  180.0000  bottom
+R2        2K2       R_0805_HandSoldering   -46.9900  -139.7000  180.0000  bottom
+R3        5R6       R_0805_HandSoldering   -41.9100  -139.7000  180.0000  bottom
+R4        680R      R_0805_HandSoldering   -40.6400  -152.4000  180.0000  bottom
+R5        680R      R_0805_HandSoldering   -46.9900  -153.6700  180.0000  bottom
+R6        10K       R_0805_HandSoldering   -45.7200  -149.8600   90.0000  bottom
+R8        4K7       R_0805_HandSoldering   -57.0700  -153.6700    0.0000  bottom
+R9        4K7       R_0805_HandSoldering   -57.0700  -151.1300    0.0000  bottom
+R10       10k       R_0805_HandSoldering   -80.0100  -149.8600  180.0000  bottom
+R11       4k7       R_0805_HandSoldering   -74.9300  -158.7500   90.0000  bottom
+R12       10k       R_0805_HandSoldering   -78.7400  -139.7000   90.0000  bottom
+R13       4k7       R_0805_HandSoldering   -72.3900  -142.2400    0.0000  bottom
+R14       10k       R_0805_HandSoldering   -77.4700  -163.8300    0.0000  bottom
+R15       4k7       R_0805_HandSoldering   -74.9300  -161.2900  270.0000  bottom
+R18       10k       R_0805_HandSoldering   -72.3900  -149.8600  270.0000  bottom
+R19       15k       R_0805_HandSoldering   -74.9300  -149.8600  270.0000  bottom
+R20       10k       R_0805_HandSoldering   -55.8800  -144.7800  270.0000  bottom
+R21       15k       R_0805_HandSoldering   -55.8800  -142.2400   90.0000  bottom
+R22       10k       R_0805_HandSoldering   -77.4700  -158.7500   90.0000  bottom
+R23       10k       R_0805_HandSoldering   -72.3900  -144.7800    0.0000  bottom
+R24       10k       R_0805_HandSoldering   -72.3900  -170.1800  180.0000  bottom
+## End

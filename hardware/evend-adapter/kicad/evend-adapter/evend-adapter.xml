@@ -1,0 +1,860 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<export version="D">
+  <design>
+    <source>C:\GitHub\vender\hardware\evend-adapter\kicad\evend-adapter\evend-adapter.sch</source>
+    <date>05/06/19 09:48:12</date>
+    <tool>Eeschema (5.1.2)-1</tool>
+    <sheet number="1" name="/" tstamps="/">
+      <title_block>
+        <title/>
+        <company/>
+        <rev/>
+        <date/>
+        <source>evend-adapter.sch</source>
+        <comment number="1" value=""/>
+        <comment number="2" value=""/>
+        <comment number="3" value=""/>
+        <comment number="4" value=""/>
+      </title_block>
+    </sheet>
+  </design>
+  <components>
+    <comp ref="Q2">
+      <value>BC807</value>
+      <footprint>evend-adapter:SOT-23</footprint>
+      <libsource lib="evend-adapter-rescue" part="BC807-transistors" description=""/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5B08F43C</tstamp>
+    </comp>
+    <comp ref="Q3">
+      <value>BC807</value>
+      <footprint>evend-adapter:SOT-23</footprint>
+      <libsource lib="evend-adapter-rescue" part="BC807-transistors" description=""/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5B08F4F9</tstamp>
+    </comp>
+    <comp ref="R3">
+      <value>5R6</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5B08F67D</tstamp>
+    </comp>
+    <comp ref="R4">
+      <value>680R</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5B08F7FA</tstamp>
+    </comp>
+    <comp ref="U1">
+      <value>RC1602A</value>
+      <footprint>evend-adapter:LCD-016N002L</footprint>
+      <datasheet>http://www.raystar-optronics.com/down.php?ProID=18</datasheet>
+      <libsource lib="Display_Character" part="RC1602A" description="LCD 16x2 Alphanumeric gray backlight, 3 or 5V VDD"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CD310D3</tstamp>
+    </comp>
+    <comp ref="R8">
+      <value>4K7</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CD7B3C2</tstamp>
+    </comp>
+    <comp ref="R9">
+      <value>4K7</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CD7C818</tstamp>
+    </comp>
+    <comp ref="J3">
+      <value>Conn_02x03_Top_Bottom</value>
+      <footprint>evend-adapter:Molex_MiniFit-JR-5569-06A2_2x03x4.20mm_Angled</footprint>
+      <datasheet>~</datasheet>
+      <libsource lib="Connector_Generic" part="Conn_02x03_Top_Bottom" description="Generic connector, double row, 02x03, top/bottom pin numbering scheme (row 1: 1...pins_per_row, row2: pins_per_row+1 ... num_pins), script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CD8CD77</tstamp>
+    </comp>
+    <comp ref="psu1">
+      <value>dc24-dc5-module</value>
+      <footprint>evend-adapter:PSU_24-5_копия</footprint>
+      <libsource lib="evend-adapter-rescue" part="dc24-dc5-module" description=""/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CE02DDD</tstamp>
+    </comp>
+    <comp ref="R6">
+      <value>10K</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5B090100</tstamp>
+    </comp>
+    <comp ref="J2">
+      <value>Keyboard</value>
+      <footprint>Connectors_JST:JST_PH_B4B-PH-K_04x2.00mm_Straight</footprint>
+      <datasheet>~</datasheet>
+      <libsource lib="Connector" part="Conn_01x04_Male" description="Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CD701D9</tstamp>
+    </comp>
+    <comp ref="Q4">
+      <value>2N7002</value>
+      <footprint>evend-adapter:SOT-23</footprint>
+      <datasheet>https://www.fairchildsemi.com/datasheets/2N/2N7002.pdf</datasheet>
+      <libsource lib="Transistor_FET" part="2N7002" description="0.115A Id, 60V Vds, N-Channel MOSFET, SOT-23"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CD93225</tstamp>
+    </comp>
+    <comp ref="R11">
+      <value>4k7</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CD9834F</tstamp>
+    </comp>
+    <comp ref="R10">
+      <value>10k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CD98B31</tstamp>
+    </comp>
+    <comp ref="R22">
+      <value>10k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CD9E593</tstamp>
+    </comp>
+    <comp ref="Q5">
+      <value>2N7002</value>
+      <footprint>evend-adapter:SOT-23</footprint>
+      <datasheet>https://www.fairchildsemi.com/datasheets/2N/2N7002.pdf</datasheet>
+      <libsource lib="Transistor_FET" part="2N7002" description="0.115A Id, 60V Vds, N-Channel MOSFET, SOT-23"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDAEC48</tstamp>
+    </comp>
+    <comp ref="R13">
+      <value>4k7</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDAEC52</tstamp>
+    </comp>
+    <comp ref="R12">
+      <value>10k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDAEC5C</tstamp>
+    </comp>
+    <comp ref="R23">
+      <value>10k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDAEC66</tstamp>
+    </comp>
+    <comp ref="Q6">
+      <value>2N7002</value>
+      <footprint>evend-adapter:SOT-23</footprint>
+      <datasheet>https://www.fairchildsemi.com/datasheets/2N/2N7002.pdf</datasheet>
+      <libsource lib="Transistor_FET" part="2N7002" description="0.115A Id, 60V Vds, N-Channel MOSFET, SOT-23"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDBD459</tstamp>
+    </comp>
+    <comp ref="R15">
+      <value>4k7</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDBD45F</tstamp>
+    </comp>
+    <comp ref="R14">
+      <value>10k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDBD465</tstamp>
+    </comp>
+    <comp ref="R24">
+      <value>10k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDBD46B</tstamp>
+    </comp>
+    <comp ref="R18">
+      <value>10k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDC94AD</tstamp>
+    </comp>
+    <comp ref="R19">
+      <value>15k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDC9883</tstamp>
+    </comp>
+    <comp ref="R20">
+      <value>10k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDD1E52</tstamp>
+    </comp>
+    <comp ref="R21">
+      <value>15k</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CDD1E58</tstamp>
+    </comp>
+    <comp ref="D1">
+      <value>B260</value>
+      <footprint>Diodes_SMD:D_1206</footprint>
+      <datasheet>http://www.jameco.com/Jameco/Products/ProdDS/1538777.pdf</datasheet>
+      <libsource lib="Diode" part="B260" description="60V 2A Schottky Barrier Rectifier Diode, SMB"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CE0CB4F</tstamp>
+    </comp>
+    <comp ref="J1">
+      <value>Orange_pi_lite</value>
+      <footprint>evend-adapter:Orange_pi_lite</footprint>
+      <libsource lib="evend-adapter-rescue" part="Orange_pi_lite" description="Orange PI Lite"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CED487B</tstamp>
+    </comp>
+    <comp ref="R5">
+      <value>680R</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5B090179</tstamp>
+    </comp>
+    <comp ref="X1">
+      <value>Arduino_Pro_Mini-1</value>
+      <footprint>evend-adapter:Arduino_Pro_Mini-1</footprint>
+      <datasheet>https://www.arduino.cc/en/Main/ArduinoBoardProMini</datasheet>
+      <libsource lib="evend-adapter-rescue" part="Arduino_Pro_Mini-1" description="Arduino Pro Mini module"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5CF6010D</tstamp>
+    </comp>
+    <comp ref="R2">
+      <value>2K2</value>
+      <footprint>evend-adapter:R_0805_HandSoldering</footprint>
+      <libsource lib="Device" part="R" description="Resistor"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5B08F6E8</tstamp>
+    </comp>
+    <comp ref="J5">
+      <value>Conn_01x01_Female</value>
+      <footprint>Connectors:1pin</footprint>
+      <datasheet>~</datasheet>
+      <libsource lib="evend-adapter-rescue" part="Conn_01x01_Female" description="Generic connector, single row, 01x01, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5D048756</tstamp>
+    </comp>
+    <comp ref="J4">
+      <value>Conn_01x01_Female</value>
+      <footprint>Connectors:1pin</footprint>
+      <datasheet>~</datasheet>
+      <libsource lib="evend-adapter-rescue" part="Conn_01x01_Female" description="Generic connector, single row, 01x01, script generated (kicad-library-utils/schlib/autogen/connector/)"/>
+      <sheetpath names="/" tstamps="/"/>
+      <tstamp>5D049A0E</tstamp>
+    </comp>
+  </components>
+  <libparts>
+    <libpart lib="Connector" part="Conn_01x04_Male">
+      <description>Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>Connector*:*_1x??_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">J</field>
+        <field name="Value">Conn_01x04_Male</field>
+      </fields>
+      <pins>
+        <pin num="1" name="Pin_1" type="passive"/>
+        <pin num="2" name="Pin_2" type="passive"/>
+        <pin num="3" name="Pin_3" type="passive"/>
+        <pin num="4" name="Pin_4" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Connector_Generic" part="Conn_02x03_Top_Bottom">
+      <description>Generic connector, double row, 02x03, top/bottom pin numbering scheme (row 1: 1...pins_per_row, row2: pins_per_row+1 ... num_pins), script generated (kicad-library-utils/schlib/autogen/connector/)</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>Connector*:*_2x??_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">J</field>
+        <field name="Value">Conn_02x03_Top_Bottom</field>
+      </fields>
+      <pins>
+        <pin num="1" name="Pin_1" type="passive"/>
+        <pin num="2" name="Pin_2" type="passive"/>
+        <pin num="3" name="Pin_3" type="passive"/>
+        <pin num="4" name="Pin_4" type="passive"/>
+        <pin num="5" name="Pin_5" type="passive"/>
+        <pin num="6" name="Pin_6" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Device" part="R">
+      <description>Resistor</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>R_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">R</field>
+        <field name="Value">R</field>
+      </fields>
+      <pins>
+        <pin num="1" name="~" type="passive"/>
+        <pin num="2" name="~" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Diode" part="B220">
+      <aliases>
+        <alias>B230</alias>
+        <alias>B240</alias>
+        <alias>B250</alias>
+        <alias>B260</alias>
+      </aliases>
+      <description>20V 2A Schottky Barrier Rectifier Diode, SMB</description>
+      <docs>http://www.jameco.com/Jameco/Products/ProdDS/1538777.pdf</docs>
+      <footprints>
+        <fp>D*SMB*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">D</field>
+        <field name="Value">B220</field>
+        <field name="Footprint">Diode_SMD:D_SMB</field>
+      </fields>
+      <pins>
+        <pin num="1" name="K" type="passive"/>
+        <pin num="2" name="A" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="Display_Character" part="RC1602A">
+      <description>LCD 16x2 Alphanumeric gray backlight, 3 or 5V VDD</description>
+      <docs>http://www.raystar-optronics.com/down.php?ProID=18</docs>
+      <footprints>
+        <fp>*RC1602A*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">U</field>
+        <field name="Value">RC1602A</field>
+        <field name="Footprint">Display:RC1602A</field>
+      </fields>
+      <pins>
+        <pin num="1" name="VSS" type="power_in"/>
+        <pin num="2" name="VDD" type="power_in"/>
+        <pin num="3" name="VO" type="power_in"/>
+        <pin num="4" name="RS" type="input"/>
+        <pin num="5" name="R/~W" type="input"/>
+        <pin num="6" name="E" type="input"/>
+        <pin num="7" name="DB0" type="BiDi"/>
+        <pin num="8" name="DB1" type="BiDi"/>
+        <pin num="9" name="DB2" type="BiDi"/>
+        <pin num="10" name="DB3" type="BiDi"/>
+        <pin num="11" name="DB4" type="BiDi"/>
+        <pin num="12" name="DB5" type="BiDi"/>
+        <pin num="13" name="DB6" type="BiDi"/>
+        <pin num="14" name="DB7" type="BiDi"/>
+        <pin num="15" name="A/VEE" type="power_in"/>
+        <pin num="16" name="K" type="power_in"/>
+      </pins>
+    </libpart>
+    <libpart lib="Transistor_FET" part="BSS138">
+      <aliases>
+        <alias>2N7002</alias>
+        <alias>2N7002E</alias>
+        <alias>2N7002H</alias>
+        <alias>2N7002K</alias>
+        <alias>BS170F</alias>
+        <alias>BS870</alias>
+        <alias>BSN20</alias>
+        <alias>BSS123</alias>
+        <alias>BSS127S</alias>
+        <alias>DMG2302U</alias>
+        <alias>DMG3402L</alias>
+        <alias>DMG3404L</alias>
+        <alias>DMG3406L</alias>
+        <alias>DMG3414U</alias>
+        <alias>DMG3418L</alias>
+        <alias>DMN10H220L</alias>
+        <alias>DMN10H700S</alias>
+        <alias>DMN13H750S</alias>
+        <alias>DMN2041L</alias>
+        <alias>DMN2050L</alias>
+        <alias>DMN2056U</alias>
+        <alias>DMN2058U</alias>
+        <alias>DMN2075U</alias>
+        <alias>DMN2230U</alias>
+        <alias>DMN24H11DS</alias>
+        <alias>DMN24H3D5L</alias>
+        <alias>DMN3042L</alias>
+        <alias>DMN3051L</alias>
+        <alias>DMN30H4D0L</alias>
+        <alias>DMN3110S</alias>
+        <alias>DMN3150L</alias>
+        <alias>DMN3300U</alias>
+        <alias>DMN3404L</alias>
+        <alias>DMN6075S</alias>
+        <alias>DMN6140L</alias>
+        <alias>DMN67D7L</alias>
+        <alias>DMN67D8L</alias>
+        <alias>MMBF170</alias>
+        <alias>VN10LF</alias>
+        <alias>ZVN3306F</alias>
+        <alias>ZVN3310F</alias>
+        <alias>ZVN3320F</alias>
+        <alias>ZVN4106F</alias>
+        <alias>ZXM61N02F</alias>
+        <alias>ZXM61N03F</alias>
+        <alias>ZXMN10A07F</alias>
+        <alias>ZXMN2A01F</alias>
+        <alias>ZXMN2A14F</alias>
+        <alias>ZXMN2B01F</alias>
+        <alias>ZXMN2B14FH</alias>
+        <alias>ZXMN2F30FH</alias>
+        <alias>ZXMN2F34FH</alias>
+        <alias>ZXMN3A01F</alias>
+        <alias>ZXMN3A14F</alias>
+        <alias>ZXMN3B01F</alias>
+        <alias>ZXMN3B14F</alias>
+        <alias>ZXMN3F30FH</alias>
+        <alias>ZXMN6A07F</alias>
+        <alias>IRLML2060</alias>
+      </aliases>
+      <description>50V Vds, 0.22A Id, N-Channel MOSFET, SOT-23</description>
+      <docs>https://www.fairchildsemi.com/datasheets/BS/BSS138.pdf</docs>
+      <footprints>
+        <fp>SOT?23*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">Q</field>
+        <field name="Value">BSS138</field>
+        <field name="Footprint">Package_TO_SOT_SMD:SOT-23</field>
+      </fields>
+      <pins>
+        <pin num="1" name="G" type="input"/>
+        <pin num="2" name="S" type="passive"/>
+        <pin num="3" name="D" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="evend-adapter-rescue" part="Arduino_Pro_Mini-1">
+      <description>Arduino Pro Mini module</description>
+      <docs>https://www.arduino.cc/en/Main/ArduinoBoardProMini</docs>
+      <fields>
+        <field name="Reference">X</field>
+        <field name="Value">Arduino_Pro_Mini-1</field>
+        <field name="Datasheet">https://www.arduino.cc/en/Main/ArduinoBoardProMini</field>
+      </fields>
+      <pins>
+        <pin num="1A" name="RAW" type="power_in"/>
+        <pin num="1B" name="GND" type="power_in"/>
+        <pin num="1D" name="1(Tx)" type="passive"/>
+        <pin num="2D" name="0(Rx)" type="passive"/>
+        <pin num="4A" name="Vcc" type="power_out"/>
+        <pin num="4B" name="A4" type="passive"/>
+        <pin num="5B" name="A5" type="passive"/>
+        <pin num="5D" name="2" type="passive"/>
+        <pin num="9A" name="13(SCK)" type="passive"/>
+        <pin num="10A" name="12(MISO)" type="passive"/>
+        <pin num="11A" name="11(/MOSI)" type="passive"/>
+        <pin num="12A" name="10(/SS)" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="evend-adapter-rescue" part="BC807-transistors">
+      <footprints>
+        <fp>SOT?23*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">Q</field>
+        <field name="Value">BC807-transistors</field>
+        <field name="Footprint">TO_SOT_Packages_SMD:SOT-23</field>
+      </fields>
+      <pins>
+        <pin num="1" name="B" type="input"/>
+        <pin num="2" name="E" type="passive"/>
+        <pin num="3" name="C" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="evend-adapter-rescue" part="Conn_01x01_Female">
+      <description>Generic connector, single row, 01x01, script generated (kicad-library-utils/schlib/autogen/connector/)</description>
+      <docs>~</docs>
+      <footprints>
+        <fp>Connector*:*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">J</field>
+        <field name="Value">Conn_01x01_Female</field>
+        <field name="Footprint">Connectors:1pin</field>
+      </fields>
+      <pins>
+        <pin num="1" name="Pin_1" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="evend-adapter-rescue" part="Orange_pi_lite">
+      <description>Orange PI Lite</description>
+      <fields>
+        <field name="Reference">J</field>
+        <field name="Value">Orange_pi_lite</field>
+      </fields>
+      <pins>
+        <pin num="1" name="3.3V" type="power_in"/>
+        <pin num="2" name="5V" type="power_in"/>
+        <pin num="3" name="12/TWI.0_SDA" type="BiDi"/>
+        <pin num="4" name="5V" type="power_in"/>
+        <pin num="5" name="11/TWI.0_SCK" type="BiDi"/>
+        <pin num="6" name="GND" type="power_in"/>
+        <pin num="7" name="6" type="BiDi"/>
+        <pin num="8" name="13/SPI.1_CS/UART.3_Tx" type="BiDi"/>
+        <pin num="9" name="GND" type="power_in"/>
+        <pin num="10" name="14/SPI.1_CLK/UART.3_Rx" type="BiDi"/>
+        <pin num="11" name="1/UART.0_Rx/JTAG_CK" type="BiDi"/>
+        <pin num="12" name="110" type="BiDi"/>
+        <pin num="13" name="0/UART.0_Tx/JTAG_MS" type="BiDi"/>
+        <pin num="14" name="GND" type="power_in"/>
+        <pin num="15" name="3/UART.0_CTS/JTAG_DI" type="BiDi"/>
+        <pin num="16" name="68" type="BiDi"/>
+        <pin num="17" name="3.3V" type="power_in"/>
+        <pin num="18" name="71" type="BiDi"/>
+        <pin num="19" name="64/SPI.0_MOSI" type="BiDi"/>
+        <pin num="20" name="GND" type="power_in"/>
+        <pin num="21" name="65/SPI.0_MISO" type="BiDi"/>
+        <pin num="22" name="2/UART.2_RST/JTAG_DO" type="BiDi"/>
+        <pin num="23" name="66/SPI.0_SCK" type="BiDi"/>
+        <pin num="24" name="67/SPI.0_CS" type="BiDi"/>
+        <pin num="25" name="GND" type="power_in"/>
+        <pin num="26" name="21" type="BiDi"/>
+        <pin num="27" name="19/TWI.1_SDA" type="BiDi"/>
+        <pin num="28" name="18/TWI.1_SCK" type="BiDi"/>
+        <pin num="29" name="7" type="BiDi"/>
+        <pin num="30" name="GND" type="power_in"/>
+        <pin num="31" name="8" type="BiDi"/>
+        <pin num="32" name="200/UART.1_RST" type="BiDi"/>
+        <pin num="33" name="9" type="BiDi"/>
+        <pin num="34" name="GND" type="power_in"/>
+        <pin num="35" name="10" type="BiDi"/>
+        <pin num="36" name="201/UART.1_CTS" type="BiDi"/>
+        <pin num="37" name="20" type="BiDi"/>
+        <pin num="38" name="198/UART.1_Tx" type="BiDi"/>
+        <pin num="39" name="GND" type="power_in"/>
+        <pin num="40" name="199/UART.1_Rx" type="BiDi"/>
+      </pins>
+    </libpart>
+    <libpart lib="evend-adapter-rescue" part="dc24-dc5-module">
+      <fields>
+        <field name="Reference">psu</field>
+        <field name="Value">dc24-dc5-module</field>
+      </fields>
+      <pins>
+        <pin num="1" name="+VIN" type="passive"/>
+        <pin num="2" name="-VIN" type="power_in"/>
+        <pin num="3" name="-VOUT" type="power_out"/>
+        <pin num="4" name="+VOUT" type="power_out"/>
+      </pins>
+    </libpart>
+  </libparts>
+  <libraries>
+    <library logical="Connector">
+      <uri>C:\Program Files\KiCad\share\kicad\library/Connector.lib</uri>
+    </library>
+    <library logical="Connector_Generic">
+      <uri>C:\Program Files\KiCad\share\kicad\library/Connector_Generic.lib</uri>
+    </library>
+    <library logical="Device">
+      <uri>C:\Program Files\KiCad\share\kicad\library/Device.lib</uri>
+    </library>
+    <library logical="Diode">
+      <uri>C:\Program Files\KiCad\share\kicad\library/Diode.lib</uri>
+    </library>
+    <library logical="Display_Character">
+      <uri>C:\Program Files\KiCad\share\kicad\library/Display_Character.lib</uri>
+    </library>
+    <library logical="Transistor_FET">
+      <uri>C:\Program Files\KiCad\share\kicad\library/Transistor_FET.lib</uri>
+    </library>
+    <library logical="evend-adapter-rescue">
+      <uri>C:\GitHub\vender\hardware\evend-adapter\kicad\evend-adapter/evend-adapter-rescue.lib</uri>
+    </library>
+  </libraries>
+  <nets>
+    <net code="1" name="Net-(Q6-Pad1)">
+      <node ref="R15" pin="2"/>
+      <node ref="Q6" pin="1"/>
+      <node ref="R14" pin="1"/>
+    </net>
+    <net code="2" name="SS-5V">
+      <node ref="X1" pin="12A"/>
+      <node ref="R24" pin="2"/>
+      <node ref="Q6" pin="3"/>
+    </net>
+    <net code="3" name="+5V">
+      <node ref="U1" pin="15"/>
+      <node ref="R13" pin="1"/>
+      <node ref="R23" pin="1"/>
+      <node ref="R11" pin="1"/>
+      <node ref="U1" pin="2"/>
+      <node ref="J1" pin="2"/>
+      <node ref="R15" pin="1"/>
+      <node ref="R22" pin="1"/>
+      <node ref="R24" pin="1"/>
+    </net>
+    <net code="4" name="MISO-5V">
+      <node ref="X1" pin="10A"/>
+      <node ref="R18" pin="2"/>
+    </net>
+    <net code="5" name="GND">
+      <node ref="J5" pin="1"/>
+      <node ref="R10" pin="2"/>
+      <node ref="J2" pin="3"/>
+      <node ref="J3" pin="6"/>
+      <node ref="psu1" pin="3"/>
+      <node ref="psu1" pin="2"/>
+      <node ref="X1" pin="1B"/>
+      <node ref="J3" pin="2"/>
+      <node ref="J1" pin="6"/>
+      <node ref="J1" pin="9"/>
+      <node ref="J1" pin="25"/>
+      <node ref="U1" pin="3"/>
+      <node ref="R21" pin="2"/>
+      <node ref="R14" pin="2"/>
+      <node ref="U1" pin="1"/>
+      <node ref="R19" pin="2"/>
+      <node ref="U1" pin="16"/>
+      <node ref="R4" pin="2"/>
+      <node ref="R12" pin="2"/>
+    </net>
+    <net code="6" name="INT-3V">
+      <node ref="R21" pin="1"/>
+      <node ref="R20" pin="1"/>
+      <node ref="J1" pin="7"/>
+    </net>
+    <net code="7" name="INT-5V">
+      <node ref="R20" pin="2"/>
+      <node ref="X1" pin="5D"/>
+    </net>
+    <net code="8" name="MISO-3V">
+      <node ref="R18" pin="1"/>
+      <node ref="J1" pin="21"/>
+      <node ref="R19" pin="1"/>
+    </net>
+    <net code="9" name="MOSI-5V">
+      <node ref="R22" pin="2"/>
+      <node ref="X1" pin="11A"/>
+      <node ref="Q4" pin="3"/>
+    </net>
+    <net code="10" name="Net-(Q5-Pad1)">
+      <node ref="Q5" pin="1"/>
+      <node ref="R13" pin="2"/>
+      <node ref="R12" pin="1"/>
+    </net>
+    <net code="11" name="SCK-5V">
+      <node ref="Q5" pin="3"/>
+      <node ref="R23" pin="2"/>
+      <node ref="X1" pin="9A"/>
+    </net>
+    <net code="12" name="SCK-3V">
+      <node ref="Q5" pin="2"/>
+      <node ref="J1" pin="23"/>
+    </net>
+    <net code="13" name="Net-(Q4-Pad1)">
+      <node ref="R10" pin="1"/>
+      <node ref="R11" pin="2"/>
+      <node ref="Q4" pin="1"/>
+    </net>
+    <net code="14" name="SS-3V">
+      <node ref="Q6" pin="2"/>
+      <node ref="J1" pin="24"/>
+    </net>
+    <net code="15" name="+5C">
+      <node ref="R8" pin="1"/>
+      <node ref="R5" pin="1"/>
+      <node ref="R3" pin="1"/>
+      <node ref="Q2" pin="2"/>
+      <node ref="R9" pin="1"/>
+      <node ref="J2" pin="4"/>
+      <node ref="X1" pin="4A"/>
+    </net>
+    <net code="16" name="TTL-TX">
+      <node ref="X1" pin="1D"/>
+      <node ref="R2" pin="1"/>
+    </net>
+    <net code="17" name="Net-(J1-Pad35)">
+      <node ref="J1" pin="35"/>
+    </net>
+    <net code="18" name="Net-(J1-Pad30)">
+      <node ref="J1" pin="30"/>
+    </net>
+    <net code="19" name="Net-(J1-Pad4)">
+      <node ref="J1" pin="4"/>
+    </net>
+    <net code="20" name="+6V">
+      <node ref="X1" pin="1A"/>
+      <node ref="J4" pin="1"/>
+      <node ref="psu1" pin="4"/>
+    </net>
+    <net code="21" name="Net-(J1-Pad14)">
+      <node ref="J1" pin="14"/>
+    </net>
+    <net code="22" name="D6">
+      <node ref="J1" pin="22"/>
+      <node ref="U1" pin="13"/>
+    </net>
+    <net code="23" name="Net-(J1-Pad20)">
+      <node ref="J1" pin="20"/>
+    </net>
+    <net code="24" name="D5">
+      <node ref="U1" pin="12"/>
+      <node ref="J1" pin="18"/>
+    </net>
+    <net code="25" name="Net-(J1-Pad17)">
+      <node ref="J1" pin="17"/>
+    </net>
+    <net code="26" name="D4">
+      <node ref="U1" pin="11"/>
+      <node ref="J1" pin="16"/>
+    </net>
+    <net code="27" name="Net-(J1-Pad15)">
+      <node ref="J1" pin="15"/>
+    </net>
+    <net code="28" name="Net-(J1-Pad13)">
+      <node ref="J1" pin="13"/>
+    </net>
+    <net code="29" name="E">
+      <node ref="J1" pin="12"/>
+      <node ref="U1" pin="6"/>
+    </net>
+    <net code="30" name="Net-(J1-Pad11)">
+      <node ref="J1" pin="11"/>
+    </net>
+    <net code="31" name="RW">
+      <node ref="J1" pin="10"/>
+      <node ref="U1" pin="5"/>
+    </net>
+    <net code="32" name="Net-(J1-Pad1)">
+      <node ref="J1" pin="1"/>
+    </net>
+    <net code="33" name="Net-(D1-Pad2)">
+      <node ref="D1" pin="2"/>
+      <node ref="J3" pin="1"/>
+    </net>
+    <net code="34" name="A0">
+      <node ref="J1" pin="8"/>
+      <node ref="U1" pin="4"/>
+    </net>
+    <net code="35" name="Net-(J1-Pad5)">
+      <node ref="J1" pin="5"/>
+    </net>
+    <net code="36" name="Net-(J1-Pad40)">
+      <node ref="J1" pin="40"/>
+    </net>
+    <net code="37" name="Net-(J1-Pad39)">
+      <node ref="J1" pin="39"/>
+    </net>
+    <net code="38" name="Net-(J1-Pad38)">
+      <node ref="J1" pin="38"/>
+    </net>
+    <net code="39" name="Net-(J1-Pad37)">
+      <node ref="J1" pin="37"/>
+    </net>
+    <net code="40" name="Net-(J1-Pad36)">
+      <node ref="J1" pin="36"/>
+    </net>
+    <net code="41" name="Net-(J1-Pad34)">
+      <node ref="J1" pin="34"/>
+    </net>
+    <net code="42" name="Net-(J1-Pad33)">
+      <node ref="J1" pin="33"/>
+    </net>
+    <net code="43" name="Net-(J1-Pad32)">
+      <node ref="J1" pin="32"/>
+    </net>
+    <net code="44" name="Net-(J1-Pad31)">
+      <node ref="J1" pin="31"/>
+    </net>
+    <net code="45" name="Net-(J1-Pad3)">
+      <node ref="J1" pin="3"/>
+    </net>
+    <net code="46" name="Net-(J1-Pad29)">
+      <node ref="J1" pin="29"/>
+    </net>
+    <net code="47" name="Net-(J1-Pad28)">
+      <node ref="J1" pin="28"/>
+    </net>
+    <net code="48" name="Net-(J1-Pad27)">
+      <node ref="J1" pin="27"/>
+    </net>
+    <net code="49" name="D7">
+      <node ref="J1" pin="26"/>
+      <node ref="U1" pin="14"/>
+    </net>
+    <net code="50" name="SCL">
+      <node ref="X1" pin="5B"/>
+      <node ref="J2" pin="2"/>
+      <node ref="R9" pin="2"/>
+    </net>
+    <net code="51" name="SDA">
+      <node ref="J2" pin="1"/>
+      <node ref="R8" pin="2"/>
+      <node ref="X1" pin="4B"/>
+    </net>
+    <net code="52" name="Net-(U1-Pad9)">
+      <node ref="U1" pin="9"/>
+    </net>
+    <net code="53" name="Net-(U1-Pad8)">
+      <node ref="U1" pin="8"/>
+    </net>
+    <net code="54" name="Net-(U1-Pad7)">
+      <node ref="U1" pin="7"/>
+    </net>
+    <net code="55" name="Net-(Q2-Pad3)">
+      <node ref="R2" pin="2"/>
+      <node ref="Q2" pin="3"/>
+      <node ref="Q3" pin="1"/>
+    </net>
+    <net code="56" name="MDB-MT">
+      <node ref="J3" pin="5"/>
+      <node ref="Q3" pin="3"/>
+      <node ref="R4" pin="1"/>
+    </net>
+    <net code="57" name="Net-(Q2-Pad1)">
+      <node ref="R3" pin="2"/>
+      <node ref="Q3" pin="2"/>
+      <node ref="Q2" pin="1"/>
+    </net>
+    <net code="58" name="Net-(U1-Pad10)">
+      <node ref="U1" pin="10"/>
+    </net>
+    <net code="59" name="MDB-MR">
+      <node ref="R5" pin="2"/>
+      <node ref="R6" pin="1"/>
+      <node ref="J3" pin="4"/>
+    </net>
+    <net code="60" name="TTL-RX">
+      <node ref="R6" pin="2"/>
+      <node ref="X1" pin="2D"/>
+    </net>
+    <net code="61" name="MOSI-3V">
+      <node ref="Q4" pin="2"/>
+      <node ref="J1" pin="19"/>
+    </net>
+    <net code="62" name="Net-(J3-Pad3)">
+      <node ref="J3" pin="3"/>
+    </net>
+    <net code="63" name="MDB+24V">
+      <node ref="psu1" pin="1"/>
+      <node ref="D1" pin="1"/>
+    </net>
+  </nets>
+</export>

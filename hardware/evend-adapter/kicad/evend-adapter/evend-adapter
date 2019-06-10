@@ -1,0 +1,154 @@
+.HEA
+.TIM 05/06/19 09:48:12
+.APP "Eeschema (5.1.2)-1"
+
+.ADD_COM Q2 "BC807"
+.ADD_COM Q3 "BC807"
+.ADD_COM R3 "5R6"
+.ADD_COM R4 "680R"
+.ADD_COM U1 "RC1602A"
+.ADD_COM R8 "4K7"
+.ADD_COM R9 "4K7"
+.ADD_COM J3 "Conn_02x03_Top_Bottom"
+.ADD_COM psu1 "dc24-dc5-module"
+.ADD_COM R6 "10K"
+.ADD_COM J2 "Keyboard"
+.ADD_COM Q4 "2N7002"
+.ADD_COM R11 "4k7"
+.ADD_COM R10 "10k"
+.ADD_COM R22 "10k"
+.ADD_COM Q5 "2N7002"
+.ADD_COM R13 "4k7"
+.ADD_COM R12 "10k"
+.ADD_COM R23 "10k"
+.ADD_COM Q6 "2N7002"
+.ADD_COM R15 "4k7"
+.ADD_COM R14 "10k"
+.ADD_COM R24 "10k"
+.ADD_COM R18 "10k"
+.ADD_COM R19 "15k"
+.ADD_COM R20 "10k"
+.ADD_COM R21 "15k"
+.ADD_COM D1 "B260"
+.ADD_COM J1 "Orange_pi_lite"
+.ADD_COM R5 "680R"
+.ADD_COM X1 "Arduino_Pro_Mini-1"
+.ADD_COM R2 "2K2"
+.ADD_COM J5 "Conn_01x01_Female"
+.ADD_COM J4 "Conn_01x01_Female"
+
+
+.ADD_TER R15.2 "Net-(Q6-Pad1)"
+.TER     Q6.1
+         R14.1
+.ADD_TER X1.12A "SS-5V"
+.TER     R24.2
+         Q6.3
+.ADD_TER U1.15 "+5V"
+.TER     R13.1
+         R23.1
+         R11.1
+         U1.2
+         J1.2
+         R15.1
+         R22.1
+         R24.1
+.ADD_TER X1.10A "MISO-5V"
+.TER     R18.2
+.ADD_TER J5.1 "GND"
+.TER     R10.2
+         J2.3
+         J3.6
+         psu1.3
+         psu1.2
+         X1.1B
+         J3.2
+         J1.6
+         J1.9
+         J1.25
+         U1.3
+         R21.2
+         R14.2
+         U1.1
+         R19.2
+         U1.16
+         R4.2
+         R12.2
+.ADD_TER R21.1 "INT-3V"
+.TER     R20.1
+         J1.7
+.ADD_TER R20.2 "INT-5V"
+.TER     X1.5D
+.ADD_TER R18.1 "MISO-3V"
+.TER     J1.21
+         R19.1
+.ADD_TER R22.2 "MOSI-5V"
+.TER     X1.11A
+         Q4.3
+.ADD_TER Q5.1 "Net-(Q5-Pad1)"
+.TER     R13.2
+         R12.1
+.ADD_TER Q5.3 "SCK-5V"
+.TER     R23.2
+         X1.9A
+.ADD_TER Q5.2 "SCK-3V"
+.TER     J1.23
+.ADD_TER R10.1 "Net-(Q4-Pad1)"
+.TER     R11.2
+         Q4.1
+.ADD_TER Q6.2 "SS-3V"
+.TER     J1.24
+.ADD_TER R8.1 "+5C"
+.TER     R5.1
+         R3.1
+         Q2.2
+         R9.1
+         J2.4
+         X1.4A
+.ADD_TER X1.1D "TTL-TX"
+.TER     R2.1
+.ADD_TER X1.1A "+6V"
+.TER     J4.1
+         psu1.4
+.ADD_TER J1.22 "D6"
+.TER     U1.13
+.ADD_TER U1.12 "D5"
+.TER     J1.18
+.ADD_TER U1.11 "D4"
+.TER     J1.16
+.ADD_TER J1.12 "E"
+.TER     U1.6
+.ADD_TER J1.10 "RW"
+.TER     U1.5
+.ADD_TER D1.2 "Net-(D1-Pad2)"
+.TER     J3.1
+.ADD_TER J1.8 "A0"
+.TER     U1.4
+.ADD_TER J1.26 "D7"
+.TER     U1.14
+.ADD_TER X1.5B "SCL"
+.TER     J2.2
+         R9.2
+.ADD_TER J2.1 "SDA"
+.TER     R8.2
+         X1.4B
+.ADD_TER R2.2 "Net-(Q2-Pad3)"
+.TER     Q2.3
+         Q3.1
+.ADD_TER J3.5 "MDB-MT"
+.TER     Q3.3
+         R4.1
+.ADD_TER R3.2 "Net-(Q2-Pad1)"
+.TER     Q3.2
+         Q2.1
+.ADD_TER R5.2 "MDB-MR"
+.TER     R6.1
+         J3.4
+.ADD_TER R6.2 "TTL-RX"
+.TER     X1.2D
+.ADD_TER Q4.2 "MOSI-3V"
+.TER     J1.19
+.ADD_TER psu1.1 "MDB+24V"
+.TER     D1.1
+
+.END

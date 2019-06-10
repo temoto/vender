@@ -1,0 +1,32 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP Arduino_Pro_Mini
+D Arduino Pro Mini module
+K Arduino Pro Mini
+F https://www.arduino.cc/en/Main/ArduinoBoardProMini
+$ENDCMP
+#
+$CMP Arduino_Pro_Mini-1
+D Arduino Pro Mini module
+K Arduino Pro Mini
+F https://www.arduino.cc/en/Main/ArduinoBoardProMini
+$ENDCMP
+#
+$CMP Conn_01x01_Female
+D Generic connector, single row, 01x01, script generated (kicad-library-utils/schlib/autogen/connector/)
+K connector
+F ~
+$ENDCMP
+#
+$CMP Orange_pi_lite
+D Orange PI Lite
+K Orange PI Lite
+$ENDCMP
+#
+$CMP RC1602A
+D LCD 16x2 Alphanumeric gray backlight, 3 or 5V VDD
+K display LCD dot-matrix
+F http://www.raystar-optronics.com/down.php?ProID=18
+$ENDCMP
+#
+#End Doc Library

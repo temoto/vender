@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name evend-adapter)(type KiCad)(uri C:/GitHub/vender/hardware/evend-adapter/kicad/evend-adapter.pretty)(options "")(descr ""))
+)

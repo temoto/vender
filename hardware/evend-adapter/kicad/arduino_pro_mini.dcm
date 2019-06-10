@@ -1,0 +1,9 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP Arduino_Pro_Mini
+D Arduino Pro Mini module
+K Arduino Pro Mini
+F https://www.arduino.cc/en/Main/ArduinoBoardProMini
+$ENDCMP
+#
+#End Doc Library
