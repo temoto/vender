@@ -298,8 +298,6 @@ func (self *Client) readLoop(pinev *gpio.LineEventHandle) {
 			if !isasync {
 				// Correct path, send response to Tx()
 				self.readCh <- FrameError{f: *frame}
-			} else {
-				self.Log.Errorf("%s stray async during Tx frame=%s", modName, frame.ResponseString())
 			}
 		default:
 			self.readCh <- FrameError{e: err}

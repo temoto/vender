@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/temoto/alive"
-	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
+	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
@@ -18,48 +18,46 @@ func TestServiceInventory(t *testing.T) {
 	const width = 16
 	ctx, g := state.NewTestContext(t, "")
 	g.Config().UI.Service.Auth.Enable = false
-	kb := keyboard.NewMockKeyboard(0)
-	g.Hardware.Keyboard.Device = kb
 	display, displayMock := lcd.NewMockTextDisplay(width, "", 0)
 	g.Hardware.HD44780.Display = display
 	g.Inventory.Register("water", 1)
 	g.Inventory.Register("cup", 1)
 	ui := NewUIService(ctx)
 	a := alive.NewAlive()
-	go ui.Run(a)
-	stopch := a.StopChan()
 	displayUpdated := make(chan struct{})
 	display.SetUpdateChan(displayUpdated)
+	stopch := a.StopChan()
+	go ui.Run(a)
 
 	type Step struct {
 		expect string
-		input  keyboard.Key
+		inev   input.Event
 	}
 	_T := func(l1, l2 string) string {
 		return fmt.Sprintf("%s\n%s", display.Translate(l1), display.Translate(l2))
 	}
 	steps := []Step{
-		{expect: _T("Menu", "1 inventory"), input: keyboard.KeyAccept},
-		{expect: _T("I1 cup", "0 \x00"), input: '3'},
-		{expect: _T("I1 cup", "0 3\x00"), input: keyboard.KeyAccept},
-		{expect: _T("I1 cup", "3 \x00"), input: keyboard.KeyReject},
-		{expect: _T("Menu", "1 inventory"), input: keyboard.KeyReject},
-		{expect: "", input: 0},
+		{expect: _T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
+		{expect: _T("I1 cup", "0 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '3'}},
+		{expect: _T("I1 cup", "0 3\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
+		{expect: _T("I1 cup", "3 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
+		{expect: _T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
+		{expect: "", inev: input.Event{}},
 	}
 expectLoop:
 	for _, step := range steps {
 		select {
 		case <-displayUpdated:
 		case <-stopch:
-			if !(step.expect == "" && step.input == 0) {
+			if !(step.expect == "" && step.inev.IsZero()) {
 				t.Error("ui stopped before end of test")
 			}
 			break expectLoop
 		}
 		current := displayMock.String()
-		t.Logf("display:\n%s\n%s\ninput=%d", current, strings.Repeat("-", width), step.input)
+		t.Logf("display:\n%s\n%s\ninput=%v", current, strings.Repeat("-", width), step.inev)
 		helpers.AssertEqual(t, current, step.expect)
-		kb.C <- step.input
+		g.Hardware.Input.Emit(step.inev)
 	}
 	if a.IsRunning() {
 		t.Logf("display:\n%s", displayMock.String())

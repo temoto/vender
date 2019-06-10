@@ -3,14 +3,13 @@ package ui
 import (
 	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"sync/atomic"
 	"time"
 
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
-	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
+	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
@@ -62,7 +61,7 @@ type UIMenu struct {
 	menu      Menu
 	credit    atomic.Value
 	display   *lcd.TextDisplay // FIXME
-	inputCh   <-chan state.InputEvent
+	inputCh   <-chan input.Event
 	refreshCh chan struct{}
 	result    UIMenuResult
 }
@@ -86,7 +85,6 @@ func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
 		},
 	}
 	self.display = self.g.Hardware.HD44780.Display
-	self.inputCh = self.g.InputChan()
 	self.resetTimeout = helpers.IntSecondDefault(self.g.Config().Engine.Menu.ResetTimeoutSec, 0)
 	self.SetCredit(0)
 
@@ -101,12 +99,10 @@ func (self *UIMenu) SetCredit(a currency.Amount) {
 	}
 }
 
-// func (self *UIMenu) StopChan() <-chan struct{} { return self.alive.StopChan() }
-
 func (self *UIMenu) Run(alive *alive.Alive) UIMenuResult {
 	defer alive.Stop()
 
-	state.InputDrain(self.inputCh)
+	self.inputCh = self.g.Hardware.Input.SubscribeChan("ui-menu", alive.StopChan())
 	timer := time.NewTicker(200 * time.Millisecond)
 	inputBuf := make([]byte, 0, 32)
 
@@ -137,7 +133,7 @@ init:
 
 		// step 2: wait for input/timeout
 	waitInput:
-		var e state.InputEvent
+		var e input.Event
 		select {
 		case e = <-self.inputCh:
 			lastActivity = time.Now()
@@ -159,19 +155,18 @@ init:
 		}
 
 		// step 3: handle input/timeout
-		switch e.Kind {
-		case state.InputOther:
-			mode = self.handleCreamSugar(mode, e.Key)
+		switch e.Key {
+		case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
+			mode = self.handleCreamSugar(mode, e)
 			goto handleEnd
-		case state.InputNothing:
-			panic("code error state.InputNothing")
 		}
 		switch mode {
 		case modeMenuStatus:
-			switch e.Kind {
-			case state.InputNormal:
+			switch {
+			case e.IsDigit():
 				inputBuf = append(inputBuf, byte(e.Key))
-			case state.InputReject:
+
+			case input.IsReject(&e):
 				// backspace semantic
 				if len(inputBuf) > 0 {
 					inputBuf = inputBuf[:len(inputBuf)-1]
@@ -180,7 +175,8 @@ init:
 
 				self.result = UIMenuResult{Confirm: false}
 				return self.result
-			case state.InputAccept:
+
+			case input.IsAccept(&e):
 				if len(inputBuf) == 0 {
 					self.ConveyError(msgMenuCodeEmpty)
 					break
@@ -199,7 +195,7 @@ init:
 					self.ConveyError(msgMenuCodeInvalid)
 					break
 				}
-				log.Printf("compare price=%v credit=%v", mitem.Price, credit)
+				self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
 				if mitem.Price > credit {
 					self.ConveyError(msgMenuInsufficientCredit)
 					break
@@ -211,8 +207,7 @@ init:
 				return self.result
 			}
 		case modeMenuCream, modeMenuSugar:
-			switch e.Kind {
-			case state.InputReject, state.InputAccept:
+			if input.IsAccept(&e) || input.IsReject(&e) {
 				mode = modeMenuStatus // "return to previous mode"
 			}
 		}
@@ -236,30 +231,30 @@ func (self *UIMenu) ConveyError(text string) {
 	})
 }
 
-func (self *UIMenu) handleCreamSugar(mode string, key keyboard.Key) string {
-	switch key {
-	case keyboard.KeyCreamLess:
+func (self *UIMenu) handleCreamSugar(mode string, e input.Event) string {
+	switch e.Key {
+	case input.EvendKeyCreamLess:
 		if self.result.Cream > 0 {
 			self.result.Cream--
 			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
-	case keyboard.KeyCreamMore:
+	case input.EvendKeyCreamMore:
 		if self.result.Cream < MaxCream {
 			self.result.Cream++
 			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
-	case keyboard.KeySugarLess:
+	case input.EvendKeySugarLess:
 		if self.result.Sugar > 0 {
 			self.result.Sugar--
 			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
-	case keyboard.KeySugarMore:
+	case input.EvendKeySugarMore:
 		if self.result.Sugar < MaxSugar {
 			self.result.Sugar++
 			//lint:ignore SA9003 empty branch
@@ -270,12 +265,12 @@ func (self *UIMenu) handleCreamSugar(mode string, key keyboard.Key) string {
 		return mode
 	}
 	var t1, t2 []byte
-	switch key {
-	case keyboard.KeyCreamLess, keyboard.KeyCreamMore:
+	switch e.Key {
+	case input.EvendKeyCreamLess, input.EvendKeyCreamMore:
 		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", msgCream, self.result.Cream))
 		t2 = formatScale(self.result.Cream, 0, MaxCream, ScaleAlpha)
 		mode = modeMenuCream
-	case keyboard.KeySugarLess, keyboard.KeySugarMore:
+	case input.EvendKeySugarLess, input.EvendKeySugarMore:
 		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", msgSugar, self.result.Sugar))
 		t2 = formatScale(self.result.Sugar, 0, MaxSugar, ScaleAlpha)
 		mode = modeMenuSugar

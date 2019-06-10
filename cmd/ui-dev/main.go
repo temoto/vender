@@ -9,6 +9,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/head/ui"
@@ -85,7 +86,7 @@ func main() {
 	}()
 
 	log.Debugf("vender-ui-dev init complete, running")
-	runUiClient := func(uia *alive.Alive) {
+	uiClientRunner := &state.FuncRunner{Name: "ui-client", F: func(uia *alive.Alive) {
 		uiClient.SetCredit(moneysys.Credit(ctx))
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 		result := uiClient.Run(uia)
@@ -101,12 +102,16 @@ func main() {
 				telesys.Error(err)
 			}
 		}
-	}
-	// TODO listen /dev/input/event0 switch to service UI
-	_ = uiService
+	}}
+	g.Hardware.Input.SubscribeFunc("service", func(e input.Event) {
+		if e.Source == input.DevInputEventTag && e.Up {
+			log.Debugf("input event switch to service")
+			g.UISwitch(uiService)
+		}
+	}, g.Alive.StopChan())
 
 	for g.Alive.IsRunning() {
-		g.UISwitch(state.FuncRunner(runUiClient), false)
+		g.UINext(uiClientRunner)
 		// err := moneysys.WithdrawPrepare(ctx, result.Item.Price)
 		// if err == money.ErrNeedMoreMoney {
 		// 	log.Errorf("uiClientitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)

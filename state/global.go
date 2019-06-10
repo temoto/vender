@@ -10,34 +10,34 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
-	"github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
-	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
+	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
 
 type Global struct {
-	c    *Config
-	inch <-chan InputEvent
-	lk   sync.Mutex
+	c  *Config
+	lk sync.Mutex
 
-	Alive    *alive.Alive
-	Engine   *engine.Engine
+	initInputOnce sync.Once
+	initMegaOnce  sync.Once
+	initMdberOnce sync.Once
+
+	Alive  *alive.Alive
+	Engine *engine.Engine
+	// TODO input
 	Hardware struct {
 		HD44780 struct {
 			Device  *lcd.LCD
 			Display *lcd.TextDisplay
 		}
-		Keyboard struct {
-			Device keyboard.Inputer
-		}
-		Mdb struct {
+		Input *input.Dispatch
+		Mdb   struct {
 			Mdber  *mdb.Mdb
 			Uarter mdb.Uarter
 		}
@@ -45,9 +45,8 @@ type Global struct {
 		Mega  atomic.Value // *mega.Client
 	}
 	UI struct {
-		// lk sync.RWMutex
-		// currentName  string
 		currentAlive atomic.Value // *alive.Alive
+		lk           sync.Mutex
 	}
 
 	Inventory *inventory.Inventory
@@ -133,17 +132,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 		g.Hardware.HD44780.Display = d
 	}
 
-	if g.c.Hardware.Keyboard.Enable {
-		m, err := g.Mega()
-		if err != nil {
-			return errors.Annotatef(err, "config: keyboard needs mega")
-		}
-		kb, err := keyboard.NewKeyboard(m)
-		if err != nil {
-			return errors.Annotatef(err, "config: %#v", g.c.Hardware)
-		}
-		g.Hardware.Keyboard.Device = kb
-	}
+	g.initInput()
 
 	if g.c.Money.Scale == 0 {
 		g.c.Money.Scale = 1
@@ -186,96 +175,6 @@ func (g *Global) MustInit(ctx context.Context, cfg *Config) {
 	}
 }
 
-func (g *Global) Mdber() (*mdb.Mdb, error) {
-	if g.Hardware.Mdb.Mdber != nil {
-		return g.Hardware.Mdb.Mdber, nil
-	}
-
-	g.lk.Lock()
-	defer g.lk.Unlock()
-
-	switch g.c.Hardware.Mdb.UartDriver {
-	case "", "file":
-		g.Hardware.Mdb.Uarter = mdb.NewFileUart(g.Log)
-	case "mega":
-		m, err := g.Mega()
-		if err != nil {
-			return nil, err
-		}
-		g.Hardware.Mdb.Uarter = mdb.NewMegaUart(m)
-	case "iodin":
-		iodin, err := g.Iodin()
-		if err != nil {
-			return nil, err
-		}
-		g.Hardware.Mdb.Uarter = mdb.NewIodinUart(iodin)
-	default:
-		return nil, fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, fast", g.c.Hardware.Mdb.UartDriver)
-	}
-	mdbLog := g.Log.Clone(log2.LInfo)
-	if g.c.Hardware.Mdb.LogDebug {
-		mdbLog.SetLevel(log2.LDebug)
-	}
-	m, err := mdb.NewMDB(g.Hardware.Mdb.Uarter, g.c.Hardware.Mdb.UartDevice, mdbLog)
-	if err != nil {
-		return nil, errors.Annotatef(err, "config: mdb=%v", g.c.Hardware.Mdb)
-	}
-	g.Hardware.Mdb.Mdber = m
-
-	return g.Hardware.Mdb.Mdber, nil
-}
-
-func (g *Global) Iodin() (*iodin.Client, error) {
-	if x := g.Hardware.Iodin.Load(); x != nil {
-		return x.(*iodin.Client), nil
-	}
-
-	g.lk.Lock()
-	defer g.lk.Unlock()
-	if x := g.Hardware.Iodin.Load(); x != nil {
-		return x.(*iodin.Client), nil
-	}
-
-	cfg := &g.c.Hardware
-	client, err := iodin.NewClient(cfg.IodinPath)
-	if err != nil {
-		return nil, errors.Annotatef(err, "config: iodin_path=%s", cfg.IodinPath)
-	}
-	g.Hardware.Iodin.Store(client)
-
-	return client, nil
-}
-
-func (g *Global) Mega() (*mega.Client, error) {
-	if x := g.Hardware.Mega.Load(); x != nil {
-		return x.(*mega.Client), nil
-	}
-
-	g.lk.Lock()
-	defer g.lk.Unlock()
-	if x := g.Hardware.Mega.Load(); x != nil {
-		return x.(*mega.Client), nil
-	}
-
-	mcfg := &g.c.Hardware.Mega
-	client, err := mega.NewClient(mcfg.Spi, mcfg.PinChip, mcfg.Pin, g.Log)
-	if err != nil {
-		return nil, errors.Annotatef(err, "config: mega=%#v", mcfg)
-	}
-	g.Hardware.Mega.Store(client)
-
-	return client, nil
-}
-
-func (g *Global) InputChan() <-chan InputEvent {
-	g.lk.Lock()
-	if g.inch == nil {
-		g.inch = newInputEvents(g, g.Alive.StopChan())
-	}
-	g.lk.Unlock()
-	return g.inch
-}
-
 func NewTestContext(t testing.TB, confString string /* logLevel log2.Level*/) (context.Context, *Global) {
 	fs := NewMockFullReader(map[string]string{
 		"test-inline": confString,
@@ -289,9 +188,15 @@ func NewTestContext(t testing.TB, confString string /* logLevel log2.Level*/) (c
 	mdber, mdbMock := mdb.NewTestMdber(t)
 	g.Hardware.Mdb.Mdber = mdber
 	if _, err := g.Mdber(); err != nil {
-		t.Fatal(err)
+		t.Fatal(errors.Trace(err))
 	}
 	ctx = context.WithValue(ctx, mdb.MockContextKey, mdbMock)
 
 	return ctx, g
+}
+
+func recoverFatal(f helpers.Fataler) {
+	if x := recover(); x != nil {
+		f.Fatal(x)
+	}
 }

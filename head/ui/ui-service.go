@@ -12,7 +12,7 @@ import (
 
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine/inventory"
-	keyboard "github.com/temoto/vender/hardware/evend-keyboard"
+	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
@@ -43,7 +43,7 @@ type UIService struct {
 	g            *state.Global
 	display      *lcd.TextDisplay // FIXME
 	inputBuf     []byte
-	inputCh      <-chan state.InputEvent
+	inputCh      <-chan input.Event
 	lastActivity time.Time
 	mode         string
 	menuIdx      uint8
@@ -62,8 +62,7 @@ func NewUIService(ctx context.Context) *UIService {
 	}
 	config := self.g.Config()
 	self.display = self.g.Hardware.HD44780.Display
-	self.inputCh = self.g.InputChan()
-	self.resetTimeout = helpers.IntSecondDefault(config.UI.Service.ResetTimeoutSec, 1*time.Second)
+	self.resetTimeout = helpers.IntSecondDefault(config.UI.Service.ResetTimeoutSec, 3*time.Second)
 	self.g.Inventory.Iter(func(s *inventory.Stock) {
 		self.invList = append(self.invList, s)
 	})
@@ -73,10 +72,12 @@ func NewUIService(ctx context.Context) *UIService {
 	return self
 }
 
+func (self *UIService) String() string { return "ui-service" }
+
 func (self *UIService) Run(alive *alive.Alive) {
 	defer alive.Stop()
 
-	state.InputDrain(self.inputCh)
+	self.inputCh = self.g.Hardware.Input.SubscribeChan(self.String(), alive.StopChan())
 	timer := time.NewTicker(200 * time.Millisecond)
 	serviceConfig := &self.g.Config().UI.Service
 
@@ -86,6 +87,8 @@ func (self *UIService) Run(alive *alive.Alive) {
 	self.invIdx = 0
 	self.lastActivity = time.Now()
 	self.g.Tele.Service("mode=" + self.mode)
+
+	self.g.Log.Debugf("UIService begin")
 
 loop:
 	for alive.IsRunning() {
@@ -124,20 +127,22 @@ loop:
 			)
 
 		case serviceModeExit:
+			self.g.Log.Debugf("UIService stop mode=exit")
 			break loop
 		}
 
 		// step 2: wait for input/timeout
 	waitInput:
-		var e state.InputEvent
+		var e input.Event
 		select {
 		case e = <-self.inputCh:
 			self.lastActivity = time.Now()
 		case <-timer.C:
 			inactive := time.Since(self.lastActivity)
-			self.g.Log.Infof("inactive=%v", inactive)
+			// self.g.Log.Infof("inactive=%v", inactive)
 			switch {
 			case inactive >= self.resetTimeout:
+				self.g.Log.Debugf("UIService stop resettimeout")
 				break loop
 			default:
 				goto waitInput
@@ -164,19 +169,19 @@ func (self *UIService) ConveyText(line1, line2 string) {
 	})
 }
 
-func (self *UIService) handleAuth(e state.InputEvent) {
-	switch e.Kind {
-	case state.InputNormal:
+func (self *UIService) handleAuth(e input.Event) {
+	switch {
+	case e.IsDigit():
 		self.inputBuf = append(self.inputBuf, byte(e.Key))
 		if len(self.inputBuf) > 16 {
 			self.ConveyText(msgError, "len") // FIXME extract message string
 			self.mode = serviceModeExit
 		}
 
-	case state.InputNothing, state.InputReject:
+	case e.IsZero() || input.IsReject(&e):
 		self.mode = serviceModeExit
 
-	case state.InputAccept:
+	case input.IsAccept(&e):
 		if len(self.inputBuf) == 0 {
 			self.ConveyText(msgError, "empty") // FIXME extract message string
 			self.mode = serviceModeExit
@@ -198,49 +203,44 @@ func (self *UIService) handleAuth(e state.InputEvent) {
 	}
 }
 
-func (self *UIService) handleMenu(e state.InputEvent) {
-	switch e.Kind {
-	case state.InputNormal:
-		x := byte(e.Key) - byte('0')
-		if x > 0 && x <= serviceMenuMax {
-			self.menuIdx = x - 1
-		}
+func (self *UIService) handleMenu(e input.Event) {
+	switch {
+	case e.Key == input.EvendKeyCreamLess:
+		self.menuIdx = (self.menuIdx + serviceMenuMax - 1) % serviceMenuMax
+	case e.Key == input.EvendKeyCreamMore:
+		self.menuIdx = (self.menuIdx + 1) % serviceMenuMax
 
-	case state.InputOther:
-		switch e.Key {
-		case keyboard.KeyCreamLess, keyboard.KeySugarLess:
-			self.menuIdx = (self.menuIdx + serviceMenuMax - 1) % serviceMenuMax
-		case keyboard.KeyCreamMore, keyboard.KeySugarMore:
-			self.menuIdx = (self.menuIdx + 1) % serviceMenuMax
-		}
-
-	case state.InputAccept:
+	case input.IsAccept(&e):
 		if int(self.menuIdx) >= len(serviceMenu) {
 			panic("code error service menuIdx out of range")
 		}
 		self.mode = serviceMenu[self.menuIdx]
 
-	case state.InputReject:
+	case input.IsReject(&e):
 		self.mode = serviceModeExit
+
+	case e.IsDigit():
+		x := byte(e.Key) - byte('0')
+		if x > 0 && x <= serviceMenuMax {
+			self.menuIdx = x - 1
+		}
 	}
 }
 
-func (self *UIService) handleInventory(e state.InputEvent) {
+func (self *UIService) handleInventory(e input.Event) {
 	invIdxMax := uint8(len(self.invList) - 1)
-	switch e.Kind {
-	case state.InputNormal:
-		self.inputBuf = append(self.inputBuf, byte(e.Key))
-
-	case state.InputOther:
-		switch e.Key {
-		case keyboard.KeyCreamLess:
-			self.invIdx = (self.invIdx + invIdxMax - 1) % invIdxMax
-		case keyboard.KeyCreamMore:
-			self.invIdx = (self.invIdx + 1) % invIdxMax
-		}
+	switch {
+	case e.Key == input.EvendKeyCreamLess:
+		self.invIdx = (self.invIdx + invIdxMax - 1) % invIdxMax
+		self.inputBuf = self.inputBuf[:0]
+	case e.Key == input.EvendKeyCreamMore:
+		self.invIdx = (self.invIdx + 1) % invIdxMax
 		self.inputBuf = self.inputBuf[:0]
 
-	case state.InputAccept:
+	case e.IsDigit():
+		self.inputBuf = append(self.inputBuf, byte(e.Key))
+
+	case input.IsAccept(&e):
 		if len(self.inputBuf) == 0 {
 			self.ConveyText(msgError, "empty") // FIXME extract message string
 			return
@@ -256,7 +256,7 @@ func (self *UIService) handleInventory(e state.InputEvent) {
 		invCurrent := self.invList[self.invIdx]
 		invCurrent.Set(int32(x))
 
-	case state.InputReject:
+	case input.IsReject(&e):
 		// backspace semantic
 		if len(self.inputBuf) > 0 {
 			self.inputBuf = self.inputBuf[:len(self.inputBuf)-1]

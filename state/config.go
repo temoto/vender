@@ -35,9 +35,15 @@ type Config struct {
 			ScrollDelay   int        `hcl:"scroll_delay"`
 		}
 		IodinPath string `hcl:"iodin_path"`
-		Keyboard  struct {
-			Enable bool `hcl:"enable"`
-			// TODO ListenAddr int
+		Input     struct {
+			EvendKeyboard struct {
+				Enable bool `hcl:"enable"`
+				// TODO ListenAddr int
+			} `hcl:"evend_keyboard"`
+			DevInputEvent struct {
+				Enable bool   `hcl:"enable"`
+				Device string `hcl:"device"`
+			} `hcl:"dev_input_event"`
 		}
 		Mdb struct {
 			LogDebug   bool   `hcl:"log_debug"`
