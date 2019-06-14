@@ -1,4 +1,4 @@
-(module C_1206_HandSoldering (layer F.Cu) (tedit 58AA84D1)
+(module C_1206_HandSoldering (layer F.Cu) (tedit 5CFF3651)
   (descr "Capacitor SMD 1206, hand soldering")
   (tags "capacitor 1206")
   (attr smd)
@@ -21,8 +21,8 @@
   (fp_text user %R (at 0 -1.75) (layer F.Fab)
     (effects (font (size 1 1) (thickness 0.15)))
   )
-  (pad 2 smd rect (at 2 0) (size 2 1.6) (layers F.Cu F.Paste F.Mask))
-  (pad 1 smd rect (at -2 0) (size 2 1.6) (layers F.Cu F.Paste F.Mask))
+  (pad 2 smd rect (at 2 0) (size 1.4 1.6) (layers F.Cu F.Paste F.Mask))
+  (pad 1 smd rect (at -2 0) (size 1.4 1.6) (layers F.Cu F.Paste F.Mask))
   (model Capacitors_SMD.3dshapes/C_1206.wrl
     (at (xyz 0 0 0))
     (scale (xyz 1 1 1))

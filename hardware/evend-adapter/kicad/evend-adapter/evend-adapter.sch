@@ -142,7 +142,7 @@ F 3 "" H 2050 4500 50  0001 C CNN
 	1    2050 4500
 	1    0    0    -1  
 $EndComp
-Text GLabel 3400 3200 0    60   Input ~ 0
+Text GLabel 3400 3300 0    60   Input ~ 0
 SCL
 $Comp
 L power:GND #PWR0116
@@ -155,7 +155,7 @@ F 3 "" H 3800 3450 50  0001 C CNN
 	1    3800 3450
 	1    0    0    -1  
 $EndComp
-Text GLabel 3400 3300 0    60   Input ~ 0
+Text GLabel 3400 3200 0    60   Input ~ 0
 SDA
 $Comp
 L Device:R R8
@@ -320,17 +320,6 @@ F 1 "GND" H 1950 6750 50  0000 C CNN
 F 2 "" H 1950 6900 50  0001 C CNN
 F 3 "" H 1950 6900 50  0001 C CNN
 	1    1950 6900
-	1    0    0    -1  
-$EndComp
-$Comp
-L power:+5V #PWR0111
-U 1 1 5CE0D32D
-P 1950 5500
-F 0 "#PWR0111" H 1950 5350 50  0001 C CNN
-F 1 "+5V" H 1950 5640 50  0000 C CNN
-F 2 "" H 1950 5500 50  0001 C CNN
-F 3 "" H 1950 5500 50  0001 C CNN
-	1    1950 5500
 	1    0    0    -1  
 $EndComp
 Text GLabel 1550 5700 0    60   Input ~ 0
@@ -948,7 +937,7 @@ U 1 1 5CFF52FD
 P 10350 1800
 F 0 "o1" V 10430 1800 50  0000 C CNN
 F 1 "0" V 10350 1800 50  0000 C CNN
-F 2 "evend-adapter:L_1806_Handsoldering" V 10280 1800 50  0001 C CNN
+F 2 "evend-adapter:C_1206_HandSoldering" V 10280 1800 50  0001 C CNN
 F 3 "" H 10350 1800 50  0001 C CNN
 	1    10350 1800
 	-1   0    0    1   
@@ -972,7 +961,7 @@ U 1 1 5D012E19
 P 8050 900
 F 0 "o2" V 8130 900 50  0000 C CNN
 F 1 "0" V 8050 900 50  0000 C CNN
-F 2 "evend-adapter:L_1806_Handsoldering" V 7980 900 50  0001 C CNN
+F 2 "evend-adapter:C_1206_HandSoldering" V 7980 900 50  0001 C CNN
 F 3 "" H 8050 900 50  0001 C CNN
 	1    8050 900 
 	-1   0    0    1   
@@ -983,7 +972,7 @@ U 1 1 5D02BB02
 P 3200 3950
 F 0 "o3" V 3280 3950 50  0000 C CNN
 F 1 "0" V 3200 3950 50  0000 C CNN
-F 2 "evend-adapter:L_1806_Handsoldering" V 3130 3950 50  0001 C CNN
+F 2 "evend-adapter:C_1206_HandSoldering" V 3130 3950 50  0001 C CNN
 F 3 "" H 3200 3950 50  0001 C CNN
 	1    3200 3950
 	0    -1   -1   0   
@@ -996,7 +985,7 @@ U 1 1 5D05C350
 P 7600 4250
 F 0 "o4" V 7680 4250 50  0000 C CNN
 F 1 "0" V 7600 4250 50  0000 C CNN
-F 2 "evend-adapter:L_1806_Handsoldering" V 7530 4250 50  0001 C CNN
+F 2 "evend-adapter:C_1206_HandSoldering" V 7530 4250 50  0001 C CNN
 F 3 "" H 7600 4250 50  0001 C CNN
 	1    7600 4250
 	0    -1   -1   0   
@@ -1062,7 +1051,7 @@ U 1 1 5D0DD97C
 P 1300 3500
 F 0 "o5" V 1380 3500 50  0000 C CNN
 F 1 "0" V 1300 3500 50  0000 C CNN
-F 2 "evend-adapter:L_1806_Handsoldering" V 1230 3500 50  0001 C CNN
+F 2 "evend-adapter:C_1206_HandSoldering" V 1230 3500 50  0001 C CNN
 F 3 "" H 1300 3500 50  0001 C CNN
 	1    1300 3500
 	0    -1   -1   0   
@@ -1087,7 +1076,7 @@ U 1 1 5D116337
 P 6950 3350
 F 0 "o6" V 7030 3350 50  0000 C CNN
 F 1 "0" V 6950 3350 50  0000 C CNN
-F 2 "evend-adapter:L_1806_Handsoldering" V 6880 3350 50  0001 C CNN
+F 2 "evend-adapter:C_1206_HandSoldering" V 6880 3350 50  0001 C CNN
 F 3 "" H 6950 3350 50  0001 C CNN
 	1    6950 3350
 	0    -1   -1   0   
@@ -1100,17 +1089,6 @@ Wire Wire Line
 Wire Wire Line
 	6750 3200 6800 3200
 Connection ~ 6800 3200
-$Comp
-L power:+5V #PWR0112
-U 1 1 5D18117D
-P 3850 2700
-F 0 "#PWR0112" H 3850 2550 50  0001 C CNN
-F 1 "+5V" H 3850 2900 50  0000 C CNN
-F 2 "" H 3850 2700 50  0001 C CNN
-F 3 "" H 3850 2700 50  0001 C CNN
-	1    3850 2700
-	1    0    0    -1  
-$EndComp
 Wire Wire Line
 	3850 2700 3850 3000
 $Comp
@@ -1133,7 +1111,7 @@ U 1 1 5CFB5FA1
 P 6950 3500
 F 0 "o7" V 7030 3500 50  0000 C CNN
 F 1 "0" V 6950 3500 50  0000 C CNN
-F 2 "evend-adapter:L_1806_Handsoldering" V 6880 3500 50  0001 C CNN
+F 2 "evend-adapter:C_1206_HandSoldering" V 6880 3500 50  0001 C CNN
 F 3 "" H 6950 3500 50  0001 C CNN
 	1    6950 3500
 	0    -1   -1   0   
@@ -1146,4 +1124,80 @@ Wire Wire Line
 Wire Wire Line
 	6800 3500 6800 3350
 Connection ~ 6800 3350
+$Comp
+L Device:R R25
+U 1 1 5D05E879
+P 2550 4950
+F 0 "R25" V 2630 4950 50  0000 C CNN
+F 1 "300" V 2550 4950 50  0000 C CNN
+F 2 "evend-adapter:C_1206_1-HandSoldering" V 2480 4950 50  0001 C CNN
+F 3 "" H 2550 4950 50  0001 C CNN
+	1    2550 4950
+	0    -1   1    0   
+$EndComp
+$Comp
+L Device:R R26
+U 1 1 5D05E883
+P 2350 5150
+F 0 "R26" V 2430 5150 50  0000 C CNN
+F 1 "1.5k" V 2350 5150 50  0000 C CNN
+F 2 "evend-adapter:C_1206_1-HandSoldering" V 2280 5150 50  0001 C CNN
+F 3 "" H 2350 5150 50  0001 C CNN
+	1    2350 5150
+	-1   0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR0111
+U 1 1 5D05E88D
+P 2350 5300
+F 0 "#PWR0111" H 2350 5050 50  0001 C CNN
+F 1 "GND" H 2350 5150 50  0000 C CNN
+F 2 "" H 2350 5300 50  0001 C CNN
+F 3 "" H 2350 5300 50  0001 C CNN
+	1    2350 5300
+	-1   0    0    -1  
+$EndComp
+Wire Wire Line
+	2400 4950 2350 4950
+Wire Wire Line
+	2350 5000 2350 4950
+Connection ~ 2350 4950
+Wire Wire Line
+	1950 5500 1950 4950
+Wire Wire Line
+	1950 4950 2350 4950
+$Comp
+L power:+6V #PWR0119
+U 1 1 5D068D77
+P 2700 4950
+F 0 "#PWR0119" H 2700 4800 50  0001 C CNN
+F 1 "+6V" V 2715 5078 50  0000 L CNN
+F 2 "" H 2700 4950 50  0001 C CNN
+F 3 "" H 2700 4950 50  0001 C CNN
+	1    2700 4950
+	0    1    1    0   
+$EndComp
+$Comp
+L power:+5VD #PWR?
+U 1 1 5D083C89
+P 1950 4950
+F 0 "#PWR?" H 1950 4800 50  0001 C CNN
+F 1 "+5VD" V 1965 5078 50  0000 L CNN
+F 2 "" H 1950 4950 50  0001 C CNN
+F 3 "" H 1950 4950 50  0001 C CNN
+	1    1950 4950
+	0    -1   -1   0   
+$EndComp
+Connection ~ 1950 4950
+$Comp
+L power:+5VD #PWR?
+U 1 1 5D08BD3D
+P 3850 2700
+F 0 "#PWR?" H 3850 2550 50  0001 C CNN
+F 1 "+5VD" H 3865 2828 50  0000 L CNN
+F 2 "" H 3850 2700 50  0001 C CNN
+F 3 "" H 3850 2700 50  0001 C CNN
+	1    3850 2700
+	1    0    0    -1  
+$EndComp
 $EndSCHEMATC
