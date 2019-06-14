@@ -28,8 +28,8 @@
     <ResetRule>0</ResetRule>
     <eraseonlaunchrule>0</eraseonlaunchrule>
     <EraseKey />
-    <avrtool>com.atmel.avrdbg.tool.simulator</avrtool>
-    <avrtoolserialnumber />
+    <avrtool>com.atmel.avrdbg.tool.avrdragon</avrtool>
+    <avrtoolserialnumber>00A200003254</avrtoolserialnumber>
     <avrdeviceexpectedsignature>0x1E950F</avrdeviceexpectedsignature>
     <com_atmel_avrdbg_tool_simulator>
       <ToolOptions>
@@ -43,19 +43,31 @@
       </ToolNumber>
       <ToolName>Simulator</ToolName>
     </com_atmel_avrdbg_tool_simulator>
-    <avrtoolinterface />
+    <avrtoolinterface>ISP</avrtoolinterface>
     <AsfFrameworkConfig>
       <framework-data xmlns="">
-  <options />
-  <configurations />
-  <files />
-  <documentation help="" />
-  <offline-documentation help="" />
-  <dependencies>
-    <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.40.0" />
-  </dependencies>
-</framework-data>
+        <options />
+        <configurations />
+        <files />
+        <documentation help="" />
+        <offline-documentation help="" />
+        <dependencies>
+          <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.40.0" />
+        </dependencies>
+      </framework-data>
     </AsfFrameworkConfig>
+    <com_atmel_avrdbg_tool_avrdragon>
+      <ToolOptions>
+        <InterfaceProperties>
+          <IspClock>125000</IspClock>
+        </InterfaceProperties>
+        <InterfaceName>ISP</InterfaceName>
+      </ToolOptions>
+      <ToolType>com.atmel.avrdbg.tool.avrdragon</ToolType>
+      <ToolNumber>00A200003254</ToolNumber>
+      <ToolName>AVR Dragon</ToolName>
+    </com_atmel_avrdbg_tool_avrdragon>
+    <avrtoolinterfaceclock>125000</avrtoolinterfaceclock>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <ToolchainSettings>
@@ -148,19 +160,34 @@
     <ExternalMakeFilePath>Makefile</ExternalMakeFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="buffer.c">
-      <SubType>compile</SubType>
-    </None>
-    <Compile Include="crc.c">
+    <Compile Include="protocol.h">
       <SubType>compile</SubType>
     </Compile>
+    <None Include="spi.c">
+      <SubType>compile</SubType>
+    </None>
+    <Compile Include="bit.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="buffer.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="common.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="config.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <None Include="crc.c">
+      <SubType>compile</SubType>
+    </None>
     <Compile Include="crc.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="main.c">
+    <Compile Include="crc_test.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="main.h">
+    <Compile Include="main.c">
       <SubType>compile</SubType>
     </Compile>
     <None Include="Makefile">
