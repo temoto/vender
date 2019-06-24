@@ -84,7 +84,7 @@ type Config struct {
 		}
 	}
 
-	_unused_copy_guard sync.Mutex
+	_copy_guard sync.Mutex //nolint:unused
 }
 
 type ConfigSource struct {

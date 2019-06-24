@@ -21,7 +21,7 @@ const (
 	valvePollNotHot = 0x40
 )
 
-type DeviceValve struct { //nolint:malign
+type DeviceValve struct { //nolint:maligned
 	Generic
 
 	cautionPartMl uint16
