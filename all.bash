@@ -15,14 +15,7 @@ main() {
 		ensure_golangci_lint
 		go generate ./...
 		go build ./...
-		# begin workaround cannot use test profile flag with multiple packages
-		for d in $(go list ./...) ; do
-			go test -timeout 3m -race -coverprofile=$base/coverage-$(basename $d).txt -covermode=atomic $d
-		done
-		cat $base/coverage-*.txt >>$base/coverage.txt
-		rm $base/coverage-*.txt
-		# end workaround cannot use test profile flag with multiple packages
-
+		go test -timeout 3m -race -coverprofile=$base/coverage.txt -covermode=atomic ./...
 		go test -bench=. -vet= ./...
 		golangci-lint run || true
 	fi

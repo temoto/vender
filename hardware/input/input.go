@@ -104,6 +104,7 @@ func (self *Dispatch) Run(sources []Source) {
 func (self *Dispatch) Emit(event Event) {
 	select {
 	case self.bus <- event:
+		self.Log.Debugf("input emit=%#v", event)
 	case <-self.stop:
 		return
 	}

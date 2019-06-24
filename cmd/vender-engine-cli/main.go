@@ -84,10 +84,13 @@ func newExecutor(ctx context.Context) func(string) {
 			g.Log.Errorf(errors.ErrorStack(err))
 			return
 		}
+		tbegin := time.Now()
 		err = d.Do(ctx)
 		if err != nil {
 			g.Log.Errorf(errors.ErrorStack(err))
 		}
+		texec := time.Since(tbegin)
+		g.Log.Infof("duration=%v", texec)
 	}
 }
 

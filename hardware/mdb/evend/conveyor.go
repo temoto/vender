@@ -9,21 +9,24 @@ import (
 	"github.com/temoto/vender/state"
 )
 
+const ConveyorDefaultTimeout = 30 * time.Second
+
 type DeviceConveyor struct {
 	Generic
 
 	maxTimeout time.Duration
 	minSpeed   uint16
-	calibrated bool
-	currentPos uint16 // estimated
+	currentPos int16 // estimated
 }
 
 func (self *DeviceConveyor) Init(ctx context.Context) error {
-	self.calibrated = false
-	self.currentPos = 0
+	self.currentPos = -1
 	g := state.GetGlobal(ctx)
 	devConfig := &g.Config().Hardware.Evend.Conveyor
 	self.maxTimeout = speedDistanceDuration(float32(devConfig.MinSpeed), uint(devConfig.PositionMax))
+	if self.maxTimeout == 0 {
+		self.maxTimeout = ConveyorDefaultTimeout
+	}
 	self.minSpeed = uint16(devConfig.MinSpeed)
 	if self.minSpeed == 0 {
 		self.minSpeed = 200
@@ -38,12 +41,14 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 }
 
 func (self *DeviceConveyor) calibrate(ctx context.Context) error {
-	if self.calibrated {
+	self.dev.Log.Debugf("mdb.evend.conveyor calibrate ready=%t current=%d", self.dev.Ready(), self.currentPos)
+	if self.currentPos >= 0 {
 		return nil
 	}
+	self.dev.Log.Debugf("mdb.evend.conveyor calibrate begin")
 	err := self.move(ctx, 0)
 	if err == nil {
-		self.calibrated = true
+		self.dev.Log.Debugf("mdb.evend.conveyor calibrate success")
 	}
 	return err
 }
@@ -59,17 +64,20 @@ func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 	}
 
 	timeout := self.maxTimeout
-	if self.calibrated {
-		distance := absDiffU16(self.currentPos, position)
+	if self.dev.Ready() && self.currentPos >= 0 {
+		distance := absDiffU16(uint16(self.currentPos), position)
 		eta := speedDistanceDuration(float32(self.minSpeed), uint(distance))
 		timeout = eta * 2
 	}
-	self.dev.Log.Debugf("%s position current=%d target=%d timeout=%s", tag, self.currentPos, position, timeout)
+	self.dev.Log.Debugf("%s position current=%d target=%d timeout=%v maxtimeout=%v", tag, self.currentPos, position, timeout, self.maxTimeout)
 	if err := self.Generic.NewWaitDone(tag, timeout).Do(ctx); err != nil {
-		self.calibrated = false
+		self.currentPos = -1
+		self.dev.SetReady(false)
 		return err
+	} else {
+		self.currentPos = int16(position)
+		self.dev.SetReady(true)
 	}
-	self.currentPos = position
 	return nil
 }
 

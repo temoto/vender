@@ -21,7 +21,7 @@ const (
 	valvePollNotHot = 0x40
 )
 
-type DeviceValve struct {
+type DeviceValve struct { //nolint:malign
 	Generic
 
 	cautionPartMl uint16
@@ -34,7 +34,7 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 	valveConfig := &g.Config().Hardware.Evend.Valve
 	self.cautionPartMl = uint16(valveConfig.CautionPartMl)
-	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, 30*time.Second)
+	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, time.Hour) // big default timeout is fine, depend on valve hardware
 	self.proto2BusyMask = valvePollBusy
 	self.proto2IgnoreMask = valvePollNotHot
 	err := self.Generic.Init(ctx, 0xc0, "valve", proto2)
@@ -126,7 +126,7 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 				if err != nil {
 					return err
 				}
-				err = self.NewWaitDone(tag, cautionTimeout).Do(ctx)
+				err = self.Generic.NewWaitDone(tag, cautionTimeout).Do(ctx)
 				if err != nil {
 					_ = abort.Do(ctx)
 					return err
@@ -138,35 +138,35 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 			if err != nil {
 				return err
 			}
-			err = self.NewWaitDone(tag, self.MlToTimeout(ml)).Do(ctx)
+			err = self.Generic.NewWaitDone(tag, self.MlToTimeout(ml)).Do(ctx)
 			return err
 		}}
 
 	return engine.NewSeq(tag).
-		Append(self.NewWaitReady(tag)).
+		Append(self.Generic.NewWaitReady(tag)).
 		Append(doPour)
 }
 
-func (self *DeviceValve) NewPourHot() engine.Doer {
-	const tag = "mdb.evend.valve.pour_hot"
-	tx := engine.NewSeq(tag).
-		Append(self.NewWaitReady(tag)).
-		Append(self.newPour(tag, 0x01)).
-		Append(self.NewWaitDone(tag, self.pourTimeout))
+func (self *DeviceValve) NewPourCoffee() engine.Doer {
+	tx := self.newPourCareful("coffee", 0x03, self.NewPumpCoffee(false))
 	return self.waterStock.WrapArg(tx)
 }
 
 func (self *DeviceValve) NewPourCold() engine.Doer {
 	const tag = "mdb.evend.valve.pour_cold"
 	tx := engine.NewSeq(tag).
-		Append(self.NewWaitReady(tag)).
+		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.newPour(tag, 0x02)).
-		Append(self.NewWaitDone(tag, self.pourTimeout))
+		Append(self.Generic.NewWaitDone(tag, self.pourTimeout))
 	return self.waterStock.WrapArg(tx)
 }
 
-func (self *DeviceValve) NewPourCoffee() engine.Doer {
-	tx := self.newPourCareful("coffee", 0x03, self.NewPumpCoffee(false))
+func (self *DeviceValve) NewPourHot() engine.Doer {
+	const tag = "mdb.evend.valve.pour_hot"
+	tx := engine.NewSeq(tag).
+		Append(self.Generic.NewWaitReady(tag)).
+		Append(self.newPour(tag, 0x01)).
+		Append(self.Generic.NewWaitDone(tag, self.pourTimeout))
 	return self.waterStock.WrapArg(tx)
 }
 
@@ -210,7 +210,9 @@ func (self *DeviceValve) newPour(tag string, b1 byte) engine.Doer {
 	return engine.FuncArg{
 		Name: tag,
 		F: func(ctx context.Context, arg engine.Arg) error {
-			bs := []byte{b1, uint8(self.waterStock.TranslateArg(arg))}
+			units := self.waterStock.TranslateArg(arg)
+			self.dev.Log.Debugf("%s arg=%d units=%d", tag, arg, units)
+			bs := []byte{b1, uint8(units)}
 			return self.txAction(bs)
 		},
 	}

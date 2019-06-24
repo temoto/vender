@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juju/errors"
@@ -25,7 +26,7 @@ type Device struct {
 	lastOff time.Time
 
 	// "ready for useful work", with RESET, configure, calibration done.
-	// ready bool
+	ready uint32 // atomic bool
 
 	Log           *log2.Log
 	Address       uint8
@@ -136,6 +137,17 @@ func (self *Device) DoSetup(ctx context.Context) error {
 	return nil
 }
 
+func (self *Device) Ready() bool {
+	return atomic.LoadUint32(&self.ready) == 1
+}
+func (self *Device) SetReady(r bool) {
+	u := uint32(0)
+	if r {
+		u = 1
+	}
+	atomic.StoreUint32(&self.ready, u)
+}
+
 // "Idle mode" polling, runs forever until receive on `stopch`.
 // Switches between fast/idle delays.
 // Used by bill/coin devices.
@@ -185,8 +197,11 @@ func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duratio
 			if err != nil {
 				return errors.Annotate(err, tag)
 			}
-			if stop || timeout == 0 {
+			if stop {
 				return nil
+			}
+			if timeout == 0 {
+				return errors.Errorf("tag=%s timeout=0 invalid", tag)
 			}
 			time.Sleep(self.DelayNext)
 			if time.Since(tbegin) > timeout {

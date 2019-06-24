@@ -129,7 +129,38 @@ func (self *Generic) NewWaitReady(tag string) engine.Doer {
 
 		return self.dev.NewPollLoop(tag, self.dev.PacketPoll, self.readyTimeout, fun)
 	case proto2:
-		return self.newProto2PollWait(tag, self.readyTimeout, genericPollMiss)
+		fun := func(p mdb.Packet) (bool, error) {
+			bs := p.Bytes()
+			// self.dev.Log.Debugf("%s POLL=%x", tag, bs)
+			if stop, err := self.proto2PollCommon(tag, bs); stop || err != nil {
+				return stop, err
+			}
+			value := bs[0]
+			value &^= self.proto2IgnoreMask
+
+			// 04 during WaitReady is "OK, poll few more"
+			if value&genericPollMiss != 0 {
+				// self.dev.SetReady(false)
+				value &^= genericPollMiss
+			}
+
+			// busy during WaitReady is problem (previous action did not finish cleanly)
+			if value == self.proto2BusyMask {
+				self.dev.Log.Errorf("%s PLEASE REPORT WaitReady POLL=%x (busy) unexpected", tag, bs[0])
+				// self.dev.SetReady(false)
+				return false, nil
+			}
+
+			if value == 0 {
+				self.dev.Log.Debugf("%s WaitReady value=%02x (%02x&^%02x) -> late repeat", tag, value, bs[0], self.proto2IgnoreMask)
+				return false, nil
+			}
+
+			self.dev.SetReady(false)
+			self.dev.Log.Errorf("%s PLEASE REPORT WaitReady value=%02x (%02x&^%02x) -> unexpected", tag, value, bs[0], self.proto2IgnoreMask)
+			return true, self.NewErrPollUnexpected(p)
+		}
+		return self.dev.NewPollLoop(tag, self.dev.PacketPoll, self.readyTimeout, fun)
 	default:
 		panic("code error")
 	}
@@ -142,7 +173,36 @@ func (self *Generic) NewWaitDone(tag string, timeout time.Duration) engine.Doer 
 	case proto1:
 		return self.newProto1PollWaitSuccess(tag, timeout)
 	case proto2:
-		return self.newProto2PollWait(tag, timeout, self.proto2BusyMask)
+		fun := func(p mdb.Packet) (bool, error) {
+			bs := p.Bytes()
+			// self.dev.Log.Debugf("%s POLL=%x", tag, bs)
+			if stop, err := self.proto2PollCommon(tag, bs); stop || err != nil {
+				// self.dev.Log.Debugf("%s ... return common stop=%t err=%v", tag, stop, err)
+				return stop, err
+			}
+			value := bs[0]
+			value &^= self.proto2IgnoreMask
+
+			// 04 during WaitDone is "oops, device reboot in operation"
+			if value&genericPollMiss != 0 {
+				self.dev.SetReady(false)
+				return true, errors.Errorf("%s POLL=%x ignore=%02x continous connection lost, (TODO decide reset?)", tag, bs, self.proto2IgnoreMask)
+			}
+
+			// busy during WaitDone is correct path
+			if value == self.proto2BusyMask {
+				self.dev.Log.Debugf("%s POLL=%x (busy) -> ok, repeat", tag, bs[0])
+				return false, nil
+			}
+
+			self.dev.Log.Debugf("%s poll-wait-done value=%02x (%02x&^%02x)", tag, value, bs[0], self.proto2IgnoreMask)
+			if value == 0 {
+				self.dev.Log.Debugf("%s PLEASE REPORT POLL=%x final=00", tag, bs[0])
+				return true, nil
+			}
+			return true, self.NewErrPollUnexpected(p)
+		}
+		return self.dev.NewPollLoop(tag, self.dev.PacketPoll, timeout, fun)
 	default:
 		panic("code error")
 	}
@@ -168,38 +228,26 @@ func (self *Generic) newProto1PollWaitSuccess(tag string, timeout time.Duration)
 	return self.dev.NewPollLoop(tag, self.dev.PacketPoll, timeout, fun)
 }
 
-func (self *Generic) newProto2PollWait(tag string, timeout time.Duration, ignoreBits byte) engine.Doer {
-	fun := func(p mdb.Packet) (bool, error) {
-		bs := p.Bytes()
-		if len(bs) == 0 {
-			return true, nil
-		}
-		if len(bs) > 1 {
-			return true, errors.Errorf("%s POLL=%x -> too long", tag, bs)
-		}
-		value := bs[0]
-		value &^= self.proto2IgnoreMask
-		if (value&^ignoreBits)&genericPollMiss != 0 {
-			// FIXME
-			// 04 during WaitReady is "OK, poll few more"
-			// 04 during WaitDone is "oops, device reboot in operation"
-			return true, errors.Errorf("%s POLL=%x continous connection lost, (TODO decide reset?)", tag, bs)
-		}
-		if value&genericPollProblem != 0 {
-			// err := self.NewErrPollProblem(r.P)
-			// self.dev.Log.Errorf(err.Error())
-			value &^= genericPollProblem
-			errCode, err := self.CommandErrorCode()
-			if err == nil {
-				err = errors.Errorf("%s POLL=%x errorcode=%[3]d %02[3]x", tag, bs, errCode)
-			}
-			return true, errors.Annotate(err, tag)
-		}
-		self.dev.Log.Debugf("%s npw v=%02x i=%02x &=%02x", tag, value, ignoreBits, value&^ignoreBits)
-		if value&^ignoreBits == 0 {
-			return false, nil
-		}
-		return true, self.NewErrPollUnexpected(p)
+func (self *Generic) proto2PollCommon(tag string, bs []byte) (bool, error) {
+	if len(bs) == 0 {
+		return true, nil
 	}
-	return self.dev.NewPollLoop(tag, self.dev.PacketPoll, timeout, fun)
+	if len(bs) > 1 {
+		return true, errors.Errorf("%s POLL=%x -> too long", tag, bs)
+	}
+	value := bs[0]
+	value &^= self.proto2IgnoreMask
+	if bs[0] != 0 && value == 0 {
+		self.dev.Log.Debugf("%s proto2-common value=00 bs=%02x ignoring mask=%02x -> success", tag, bs[0], self.proto2IgnoreMask)
+		return true, nil
+	}
+	if value&genericPollProblem != 0 {
+		self.dev.SetReady(false)
+		errCode, err := self.CommandErrorCode()
+		if err == nil {
+			err = errors.Errorf("%s POLL=%x errorcode=%[3]d %02[3]x", tag, bs, errCode)
+		}
+		return true, errors.Annotate(err, tag)
+	}
+	return false, nil
 }
