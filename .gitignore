@@ -18,6 +18,7 @@
 /ui-dev
 /vender
 /vender-engine-cli
+__Previews/
 _cgo_defun.c
 _cgo_export.*
 _cgo_gotypes.go
