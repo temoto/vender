@@ -10,7 +10,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/juju/errors"
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/log2"
 	"golang.org/x/sys/unix"
 )

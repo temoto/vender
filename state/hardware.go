@@ -3,7 +3,7 @@ package state
 import (
 	"fmt"
 
-	"github.com/juju/errors"
+	"github.com/temoto/errors"
 	"github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/mdb"

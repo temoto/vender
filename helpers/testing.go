@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/juju/errors"
+	"github.com/temoto/errors"
 )
 
 type FatalFunc func(...interface{})

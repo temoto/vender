@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/coreos/go-systemd/daemon"
-	"github.com/juju/errors"
 	"github.com/temoto/alive"
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/mdb/evend"
@@ -20,6 +20,8 @@ import (
 var log = log2.NewStderr(log2.LDebug)
 
 func main() {
+	errors.SetSourceTrimPrefix(os.Getenv("source_trim_prefix"))
+
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	flagConfig := cmdline.String("config", "vender.hcl", "")
 	cmdline.Parse(os.Args[1:])

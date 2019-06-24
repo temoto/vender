@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/errors"
+	"github.com/temoto/errors"
 	iodin "github.com/temoto/iodin/client/go-iodin"
 )
 

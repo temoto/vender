@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/temoto/alive"
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/head/money"

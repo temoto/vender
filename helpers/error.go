@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/juju/errors"
+	"github.com/temoto/errors"
 )
 
 func FoldErrors(errs []error) error {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/juju/errors"
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/log2"
 )
 

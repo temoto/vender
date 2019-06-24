@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/juju/errors"
+	"github.com/temoto/errors"
 )
 
 var ErrArgNotApplied = errors.Errorf("Argument is not applied")
