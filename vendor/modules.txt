@@ -36,6 +36,10 @@ github.com/pkg/term/termios
 github.com/temoto/alive
 # github.com/temoto/errors v0.0.0-20190624114038-cc113d523821
 github.com/temoto/errors
+# github.com/temoto/gpio-cdev-go v0.8.0
+github.com/temoto/gpio-cdev-go
+# github.com/temoto/inputevent-go v1.0.0
+github.com/temoto/inputevent-go
 # github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 github.com/temoto/iodin/client/go-iodin
 # golang.org/x/net v0.0.0-20190311183353-d8887717615a
@@ -45,12 +49,12 @@ golang.org/x/net/internal/socks
 # golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223
 golang.org/x/sys/unix
 # periph.io/x/periph v3.4.0+incompatible
-periph.io/x/periph/conn/gpio
-periph.io/x/periph/conn/gpio/gpioreg
-periph.io/x/periph/host
 periph.io/x/periph/conn/physic
 periph.io/x/periph/conn/spi
 periph.io/x/periph/conn/spi/spireg
+periph.io/x/periph/host
+periph.io/x/periph/conn
+periph.io/x/periph/conn/gpio
 periph.io/x/periph/conn/pin
 periph.io/x/periph
 periph.io/x/periph/host/allwinner
@@ -63,7 +67,7 @@ periph.io/x/periph/host/odroidc1
 periph.io/x/periph/host/pine64
 periph.io/x/periph/host/rpi
 periph.io/x/periph/host/sysfs
-periph.io/x/periph/conn
+periph.io/x/periph/conn/gpio/gpioreg
 periph.io/x/periph/host/cpu
 periph.io/x/periph/host/distro
 periph.io/x/periph/host/pmem
