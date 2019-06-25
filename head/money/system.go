@@ -113,7 +113,7 @@ func (self *MoneySystem) billInit(ctx context.Context) error {
 			self.Log.Debugf("money.bill credit amount=%s bill=%s total=%s",
 				pi.Amount().FormatCtx(ctx), self.billCredit.Total().FormatCtx(ctx), self.locked_credit(true).FormatCtx(ctx))
 			self.dirty += pi.Amount()
-			self.EventFire(Event{created: itemTime, name: EventCredit, amount: pi.Amount()})
+			go self.EventFire(Event{created: itemTime, name: EventCredit, amount: pi.Amount()})
 			// maybe TODO escrow?
 		}
 		return false
@@ -142,7 +142,7 @@ func (self *MoneySystem) coinInit(ctx context.Context) error {
 			_ = self.coin.DoTubeStatus.Do(ctx)
 			_ = self.coin.CommandExpansionSendDiagStatus(nil)
 		case money.StatusReturnRequest:
-			self.EventFire(Event{created: itemTime, name: EventAbort})
+			go self.EventFire(Event{created: itemTime, name: EventAbort})
 		case money.StatusRejected:
 			state.GetGlobal(ctx).Tele.StatModify(func(s *tele.Stat) { s.CoinRejected[uint32(pi.DataNominal)] += uint32(pi.DataCount) })
 		case money.StatusCredit:
@@ -153,7 +153,7 @@ func (self *MoneySystem) coinInit(ctx context.Context) error {
 			_ = self.coin.DoTubeStatus.Do(ctx)
 			_ = self.coin.CommandExpansionSendDiagStatus(nil)
 			self.dirty += pi.Amount()
-			self.EventFire(Event{created: itemTime, name: EventCredit, amount: pi.Amount()})
+			go self.EventFire(Event{created: itemTime, name: EventCredit, amount: pi.Amount()})
 		default:
 			panic("unhandled coin POLL item: " + pi.String())
 		}
