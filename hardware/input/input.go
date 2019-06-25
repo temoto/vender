@@ -142,8 +142,15 @@ func (self *Dispatch) subClose(s *sub) {
 
 func (self *Dispatch) safeSubscribe(s *sub) {
 	self.mu.Lock()
-	if _, ok := self.subs[s.name]; ok {
-		panic("code error input duplicate subscribe name=" + s.name)
+	if existing, ok := self.subs[s.name]; ok {
+		select {
+		case <-s.stop:
+			panic("code error input subscribe already closed name=" + s.name)
+		case <-existing.stop:
+			self.subClose(existing)
+		default:
+			panic("code error input duplicate subscribe name=" + s.name)
+		}
 	}
 	self.subs[s.name] = s
 	self.mu.Unlock()

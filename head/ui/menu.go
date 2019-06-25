@@ -49,7 +49,9 @@ func (self Menu) MaxPrice() currency.Amount {
 	max := currency.Amount(0)
 	for _, item := range self {
 		valErr := item.D.Validate()
-		log.Printf("val=%v %s", valErr, item.String())
+		if valErr != nil {
+			log.Printf("menu valerr=%v %s", valErr, item.String())
+		}
 		if (valErr == nil) && (item.Price > max) {
 			max = item.Price
 		}

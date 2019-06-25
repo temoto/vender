@@ -3,9 +3,41 @@ package ui
 import (
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/temoto/alive"
+	"github.com/temoto/errors"
+	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/state"
 )
+
+func TestFrontUILoop(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state.NewTestContext(t, "")
+	g.Config().Engine.Menu.ResetTimeoutSec = 1
+	const width = 16
+	display, _ := lcd.NewMockTextDisplay(width, "", 0)
+	g.Hardware.HD44780.Display = display
+
+	menuMap := make(Menu)
+	if err := menuMap.Init(ctx); err != nil {
+		t.Fatalf("menuMap.Init err=%v", errors.ErrorStack(err))
+	}
+	counter := 0
+	uiFront := NewUIFront(ctx, menuMap)
+	uiFrontRunner := &state.FuncRunner{Name: "ui-front", F: func(a *alive.Alive) {
+		time.AfterFunc(300*time.Millisecond, a.Stop)
+		frontResult := uiFront.Run(a)
+		t.Logf("uiFront result=%#v", frontResult)
+		counter++
+	}}
+
+	g.UINext(uiFrontRunner)
+	// g.UINext(uiFrontRunner)
+	// require.Equal(t, counter, 2)
+}
 
 func TestFormatScale(t *testing.T) {
 	t.Parallel()

@@ -57,17 +57,17 @@ func main() {
 
 	menuMap := make(ui.Menu)
 	if err = menuMap.Init(ctx); err != nil {
-		log.Fatalf("uiClient: %v", errors.ErrorStack(err))
+		log.Fatalf("uiFront: %v", errors.ErrorStack(err))
 	}
-	log.Debugf("uiClient len=%d", len(menuMap))
+	log.Debugf("uiFront len=%d", len(menuMap))
 
-	uiClient := ui.NewUIMenu(ctx, menuMap)
+	uiFront := ui.NewUIFront(ctx, menuMap)
 	uiService := ui.NewUIService(ctx)
 
 	moneysys.EventSubscribe(func(em money.Event) {
-		uiClient.SetCredit(moneysys.Credit(ctx))
-
 		log.Debugf("money event: %s", em.String())
+		uiFront.SetCredit(moneysys.Credit(ctx))
+
 		switch em.Name() {
 		case money.EventCredit:
 		case money.EventAbort:
@@ -98,11 +98,11 @@ func main() {
 	g.Inventory.DisableAll()
 	log.Debugf("vender init complete, running")
 
-	uiClientRunner := &state.FuncRunner{Name: "ui-client", F: func(uia *alive.Alive) {
-		uiClient.SetCredit(moneysys.Credit(ctx))
+	uiFrontRunner := &state.FuncRunner{Name: "ui-front", F: func(uia *alive.Alive) {
+		uiFront.SetCredit(moneysys.Credit(ctx))
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
-		menuResult := uiClient.Run(uia)
-		log.Debugf("uiClient result=%#v", menuResult)
+		menuResult := uiFront.Run(uia)
+		log.Debugf("uiFront result=%#v", menuResult)
 		if menuResult.Confirm {
 			itemCtx := money.SetCurrentPrice(ctx, menuResult.Item.Price)
 			err := menuResult.Item.D.Do(itemCtx)
@@ -123,7 +123,7 @@ func main() {
 	}, g.Alive.StopChan())
 
 	for g.Alive.IsRunning() {
-		g.UINext(uiClientRunner)
+		g.UINext(uiFrontRunner)
 	}
 	g.Alive.Wait()
 }

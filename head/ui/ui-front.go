@@ -52,7 +52,7 @@ var ScaleAlpha = []byte{
 	// '0', '1', '2', '3',
 }
 
-type UIMenu struct {
+type UIFront struct {
 	// config
 	resetTimeout time.Duration
 
@@ -73,8 +73,8 @@ type UIMenuResult struct {
 	Sugar   uint8
 }
 
-func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
-	self := &UIMenu{
+func NewUIFront(ctx context.Context, menu Menu) *UIFront {
+	self := &UIFront{
 		g:         state.GetGlobal(ctx),
 		menu:      menu,
 		refreshCh: make(chan struct{}),
@@ -91,7 +91,7 @@ func NewUIMenu(ctx context.Context, menu Menu) *UIMenu {
 	return self
 }
 
-func (self *UIMenu) SetCredit(a currency.Amount) {
+func (self *UIFront) SetCredit(a currency.Amount) {
 	self.credit.Store(a)
 	select {
 	case self.refreshCh <- struct{}{}:
@@ -99,10 +99,10 @@ func (self *UIMenu) SetCredit(a currency.Amount) {
 	}
 }
 
-func (self *UIMenu) Run(alive *alive.Alive) UIMenuResult {
+func (self *UIFront) Run(alive *alive.Alive) UIMenuResult {
 	defer alive.Stop()
 
-	self.inputCh = self.g.Hardware.Input.SubscribeChan("ui-menu", alive.StopChan())
+	self.inputCh = self.g.Hardware.Input.SubscribeChan("ui-front", alive.StopChan())
 	timer := time.NewTicker(200 * time.Millisecond)
 	inputBuf := make([]byte, 0, 32)
 
@@ -219,7 +219,7 @@ init:
 	return self.result
 }
 
-func (self *UIMenu) ConveyError(text string) {
+func (self *UIFront) ConveyError(text string) {
 	const timeout = 10 * time.Second
 
 	self.display.Message(msgError, text, func() {
@@ -231,7 +231,7 @@ func (self *UIMenu) ConveyError(text string) {
 	})
 }
 
-func (self *UIMenu) handleCreamSugar(mode string, e input.Event) string {
+func (self *UIFront) handleCreamSugar(mode string, e input.Event) string {
 	switch e.Key {
 	case input.EvendKeyCreamLess:
 		if self.result.Cream > 0 {

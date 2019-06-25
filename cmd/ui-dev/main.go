@@ -56,11 +56,11 @@ func main() {
 			return nil
 		}})
 
-	uiClient := ui.NewUIMenu(ctx, menuMap)
+	uiFront := ui.NewUIFront(ctx, menuMap)
 	uiService := ui.NewUIService(ctx)
 
 	moneysys.EventSubscribe(func(em money.Event) {
-		uiClient.SetCredit(moneysys.Credit(ctx))
+		uiFront.SetCredit(moneysys.Credit(ctx))
 		log.Debugf("money event: %s", em.String())
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 	})
@@ -78,7 +78,7 @@ func main() {
 					err := moneysys.Abort(ctx)
 					telesys.CommandReplyErr(&cmd, err)
 					log.Infof("admin requested abort err=%v", err)
-					uiClient.SetCredit(moneysys.Credit(ctx))
+					uiFront.SetCredit(moneysys.Credit(ctx))
 					moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 				}
 			}
@@ -86,11 +86,11 @@ func main() {
 	}()
 
 	log.Debugf("vender-ui-dev init complete, running")
-	uiClientRunner := &state.FuncRunner{Name: "ui-client", F: func(uia *alive.Alive) {
-		uiClient.SetCredit(moneysys.Credit(ctx))
+	uiFrontRunner := &state.FuncRunner{Name: "ui-front", F: func(uia *alive.Alive) {
+		uiFront.SetCredit(moneysys.Credit(ctx))
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
-		result := uiClient.Run(uia)
-		log.Debugf("uiClient result=%#v", result)
+		result := uiFront.Run(uia)
+		log.Debugf("uiFront result=%#v", result)
 		if result.Confirm {
 			itemCtx := money.SetCurrentPrice(ctx, result.Item.Price)
 			err := result.Item.D.Do(itemCtx)
@@ -111,19 +111,19 @@ func main() {
 	}, g.Alive.StopChan())
 
 	for g.Alive.IsRunning() {
-		g.UINext(uiClientRunner)
+		g.UINext(uiFrontRunner)
 		// err := moneysys.WithdrawPrepare(ctx, result.Item.Price)
 		// if err == money.ErrNeedMoreMoney {
-		// 	log.Errorf("uiClientitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
+		// 	log.Errorf("uiFrontitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
 		// } else if err == nil {
 		// 	if err = result.Item.D.Do(ctx); err != nil {
-		// 		log.Errorf("uiClientitem=%v execute err=%v", result.Item, err)
+		// 		log.Errorf("uiFrontitem=%v execute err=%v", result.Item, err)
 		// 		moneysys.Abort(ctx)
 		// 	} else {
 		// 		moneysys.WithdrawCommit(ctx, result.Item.Price)
 		// 	}
 		// } else {
-		// 	log.Errorf("uiClientitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
+		// 	log.Errorf("uiFrontitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
 		// }
 	}
 }

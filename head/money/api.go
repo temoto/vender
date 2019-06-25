@@ -49,9 +49,9 @@ type EventFunc func(Event)
 
 func (self *MoneySystem) EventFire(e Event) {
 	// built-in handlers
-	switch e.name {
-	case EventAbort:
-	}
+	// switch e.name {
+	// case EventAbort:
+	// }
 
 	self.subsLk.Lock()
 	for _, fun := range self.subs {
