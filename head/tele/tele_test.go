@@ -7,6 +7,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	proto "github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	tele_config "github.com/temoto/vender/head/tele/config"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
@@ -74,7 +75,7 @@ func TestCommandReport(t *testing.T) {
 	if tm.Error != nil {
 		t.Error(tm.Error)
 	}
-	helpers.AssertEqual(t, tm.VmId, vmId)
+	assert.Equal(t, vmId, tm.VmId)
 }
 
 func TestCommandSetGiftCredit(t *testing.T) {

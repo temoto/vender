@@ -5,10 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
@@ -56,7 +57,7 @@ expectLoop:
 		}
 		current := displayMock.String()
 		t.Logf("display:\n%s\n%s\ninput=%v", current, strings.Repeat("-", width), step.inev)
-		helpers.AssertEqual(t, current, step.expect)
+		require.Equal(t, step.expect, current)
 		g.Hardware.Input.Emit(step.inev)
 	}
 	if a.IsRunning() {
@@ -83,7 +84,7 @@ func TestVisualHash(t *testing.T) {
 		c := c
 		t.Run("input="+c.input, func(t *testing.T) {
 			result := visualHash([]byte(c.input), []byte(c.salt))
-			helpers.AssertEqual(t, result, c.expect)
+			assert.Equal(t, c.expect, result)
 		})
 	}
 }

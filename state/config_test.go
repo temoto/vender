@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
 
@@ -29,7 +29,7 @@ func TestReadConfig(t *testing.T) {
 			`hardware { mdb { uart_device = "/dev/shmoo" } } money { scale = 1 }`,
 			func(t testing.TB, ctx context.Context) {
 				c := GetGlobal(ctx).Config()
-				helpers.AssertEqual(t, c.Hardware.Mdb.UartDevice, "/dev/shmoo")
+				assert.Equal(t, "/dev/shmoo", c.Hardware.Mdb.UartDevice)
 			},
 			"",
 		},
@@ -51,9 +51,9 @@ engine {
 				if err != nil {
 					t.Error(err)
 				}
-				helpers.AssertEqual(t, mock1calls, 2)
-				helpers.AssertEqual(t, mock2calls, 2)
-				helpers.AssertEqual(t, mockArg, 3)
+				assert.Equal(t, 2, mock1calls)
+				assert.Equal(t, 2, mock2calls)
+				assert.Equal(t, 3, mockArg)
 			},
 			"",
 		},
@@ -93,14 +93,14 @@ include "money-scale-7" {}
 include "non-exist" { optional = true }`,
 			func(t testing.TB, ctx context.Context) {
 				c := GetGlobal(ctx).Config()
-				helpers.AssertEqual(t, c.Money.Scale, 7)
+				assert.Equal(t, 7, c.Money.Scale)
 			}, ""},
 		{"include-overwrites", `
 money { scale = 1 }
 include "money-scale-7" {}`,
 			func(t testing.TB, ctx context.Context) {
 				c := GetGlobal(ctx).Config()
-				helpers.AssertEqual(t, c.Money.Scale, 7)
+				assert.Equal(t, 7, c.Money.Scale)
 			}, ""},
 	}
 	mkCheck := func(c Case) func(*testing.T) {

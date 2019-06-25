@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
@@ -99,7 +100,7 @@ func checkUarterTx(t testing.TB, u Uarter, send string, bw *bytes.Buffer, expect
 		if err != nil {
 			t.Fatal(errors.ErrorStack(err))
 		}
-		helpers.AssertEqual(t, hex.EncodeToString(buf), expectOk)
+		assert.Equal(t, expectOk, hex.EncodeToString(buf))
 	}
 }
 

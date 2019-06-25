@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/alive"
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/hardware/lcd"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
@@ -64,7 +64,7 @@ func TestFormatScale(t *testing.T) {
 		c := c
 		t.Run(fmt.Sprintf("scale:%d[%d..%d]", c.value, c.min, c.max), func(t *testing.T) {
 			result := string(formatScale(c.value, c.min, c.max, alpha))
-			helpers.AssertEqual(t, c.expect, result)
+			require.Equal(t, c.expect, result)
 		})
 	}
 }

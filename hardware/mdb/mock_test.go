@@ -3,7 +3,7 @@ package mdb
 import (
 	"testing"
 
-	"github.com/temoto/vender/helpers"
+	"github.com/stretchr/testify/require"
 )
 
 var PH = MustPacketFromHex
@@ -16,8 +16,8 @@ func TestTestMdberExpectSync(t *testing.T) {
 	defer mock.Close()
 	wait := make(chan struct{})
 	go func() {
-		helpers.CheckErr(t, m.Tx(PH("30", true), new(Packet)))
-		// helpers.CheckErr(t, m.Tx(PH("0b", true), new(Packet)))
+		require.Nil(t, m.Tx(PH("30", true), new(Packet)))
+		// require.Nil(t, m.Tx(PH("0b", true), new(Packet)))
 		wait <- struct{}{}
 	}()
 	mock.Expect([]MockR{
@@ -35,6 +35,6 @@ func TestTestMdberExpectBg(t *testing.T) {
 		{"30", ""},
 		// {"31", ""},
 	})
-	helpers.CheckErr(t, m.Tx(PH("30", true), new(Packet)))
-	// helpers.CheckErr(t, m.Tx(PH("0b", true), new(Packet)))
+	require.Nil(t, m.Tx(PH("30", true), new(Packet)))
+	// require.Nil(t, m.Tx(PH("0b", true), new(Packet)))
 }

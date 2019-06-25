@@ -4,9 +4,9 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
@@ -41,7 +41,7 @@ func TestValve(t *testing.T) {
 	}
 
 	g.Engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
-	helpers.AssertEqual(t, d.tempHot, uint8(23))
+	assert.Equal(t, uint8(23), d.tempHot)
 
 	engine.DoCheckError(t, engine.ArgApply(d.NewSetTempHot(), 73), ctx)
 
@@ -49,5 +49,5 @@ func TestValve(t *testing.T) {
 	t.Logf("water before=%d", water)
 	d.waterStock.Set(water)
 	engine.DoCheckError(t, g.Engine.Resolve("mdb.evend.valve_pour_hot(90)"), ctx)
-	helpers.AssertEqual(t, d.waterStock.Value(), water-90)
+	assert.Equal(t, water-90, d.waterStock.Value())
 }

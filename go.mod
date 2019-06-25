@@ -17,6 +17,7 @@ require (
 	github.com/mattn/go-tty v0.0.0-20181127064339-e4f871175a2f // indirect
 	github.com/paulrosania/go-charset v0.0.0-20151028000031-621bb39fcc83
 	github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942 // indirect
+	github.com/stretchr/testify v1.3.0
 	github.com/temoto/alive v1.0.2
 	github.com/temoto/errors v0.0.0-20190624114038-cc113d523821
 	github.com/temoto/gpio-cdev-go v0.8.0

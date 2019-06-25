@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/temoto/vender/helpers"
+	"github.com/stretchr/testify/assert"
 	"github.com/temoto/vender/log2"
 )
 
@@ -35,7 +35,7 @@ func TestArg(t *testing.T) {
 		t.Fatal(err)
 	}
 	DoCheckFatal(t, applied, ctx)
-	helpers.AssertEqual(t, ok, true)
+	assert.Equal(t, true, ok)
 }
 
 // Few actions in sequence is a common case worth optimizing.

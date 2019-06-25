@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temoto/vender/helpers"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWrap(t *testing.T) {
@@ -54,11 +54,11 @@ func TestMessage(t *testing.T) {
 
 	d, mock := NewMockTextDisplay(8, "", 0)
 	d.SetLines("hello", "cursor\x00")
-	helpers.AssertEqual(t, "hello   \ncursor", mock.String())
+	assert.Equal(t, "hello   \ncursor", mock.String())
 	d.Message("padded", "msg", func() {
-		helpers.AssertEqual(t, "padded  \nmsg     ", mock.String())
+		assert.Equal(t, "padded  \nmsg     ", mock.String())
 	})
-	helpers.AssertEqual(t, "hello   \ncursor", mock.String())
+	assert.Equal(t, "hello   \ncursor", mock.String())
 }
 
 func TestJustCenter(t *testing.T) {
@@ -68,8 +68,8 @@ func TestJustCenter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	helpers.AssertEqual(t, []byte("longlong"), d.JustCenter([]byte("longlong")))
-	helpers.AssertEqual(t, []byte("longlon"), d.JustCenter([]byte("longlon")))
-	helpers.AssertEqual(t, []byte("  long  "), d.JustCenter([]byte("long")))
-	helpers.AssertEqual(t, []byte("   1    "), d.JustCenter([]byte("1")))
+	assert.Equal(t, []byte("longlong"), d.JustCenter([]byte("longlong")))
+	assert.Equal(t, []byte("longlon"), d.JustCenter([]byte("longlon")))
+	assert.Equal(t, []byte("  long  "), d.JustCenter([]byte("long")))
+	assert.Equal(t, []byte("   1    "), d.JustCenter([]byte("1")))
 }

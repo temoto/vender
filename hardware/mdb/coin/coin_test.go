@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state"
 )
@@ -133,7 +133,7 @@ func TestCoinPayout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	helpers.AssertEqual(t, dispensed.String(), "1:7,total:7")
+	assert.Equal(t, "1:7,total:7", dispensed.String())
 }
 
 func TestCoinAccept(t *testing.T) {
@@ -181,7 +181,7 @@ func TestCoinDispenseSmart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	helpers.AssertEqual(t, dispensed.String(), "2:1,total:2")
+	assert.Equal(t, "2:1,total:2", dispensed.String())
 }
 
 func TestCoinDiag(t *testing.T) {
