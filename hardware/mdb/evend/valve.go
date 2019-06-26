@@ -113,7 +113,7 @@ func (self *DeviceValve) NewSetTempHot() engine.Doer {
 
 func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doer) engine.Doer {
 	tagPour := "pour_" + name
-	tag := "mdb.evend.valve.%s" + tagPour
+	tag := "mdb.evend.valve." + tagPour
 
 	doPour := engine.FuncArg{
 		Name: tag + "/careful",

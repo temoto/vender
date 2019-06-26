@@ -61,7 +61,6 @@ type UIFront struct {
 	menu      Menu
 	credit    atomic.Value
 	display   *lcd.TextDisplay // FIXME
-	inputCh   <-chan input.Event
 	refreshCh chan struct{}
 	result    UIMenuResult
 }
@@ -93,16 +92,21 @@ func NewUIFront(ctx context.Context, menu Menu) *UIFront {
 
 func (self *UIFront) SetCredit(a currency.Amount) {
 	self.credit.Store(a)
-	select {
-	case self.refreshCh <- struct{}{}:
-	default:
-	}
+	self.refresh()
 }
 
-func (self *UIFront) Run(alive *alive.Alive) UIMenuResult {
-	defer alive.Stop()
+func (self *UIFront) Tag() string { return "ui-front" }
 
-	self.inputCh = self.g.Hardware.Input.SubscribeChan("ui-front", alive.StopChan())
+func (self *UIFront) Run(alive *alive.Alive) UIMenuResult {
+	inputTag := self.Tag()
+	defer alive.Stop()
+	defer self.g.Hardware.Input.Unsubscribe(inputTag)
+
+	inputCh := make(chan input.Event)
+	self.g.Hardware.Input.SubscribeFunc(inputTag, func(e input.Event) {
+		inputCh <- e
+		self.refresh()
+	}, alive.StopChan())
 	timer := time.NewTicker(200 * time.Millisecond)
 	inputBuf := make([]byte, 0, 32)
 
@@ -135,7 +139,7 @@ init:
 	waitInput:
 		var e input.Event
 		select {
-		case e = <-self.inputCh:
+		case e = <-inputCh:
 			lastActivity = time.Now()
 		case <-self.refreshCh:
 			lastActivity = time.Now()
@@ -178,26 +182,26 @@ init:
 
 			case input.IsAccept(&e):
 				if len(inputBuf) == 0 {
-					self.ConveyError(msgMenuCodeEmpty)
+					self.showError(msgMenuCodeEmpty)
 					break
 				}
 
 				x, err := strconv.ParseUint(string(inputBuf), 10, 16)
 				if err != nil {
 					inputBuf = inputBuf[:0]
-					self.ConveyError(msgMenuCodeInvalid)
+					self.showError(msgMenuCodeInvalid)
 					break
 				}
 				code := uint16(x)
 
 				mitem, ok := self.menu[code]
 				if !ok {
-					self.ConveyError(msgMenuCodeInvalid)
+					self.showError(msgMenuCodeInvalid)
 					break
 				}
 				self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
 				if mitem.Price > credit {
-					self.ConveyError(msgMenuInsufficientCredit)
+					self.showError(msgMenuInsufficientCredit)
 					break
 				}
 
@@ -219,13 +223,12 @@ init:
 	return self.result
 }
 
-func (self *UIFront) ConveyError(text string) {
+func (self *UIFront) showError(text string) {
 	const timeout = 10 * time.Second
 
 	self.display.Message(msgError, text, func() {
 		select {
 		case <-self.refreshCh:
-		case <-self.inputCh:
 		case <-time.After(timeout):
 		}
 	})
@@ -281,6 +284,13 @@ func (self *UIFront) handleCreamSugar(mode string, e input.Event) string {
 		self.display.JustCenter(t2),
 	)
 	return mode
+}
+
+func (self *UIFront) refresh() {
+	select {
+	case self.refreshCh <- struct{}{}:
+	default:
+	}
 }
 
 // tightly coupled to len(alphabet)=4

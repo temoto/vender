@@ -1,10 +1,12 @@
 package state
 
-import "github.com/temoto/alive"
+import (
+	"github.com/temoto/alive"
+)
 
 type Runner interface {
 	Run(*alive.Alive)
-	String() string
+	Tag() string
 }
 
 type FuncRunner struct {
@@ -13,7 +15,7 @@ type FuncRunner struct {
 }
 
 func (fr *FuncRunner) Run(a *alive.Alive) { fr.F(a) }
-func (fr *FuncRunner) String() string     { return fr.Name }
+func (fr *FuncRunner) Tag() string        { return fr.Name }
 
 func (g *Global) UIWait() {
 	current := g.UI.currentAlive.Load()
@@ -23,16 +25,8 @@ func (g *Global) UIWait() {
 	}
 }
 
-func (g *Global) uiActivate(u Runner) {
-	tagNext := u.String()
-	g.Log.Debugf("UISwitch next=%s activating", tagNext)
-	na := alive.NewAlive()
-	g.UI.currentAlive.Store(na)
-	go u.Run(na)
-}
-
 func (g *Global) UINext(u Runner) {
-	tagNext := u.String()
+	tagNext := u.Tag()
 
 	var current *alive.Alive
 	for {
@@ -59,7 +53,7 @@ func (g *Global) UINext(u Runner) {
 }
 
 func (g *Global) UISwitch(u Runner) {
-	tagNext := u.String()
+	tagNext := u.Tag()
 	g.Log.Debugf("UISwitch u=%s", tagNext)
 
 	var current *alive.Alive
@@ -80,4 +74,12 @@ func (g *Global) UISwitch(u Runner) {
 		return
 	}
 	g.UI.lk.Unlock()
+}
+
+func (g *Global) uiActivate(u Runner) {
+	tagNext := u.Tag()
+	g.Log.Debugf("UISwitch next=%s activating", tagNext)
+	na := alive.NewAlive()
+	g.UI.currentAlive.Store(na)
+	go u.Run(na)
 }

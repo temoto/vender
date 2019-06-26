@@ -80,6 +80,16 @@ func (self *Dispatch) SubscribeFunc(name string, fun EventFunc, substop <-chan s
 	self.safeSubscribe(sub)
 }
 
+func (self *Dispatch) Unsubscribe(name string) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	if sub, ok := self.subs[name]; ok {
+		self.subClose(sub)
+	} else {
+		panic("code error input sub not found name=" + name)
+	}
+}
+
 func (self *Dispatch) Run(sources []Source) {
 	for _, source := range sources {
 		go self.readSource(source)
@@ -88,11 +98,17 @@ func (self *Dispatch) Run(sources []Source) {
 	for {
 		select {
 		case event := <-self.bus:
+			handled := false
 			self.mu.Lock()
 			for _, sub := range self.subs {
 				self.subFire(sub, event)
+				handled = true
 			}
 			self.mu.Unlock()
+			if !handled {
+				// TODO emit sound/etc notification
+				self.Log.Errorf("input is not handled event=%#v", event)
+			}
 
 		case <-self.stop:
 			Drain(self.bus)

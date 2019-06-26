@@ -191,7 +191,7 @@ func (self *Generic) NewWaitDone(tag string, timeout time.Duration) engine.Doer 
 
 			// busy during WaitDone is correct path
 			if value == self.proto2BusyMask {
-				self.dev.Log.Debugf("%s POLL=%x (busy) -> ok, repeat", tag, bs[0])
+				// self.dev.Log.Debugf("%s POLL=%x (busy) -> ok, repeat", tag, bs[0])
 				return false, nil
 			}
 

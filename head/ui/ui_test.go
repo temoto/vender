@@ -12,6 +12,7 @@ import (
 	"github.com/temoto/vender/state"
 )
 
+// regression for input duplicate subscribe
 func TestFrontUILoop(t *testing.T) {
 	t.Parallel()
 
@@ -25,18 +26,15 @@ func TestFrontUILoop(t *testing.T) {
 	if err := menuMap.Init(ctx); err != nil {
 		t.Fatalf("menuMap.Init err=%v", errors.ErrorStack(err))
 	}
-	counter := 0
 	uiFront := NewUIFront(ctx, menuMap)
 	uiFrontRunner := &state.FuncRunner{Name: "ui-front", F: func(a *alive.Alive) {
-		time.AfterFunc(300*time.Millisecond, a.Stop)
-		frontResult := uiFront.Run(a)
-		t.Logf("uiFront result=%#v", frontResult)
-		counter++
+		time.AfterFunc(100*time.Millisecond, a.Stop)
+		uiFront.Run(a)
 	}}
 
 	g.UINext(uiFrontRunner)
-	// g.UINext(uiFrontRunner)
-	// require.Equal(t, counter, 2)
+	g.UINext(uiFrontRunner)
+	g.UIWait()
 }
 
 func TestFormatScale(t *testing.T) {

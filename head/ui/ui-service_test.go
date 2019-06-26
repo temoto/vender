@@ -66,6 +66,22 @@ expectLoop:
 	}
 }
 
+// regression for input duplicate subscribe
+func TestServiceLoop(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state.NewTestContext(t, "")
+	const width = 16
+	display, _ := lcd.NewMockTextDisplay(width, "", 0)
+	g.Hardware.HD44780.Display = display
+
+	g.Inventory.Register("water", 1)
+	ui := NewUIService(ctx)
+	g.UINext(ui)
+	g.UINext(ui)
+	g.UIWait()
+}
+
 func TestVisualHash(t *testing.T) {
 	t.Parallel()
 

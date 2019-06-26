@@ -72,12 +72,14 @@ func NewUIService(ctx context.Context) *UIService {
 	return self
 }
 
-func (self *UIService) String() string { return "ui-service" }
+func (self *UIService) Tag() string { return "ui-service" }
 
 func (self *UIService) Run(alive *alive.Alive) {
+	inputTag := self.Tag()
 	defer alive.Stop()
+	defer self.g.Hardware.Input.Unsubscribe(inputTag)
 
-	self.inputCh = self.g.Hardware.Input.SubscribeChan(self.String(), alive.StopChan())
+	self.inputCh = self.g.Hardware.Input.SubscribeChan(inputTag, alive.StopChan())
 	timer := time.NewTicker(200 * time.Millisecond)
 	serviceConfig := &self.g.Config().UI.Service
 

@@ -88,7 +88,7 @@ func NewClient(bus string, notifyPinChip, notifyPinName string, log *log2.Log) (
 	pinev, err := pinChip.GetLineEvent(uint32(notifyPinLine), 0,
 		gpio.GPIOEVENT_REQUEST_RISING_EDGE, "vender-mega")
 	if err != nil {
-		log.Error(errors.Annotate(err, "gpio.EventLoop"))
+		self.Log.Error(errors.Annotate(err, "gpio.EventLoop"))
 		self.alive.Stop()
 	}
 
