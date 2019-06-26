@@ -19,45 +19,36 @@ import (
 
 var log = log2.NewStderr(log2.LDebug)
 
-func main() {
-	errors.SetSourceTrimPrefix(os.Getenv("source_trim_prefix"))
-
-	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	flagConfig := cmdline.String("config", "vender.hcl", "")
-	cmdline.Parse(os.Args[1:])
-
-	logFlags := log2.LInteractiveFlags
-	if sdnotify("start") {
-		// under systemd assume systemd journal logging, no timestamp
-		logFlags = log2.LServiceFlags
-	}
-	log.SetFlags(logFlags)
-	log.Debugf("hello")
-
+func mainerr(configPath string) error {
 	ctx, g := state.NewContext(log)
-	g.MustInit(ctx, state.MustReadConfig(log, state.NewOsFullReader(), *flagConfig))
+	g.MustInit(ctx, state.MustReadConfig(log, state.NewOsFullReader(), configPath))
 	log.Debugf("config=%+v", g.Config())
-
-	moneysys := new(money.MoneySystem)
-	moneysys.Start(ctx)
 
 	mdber, err := g.Mdber()
 	if err != nil {
-		log.Fatalf("mdb init err=%v", errors.ErrorStack(err))
+		err = errors.Annotate(err, "mdb init")
+		return err
+	}
+	if err = mdber.BusResetDefault(); err != nil {
+		err = errors.Annotate(err, "mdb bus reset")
+		return err
 	}
 
-	mdber.BusResetDefault()
+	moneysys := new(money.MoneySystem)
+	if err = moneysys.Start(ctx); err != nil {
+		err = errors.Annotate(err, "money system Start()")
+		return err
+	}
 
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
 	// right now Enum does IO implicitly
 	// FIXME hardware.Enum() but money system inits bill/coin devices explicitly
 	evend.Enum(ctx, nil)
 
-	sdnotify(daemon.SdNotifyReady)
-
 	menuMap := make(ui.Menu)
 	if err = menuMap.Init(ctx); err != nil {
-		log.Fatalf("uiFront: %v", errors.ErrorStack(err))
+		err = errors.Annotate(err, "menuMap.Init")
+		return err
 	}
 	log.Debugf("uiFront len=%d", len(menuMap))
 
@@ -95,9 +86,6 @@ func main() {
 		}
 	}()
 
-	g.Inventory.DisableAll()
-	log.Debugf("vender init complete, running")
-
 	uiFrontRunner := &state.FuncRunner{Name: "ui-front", F: func(uia *alive.Alive) {
 		uiFront.SetCredit(moneysys.Credit(ctx))
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
@@ -122,10 +110,35 @@ func main() {
 		}
 	}, g.Alive.StopChan())
 
+	g.Inventory.DisableAll()
+	sdnotify(daemon.SdNotifyReady)
+	log.Debugf("vender init complete, running")
+
 	for g.Alive.IsRunning() {
 		g.UINext(uiFrontRunner)
 	}
 	g.Alive.Wait()
+	return nil
+}
+
+func main() {
+	errors.SetSourceTrimPrefix(os.Getenv("source_trim_prefix"))
+
+	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	flagConfig := cmdline.String("config", "vender.hcl", "")
+	cmdline.Parse(os.Args[1:])
+
+	logFlags := log2.LInteractiveFlags
+	if sdnotify("start") {
+		// under systemd assume systemd journal logging, no timestamp
+		logFlags = log2.LServiceFlags
+	}
+	log.SetFlags(logFlags)
+	log.Debugf("hello")
+
+	if err := mainerr(*flagConfig); err != nil {
+		log.Fatal(errors.ErrorStack(err))
+	}
 }
 
 func sdnotify(s string) bool {

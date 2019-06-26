@@ -60,6 +60,7 @@ func (self *megaUart) Break(d, sleep time.Duration) error {
 		}
 		err = responseError(f.Fields.MdbResult, f.Fields.MdbError)
 		if err == nil {
+			time.Sleep(sleep)
 			break
 		}
 		time.Sleep(DelayErr)

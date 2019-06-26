@@ -4,12 +4,12 @@ base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 target=./cmd/mega-cli/mega-cli
 gopkg=$(dirname $target)
 name=$(basename $target)
-remote="pi@pipi"
+: ${remote="pi@pipi"}
 test_pkgs=($(dirname $target) ./hardware/mega-client)
 
 echo "- run tests" >&2
 set -x
 go test ${test_pkgs[@]} >/dev/null || go test -v ${test_pkgs[@]}
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
-rsync -a $base/$target $remote:~/bin/
-ssh -t $remote time sudo -n chrt --fifo 99 \~/bin/$name "$@"
+rsync -a $base/$target $remote:~/
+ssh -t $remote time sudo -n chrt --fifo 99 \~/$name "$@"

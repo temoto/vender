@@ -4,11 +4,11 @@ base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 target=./cmd/vender-engine-cli/vender-engine-cli
 gopkg=$(dirname $target)
 name=$(basename $target)
-remote="pi@pipi"
+: ${remote="pi@pipi"}
 
 echo "- run tests" >&2
 set -x
 go test ./... >/dev/null || go test -v ./...
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
-rsync -a $base/$target $base/*.hcl $remote:~/bin/
-ssh -t $remote time sudo -n chrt --fifo 99 \~/bin/vender-engine-cli -config \~/bin/vender.hcl
+rsync -a $base/$target $base/vender.hcl $remote:~/
+ssh -t $remote time sudo -n chrt --fifo 99 \~/vender-engine-cli -config=vender.hcl
