@@ -1,3 +1,20 @@
+engine {
+  // alias "cup_dispense" { scenario = "conveyor_move_cup cup_drop" }
+
+  menu {
+    msg_intro = "TODO_EDIT showed after successful boot"
+    reset_sec = 180
+
+    item "1" {
+      name     = "example"
+      price    = 1
+      scenario = "cup_dispense water_hot(10) put_milk(10) cup_serve"
+    }
+  }
+
+  // on_start = ["mixer_move_top", "cup_serve", "conveyor_move_cup"]
+}
+
 hardware {
   hd44780 {
     codepage = "windows-1251"
@@ -52,12 +69,6 @@ hardware {
     #uart_driver = "iodin"
     #uart_device = "\x0f\x0e"
   }
-}
-
-menu {
-  msg_intro = "TODO_EDIT showed after successful boot"
-
-  reset_sec = 180
 }
 
 money {
