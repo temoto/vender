@@ -58,7 +58,8 @@ type Config struct {
 	}
 
 	Engine struct {
-		Aliases []Alias `hcl:"alias"`
+		Aliases []Alias  `hcl:"alias"`
+		OnStart []string `hcl:"on_start"`
 		Menu    struct {
 			MsgIntro        string      `hcl:"msg_intro"`
 			ResetTimeoutSec int         `hcl:"reset_sec"`
