@@ -11,6 +11,7 @@ type Config struct { //nolint:maligned
 	MqttKeepaliveSec  int    `hcl:"keepalive_sec"`
 	MqttLogDebug      bool   `hcl:"mqtt_log_debug"`
 	MqttPassword      string `hcl:"mqtt_password"` // secret
+	Persist           string `hcl:"mqtt_store_path"`
 	StateIntervalSec  int    `hcl:"state_interval_sec"`
 	TlsCaFile         string `hcl:"tls_ca_file"`
 	TlsPsk            string `hcl:"tls_psk"` // secret

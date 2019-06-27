@@ -117,6 +117,9 @@ func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 		SetPingTimeout(networkTimeout).
 		SetTLSConfig(tlsconf).
 		SetWriteTimeout(networkTimeout)
+	if teleConfig.Persist != "" {
+		self.mopt = self.mopt.SetStore(mqtt.NewFileStore(teleConfig.Persist))
+	}
 	if teleConfig.MqttBroker == "mock" {
 		mock := GetMqttMock(ctx)
 		mock.MockNew(self.mopt)

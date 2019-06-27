@@ -73,13 +73,14 @@ money {
 }
 
 tele {
-  enable         = false
-  vm_id          = -1
-  log_debug      = true
-  mqtt_log_debug = false
-  mqtt_broker    = "tls://TODO_EDIT:8884"
-  mqtt_password  = "TODO_EDIT"
-  tls_ca_file    = "TODO_EDIT"
+  enable          = false
+  vm_id           = -1
+  log_debug       = true
+  mqtt_log_debug  = false
+  mqtt_broker     = "tls://TODO_EDIT:8884"
+  mqtt_password   = "TODO_EDIT"
+  mqtt_store_path = ""
+  tls_ca_file     = "TODO_EDIT"
 }
 
 include "local.hcl" {
