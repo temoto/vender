@@ -30,6 +30,10 @@ const (
 	DefaultResetDelay   = 2100 * time.Millisecond
 )
 
+type DeviceErrorCode byte
+
+func (c DeviceErrorCode) Error() string { return fmt.Sprintf("evend errorcode=%d", c) }
+
 type Generic struct {
 	dev          mdb.Device
 	logPrefix    string
@@ -65,7 +69,7 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 	self.dev.Init(m.Tx, g.Log, address, name, binary.BigEndian)
 
 	// FIXME Enum, remove IO from Init
-	if err = self.dev.NewReset().Do(ctx); err != nil {
+	if err = self.dev.DoReset.Do(ctx); err != nil {
 		return errors.Annotate(err, tag)
 	}
 	err = self.dev.DoSetup(ctx)
@@ -121,13 +125,26 @@ func (self *Generic) NewWaitReady(tag string) engine.Doer {
 	case proto1:
 		fun := func(p mdb.Packet) (bool, error) {
 			bs := p.Bytes()
-			if len(bs) == 0 {
+			switch len(bs) {
+			case 0: // success path
 				return true, nil
-			}
-			return false, errors.Errorf("%s unexpected response=%x", tag, bs)
-		}
 
+			case 2: // device reported error code
+				code := bs[1]
+				self.dev.Log.Errorf("%s response=%x errorcode=%d", tag, bs, code)
+				self.dev.SetErrorCode(int32(code))
+				// self.dev.SetReady(false)
+				// TODO tele
+				return true, DeviceErrorCode(code)
+
+			default:
+				err := errors.Errorf("%s unknown response=%x", tag, bs)
+				self.dev.Log.Error(err)
+				return false, err
+			}
+		}
 		return self.dev.NewPollLoop(tag, self.dev.PacketPoll, self.readyTimeout, fun)
+
 	case proto2:
 		fun := func(p mdb.Packet) (bool, error) {
 			bs := p.Bytes()
@@ -152,7 +169,7 @@ func (self *Generic) NewWaitReady(tag string) engine.Doer {
 			}
 
 			if value == 0 {
-				self.dev.Log.Debugf("%s WaitReady value=%02x (%02x&^%02x) -> late repeat", tag, value, bs[0], self.proto2IgnoreMask)
+				// self.dev.Log.Debugf("%s WaitReady value=%02x (%02x&^%02x) -> late repeat", tag, value, bs[0], self.proto2IgnoreMask)
 				return false, nil
 			}
 
@@ -161,6 +178,7 @@ func (self *Generic) NewWaitReady(tag string) engine.Doer {
 			return true, self.NewErrPollUnexpected(p)
 		}
 		return self.dev.NewPollLoop(tag, self.dev.PacketPoll, self.readyTimeout, fun)
+
 	default:
 		panic("code error")
 	}
@@ -169,9 +187,11 @@ func (self *Generic) NewWaitReady(tag string) engine.Doer {
 // proto1/2 agnostic, use it after action
 func (self *Generic) NewWaitDone(tag string, timeout time.Duration) engine.Doer {
 	tag += "/wait-done"
+
 	switch self.proto {
 	case proto1:
 		return self.newProto1PollWaitSuccess(tag, timeout)
+
 	case proto2:
 		fun := func(p mdb.Packet) (bool, error) {
 			bs := p.Bytes()
@@ -203,6 +223,7 @@ func (self *Generic) NewWaitDone(tag string, timeout time.Duration) engine.Doer 
 			return true, self.NewErrPollUnexpected(p)
 		}
 		return self.dev.NewPollLoop(tag, self.dev.PacketPoll, timeout, fun)
+
 	default:
 		panic("code error")
 	}
@@ -212,16 +233,17 @@ func (self *Generic) newProto1PollWaitSuccess(tag string, timeout time.Duration)
 	success := []byte{0x0d, 0x00}
 	fun := func(p mdb.Packet) (bool, error) {
 		bs := p.Bytes()
-		if len(bs) == 0 {
-			self.dev.Log.Debugf("%s POLL=empty", tag)
+		if len(bs) == 0 { // empty -> try again
+			// self.dev.Log.Debugf("%s POLL=empty", tag)
 			return false, nil
-			// return true, errors.Errorf("%s POLL=%x -> expected non-empty", tag, bs)
 		}
 		if bytes.Equal(bs, success) {
 			return true, nil
 		}
 		if bs[0] == 0x04 {
-			return true, errors.Errorf("%s device=%s POLL=%x -> parsed error", tag, self.dev.Name, bs)
+			code := bs[1]
+			self.dev.SetErrorCode(int32(code))
+			return true, DeviceErrorCode(code)
 		}
 		return true, self.NewErrPollUnexpected(p)
 	}
@@ -243,11 +265,28 @@ func (self *Generic) proto2PollCommon(tag string, bs []byte) (bool, error) {
 	}
 	if value&genericPollProblem != 0 {
 		self.dev.SetReady(false)
-		errCode, err := self.CommandErrorCode()
-		if err == nil {
-			err = errors.Errorf("%s POLL=%x errorcode=%[3]d %02[3]x", tag, bs, errCode)
+		code, err := self.CommandErrorCode()
+		if err != nil {
+			err = errors.Annotate(err, "CommandErrorCode")
+			err = errors.Annotate(err, tag)
+			return true, err
 		}
-		return true, errors.Annotate(err, tag)
+		self.dev.SetErrorCode(int32(code))
+		return true, DeviceErrorCode(code)
 	}
 	return false, nil
+}
+
+func (self *Generic) WithRestart(d engine.Doer) engine.Doer {
+	return &engine.RestartError{
+		Doer: d,
+		Check: func(e error) bool {
+			_, ok := errors.Cause(e).(DeviceErrorCode)
+			return ok
+		},
+		Reset: engine.Func0{
+			Name: d.String() + "/restart-reset",
+			F:    self.dev.Reset,
+		},
+	}
 }

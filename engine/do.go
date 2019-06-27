@@ -124,21 +124,24 @@ func ForceLazy(d Doer) Doer {
 	return d
 }
 
-type mockdo struct {
-	name   string
-	called int32
-	err    error
-	lk     sync.Mutex
-	last   time.Time
-	v      ValidateFunc
+type RestartError struct {
+	Doer
+	Check func(error) bool
+	Reset Doer
 }
 
-func (self *mockdo) Validate() error { return useValidator(self.v) }
-func (self *mockdo) Do(ctx context.Context) error {
-	self.lk.Lock()
-	self.called += 1
-	self.last = time.Now()
-	self.lk.Unlock()
-	return self.err
+func (self *RestartError) Validate() error { return self.Doer.Validate() }
+func (self *RestartError) Do(ctx context.Context) error {
+	first := self.Doer.Do(ctx)
+	if first != nil {
+		if self.Check(first) {
+			resetErr := self.Reset.Do(ctx)
+			if resetErr != nil {
+				return errors.Wrap(first, resetErr)
+			}
+			return self.Doer.Do(ctx)
+		}
+	}
+	return first
 }
-func (self *mockdo) String() string { return self.name }
+func (self *RestartError) String() string { return self.Doer.String() }

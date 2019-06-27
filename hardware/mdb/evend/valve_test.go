@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/state"
 )
@@ -43,11 +42,11 @@ func TestValve(t *testing.T) {
 	g.Engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
 	assert.Equal(t, uint8(23), d.tempHot)
 
-	engine.DoCheckError(t, engine.ArgApply(d.NewSetTempHot(), 73), ctx)
+	g.Engine.TestDo(t, ctx, "mdb.evend.valve_set_temp_hot(73)")
 
 	water := d.waterStock.Min() + rand.Int31() + 90
 	t.Logf("water before=%d", water)
 	d.waterStock.Set(water)
-	engine.DoCheckError(t, g.Engine.Resolve("mdb.evend.valve_pour_hot(90)"), ctx)
+	g.Engine.TestDo(t, ctx, "mdb.evend.valve_pour_hot(90)")
 	assert.Equal(t, water-90, d.waterStock.Value())
 }

@@ -14,11 +14,11 @@ type DeviceElevator struct {
 	Generic
 
 	timeout    time.Duration
-	calibrated bool
+	currentPos int16 // estimated
 }
 
 func (self *DeviceElevator) Init(ctx context.Context) error {
-	self.calibrated = false
+	self.currentPos = -1
 	g := state.GetGlobal(ctx)
 	config := &g.Config().Hardware.Evend.Elevator
 	self.timeout = helpers.IntSecondDefault(config.TimeoutSec, 10*time.Second)
@@ -34,37 +34,57 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 			return self.move(ctx, uint8(arg))
 		},
 		V: func() error {
-			if !self.calibrated {
+			if self.currentPos == -1 {
 				return nil
 			}
 			// FIXME Generic offline -> calibrated=false
 			if err := self.Generic.dev.ValidateOnline(); err != nil {
-				self.calibrated = false
+				self.currentPos = -1
+				return err
+			}
+			if err := self.Generic.dev.ValidateErrorCode(); err != nil {
+				self.currentPos = -1
 				return err
 			}
 			return nil
 		},
 	}
-	g.Engine.RegisterNewSeq("mdb.evend.elevator_move(?)", doCalibrate, doMove)
+	moveSeq := engine.NewSeq("mdb.evend.elevator_move(?)").Append(doCalibrate).Append(doMove)
+	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
 
 	return err
 }
 
 func (self *DeviceElevator) calibrate(ctx context.Context) error {
-	if self.calibrated {
+	// self.dev.Log.Debugf("mdb.evend.elevator calibrate ready=%t current=%d", self.dev.Ready(), self.currentPos)
+	if self.currentPos != -1 {
 		return nil
 	}
 	err := self.move(ctx, 0)
-	if err == nil {
-		self.calibrated = true
-	}
+	// if err == nil {
+	// 	self.dev.Log.Debugf("mdb.evend.elevator calibrate success")
+	// }
 	return err
 }
 
-func (self *DeviceElevator) move(ctx context.Context, position uint8) error {
+func (self *DeviceElevator) move(ctx context.Context, position uint8) (err error) {
 	tag := fmt.Sprintf("mdb.evend.elevator.move:%d", position)
-	return engine.NewSeq(tag).
-		Append(self.Generic.NewWaitReady(tag)).
-		Append(self.Generic.NewAction(tag, 0x03, position, 0)).
-		Append(self.Generic.NewWaitDone(tag, self.timeout)).Do(ctx)
+	defer func() {
+		if err != nil {
+			self.currentPos = -1
+			self.dev.SetReady(false)
+		} else {
+			self.currentPos = int16(position)
+			self.dev.SetReady(true)
+		}
+	}()
+
+	if err = self.Generic.NewWaitReady(tag).Do(ctx); err != nil {
+		return
+	}
+	if err = self.Generic.NewAction(tag, 0x03, position, 0).Do(ctx); err != nil {
+		return
+	}
+	err = self.Generic.NewWaitDone(tag, self.timeout).Do(ctx)
+	return
 }

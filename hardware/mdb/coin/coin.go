@@ -54,7 +54,6 @@ type CoinAcceptor struct { //nolint:maligned
 	tubesmu sync.Mutex
 	tubes   currency.NominalGroup
 
-	doReset      engine.Doer
 	doSetup      engine.Doer
 	DoTubeStatus engine.Doer
 }
@@ -88,7 +87,6 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	self.dispenseTimeout = 5 * time.Second
 	self.scalingFactor = 1 // FIXME
 
-	self.doReset = self.dev.NewReset()
 	self.doSetup = self.newSetuper()
 	self.DoTubeStatus = self.NewTubeStatus()
 
@@ -218,7 +216,7 @@ func (self *CoinAcceptor) newIniter() engine.Doer {
 
 func (self *CoinAcceptor) Restarter() engine.Doer {
 	return engine.NewSeq(self.dev.Name + ".restarter").
-		Append(self.doReset).
+		Append(self.dev.DoReset).
 		Append(self.newIniter())
 }
 
@@ -310,7 +308,9 @@ func (self *CoinAcceptor) NewCoinType(accept, dispense uint16) engine.Doer {
 	self.dev.ByteOrder.PutUint16(buf[1:], accept)
 	self.dev.ByteOrder.PutUint16(buf[3:], dispense)
 	request := mdb.MustPacketFromBytes(buf[:], true)
-	return self.dev.NewTx("CoinType", request)
+	return engine.Func0{Name: "mdb.coin.CoinType", F: func() error {
+		return self.dev.Tx(request).E
+	}}
 }
 
 func (self *CoinAcceptor) CommandExpansionIdentification() error {

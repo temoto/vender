@@ -3,9 +3,12 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/log2"
 )
 
@@ -15,27 +18,35 @@ var _ = ArgApplier(new(FuncArg))
 func TestArg(t *testing.T) {
 	t.Parallel()
 
-	const expect = 42
-	ok := false
 	worker := func(ctx context.Context, param Arg) error {
-		if param == expect {
-			ok = true
-		}
+		result := ctx.Value("result").(*Arg)
+		*result = param + 1
 		return nil
 	}
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
 	var action Doer = FuncArg{Name: "worker", F: worker}
-	seq := NewSeq("complex_seq").Append(action)
-	// tx := NewTree("complex_tree")
-	// tx.Root.Append(Nothing{"prepare"}).Append(action).Append(Nothing{"cleanup"})
-	var applied Doer = ArgApply(seq, 42)
-	if err := applied.Validate(); err != nil {
-		t.Fatal(err)
+
+	cases := []func() Doer{
+		func() Doer { return action },
+		func() Doer { return NewSeq("seq").Append(action) },
+		func() Doer { return NewSeq("seq-nest").Append(NewSeq("inner").Append(action)) },
+		// tx := NewTree("complex_tree")
+		// tx.Root.Append(Nothing{"prepare"}).Append(action).Append(Nothing{"cleanup"})
 	}
-	DoCheckFatal(t, applied, ctx)
-	assert.Equal(t, true, ok)
+	for _, c := range cases {
+		d := c()
+		t.Run(d.String(), func(t *testing.T) {
+			arg := Arg(42)
+			applied := ArgApply(d, arg)
+			require.Nil(t, applied.Validate())
+			var result Arg
+			outctx := context.WithValue(ctx, "result", &result)
+			require.Nil(t, applied.Do(outctx), d.String())
+			assert.Equal(t, arg+1, result)
+		})
+	}
 }
 
 // Few actions in sequence is a common case worth optimizing.
@@ -82,3 +93,22 @@ func BenchmarkSequentialDo(b *testing.B) {
 	b.Run("seq-3", mkbench("seq", 3))
 	b.Run("seq-5", mkbench("seq", 5))
 }
+
+type mockdo struct {
+	name   string
+	called int32
+	err    error
+	lk     sync.Mutex
+	last   time.Time
+	v      ValidateFunc
+}
+
+func (self *mockdo) Validate() error { return useValidator(self.v) }
+func (self *mockdo) Do(ctx context.Context) error {
+	self.lk.Lock()
+	self.called += 1
+	self.last = time.Now()
+	self.lk.Unlock()
+	return self.err
+}
+func (self *mockdo) String() string { return self.name }

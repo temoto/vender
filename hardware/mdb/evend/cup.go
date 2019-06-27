@@ -27,7 +27,7 @@ func (self *DeviceCup) Init(ctx context.Context) error {
 
 	self.cupStock = g.Inventory.Register("cup", 1)
 
-	g.Engine.Register("mdb.evend.cup_dispense_proper", self.NewDispenseProper())
+	g.Engine.Register("mdb.evend.cup_dispense_proper", self.Generic.WithRestart(self.NewDispenseProper()))
 	g.Engine.Register("mdb.evend.cup_light_on", self.NewLight(true))
 	g.Engine.Register("mdb.evend.cup_light_off", self.NewLight(false))
 	g.Engine.Register("mdb.evend.cup_ensure", self.NewEnsure())

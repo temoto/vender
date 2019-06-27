@@ -13,6 +13,8 @@ import (
 	"github.com/temoto/vender/log2"
 )
 
+const ErrCodeNone int32 = -1
+
 const (
 	DefaultDelayIdle     = 700 * time.Millisecond
 	DefaultDelayNext     = 200 * time.Millisecond
@@ -20,10 +22,16 @@ const (
 	DefaultIdleThreshold = 30 * time.Second
 )
 
-type Device struct {
+type PacketError struct {
+	E error
+	P Packet
+}
+
+type Device struct { //nolint:maligned
 	cmdLk   sync.Mutex // TODO explore if chan approach is better
 	txfun   TxFunc
 	lastOff time.Time
+	errCode int32
 
 	// "ready for useful work", with RESET, configure, calibration done.
 	ready uint32 // atomic bool
@@ -39,6 +47,7 @@ type Device struct {
 	PacketReset   Packet
 	PacketSetup   Packet
 	PacketPoll    Packet
+	DoReset       engine.Doer
 
 	SetupResponse Packet
 }
@@ -52,6 +61,7 @@ func (self *Device) Init(txfun TxFunc, log *log2.Log, addr uint8, name string, b
 	self.Log = log
 	self.txfun = txfun
 	self.Name = name
+	self.errCode = ErrCodeNone
 
 	if self.DelayIdle == 0 {
 		self.DelayIdle = DefaultDelayIdle
@@ -69,21 +79,38 @@ func (self *Device) Init(txfun TxFunc, log *log2.Log, addr uint8, name string, b
 	self.PacketReset = MustPacketFromBytes([]byte{self.Address + 0}, true)
 	self.PacketSetup = MustPacketFromBytes([]byte{self.Address + 1}, true)
 	self.PacketPoll = MustPacketFromBytes([]byte{self.Address + 3}, true)
+	self.DoReset = engine.Func0{Name: fmt.Sprintf("mdb.%s.reset", self.Name), F: self.Reset}
+}
+
+func (self *Device) ValidateErrorCode() error {
+	value := atomic.LoadInt32(&self.errCode)
+	if value == ErrCodeNone {
+		return nil
+	}
+	return errors.Errorf("mdb.%s unhandled errorcode=%d", self.Name, value)
 }
 
 func (self *Device) ValidateOnline() error {
 	if !self.lastOff.IsZero() {
 		return nil
 	}
-	return errors.Errorf("mdb.dev.%s offline", self.Name)
+	return errors.Errorf("mdb.%s offline", self.Name)
 }
 
 func (self *Device) Tx(request Packet) (r PacketError) {
+	if ee := self.ValidateErrorCode(); ee != nil {
+		// self.Log.Errorf("TODO-ERRCODE %v", errors.ErrorStack(errors.Trace(ee)))
+		// TODO self.Reset()
+	}
+	return self.tx(request)
+}
+
+func (self *Device) tx(request Packet) (r PacketError) {
 	r.E = self.txfun(request, &r.P)
 	if r.E == nil {
 		self.lastOff = time.Time{}
 	} else {
-		self.Log.Errorf("mdb.dev.%s request=%s err=%v", self.Name, request.Format(), r.E)
+		self.Log.Errorf("mdb.%s request=%s err=%v", self.Name, request.Format(), r.E)
 		if self.lastOff.IsZero() && errors.Cause(r.E) == ErrTimeout {
 			self.lastOff = time.Now()
 		}
@@ -92,44 +119,12 @@ func (self *Device) Tx(request Packet) (r PacketError) {
 	return
 }
 
-func (self *Device) NewTx(name string, request Packet) *doRequest {
-	return &doRequest{
-		dev:     self,
-		str:     fmt.Sprintf("mdb.%s.%s/%x", self.Name, name, request.Bytes()),
-		request: request,
-	}
-}
-
-func (self *Device) NewReset() engine.Doer {
-	tag := fmt.Sprintf("mdb.%s.reset", self.Name)
-
-	return engine.Func0{Name: tag, F: func() error {
-		self.cmdLk.Lock()
-		defer self.cmdLk.Unlock()
-
-		request := self.PacketReset
-		r := self.Tx(request)
-		if r.E != nil {
-			if errors.Cause(r.E) == ErrTimeout {
-				self.lastOff = time.Now()
-				self.Log.Errorf("%s addr=%02x is offline RESET err=timeout", tag, self.Address)
-			} else {
-				self.Log.Errorf("%s RESET err=%s", tag, errors.ErrorStack(r.E))
-			}
-			return r.E
-		}
-		self.Log.Infof("%s addr=%02x is working", tag, self.Address)
-		time.Sleep(self.DelayReset)
-		return nil
-	}}
-}
-
 func (self *Device) DoSetup(ctx context.Context) error {
 	self.cmdLk.Lock()
 	defer self.cmdLk.Unlock()
 
 	request := self.PacketSetup
-	r := self.Tx(request)
+	r := self.tx(request)
 	if r.E != nil {
 		return r.E
 	}
@@ -137,15 +132,54 @@ func (self *Device) DoSetup(ctx context.Context) error {
 	return nil
 }
 
-func (self *Device) Ready() bool {
-	return atomic.LoadUint32(&self.ready) == 1
+func (self *Device) ErrorCode() int32 { return atomic.LoadInt32(&self.errCode) }
+func (self *Device) SetErrorCode(c int32) {
+	prev := atomic.SwapInt32(&self.errCode, c)
+	if prev != ErrCodeNone {
+		self.Log.Errorf("mdb.%s CRITICAL SetErrorCode overwrite previous=%d", self.Name, prev)
+		// TODO tele
+	}
+	if c != ErrCodeNone {
+		// self.SetReady(false)
+		self.Log.Errorf("mdb.%s errcode=%d", self.Name, c)
+		// TODO tele
+	}
 }
+
+func (self *Device) Ready() bool { return atomic.LoadUint32(&self.ready) == 1 }
 func (self *Device) SetReady(r bool) {
 	u := uint32(0)
 	if r {
 		u = 1
 	}
 	atomic.StoreUint32(&self.ready, u)
+}
+
+func (self *Device) Reset() error {
+	self.cmdLk.Lock()
+	defer self.cmdLk.Unlock()
+	return self.locked_reset()
+}
+
+// cmdLk used to ensure no concurrent commands between tx() and Sleep()
+func (self *Device) locked_reset() error {
+	tag := fmt.Sprintf("mdb.%s.reset", self.Name)
+	request := self.PacketReset
+	r := self.tx(request)
+	atomic.StoreInt32(&self.errCode, ErrCodeNone)
+	self.SetReady(false)
+	if r.E != nil {
+		if errors.Cause(r.E) == ErrTimeout {
+			self.lastOff = time.Now()
+			self.Log.Errorf("%s addr=%02x is offline RESET err=timeout", tag, self.Address)
+		} else {
+			self.Log.Errorf("%s RESET err=%s", tag, errors.ErrorStack(r.E))
+		}
+		return r.E
+	}
+	self.Log.Infof("%s addr=%02x is working", tag, self.Address)
+	time.Sleep(self.DelayReset)
+	return nil
 }
 
 // "Idle mode" polling, runs forever until receive on `stopch`.
@@ -194,43 +228,20 @@ func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duratio
 				return errors.Annotate(r.E, tag)
 			}
 			stop, err := fun(r.P)
-			if err != nil {
-				return errors.Annotate(err, tag)
-			}
-			if stop {
+			if err == nil && stop { // success
 				return nil
+			} else if err == nil && !stop { // try again
+				if timeout == 0 {
+					return errors.Errorf("tag=%s timeout=0 invalid", tag)
+				}
+				time.Sleep(self.DelayNext)
+				if time.Since(tbegin) > timeout {
+					return errors.Timeoutf(tag)
+				}
+				continue
 			}
-			if timeout == 0 {
-				return errors.Errorf("tag=%s timeout=0 invalid", tag)
-			}
-			time.Sleep(self.DelayNext)
-			if time.Since(tbegin) > timeout {
-				return errors.Timeoutf(tag)
-			}
+
+			return errors.Annotate(err, tag)
 		}
 	}}
 }
-
-type PacketError struct {
-	E error
-	P Packet
-}
-
-// Doer wrap for mbder.Tx()
-type doRequest struct {
-	dev     *Device
-	str     string
-	request Packet
-}
-
-func (self *doRequest) Do(ctx context.Context) error {
-	r := self.dev.Tx(self.request)
-	return r.E
-}
-func (self *doRequest) Validate() error {
-	if self.dev.txfun == nil {
-		return errors.Errorf("%s txfun=nil", self.str)
-	}
-	return nil
-}
-func (self *doRequest) String() string { return self.str }

@@ -19,6 +19,7 @@ type ArgApplier interface {
 	Apply(a Arg) Doer
 	Applied() bool
 }
+
 type FuncArg struct {
 	Name string
 	F    func(context.Context, Arg) error
@@ -88,9 +89,31 @@ func (seq *Seq) Applied( /*TODO arg name?*/ ) bool {
 	result := true
 	for _, d := range seq.items {
 		if x, ok := d.(ArgApplier); ok && !x.Applied() {
-			result = false
-			return true
+			return false
 		}
 	}
 	return result
+}
+
+func (self *RestartError) Apply(a Arg) Doer {
+	d := ForceLazy(self.Doer)
+	if x, ok := d.(ArgApplier); ok {
+		if !x.Applied() { // success path
+			return &RestartError{
+				Doer:  x.Apply(a),
+				Check: self.Check,
+				Reset: self.Reset,
+			}
+		} else {
+			return Fail{E: ErrArgOverwrite}
+		}
+	} else {
+		panic(fmt.Sprintf("code error RestartError.Apply: no arg placeholders in %s", self.String()))
+	}
+}
+func (self *RestartError) Applied( /*TODO arg name?*/ ) bool {
+	if x, ok := self.Doer.(ArgApplier); ok && !x.Applied() {
+		return false
+	}
+	return true
 }

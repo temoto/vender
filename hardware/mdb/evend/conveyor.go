@@ -10,6 +10,7 @@ import (
 )
 
 const ConveyorDefaultTimeout = 30 * time.Second
+const ConveyorMinTimeout = 1 * time.Second
 
 type DeviceConveyor struct {
 	Generic
@@ -34,18 +35,23 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 	err := self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
 
 	doCalibrate := engine.Func{Name: "mdb.evend.conveyor.calibrate", F: self.calibrate}
-	doMove := engine.FuncArg{Name: "mdb.evend.conveyor.move", F: func(ctx context.Context, arg engine.Arg) error { return self.move(ctx, uint16(arg)) }}
-	g.Engine.RegisterNewSeq("mdb.evend.conveyor_move(?)", doCalibrate, doMove)
+	doMove := engine.FuncArg{
+		Name: "mdb.evend.conveyor.move",
+		F: func(ctx context.Context, arg engine.Arg) error {
+			return self.move(ctx, uint16(arg))
+		}}
+	moveSeq := engine.NewSeq("mdb.evend.conveyor_move(?)").Append(doCalibrate).Append(doMove)
+	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
 
 	return err
 }
 
 func (self *DeviceConveyor) calibrate(ctx context.Context) error {
-	self.dev.Log.Debugf("mdb.evend.conveyor calibrate ready=%t current=%d", self.dev.Ready(), self.currentPos)
+	// self.dev.Log.Debugf("mdb.evend.conveyor calibrate ready=%t current=%d", self.dev.Ready(), self.currentPos)
 	if self.currentPos >= 0 {
 		return nil
 	}
-	self.dev.Log.Debugf("mdb.evend.conveyor calibrate begin")
+	// self.dev.Log.Debugf("mdb.evend.conveyor calibrate begin")
 	err := self.move(ctx, 0)
 	if err == nil {
 		self.dev.Log.Debugf("mdb.evend.conveyor calibrate success")
@@ -68,6 +74,9 @@ func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 		distance := absDiffU16(uint16(self.currentPos), position)
 		eta := speedDistanceDuration(float32(self.minSpeed), uint(distance))
 		timeout = eta * 2
+	}
+	if timeout < ConveyorMinTimeout {
+		timeout = ConveyorMinTimeout
 	}
 	self.dev.Log.Debugf("%s position current=%d target=%d timeout=%v maxtimeout=%v", tag, self.currentPos, position, timeout, self.maxTimeout)
 	if err := self.Generic.NewWaitDone(tag, timeout).Do(ctx); err != nil {

@@ -194,12 +194,14 @@ func (self *BillValidator) NewBillType(accept, escrow uint16) engine.Doer {
 	self.dev.ByteOrder.PutUint16(buf[1:], accept)
 	self.dev.ByteOrder.PutUint16(buf[3:], escrow)
 	request := mdb.MustPacketFromBytes(buf[:], true)
-	return self.dev.NewTx("BillType", request)
+	return engine.Func0{Name: "mdb.bill.BillType", F: func() error {
+		return self.dev.Tx(request).E
+	}}
 }
 
 func (self *BillValidator) NewRestarter() engine.Doer {
 	return engine.NewSeq(self.dev.Name + ".restarter").
-		Append(self.dev.NewReset()).
+		Append(self.dev.DoReset).
 		Append(self.newIniter())
 }
 

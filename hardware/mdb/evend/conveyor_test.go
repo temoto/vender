@@ -3,6 +3,8 @@ package evend
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/state"
 )
@@ -45,17 +47,10 @@ func TestConveyor(t *testing.T) {
 	d.dev.DelayIdle = 1
 	d.dev.DelayNext = 1
 	d.dev.DelayReset = 1
-	err := d.Init(ctx)
-	if err != nil {
-		t.Fatalf("Init err=%v", err)
-	}
+	require.Nil(t, d.Init(ctx))
 
-	if err := g.Engine.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"); err != nil {
-		t.Error(err)
-	}
-	if err := g.Engine.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, g.Engine.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))
+	assert.NoError(t, g.Engine.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))
 	g.Engine.TestDo(t, ctx, "@conveyor_move_cup")
 	g.Engine.TestDo(t, ctx, "@conveyor_move_elevator")
 }
