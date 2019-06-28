@@ -1,36 +1,29 @@
-// Temporary executable for developing UI
-package main
+// Helper for developing vender user interfaces
+package ui
 
 import (
-	"flag"
-	"os"
+	"context"
 	"time"
 
 	"github.com/temoto/alive"
 	"github.com/temoto/errors"
+	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/head/ui"
-	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state"
 )
 
-var log = log2.NewStderr(log2.LDebug)
+var Mod = subcmd.Mod{Name: "ui", Main: Main}
 
-func main() {
-	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	flagConfig := cmdline.String("config", "vender.hcl", "")
-	cmdline.Parse(os.Args[1:])
+func Main(ctx context.Context, config *state.Config) error {
+	g := state.GetGlobal(ctx)
+	g.MustInit(ctx, config)
+	g.Log.Debugf("config=%+v", g.Config())
 
-	log.SetFlags(log2.LInteractiveFlags)
-
-	ctx, g := state.NewContext(log)
-	g.MustInit(ctx, state.MustReadConfig(log, state.NewOsFullReader(), *flagConfig))
-	log.Debugf("config=%+v", g.Config())
-
-	log.Debugf("Init display")
+	g.Log.Debugf("Init display")
 	d := g.Hardware.HD44780.Display
 	d.SetLine1("loaded")
 	d.SetLine2("test long wrap bla bla hello world")
@@ -61,7 +54,7 @@ func main() {
 
 	moneysys.EventSubscribe(func(em money.Event) {
 		uiFront.SetCredit(moneysys.Credit(ctx))
-		log.Debugf("money event: %s", em.String())
+		g.Log.Debugf("money event: %s", em.String())
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 	})
 
@@ -77,7 +70,7 @@ func main() {
 				case *tele.Command_Abort:
 					err := moneysys.Abort(ctx)
 					telesys.CommandReplyErr(&cmd, err)
-					log.Infof("admin requested abort err=%v", err)
+					g.Log.Infof("admin requested abort err=%v", err)
 					uiFront.SetCredit(moneysys.Credit(ctx))
 					moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 				}
@@ -85,12 +78,12 @@ func main() {
 		}
 	}()
 
-	log.Debugf("vender-ui-dev init complete, running")
+	g.Log.Debugf("vender-ui-dev init complete, running")
 	uiFrontRunner := &state.FuncRunner{Name: "ui-front", F: func(uia *alive.Alive) {
 		uiFront.SetCredit(moneysys.Credit(ctx))
 		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
 		result := uiFront.Run(uia)
-		log.Debugf("uiFront result=%#v", result)
+		g.Log.Debugf("uiFront result=%#v", result)
 		if result.Confirm {
 			itemCtx := money.SetCurrentPrice(ctx, result.Item.Price)
 			err := result.Item.D.Do(itemCtx)
@@ -98,14 +91,14 @@ func main() {
 				// telesys.
 			} else {
 				err = errors.Annotatef(err, "execute %s", result.Item.String())
-				log.Errorf(errors.ErrorStack(err))
+				g.Log.Errorf(errors.ErrorStack(err))
 				telesys.Error(err)
 			}
 		}
 	}}
 	g.Hardware.Input.SubscribeFunc("service", func(e input.Event) {
 		if e.Source == input.DevInputEventTag && e.Up {
-			log.Debugf("input event switch to service")
+			g.Log.Debugf("input event switch to service")
 			g.UISwitch(uiService)
 		}
 	}, g.Alive.StopChan())
@@ -114,16 +107,18 @@ func main() {
 		g.UINext(uiFrontRunner)
 		// err := moneysys.WithdrawPrepare(ctx, result.Item.Price)
 		// if err == money.ErrNeedMoreMoney {
-		// 	log.Errorf("uiFrontitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
+		// 	g.Log.Errorf("uiFrontitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
 		// } else if err == nil {
 		// 	if err = result.Item.D.Do(ctx); err != nil {
-		// 		log.Errorf("uiFrontitem=%v execute err=%v", result.Item, err)
+		// 		g.Log.Errorf("uiFrontitem=%v execute err=%v", result.Item, err)
 		// 		moneysys.Abort(ctx)
 		// 	} else {
 		// 		moneysys.WithdrawCommit(ctx, result.Item.Price)
 		// 	}
 		// } else {
-		// 	log.Errorf("uiFrontitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
+		// 	g.Log.Errorf("uiFrontitem=%v price=%s err=%v", result.Item, result.Item.Price.FormatCtx(ctx), err)
 		// }
 	}
+
+	return nil
 }

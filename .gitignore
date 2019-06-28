@@ -13,11 +13,8 @@
 /.tags*
 /.vagrant
 /build
-/mdb-cli
 /mega-cli
-/ui-dev
 /vender
-/vender-engine-cli
 __Previews/
 _cgo_defun.c
 _cgo_export.*
@@ -25,10 +22,7 @@ _cgo_gotypes.go
 _obj
 _test
 _testmain.go
-cmd/mdb-cli/mdb-cli
 cmd/mega-cli/mega-cli
-cmd/ui-dev/ui-dev
-cmd/vender-engine-cli/vender-engine-cli
 cmd/vender/vender
 cover.out
 coverage*.info

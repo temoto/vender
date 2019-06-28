@@ -1,15 +1,14 @@
-package main
+package mdb
 
 import (
 	"context"
-	"flag"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	prompt "github.com/c-bata/go-prompt"
 	"github.com/temoto/errors"
+	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers/cli"
@@ -29,45 +28,43 @@ const usage = `syntax: commands separated by whitespace
 - loop=N   repeat N times all commands on this line
 `
 
-var log = log2.NewStderr(log2.LDebug)
+const modName = "mdb-cli"
 
-func main() {
-	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	devicePath := cmdline.String("device", "/dev/ttyAMA0", "")
-	iodinPath := cmdline.String("iodin", "./iodin", "Path to iodin executable")
-	megaSpi := cmdline.String("mega-spi", "", "mega SPI port")
-	megaPin := cmdline.String("mega-pin", "25", "mega notify pin")
-	uarterName := cmdline.String("io", "file", "file|iodin|mega")
-	cmdline.Parse(os.Args[1:])
+var Mod = subcmd.Mod{
+	Name: modName,
+	Main: Main,
+}
 
-	log.SetFlags(log2.LInteractiveFlags)
+// cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+// devicePath := cmdline.String("device", "/dev/ttyAMA0", "")
+// iodinPath := cmdline.String("iodin", "./iodin", "Path to iodin executable")
+// megaSpi := cmdline.String("mega-spi", "", "mega SPI port")
+// megaPin := cmdline.String("mega-pin", "25", "mega notify pin")
+// uarterName := cmdline.String("io", "file", "file|iodin|mega")
 
-	config := new(state.Config)
-	config.Money.Scale = 1 // XXX workaround required setting
-	config.Hardware.IodinPath = *iodinPath
-	config.Hardware.Mdb.UartDevice = *devicePath
-	config.Hardware.Mdb.UartDriver = *uarterName
-	config.Hardware.Mega.Pin = *megaPin
-	config.Hardware.Mega.Spi = *megaSpi
-
-	ctx, g := state.NewContext(log)
+func Main(ctx context.Context, config *state.Config) error {
+	g := state.GetGlobal(ctx)
 	g.MustInit(ctx, config)
+
+	synthConfig := &state.Config{}
+	synthConfig.Hardware.IodinPath = config.Hardware.IodinPath // *iodinPath
+	synthConfig.Hardware.Mdb = config.Hardware.Mdb             // *uarterName *devicePath
+	synthConfig.Hardware.Mega = config.Hardware.Mega           // *megaSpi *megaPin
+	g.MustInit(ctx, synthConfig)
+
 	if _, err := g.Mdber(); err != nil {
-		log.Fatal(err)
+		g.Log.Fatal(err)
 	}
 	defer g.Hardware.Mdb.Uarter.Close()
 
 	if err := doBusReset.Do(ctx); err != nil {
-		log.Fatal(err)
+		g.Log.Fatal(err)
 	}
 
-	cli.MainLoop("vender-mdb-cli", newExecutor(ctx), newCompleter(ctx))
+	cli.MainLoop(modName, newExecutor(ctx), newCompleter(ctx))
+	return nil
 }
 
-var doUsage = engine.Func{F: func(ctx context.Context) error {
-	log.Infof(usage)
-	return nil
-}}
 var doLogYes = engine.Func{Name: "log=yes", F: func(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 	m, err := g.Mdber()
@@ -143,6 +140,7 @@ func newTx(request mdb.Packet) engine.Doer {
 }
 
 func parseLine(ctx context.Context, line string) (engine.Doer, error) {
+	g := state.GetGlobal(ctx)
 	words := strings.Split(line, " ")
 	empty := true
 	for i, w := range words {
@@ -162,7 +160,8 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 	for _, word := range words {
 		switch {
 		case word == "help":
-			return doUsage, nil
+			g.Log.Infof(usage)
+			return engine.Nothing{}, nil
 		case strings.HasPrefix(word, "loop="):
 			if loopn != 0 {
 				return nil, errors.Errorf("multiple loop commands, expected at most one")
@@ -181,7 +180,7 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 	for _, word := range wordsRest {
 		d, err := parseCommand(word)
 		if d == nil && err == nil {
-			log.Fatalf("code error parseCommand word='%s' both doer and err are nil", word)
+			g.Log.Fatalf("code error parseCommand word='%s' both doer and err are nil", word)
 		}
 		if err != nil {
 			// TODO accumulate errors into list

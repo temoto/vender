@@ -1,10 +1,7 @@
-package main
+package engine
 
 import (
 	"context"
-	"flag"
-	"log"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,12 +9,12 @@ import (
 
 	prompt "github.com/c-bata/go-prompt"
 	"github.com/temoto/errors"
+	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/helpers/cli"
-	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state"
 )
 
@@ -31,34 +28,31 @@ const usage = `syntax: commands separated by whitespace
 - /loop=N  repeat N times all commands on this line
 `
 
-func main() {
-	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	flagConfig := cmdline.String("config", "vender.hcl", "")
-	cmdline.Parse(os.Args[1:])
+var Mod = subcmd.Mod{Name: "engine-cli", Main: Main}
 
-	log := log2.NewStderr(log2.LDebug)
-	log.SetFlags(log2.LInteractiveFlags)
-
-	ctx, g := state.NewContext(log)
-	g.MustInit(ctx, state.MustReadConfig(log, state.NewOsFullReader(), *flagConfig))
-	log.Debugf("config=%+v", g.Config())
+func Main(ctx context.Context, config *state.Config) error {
+	g := state.GetGlobal(ctx)
+	g.MustInit(ctx, config)
+	g.Log.Debugf("config=%+v", g.Config())
 
 	if err := doMdbBusReset.Do(ctx); err != nil {
-		log.Fatal(errors.ErrorStack(err))
+		g.Log.Fatal(errors.ErrorStack(err))
 	}
 
 	g.Engine.Register("mdb.bus_reset", doMdbBusReset)
 	g.Engine.Register("@money.commit", engine.Func0{Name: "@money.commit", F: func() error {
-		log.Debugf("- money commit")
+		g.Log.Debugf("- money commit")
 		return nil
 	}})
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
 	// right now Enum does IO implicitly
 	hardware.Enum(ctx, nil)
 	g.Inventory.DisableAll()
-	log.Debugf("devices init complete")
+	g.Log.Debugf("devices init complete")
 
 	cli.MainLoop("vender-engine-cli", newExecutor(ctx), newCompleter(ctx))
+
+	return nil
 }
 
 func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest {
@@ -173,7 +167,7 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 	for _, word := range wordsRest {
 		d, err := parseCommand(g.Engine, word)
 		if d == nil && err == nil {
-			log.Fatalf("code error parseCommand word='%s' both doer and err are nil", word)
+			g.Log.Fatalf("code error parseCommand word='%s' both doer and err are nil", word)
 		}
 		if err == nil {
 			tx.Append(d)
