@@ -35,6 +35,8 @@ type Client struct {
 	refcount int32
 	alive    *alive.Alive
 	stat     Stat
+
+	xxx_expect_reset uint32
 }
 type Stat struct {
 	Request   uint32
@@ -94,23 +96,9 @@ func NewClient(bus string, notifyPinChip, notifyPinName string, log *log2.Log) (
 
 	go self.readLoop(pinev)
 
-	// try to read RESET
-	var frame Frame
-	err = self.Tx(nil, &frame, 0)
-	switch err {
-	case ErrResponseEmpty:
-		// mega was reset at other time and RESET was read
-	case nil:
-		// TODO header==RESET -> OK, other -> log error
-		if frame.ResponseKind() != RESPONSE_RESET {
-			self.Log.Errorf("first frame not reset: %s", frame.ResponseString())
-		}
-	default:
-		self.Close()
-		err = errors.Annotatef(err, "mega init RESET frame read")
+	if err = self.expectReset(); err != nil {
 		return nil, err
 	}
-
 	return self, nil
 }
 
@@ -212,6 +200,51 @@ func (self *Client) Tx(send, recv *Frame, timeout time.Duration) error {
 	}
 }
 
+// bring mega to known state: expect or force RESET
+func (self *Client) expectReset() error {
+	try := func(cmd *Frame, timeout time.Duration) (bool, error) {
+		var response Frame
+		err := self.Tx(cmd, &response, timeout)
+		self.Log.Debugf("%s expectReset response=%v err=%v", modName, response.ResponseString(), err)
+		switch err {
+		case ErrResponseEmpty:
+			// mega was reset at other time and RESET has been consumed
+			return false, nil
+		case nil:
+			if response.ResponseKind() == RESPONSE_RESET {
+				return true, nil // success path
+			}
+			self.Log.Errorf("%s expectReset response=%s", modName, response.ResponseString())
+			return false, nil
+		default:
+			self.Close()
+			err = errors.Annotatef(err, "mega init RESET read error")
+			return false, err
+		}
+	}
+
+	// Sorry for ugly hack, I couldn't think of better way.
+	atomic.StoreUint32(&self.xxx_expect_reset, 1)
+	defer atomic.StoreUint32(&self.xxx_expect_reset, 0)
+
+	ok, err := try(nil, 0)
+	if err != nil {
+		err = errors.Annotate(err, "expect reset")
+		return err
+	} else if !ok {
+		cmd := NewCommand(COMMAND_RESET, 0xff)
+		ok, err = try(&cmd, DefaultTimeout*3)
+		if err != nil {
+			err = errors.Annotate(err, "expect reset")
+			return err
+		} else if !ok {
+			err = errors.Errorf("CRITICAL hardware problem: no reset response even after command")
+			return err
+		}
+	}
+	return nil
+}
+
 func (self *Client) write(f *Frame) error {
 	// static allocation of maximum possible size
 	var bufarr [BUFFER_SIZE + totalOverheads]byte
@@ -288,14 +321,17 @@ func (self *Client) readLoop(pinev *gpio.LineEventHandle) {
 		case ErrResponseEmpty:
 			// self.Log.Errorf("%s readLoop err=%v", modName, err)
 		case nil:
-			isasync := false
+			sendToTx := true
 			if frame != nil {
 				switch frame.ResponseKind() {
-				case RESPONSE_TWI_LISTEN, RESPONSE_RESET:
-					isasync = true
+				case RESPONSE_TWI_LISTEN:
+					sendToTx = false
+				case RESPONSE_RESET:
+					// Sorry for ugly hack, I couldn't think of better way.
+					sendToTx = atomic.LoadUint32(&self.xxx_expect_reset) == 1
 				}
 			}
-			if !isasync {
+			if sendToTx {
 				// Correct path, send response to Tx()
 				self.readCh <- FrameError{f: *frame}
 			}
