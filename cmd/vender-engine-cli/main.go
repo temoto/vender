@@ -48,8 +48,8 @@ func main() {
 	}
 
 	g.Engine.Register("mdb.bus_reset", doMdbBusReset)
-	g.Engine.Register("@ponr", engine.Func0{Name: "@ponr", F: func() error {
-		g.Engine.Log.Infof("- Point Of No Return")
+	g.Engine.Register("@money.commit", engine.Func0{Name: "@money.commit", F: func() error {
+		log.Debugf("- money commit")
 		return nil
 	}})
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }

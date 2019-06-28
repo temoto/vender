@@ -13,6 +13,7 @@ engine {
   }
 
   // on_start = ["mixer_move_top", "cup_serve", "conveyor_move_cup"]
+  // on_menu_error = ["money.abort", "cup_serve"]
 }
 
 hardware {

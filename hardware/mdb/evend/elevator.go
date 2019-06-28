@@ -69,6 +69,7 @@ func (self *DeviceElevator) calibrate(ctx context.Context) error {
 
 func (self *DeviceElevator) move(ctx context.Context, position uint8) (err error) {
 	tag := fmt.Sprintf("mdb.evend.elevator.move:%d", position)
+	// self.dev.Log.Debugf("mdb.evend.elevator calibrate ready=%t current=%d", self.dev.Ready(), self.currentPos)
 	defer func() {
 		if err != nil {
 			self.currentPos = -1

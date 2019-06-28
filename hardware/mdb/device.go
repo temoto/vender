@@ -91,10 +91,10 @@ func (self *Device) ValidateErrorCode() error {
 }
 
 func (self *Device) ValidateOnline() error {
-	if !self.lastOff.IsZero() {
+	if self.lastOff.IsZero() {
 		return nil
 	}
-	return errors.Errorf("mdb.%s offline", self.Name)
+	return errors.Errorf("mdb.%s offline duration=%v", self.Name, time.Since(self.lastOff))
 }
 
 func (self *Device) Tx(request Packet) (r PacketError) {

@@ -51,15 +51,20 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 		self.Log.Errorf("money.Start coin err=%v", errors.ErrorStack(err))
 	}
 
-	ponr := engine.Func{
-		Name: "@money.ponr",
+	doCommit := engine.Func{
+		Name: "@money.commit",
 		F: func(ctx context.Context) error {
 			curPrice := GetCurrentPrice(ctx)
 			err := self.WithdrawCommit(ctx, curPrice)
 			return errors.Annotatef(err, "curPrice=%s", curPrice.FormatCtx(ctx))
 		},
 	}
-	g.Engine.Register("@money.ponr", ponr)
+	g.Engine.Register(doCommit.String(), doCommit)
+	doAbort := engine.Func{
+		Name: "@money.abort",
+		F:    self.Abort,
+	}
+	g.Engine.Register(doAbort.String(), doAbort)
 
 	return nil
 }

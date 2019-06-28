@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"context"
+	"fmt"
 	"regexp"
 	"strconv"
 	"sync"
@@ -133,4 +135,21 @@ func (self *Engine) ParseText(tag, text string) (Doer, error) {
 		tx.Append(d)
 	}
 	return tx, helpers.FoldErrors(errs)
+}
+
+func (self *Engine) ExecList(ctx context.Context, tag string, list []string) error {
+	self.Log.Debugf("engine.ExecList tag=%s list=%v", tag, list)
+
+	errs := make([]error, 0)
+	for i, text := range list {
+		itemTag := fmt.Sprintf("%s:%d", tag, i)
+		d, err := self.ParseText(itemTag, text)
+		if err == nil {
+			err = d.Do(ctx)
+		}
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return helpers.FoldErrors(errs)
 }

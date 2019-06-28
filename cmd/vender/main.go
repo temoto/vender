@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 
 	"github.com/coreos/go-systemd/daemon"
@@ -14,7 +13,6 @@ import (
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/head/ui"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state"
 )
@@ -101,7 +99,14 @@ func mainerr(configPath string) error {
 			} else {
 				err = errors.Annotatef(err, "execute %s", menuResult.Item.String())
 				log.Errorf(errors.ErrorStack(err))
+
+				log.Errorf("tele.error")
 				telesys.Error(err)
+
+				log.Errorf("on_menu_error")
+				if err := g.Engine.ExecList(ctx, "on_menu_error", g.Config().Engine.OnMenuError); err != nil {
+					log.Error(err)
+				}
 			}
 		}
 	}}
@@ -113,20 +118,12 @@ func mainerr(configPath string) error {
 	}, g.Alive.StopChan())
 
 	g.Inventory.DisableAll()
+
 	sdnotify("executing on_start")
-	errs := make([]error, 0)
-	for i, text := range g.Config().Engine.OnStart {
-		d, err := g.Engine.ParseText(fmt.Sprintf("init:%d", i), text)
-		if err == nil {
-			err = d.Do(ctx)
-		}
-		if err != nil {
-			errs = append(errs, err)
-		}
+	if err := g.Engine.ExecList(ctx, "on_start", g.Config().Engine.OnStart); err != nil {
+		log.Fatal(err)
 	}
-	if len(errs) != 0 {
-		return helpers.FoldErrors(errs)
-	}
+
 	sdnotify(daemon.SdNotifyReady)
 	log.Debugf("vender init complete, running")
 
