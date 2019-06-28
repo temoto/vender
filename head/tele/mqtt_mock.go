@@ -3,6 +3,7 @@ package tele
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 )
 
 type MqttMock struct {
+	mu   sync.RWMutex
 	Opt  *mqtt.ClientOptions
 	Pub  chan MockMsg
 	subs []MockSub
@@ -31,10 +33,14 @@ func NewMqttMock(t testing.TB) *MqttMock {
 }
 
 func (self *MqttMock) MockNew(opt *mqtt.ClientOptions) {
+	self.mu.Lock()
 	self.Opt = opt
+	self.mu.Unlock()
 }
 
 func (self *MqttMock) TestPublish(t testing.TB, topic string, payload []byte) {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
 	for _, sub := range self.subs {
 		// TODO pattern-match
 		if topic == sub.Pattern {
@@ -69,7 +75,9 @@ func (self *MqttMock) Publish(topic string, qos byte, retain bool, payload inter
 }
 
 func (self *MqttMock) Subscribe(pattern string, qos byte, handler mqtt.MessageHandler) mqtt.Token {
+	self.mu.Lock()
 	self.subs = append(self.subs, MockSub{pattern, qos, handler})
+	self.mu.Unlock()
 	return mockToken{nil}
 }
 

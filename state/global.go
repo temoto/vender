@@ -107,7 +107,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	if g.c.Hardware.HD44780.Enable {
 		dev := new(lcd.LCD)
 		if err := dev.Init(g.c.Hardware.HD44780.PinChip, g.c.Hardware.HD44780.Pinmap); err != nil {
-			return errors.Annotatef(err, "config: %#v", g.c.Hardware)
+			return errors.Annotatef(err, "lcd.Init config=%#v", g.c.Hardware.HD44780)
 		}
 		ctrl := lcd.ControlOn
 		if g.c.Hardware.HD44780.ControlBlink {

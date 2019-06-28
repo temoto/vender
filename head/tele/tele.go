@@ -128,17 +128,28 @@ func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 		self.m = mqtt.NewClient(self.mopt)
 	}
 
-	if t := self.m.Connect(); self.tokenWait(t, "connect") != nil {
-		return
-	}
-
-	t := self.m.Subscribe(self.topicCommand, 1, self.mqttSubCommand)
-	if self.tokenWait(t, "subscribe:"+self.topicCommand) != nil {
-		return
-	}
-
 	self.lastState = State_Boot
-	self.sendState(self.lastState)
+
+	go func() {
+		for self.isRunning() {
+			self.Log.Debugf("tele connect before")
+			t := self.m.Connect()
+			if self.tokenWait(t, "connect") == nil {
+				break // success path
+			}
+			self.Log.Debugf("tele connect after")
+		}
+
+		for self.isRunning() {
+			self.Log.Debugf("tele sub-command before")
+			t := self.m.Subscribe(self.topicCommand, 1, self.mqttSubCommand)
+			if self.tokenWait(t, "subscribe:"+self.topicCommand) == nil {
+				break // success path
+			}
+			self.Log.Debugf("tele sub-command after")
+		}
+	}()
+
 	go self.worker()
 }
 
@@ -181,6 +192,8 @@ func (self *Tele) isRunning() bool {
 }
 
 func (self *Tele) worker() {
+	self.sendState(self.lastState)
+
 	for self.isRunning() {
 		select {
 		case self.lastState = <-self.stateCh:
