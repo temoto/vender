@@ -13,6 +13,7 @@ import (
 
 const DefaultHopperRate = 10
 const DefaultHopperRunTimeout = 200 * time.Millisecond
+const HopperTimeout = 1 * time.Second
 
 type DeviceHopper struct {
 	Generic
@@ -53,7 +54,7 @@ func (self *DeviceHopper) NewRun() engine.Doer {
 		}
 
 		runTimeout := helpers.IntMillisecondDefault(hopperConfig.RunTimeoutMs, DefaultHopperRunTimeout)
-		return self.Generic.NewWaitDone(tag, runTimeout*time.Duration(units)).Do(ctx)
+		return self.Generic.NewWaitDone(tag, runTimeout*time.Duration(units)+HopperTimeout).Do(ctx)
 	}}
 
 	return self.stock.WrapArg(do)
