@@ -9,6 +9,8 @@ github.com/eclipse/paho.mqtt.golang
 github.com/eclipse/paho.mqtt.golang/packets
 # github.com/golang/protobuf v1.3.1
 github.com/golang/protobuf/proto
+# github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
+github.com/golang/snappy
 # github.com/hashicorp/hcl v1.0.0
 github.com/hashicorp/hcl
 github.com/hashicorp/hcl/hcl/ast
@@ -37,8 +39,21 @@ github.com/pkg/term/termios
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
 # github.com/stretchr/testify v1.3.0
-github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
+github.com/stretchr/testify/assert
+# github.com/syndtr/goleveldb v1.0.0
+github.com/syndtr/goleveldb/leveldb
+github.com/syndtr/goleveldb/leveldb/errors
+github.com/syndtr/goleveldb/leveldb/opt
+github.com/syndtr/goleveldb/leveldb/storage
+github.com/syndtr/goleveldb/leveldb/util
+github.com/syndtr/goleveldb/leveldb/cache
+github.com/syndtr/goleveldb/leveldb/comparer
+github.com/syndtr/goleveldb/leveldb/filter
+github.com/syndtr/goleveldb/leveldb/iterator
+github.com/syndtr/goleveldb/leveldb/journal
+github.com/syndtr/goleveldb/leveldb/memdb
+github.com/syndtr/goleveldb/leveldb/table
 # github.com/temoto/alive v1.0.2
 github.com/temoto/alive
 # github.com/temoto/errors v0.0.0-20190624114038-cc113d523821
@@ -49,6 +64,8 @@ github.com/temoto/gpio-cdev-go
 github.com/temoto/inputevent-go
 # github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 github.com/temoto/iodin/client/go-iodin
+# github.com/temoto/spq v0.9.0
+github.com/temoto/spq
 # golang.org/x/net v0.0.0-20190311183353-d8887717615a
 golang.org/x/net/proxy
 golang.org/x/net/websocket

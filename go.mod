@@ -23,6 +23,7 @@ require (
 	github.com/temoto/gpio-cdev-go v0.8.0
 	github.com/temoto/inputevent-go v1.0.0
 	github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
+	github.com/temoto/spq v0.9.0
 	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
 	golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect

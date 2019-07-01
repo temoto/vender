@@ -2,116 +2,95 @@ package tele
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/temoto/spq"
 	tele_config "github.com/temoto/vender/head/tele/config"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
 
-func NewTestContext(t testing.TB, log *log2.Log) context.Context {
-	broker := NewMqttMock(t)
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	ctx = ContextWithMqttMock(ctx, broker)
-	return ctx
+type tenv struct {
+	cmd   *Command
+	tele  *Tele
+	trans *transportMock
 }
 
-// func TokenAssert(t testing.TB, tok mqtt.Token) {
-// 	t.Helper()
-// 	if !tok.Wait() {
-// 		t.Errorf("timeout")
-// 	}
-// 	if err := tok.Error(); err != nil {
-// 		t.Error(err)
-// 	}
-// }
+func newTestTele(t testing.TB, env *tenv) {
+	env.trans = &transportMock{t: t}
+	env.tele = &Tele{transport: env.trans}
+}
 
-func TestCommandReport(t *testing.T) {
+func TestCommand(t *testing.T) {
 	// FIXME ugly `mqtt.CRITICAL/ERROR/WARN/DEBUG` global variables
 	// t.Parallel()
 	rand := helpers.RandUnix()
 
-	tele := new(Tele)
-	vmId := -rand.Int31()
-	topicCommand := fmt.Sprintf("vm%d/r/c", vmId)
-	topicState := fmt.Sprintf("vm%d/w/1s", vmId)
-	topicTelemetry := fmt.Sprintf("vm%d/w/1t", vmId)
-	conf := tele_config.Config{
-		Enabled:    true,
-		VmId:       int(vmId),
-		MqttBroker: "mock",
+	type tcase struct {
+		name  string
+		cmd   Command
+		check func(t testing.TB, env *tenv)
 	}
-	log := log2.NewTest(t, log2.LDebug)
-	ctx := NewTestContext(t, log)
-	broker := GetMqttMock(ctx)
-	result := make(chan Telemetry)
-	broker.Subscribe(topicState, 0, func(_ mqtt.Client, msg mqtt.Message) {})
-	broker.Subscribe(topicTelemetry, 0, func(_ mqtt.Client, msg mqtt.Message) {
-		srvTm := new(Telemetry)
-		if err := proto.Unmarshal(msg.Payload(), srvTm); err != nil {
-			t.Fatal(err)
-			return
-		}
-		result <- *srvTm
-	})
+	cases := []tcase{
+		{"report",
+			Command{Id: rand.Uint32(), Task: &Command_Report{&Command_ArgReport{}}},
+			func(t testing.TB, env *tenv) {
+				payload := <-env.trans.outTelemetry
+				var tm Telemetry
+				require.NoError(t, proto.Unmarshal(payload, &tm))
+				assert.Nil(t, tm.Error)
+				assert.Equal(t, env.tele.vmId, tm.VmId)
+			}},
+		{"setgiftcredit",
+			Command{
+				Id:   rand.Uint32(),
+				Task: &Command_SetGiftCredit{&Command_ArgSetGiftCredit{Amount: uint32(rand.Int31())}},
+			},
+			func(t testing.TB, env *tenv) {
+				inCmd := <-env.tele.CommandChan()
+				assert.Equal(t, env.cmd.String(), inCmd.String())
+			}},
+		{"ping", Command{
+			Id:         rand.Uint32(),
+			Task:       &Command_Ping{&Command_ArgPing{}},
+			ReplyTopic: "foobar",
+		},
+			func(t testing.TB, env *tenv) {
+				payload := <-env.trans.outResponse
+				var r Response
+				require.NoError(t, proto.Unmarshal(payload, &r))
+				require.Equal(t, env.cmd.Id, r.CommandId)
+				assert.Equal(t, "", r.Error)
+			}},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			ctx := context.Background()
+			env := &tenv{cmd: &c.cmd}
+			newTestTele(t, env)
+			defer env.tele.Close()
+			vmId := -rand.Int31()
+			conf := tele_config.Config{
+				Enabled:     true,
+				LogDebug:    true,
+				PersistPath: spq.OnlyForTesting,
+				VmId:        int(vmId),
+			}
+			log := log2.NewTest(t, log2.LDebug)
+			// log := log2.NewStderr(log2.LDebug) // useful with panics
+			err := env.tele.Init(ctx, log, conf)
+			require.NoError(t, err)
+			require.Equal(t, "\x01", string(<-env.trans.outState))
 
-	tele.Init(ctx, log, conf)
-	outCmd := Command{
-		Id:   rand.Uint32(),
-		Task: &Command_Report{&Command_ArgReport{}},
-	}
-	b, err := proto.Marshal(&outCmd)
-	t.Logf("command bytes=%x", b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	broker.TestPublish(t, topicCommand, b)
-	tm := <-result
-	if tm.Error != nil {
-		t.Error(tm.Error)
-	}
-	assert.Equal(t, vmId, tm.VmId)
-}
+			b, err := proto.Marshal(&c.cmd)
+			require.NoError(t, err)
+			require.True(t, env.trans.onCommand(b))
 
-func TestCommandSetGiftCredit(t *testing.T) {
-	// FIXME ugly `mqtt.CRITICAL/ERROR/WARN/DEBUG` global variables
-	// t.Parallel()
-	rand := helpers.RandUnix()
-
-	tele := new(Tele)
-	vmId := -rand.Int31()
-	topicCommand := fmt.Sprintf("vm%d/r/c", vmId)
-	topicState := fmt.Sprintf("vm%d/w/1s", vmId)
-	conf := tele_config.Config{
-		Enabled:    true,
-		VmId:       int(vmId),
-		MqttBroker: "mock",
-	}
-	log := log2.NewTest(t, log2.LDebug)
-	ctx := NewTestContext(t, log)
-	broker := GetMqttMock(ctx)
-	broker.Subscribe(topicState, 0, func(_ mqtt.Client, msg mqtt.Message) {})
-
-	tele.Init(ctx, log, conf)
-	outAmount := uint32(rand.Int31())
-	outCmd := Command{
-		Id:   rand.Uint32(),
-		Task: &Command_SetGiftCredit{&Command_ArgSetGiftCredit{Amount: outAmount}},
-	}
-	b, err := proto.Marshal(&outCmd)
-	t.Logf("command bytes=%x", b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	broker.TestPublish(t, topicCommand, b)
-
-	inCmd := <-tele.CommandChan()
-	if inCmd.String() != outCmd.String() {
-		t.Errorf("expected=%#v actual=%#v", outCmd, inCmd)
+			c.check(t, env)
+		})
 	}
 }

@@ -96,6 +96,7 @@ func NewUIFront(ctx context.Context, menu Menu) *UIFront {
 func (self *UIFront) SetBroken(flag bool) {
 	self.g.Log.Infof("uifront mode = broken")
 	self.broken = flag
+	self.g.Tele.Broken(flag)
 }
 
 func (self *UIFront) SetCredit(a currency.Amount) {

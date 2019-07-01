@@ -27,10 +27,13 @@ message Telemetry {
   }
 
   message Inventory {
-    int32 water = 1;
-    int32 coffee = 2;
-    int32 cup = 3;
-    repeated int32 hoppers = 4;
+    repeated StockItem stocks = 1;
+    message StockItem {
+      uint32 code = 1;
+      int32 value = 2;
+      string name = 3;
+      int32 hopper = 4;
+    }
   }
 
   message Money {
@@ -58,6 +61,7 @@ enum PaymentMethod {
   Nothing = 0;
   Cash = 1;
   Cashless = 2;
+  Gift = 3;
 }
 
 message Command {
@@ -68,15 +72,18 @@ message Command {
     ArgAbort abort = 4;
     ArgDispense dispense = 5;
     ArgSetGiftCredit set_gift_credit = 6;
+    ArgPing ping = 7;
   }
 
   message ArgReport {}
   message ArgAbort {}
   message ArgDispense { uint32 amount = 1; }
   message ArgSetGiftCredit { uint32 amount = 1; }
+  message ArgPing {}
 }
 message Response {
   uint32 command_id = 1;
   string error = 2;
   string data = 3;
+  string INTERNAL_topic = 2048; // convenience
 }
