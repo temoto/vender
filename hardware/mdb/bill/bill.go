@@ -32,14 +32,14 @@ const (
 const DefaultEscrowTimeout = 30 * time.Second
 
 type BillValidator struct {
-	dev    mdb.Device
-	pollmu sync.Mutex // isolate active/idle polling
+	dev           mdb.Device
+	pollmu        sync.Mutex // isolate active/idle polling
+	configScaling uint16
 
 	// parsed from SETUP
 	featureLevel      uint8
 	supportedFeatures Features
 	escrowSupported   bool
-	configScaling     uint16
 	nominals          [TypeCount]currency.Nominal // final values, includes all scaling factors
 
 	// dynamic state useful for external code
@@ -72,9 +72,12 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	// TODO read settings from config
-	self.configScaling = 100
 	self.dev.Init(m.Tx, g.Log, 0x30, "bill", binary.BigEndian)
+	config := g.Config().Hardware.Mdb.Bill
+	self.configScaling = 100
+	if config.ScalingFactor != 0 {
+		self.configScaling = config.ScalingFactor
+	}
 
 	doInit := self.newIniter()
 	if err = doInit.Do(ctx); err != nil {

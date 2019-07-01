@@ -31,7 +31,7 @@ func (self *CoinAcceptor) NewDispenseSmart(requestAmount currency.Amount, over b
 		}
 
 		// === Try smart manual dispense
-		if true { // FIXME DISPENSE is not completely implemented
+		if self.dispenseSmart {
 			err = self.dispenseSmartManual(ctx, leftAmount, success)
 			if err != nil {
 				return errors.Annotate(err, tag)

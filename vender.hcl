@@ -59,6 +59,10 @@ hardware {
   }
 
   mdb {
+    coin {
+      dispense_smart = false
+    }
+
     // log_debug = true
     log_debug = false
 

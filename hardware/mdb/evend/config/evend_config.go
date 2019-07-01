@@ -1,5 +1,5 @@
 // Separate package to for hardware/evend related config structure.
-// Ulgy workaround to import cycles.
+// Ugly workaround to import cycles.
 package evend_config
 
 type Config struct { //nolint:maligned

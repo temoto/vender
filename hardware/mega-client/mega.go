@@ -96,9 +96,10 @@ func NewClient(bus string, notifyPinChip, notifyPinName string, log *log2.Log) (
 
 	go self.readLoop(pinev)
 
-	if err = self.expectReset(); err != nil {
-		return nil, err
-	}
+	// FIXME
+	// if err = self.expectReset(); err != nil { return nil, err }
+	var resetf Frame
+	self.Tx(nil, &resetf, 0)
 	return self, nil
 }
 

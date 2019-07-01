@@ -11,11 +11,13 @@ import (
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
 const (
-	TypeCount = 16
+	TypeCount              = 16
+	defaultDispenseTimeout = 5 * time.Second
 )
 
 //go:generate stringer -type=CoinRouting -trimprefix=Routing
@@ -40,6 +42,7 @@ const (
 
 type CoinAcceptor struct { //nolint:maligned
 	dev             mdb.Device
+	dispenseSmart   bool
 	dispenseTimeout time.Duration
 	pollmu          sync.Mutex // isolate active/idle polling
 
@@ -82,10 +85,11 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	// TODO read settings from config
 	self.dev.Init(m.Tx, g.Log, 0x08, "coin", binary.BigEndian)
-	self.dispenseTimeout = 5 * time.Second
-	self.scalingFactor = 1 // FIXME
+	config := g.Config().Hardware.Mdb.Coin
+	self.dispenseSmart = config.DispenseSmart
+	self.dispenseTimeout = helpers.IntSecondDefault(config.DispenseTimeoutSec, defaultDispenseTimeout)
+	self.scalingFactor = 1
 
 	self.doSetup = self.newSetuper()
 	self.DoTubeStatus = self.NewTubeStatus()

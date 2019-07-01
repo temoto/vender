@@ -10,6 +10,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/lcd"
+	mdb_config "github.com/temoto/vender/hardware/mdb/config"
 	evend_config "github.com/temoto/vender/hardware/mdb/evend/config"
 	tele_config "github.com/temoto/vender/head/tele/config"
 	"github.com/temoto/vender/helpers"
@@ -45,11 +46,7 @@ type Config struct {
 				Device string `hcl:"device"`
 			} `hcl:"dev_input_event"`
 		}
-		Mdb struct {
-			LogDebug   bool   `hcl:"log_debug"`
-			UartDevice string `hcl:"uart_device"`
-			UartDriver string `hcl:"uart_driver"` // file|mega|iodin
-		}
+		Mdb  mdb_config.Config `hcl:"mdb"`
 		Mega struct {
 			Spi     string `hcl:"spi"`
 			PinChip string `hcl:"pin_chip"`

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
@@ -175,12 +176,11 @@ func TestCoinDispenseSmart(t *testing.T) {
 	ctx := mockContext(t, rs)
 	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
+	ca.dispenseSmart = true
 
 	dispensed := new(currency.NominalGroup)
 	err := ca.NewDispenseSmart(1*currency.Amount(ca.scalingFactor), true, dispensed).Do(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	assert.Equal(t, "2:1,total:2", dispensed.String())
 }
 
