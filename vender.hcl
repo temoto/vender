@@ -2,9 +2,6 @@ engine {
   // alias "cup_dispense" { scenario = "conveyor_move_cup cup_drop" }
 
   menu {
-    msg_intro = "TODO_EDIT showed after successful boot"
-    reset_sec = 180
-
     item "1" {
       name     = "example"
       price    = 1
@@ -97,6 +94,14 @@ tele {
   mqtt_password   = "TODO_EDIT"
   mqtt_store_path = ""
   tls_ca_file     = "TODO_EDIT"
+}
+
+ui {
+  front {
+    msg_intro  = "TODO_EDIT showed after successful boot"
+    msg_broken = "TODO_EDIT showed after critical error"
+    reset_sec  = 180
+  }
 }
 
 include "local.hcl" {

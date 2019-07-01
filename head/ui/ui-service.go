@@ -74,7 +74,7 @@ func NewUIService(ctx context.Context) *UIService {
 
 func (self *UIService) Tag() string { return "ui-service" }
 
-func (self *UIService) Run(alive *alive.Alive) {
+func (self *UIService) Run(ctx context.Context, alive *alive.Alive) {
 	inputTag := self.Tag()
 	defer alive.Stop()
 	defer self.g.Hardware.Input.Unsubscribe(inputTag)

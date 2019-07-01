@@ -3,39 +3,9 @@ package ui
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/temoto/alive"
-	"github.com/temoto/errors"
-	"github.com/temoto/vender/hardware/lcd"
-	"github.com/temoto/vender/state"
 )
-
-// regression for input duplicate subscribe
-func TestFrontUILoop(t *testing.T) {
-	t.Parallel()
-
-	ctx, g := state.NewTestContext(t, "")
-	g.Config().Engine.Menu.ResetTimeoutSec = 1
-	const width = 16
-	display, _ := lcd.NewMockTextDisplay(width, "", 0)
-	g.Hardware.HD44780.Display = display
-
-	menuMap := make(Menu)
-	if err := menuMap.Init(ctx); err != nil {
-		t.Fatalf("menuMap.Init err=%v", errors.ErrorStack(err))
-	}
-	uiFront := NewUIFront(ctx, menuMap)
-	uiFrontRunner := &state.FuncRunner{Name: "ui-front", F: func(a *alive.Alive) {
-		time.AfterFunc(100*time.Millisecond, a.Stop)
-		uiFront.Run(a)
-	}}
-
-	g.UINext(uiFrontRunner)
-	g.UINext(uiFrontRunner)
-	g.UIWait()
-}
 
 func TestFormatScale(t *testing.T) {
 	t.Parallel()

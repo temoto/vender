@@ -37,9 +37,10 @@ const (
 )
 
 const (
-	modeMenuStatus = "menu-status"
-	modeMenuCream  = "cream"
-	modeMenuSugar  = "sugar"
+	frontModeStatus = "menu-status"
+	frontModeCream  = "cream"
+	frontModeSugar  = "sugar"
+	frontModeBroken = "broken"
 )
 
 const modCreamSugarTimeout = 3 * time.Second
@@ -54,10 +55,12 @@ var ScaleAlpha = []byte{
 
 type UIFront struct {
 	// config
+	Finish       func(context.Context, *UIMenuResult)
 	resetTimeout time.Duration
 
 	// state
 	g         *state.Global
+	broken    bool
 	menu      Menu
 	credit    atomic.Value
 	display   *lcd.TextDisplay // FIXME
@@ -84,10 +87,15 @@ func NewUIFront(ctx context.Context, menu Menu) *UIFront {
 		},
 	}
 	self.display = self.g.Hardware.HD44780.Display
-	self.resetTimeout = helpers.IntSecondDefault(self.g.Config().Engine.Menu.ResetTimeoutSec, 0)
+	self.resetTimeout = helpers.IntSecondDefault(self.g.Config().UI.Front.ResetTimeoutSec, 0)
 	self.SetCredit(0)
 
 	return self
+}
+
+func (self *UIFront) SetBroken(flag bool) {
+	self.g.Log.Infof("uifront mode = broken")
+	self.broken = flag
 }
 
 func (self *UIFront) SetCredit(a currency.Amount) {
@@ -97,11 +105,13 @@ func (self *UIFront) SetCredit(a currency.Amount) {
 
 func (self *UIFront) Tag() string { return "ui-front" }
 
-func (self *UIFront) Run(alive *alive.Alive) UIMenuResult {
+func (self *UIFront) Run(ctx context.Context, alive *alive.Alive) {
 	inputTag := self.Tag()
 	defer alive.Stop()
+	defer self.Finish(ctx, &self.result)
 	defer self.g.Hardware.Input.Unsubscribe(inputTag)
 
+	config := self.g.Config()
 	inputCh := make(chan input.Event)
 	self.g.Hardware.Input.SubscribeFunc(inputTag, func(e input.Event) {
 		inputCh <- e
@@ -116,15 +126,18 @@ init:
 		Sugar: DefaultSugar,
 	}
 	inputBuf = inputBuf[:0]
-	mode := modeMenuStatus
+	mode := frontModeStatus
 	lastActivity := time.Now()
 
 	for alive.IsRunning() {
 		// step 1: refresh display
+		if self.broken {
+			mode = frontModeBroken
+		}
 		credit := self.credit.Load().(currency.Amount)
 		switch mode {
-		case modeMenuStatus:
-			l1 := self.display.Translate(self.g.Config().Engine.Menu.MsgIntro)
+		case frontModeStatus:
+			l1 := self.display.Translate(config.UI.Front.MsgIntro)
 			// TODO write state flags such as "no hot water" on line2
 			l2 := self.display.Translate("")
 			if (credit != 0) || (len(inputBuf) > 0) {
@@ -133,6 +146,8 @@ init:
 				l2 = self.display.Translate(fmt.Sprintf(msgInputCode, string(inputBuf)))
 			}
 			self.display.SetLinesBytes(l1, l2)
+		case frontModeBroken:
+			self.display.SetLines(config.UI.Front.MsgBroken, "")
 		}
 
 		// step 2: wait for input/timeout
@@ -147,9 +162,9 @@ init:
 		case <-timer.C:
 			inactive := time.Since(lastActivity)
 			switch {
-			case (mode == modeMenuCream || mode == modeMenuSugar) && (inactive >= modCreamSugarTimeout):
+			case (mode == frontModeCream || mode == frontModeSugar) && (inactive >= modCreamSugarTimeout):
 				lastActivity = time.Now()
-				mode = modeMenuStatus // "return to previous mode"
+				mode = frontModeStatus // "return to previous mode"
 				goto handleEnd
 			case inactive >= self.resetTimeout:
 				goto init
@@ -159,13 +174,14 @@ init:
 		}
 
 		// step 3: handle input/timeout
-		switch e.Key {
-		case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
-			mode = self.handleCreamSugar(mode, e)
-			goto handleEnd
-		}
 		switch mode {
-		case modeMenuStatus:
+		case frontModeStatus:
+			switch e.Key {
+			case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
+				mode = self.handleCreamSugar(mode, e)
+				goto handleEnd
+			}
+
 			switch {
 			case e.IsDigit():
 				inputBuf = append(inputBuf, byte(e.Key))
@@ -178,7 +194,7 @@ init:
 				}
 
 				self.result = UIMenuResult{Confirm: false}
-				return self.result
+				return
 
 			case input.IsAccept(&e):
 				if len(inputBuf) == 0 {
@@ -207,12 +223,17 @@ init:
 
 				self.result.Confirm = true
 				self.result.Item = mitem
-
-				return self.result
+				return
 			}
-		case modeMenuCream, modeMenuSugar:
+
+		case frontModeCream, frontModeSugar:
+			switch e.Key {
+			case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
+				mode = self.handleCreamSugar(mode, e)
+				goto handleEnd
+			}
 			if input.IsAccept(&e) || input.IsReject(&e) {
-				mode = modeMenuStatus // "return to previous mode"
+				mode = frontModeStatus // "return to previous mode"
 			}
 		}
 	handleEnd:
@@ -220,7 +241,6 @@ init:
 
 	// external stop
 	self.result = UIMenuResult{Confirm: false}
-	return self.result
 }
 
 func (self *UIFront) showError(text string) {
@@ -272,11 +292,11 @@ func (self *UIFront) handleCreamSugar(mode string, e input.Event) string {
 	case input.EvendKeyCreamLess, input.EvendKeyCreamMore:
 		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", msgCream, self.result.Cream))
 		t2 = formatScale(self.result.Cream, 0, MaxCream, ScaleAlpha)
-		mode = modeMenuCream
+		mode = frontModeCream
 	case input.EvendKeySugarLess, input.EvendKeySugarMore:
 		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", msgSugar, self.result.Sugar))
 		t2 = formatScale(self.result.Sugar, 0, MaxSugar, ScaleAlpha)
-		mode = modeMenuSugar
+		mode = frontModeSugar
 	}
 	t2 = append(append(append(make([]byte, 0, lcd.MaxWidth), '-', ' '), t2...), ' ', '+')
 	self.display.SetLinesBytes(

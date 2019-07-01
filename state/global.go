@@ -44,10 +44,6 @@ type Global struct {
 		Iodin atomic.Value // *iodin.Client
 		Mega  atomic.Value // *mega.Client
 	}
-	UI struct {
-		currentAlive atomic.Value // *alive.Alive
-		lk           sync.Mutex
-	}
 
 	Inventory *inventory.Inventory
 

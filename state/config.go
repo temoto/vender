@@ -59,9 +59,7 @@ type Config struct {
 		OnStart     []string `hcl:"on_start"`
 		OnMenuError []string `hcl:"on_menu_error"`
 		Menu        struct {
-			MsgIntro        string      `hcl:"msg_intro"`
-			ResetTimeoutSec int         `hcl:"reset_sec"`
-			Items           []*MenuItem `hcl:"item"`
+			Items []*MenuItem `hcl:"item"`
 		}
 	}
 
@@ -73,6 +71,12 @@ type Config struct {
 	Tele tele_config.Config
 
 	UI struct {
+		Front struct {
+			MsgIntro        string `hcl:"msg_intro"`
+			MsgBroken       string `hcl:"msg_broken"`
+			ResetTimeoutSec int    `hcl:"reset_sec"`
+		}
+
 		Service struct {
 			Auth struct {
 				Enable    bool     `hcl:"enable"`
