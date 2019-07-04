@@ -45,10 +45,9 @@ type Global struct {
 	}
 
 	Inventory *inventory.Inventory
-
-	Log *log2.Log
-
-	Tele tele.Tele
+	Log       *log2.Log
+	Tele      tele.Tele
+	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
 }
 
 const contextKey = "run/state-global"
@@ -64,9 +63,7 @@ func NewContext(log *log2.Log) (context.Context, *Global) {
 		Inventory: new(inventory.Inventory),
 		Log:       log,
 	}
-	// if ctx == nil || ctx == context.TODO() {
 	ctx := context.Background()
-	// }
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
 	ctx = context.WithValue(ctx, contextKey, g)
 

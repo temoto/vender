@@ -11,6 +11,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
+	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
@@ -88,7 +89,12 @@ func NewUIFront(ctx context.Context, menu Menu) *UIFront {
 	}
 	self.display = self.g.Hardware.HD44780.Display
 	self.resetTimeout = helpers.IntSecondDefault(self.g.Config().UI.Front.ResetTimeoutSec, 0)
-	self.SetCredit(0)
+	moneysys := money.GetGlobal(ctx)
+	self.SetCredit(moneysys.Credit(ctx))
+	moneysys.EventSubscribe(func(em money.Event) {
+		self.SetCredit(moneysys.Credit(ctx))
+		moneysys.AcceptCredit(ctx, self.menu.MaxPrice())
+	})
 
 	return self
 }
@@ -112,16 +118,19 @@ func (self *UIFront) Run(ctx context.Context, alive *alive.Alive) {
 	defer self.Finish(ctx, &self.result)
 	defer self.g.Hardware.Input.Unsubscribe(inputTag)
 
-	config := self.g.Config()
+	config := self.g.Config().UI.Front
 	inputCh := make(chan input.Event)
+	moneysys := money.GetGlobal(ctx)
+	timer := time.NewTicker(200 * time.Millisecond)
+	inputBuf := make([]byte, 0, 32)
 	self.g.Hardware.Input.SubscribeFunc(inputTag, func(e input.Event) {
 		inputCh <- e
 		self.refresh()
 	}, alive.StopChan())
-	timer := time.NewTicker(200 * time.Millisecond)
-	inputBuf := make([]byte, 0, 32)
 
 init:
+	self.SetCredit(moneysys.Credit(ctx))
+	moneysys.AcceptCredit(ctx, self.menu.MaxPrice())
 	self.result = UIMenuResult{
 		Cream: DefaultCream,
 		Sugar: DefaultSugar,
@@ -138,7 +147,7 @@ init:
 		credit := self.credit.Load().(currency.Amount)
 		switch mode {
 		case frontModeStatus:
-			l1 := self.display.Translate(config.UI.Front.MsgIntro)
+			l1 := self.display.Translate(config.MsgIntro)
 			// TODO write state flags such as "no hot water" on line2
 			l2 := self.display.Translate("")
 			if (credit != 0) || (len(inputBuf) > 0) {
@@ -148,7 +157,7 @@ init:
 			}
 			self.display.SetLinesBytes(l1, l2)
 		case frontModeBroken:
-			self.display.SetLines(config.UI.Front.MsgBroken, "")
+			self.display.SetLines(config.MsgBroken, "")
 		}
 
 		// step 2: wait for input/timeout

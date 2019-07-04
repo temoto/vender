@@ -57,18 +57,11 @@ func Main(ctx context.Context, config *state.Config) error {
 			time.Sleep(3 * time.Second)
 			return nil
 		}})
-
 	uiFront := ui.NewUIFront(ctx, menuMap)
 
-	moneysys.EventSubscribe(func(em money.Event) {
-		uiFront.SetCredit(moneysys.Credit(ctx))
-		g.Log.Debugf("money event: %s", em.String())
-		moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
-	})
-
-	go vmc_common.TeleCommandLoop(ctx, moneysys)
+	go vmc_common.TeleCommandLoop(ctx)
 
 	g.Log.Debugf("init complete, enter main loop")
-	vmc_common.UILoop(ctx, uiFront, moneysys, menuMap)
+	vmc_common.UILoop(ctx, uiFront)
 	return nil
 }

@@ -46,13 +46,11 @@ func Main(ctx context.Context, config *state.Config) error {
 		err = errors.Annotate(err, "menuMap.Init")
 		return err
 	}
-	g.Log.Debugf("uiFront len=%d", len(menuMap))
-
+	g.Log.Debugf("menu len=%d", len(menuMap))
 	uiFront := ui.NewUIFront(ctx, menuMap)
 
 	moneysys.EventSubscribe(func(em money.Event) {
 		g.Log.Debugf("money event: %s", em.String())
-		uiFront.SetCredit(moneysys.Credit(ctx))
 
 		switch em.Name() {
 		case money.EventCredit:
@@ -61,7 +59,7 @@ func Main(ctx context.Context, config *state.Config) error {
 			panic("head: unknown money event: " + em.String())
 		}
 	})
-	go vmc_common.TeleCommandLoop(ctx, moneysys)
+	go vmc_common.TeleCommandLoop(ctx)
 
 	// FIXME
 	g.Inventory.DisableAll()
@@ -82,6 +80,6 @@ func Main(ctx context.Context, config *state.Config) error {
 		}
 	}
 
-	vmc_common.UILoop(ctx, uiFront, moneysys, menuMap)
+	vmc_common.UILoop(ctx, uiFront)
 	return nil
 }

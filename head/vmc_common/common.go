@@ -13,19 +13,19 @@ import (
 	"github.com/temoto/vender/state"
 )
 
-func TeleCommandLoop(ctx context.Context, moneysys *money.MoneySystem) {
+func TeleCommandLoop(ctx context.Context) {
 	g := state.GetGlobal(ctx)
-	telesys := &state.GetGlobal(ctx).Tele
+	moneysys := money.GetGlobal(ctx)
 	stopCh := g.Alive.StopChan()
 	for {
 		select {
 		case <-stopCh:
 			return
-		case cmd := <-telesys.CommandChan():
+		case cmd := <-g.Tele.CommandChan():
 			switch cmd.Task.(type) {
 			case *tele.Command_Abort:
 				err := moneysys.Abort(ctx)
-				telesys.CommandReplyErr(&cmd, err)
+				g.Tele.CommandReplyErr(&cmd, err)
 				g.Log.Infof("admin requested abort err=%v", err)
 			case *tele.Command_SetGiftCredit:
 				moneysys.SetGiftCredit(ctx, currency.Amount(cmd.GetSetGiftCredit().Amount))
@@ -36,33 +36,46 @@ func TeleCommandLoop(ctx context.Context, moneysys *money.MoneySystem) {
 
 func uiFrontFinish(ctx context.Context, menuResult *ui.UIMenuResult) {
 	g := state.GetGlobal(ctx)
-	g.Log.Debugf("uiFront result=%#v", menuResult)
-	if menuResult.Confirm {
-		g.Log.Debugf("uiFront confirmed")
-		itemCtx := money.SetCurrentPrice(ctx, menuResult.Item.Price)
-		g.Log.Debugf("uiFront curprice set")
-		err := menuResult.Item.D.Do(itemCtx)
-		g.Log.Debugf("uiFront item Do end err=%v", err)
-		if err == nil {
-			// g.Tele.
+	moneysys := money.GetGlobal(ctx)
+	g.Log.Debugf("ui-front result=%#v", menuResult)
+	if !menuResult.Confirm {
+		return
+	}
+
+	moneysys.AcceptCredit(ctx, 0)
+	teletx := tele.Telemetry_Transaction{
+		Code:  int32(menuResult.Item.Code),
+		Price: uint32(menuResult.Item.Price),
+		// TODO options
+		// TODO payment method
+		// TODO bills, coins
+	}
+	g.Log.Debugf("menu item=%s begin", menuResult.Item.String())
+	if err := moneysys.WithdrawPrepare(ctx, menuResult.Item.Price); err != nil {
+		g.Log.Debugf("ui-front CRITICAL error while return change")
+	}
+	itemCtx := money.SetCurrentPrice(ctx, menuResult.Item.Price)
+	err := menuResult.Item.D.Do(itemCtx)
+	g.Log.Debugf("menu item=%s end", menuResult.Item.String())
+	if err == nil {
+		g.Tele.Transaction(teletx)
+	} else {
+		err = errors.Annotatef(err, "execute %s", menuResult.Item.String())
+		g.Log.Errorf(errors.ErrorStack(err))
+
+		g.Log.Errorf("tele.error")
+		g.Tele.Error(err)
+
+		g.Log.Errorf("on_menu_error")
+		if err := g.Engine.ExecList(ctx, "on_menu_error", g.Config().Engine.OnMenuError); err != nil {
+			g.Log.Errorf("on_menu_error err=%v", err)
 		} else {
-			err = errors.Annotatef(err, "execute %s", menuResult.Item.String())
-			g.Log.Errorf(errors.ErrorStack(err))
-
-			g.Log.Errorf("tele.error")
-			g.Tele.Error(err)
-
-			g.Log.Errorf("on_menu_error")
-			if err := g.Engine.ExecList(ctx, "on_menu_error", g.Config().Engine.OnMenuError); err != nil {
-				g.Log.Errorf("on_menu_error err=%v", err)
-			} else {
-				g.Log.Infof("on_menu_error success")
-			}
+			g.Log.Infof("on_menu_error success")
 		}
 	}
 }
 
-func UILoop(ctx context.Context, uiFront *ui.UIFront, moneysys *money.MoneySystem, menuMap ui.Menu) {
+func UILoop(ctx context.Context, uiFront *ui.UIFront) {
 	g := state.GetGlobal(ctx)
 	gstopch := g.Alive.StopChan()
 	uiFront.Finish = uiFrontFinish
@@ -79,11 +92,7 @@ func UILoop(ctx context.Context, uiFront *ui.UIFront, moneysys *money.MoneySyste
 	for g.Alive.IsRunning() {
 		na := alive.NewAlive()
 		g.Log.Infof("uiloop front start")
-		go func() {
-			uiFront.SetCredit(moneysys.Credit(ctx))
-			moneysys.AcceptCredit(ctx, menuMap.MaxPrice())
-			uiFront.Run(ctx, na)
-		}()
+		go uiFront.Run(ctx, na)
 		select {
 		case <-switchService:
 			na.Stop()

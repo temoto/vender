@@ -10,16 +10,17 @@ Status:
 # Hardware
 
 Required for VMC:
-- Works on RaspberryPI. We study OrangePi-{2,3}G-IOT for mobile cell connectivity. Possibly anything with GPIO that runs Go/Linux.
+- Works on RaspberryPI and OrangePi Lite (H3). Possibly anything with GPIO that runs Go/Linux.
 - MDB signal level inverter and current limiter - required, see files in `hardware/schematic`
 - MDB adapter, takes care of 9bit and timing, we use ATMega328p with `hardware/mega-firmware` It is not mandatory, software option is available: https://github.com/temoto/iodin
 
 Supported peripherals:
 - MDB coin acceptor, bill validator
-- Evend MDB drink devices (work in progress)
+- Evend MDB drink devices
 - any MDB device via configuration scenarios (work in progress)
-- TWI(I2C) numpad keyboard (work in progress)
 - MT16S2R HD44780-like text display
+- TWI(I2C) numpad keyboard
+- SSD1306-compatible graphic display (planned)
 
 
 # Design

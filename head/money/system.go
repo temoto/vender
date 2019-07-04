@@ -19,7 +19,7 @@ import (
 	"github.com/temoto/vender/state"
 )
 
-type MoneySystem struct {
+type MoneySystem struct { //nolint:maligned
 	Log    *log2.Log
 	lk     sync.Mutex
 	subs   []EventFunc
@@ -37,11 +37,17 @@ type MoneySystem struct {
 	giftCredit currency.Amount
 }
 
+func GetGlobal(ctx context.Context) *MoneySystem {
+	return state.GetGlobal(ctx).XXX_money.Load().(*MoneySystem)
+}
+
 func (self *MoneySystem) Start(ctx context.Context) error {
+	g := state.GetGlobal(ctx)
+
 	self.lk.Lock()
 	defer self.lk.Unlock()
-	g := state.GetGlobal(ctx)
 	self.Log = g.Log
+	g.XXX_money.Store(self)
 
 	// TODO determine if combination of errors is fatal for money subsystem
 	if err := self.billInit(ctx); err != nil {
@@ -57,6 +63,7 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 			curPrice := GetCurrentPrice(ctx)
 			err := self.WithdrawCommit(ctx, curPrice)
 			return errors.Annotatef(err, "curPrice=%s", curPrice.FormatCtx(ctx))
+			// return nil
 		},
 	}
 	g.Engine.Register(doCommit.String(), doCommit)
@@ -68,6 +75,7 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 
 	return nil
 }
+
 func (self *MoneySystem) Stop(ctx context.Context) error {
 	self.Log.Debugf("money.Stop")
 	errs := make([]error, 0, 8)
