@@ -93,6 +93,7 @@ func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	if err := self.transport.Init(ctx, log, teleConfig, onCommand, willPayload); err != nil {
 		return errors.Annotate(err, "tele transport")
 	}
+
 	go self.qworker()
 	go self.stateWorker()
 	self.stateCh <- State_Boot
@@ -105,14 +106,24 @@ func (self *Tele) Close() {
 }
 
 func (self *Tele) stateWorker() {
-	var lastState State
+	const retryInterval = 17 * time.Second
+	var b [1]byte
+	var sent bool
+	tmrRegular := time.NewTicker(self.stateInterval)
+	tmrRetry := time.NewTicker(retryInterval)
 	for {
 		select {
-		case lastState = <-self.stateCh:
-			self.transport.SendState([]byte{byte(lastState)})
+		case s := <-self.stateCh:
+			b[0] = byte(s)
+			sent = self.transport.SendState(b[:])
 
-		case <-time.After(self.stateInterval):
-			self.transport.SendState([]byte{byte(lastState)})
+		case <-tmrRegular.C:
+			sent = self.transport.SendState(b[:])
+
+		case <-tmrRetry.C:
+			if !sent {
+				sent = self.transport.SendState(b[:])
+			}
 
 		case <-self.stopCh:
 			return
@@ -201,25 +212,27 @@ func (self *Tele) qpushCommandResponse(c *Command, r *Response) error {
 		return err
 	}
 	r.INTERNALTopic = c.ReplyTopic
-
-	buf := proto.NewBuffer(make([]byte, 0, 1024))
-	buf.EncodeVarint(uint64(qCommandResponse))
-	err := buf.Marshal(r)
-	if err != nil {
-		return err
-	}
-	return self.q.Push(buf.Bytes())
+	return self.qpushTagProto(qCommandResponse, r)
 }
 
 func (self *Tele) qpushTelemetry(tm *Telemetry) error {
 	if tm.VmId == 0 {
 		tm.VmId = self.vmId
 	}
+	self.stat.Lock()
+	tm.Stat = &self.stat.Telemetry_Stat
+	err := self.qpushTagProto(qTelemetry, tm)
+	self.stat.Telemetry_Stat.Reset()
+	self.stat.Unlock()
+	return err
+}
 
+func (self *Tele) qpushTagProto(tag byte, pb proto.Message) error {
 	buf := proto.NewBuffer(make([]byte, 0, 1024))
-	buf.EncodeVarint(uint64(qTelemetry))
-	err := buf.Marshal(tm)
-	if err != nil {
+	if err := buf.EncodeVarint(uint64(tag)); err != nil {
+		return err
+	}
+	if err := buf.Marshal(pb); err != nil {
 		return err
 	}
 	return self.q.Push(buf.Bytes())
