@@ -106,6 +106,13 @@ func (self *MoneySystem) billInit(ctx context.Context) error {
 	self.billPoll = alive.NewAlive()
 	go self.bill.Run(ctx, self.billPoll.StopChan(), func(pi money.PollItem) bool {
 		switch pi.Status {
+		case money.StatusEscrow:
+			if pi.DataCount == 1 {
+				if err := self.bill.NewEscrow(true).Do(ctx); err != nil {
+					self.Log.Errorf("money.bill escrow accept n=%s err=%v", currency.Amount(pi.DataNominal).FormatCtx(ctx))
+				}
+			}
+
 		case money.StatusCredit:
 			itemTime := time.Now()
 			self.lk.Lock()
@@ -119,7 +126,6 @@ func (self *MoneySystem) billInit(ctx context.Context) error {
 				pi.Amount().FormatCtx(ctx), self.billCredit.Total().FormatCtx(ctx), self.locked_credit(true).FormatCtx(ctx))
 			self.dirty += pi.Amount()
 			go self.EventFire(Event{created: itemTime, name: EventCredit, amount: pi.Amount()})
-			// maybe TODO escrow?
 		}
 		return false
 	})

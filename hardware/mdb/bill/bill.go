@@ -102,7 +102,7 @@ func (self *BillValidator) AcceptMax(max currency.Amount) engine.Doer {
 				// _ = config
 				enableBitset |= 1 << uint(i)
 				// TODO consult config
-				// escrowBitset |= 1 << uint(i)
+				escrowBitset |= 1 << uint(i)
 			}
 		}
 	}
@@ -129,10 +129,10 @@ func (self *BillValidator) Run(ctx context.Context, stopch <-chan struct{}, fun 
 	for {
 		self.pollmu.Lock()
 		r = self.dev.Tx(self.dev.PacketPoll)
+		self.pollmu.Unlock()
 		if r.E == nil {
 			active, err = parse(r.P)
 		}
-		self.pollmu.Unlock()
 
 		if !pd.Delay(&self.dev, active, err != nil, stopch) {
 			break
@@ -173,8 +173,8 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 }
 
 func (self *BillValidator) newIniter() engine.Doer {
-	return engine.NewSeq(self.dev.Name + ".initer").
-		// TODO maybe execute Reset?
+	return engine.NewSeq(self.dev.Name + ".init").
+		Append(self.dev.DoReset).
 		Append(engine.Func{Name: self.dev.Name + ".setup", F: self.CommandSetup}).
 		Append(engine.Func0{Name: self.dev.Name + ".expid", F: func() error {
 			if err := self.CommandExpansionIdentificationOptions(); err != nil {
@@ -200,12 +200,6 @@ func (self *BillValidator) NewBillType(accept, escrow uint16) engine.Doer {
 	return engine.Func0{Name: "mdb.bill.BillType", F: func() error {
 		return self.dev.Tx(request).E
 	}}
-}
-
-func (self *BillValidator) NewRestarter() engine.Doer {
-	return engine.NewSeq(self.dev.Name + ".restarter").
-		Append(self.dev.DoReset).
-		Append(self.newIniter())
 }
 
 func (self *BillValidator) setEscrowBill(n currency.Nominal) {
@@ -234,7 +228,7 @@ func (self *BillValidator) NewEscrow(accept bool) engine.Doer {
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		self.pollmu.Lock()
-		defer self.pollmu.Lock()
+		defer self.pollmu.Unlock()
 
 		r := self.dev.Tx(request)
 		if r.E != nil {
@@ -465,6 +459,7 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 			self.setEscrowBill(result.DataNominal)
 			// self.dev.Log.Debugf("bill routing ESCROW POSITION")
 			result.Status = money.StatusEscrow
+			result.DataCount = 1
 		case StatusRoutingBillReturned:
 			if self.EscrowAmount() == 0 {
 				// most likely code error, but also may be rare case of boot up

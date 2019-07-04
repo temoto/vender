@@ -19,6 +19,7 @@ const testScalingFactor = 500 // FIXME put into SETUP response
 func mockInitRs() []mdb.MockR {
 	return []mdb.MockR{
 		// initer, SETUP
+		{"30", ""},
 		// FIXME put testScalingFactor here
 		{"31", "011810000a0000c8001fff01050a32640000000000000000000000"},
 
@@ -106,7 +107,8 @@ func TestBillPoll(t *testing.T) {
 func TestBillAcceptMax(t *testing.T) {
 	t.Parallel()
 
-	ctx, bv := testMake(t, []mdb.MockR{{"3400070000", ""}})
+	// FIXME explicit enable/disable escrow in config
+	ctx, bv := testMake(t, []mdb.MockR{{"3400070007", ""}})
 	defer mdb.MockFromContext(ctx).Close()
 	if err := bv.Init(ctx); err != nil {
 		t.Fatal(err)
