@@ -30,6 +30,7 @@ type Config struct {
 			Codepage      string     `hcl:"codepage"`
 			PinChip       string     `hcl:"pin_chip"`
 			Pinmap        lcd.PinMap `hcl:"pinmap"`
+			Page1         bool       `hcl:"page1"`
 			Width         int        `hcl:"width"`
 			ControlBlink  bool       `hcl:"blink"`
 			ControlCursor bool       `hcl:"cursor"`

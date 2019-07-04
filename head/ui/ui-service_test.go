@@ -19,7 +19,7 @@ func TestServiceInventory(t *testing.T) {
 	const width = 16
 	ctx, g := state.NewTestContext(t, "")
 	g.Config().UI.Service.Auth.Enable = false
-	display, displayMock := lcd.NewMockTextDisplay(width, "", 0)
+	display, displayMock := lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: width})
 	g.Hardware.HD44780.Display = display
 	g.Inventory.Register("water", 1)
 	g.Inventory.Register("cup", 1)

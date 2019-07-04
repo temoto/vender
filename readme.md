@@ -18,8 +18,8 @@ Supported peripherals:
 - MDB coin acceptor, bill validator
 - Evend MDB drink devices (work in progress)
 - any MDB device via configuration scenarios (work in progress)
-- MT16S2R-like display (work in progress)
 - TWI(I2C) numpad keyboard (work in progress)
+- MT16S2R HD44780-like text display
 
 
 # Design

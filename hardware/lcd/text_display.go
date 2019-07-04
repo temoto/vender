@@ -33,6 +33,12 @@ type TextDisplay struct { //nolint:maligned
 	upd   chan<- struct{}
 }
 
+type TextDisplayConfig struct {
+	Codepage    string
+	ScrollDelay time.Duration
+	Width       uint16
+}
+
 type Devicer interface {
 	Clear()
 	// Control() Control
@@ -41,15 +47,18 @@ type Devicer interface {
 	Write(b []byte)
 }
 
-func NewTextDisplay(width uint16, codepage string, scrollDelay time.Duration) (*TextDisplay, error) {
+func NewTextDisplay(opt *TextDisplayConfig) (*TextDisplay, error) {
+	if opt == nil {
+		panic("code error TODO make default TextDisplayConfig")
+	}
 	self := &TextDisplay{
 		alive: alive.NewAlive(),
-		width: uint32(width),
-		tickd: scrollDelay,
+		width: uint32(opt.Width),
+		tickd: opt.ScrollDelay,
 	}
 
-	if codepage != "" {
-		if err := self.SetCodepage(codepage); err != nil {
+	if opt.Codepage != "" {
+		if err := self.SetCodepage(opt.Codepage); err != nil {
 			return nil, errors.Trace(err)
 		}
 	}

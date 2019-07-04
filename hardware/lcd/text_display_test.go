@@ -52,7 +52,7 @@ func TestWrap(t *testing.T) {
 func TestMessage(t *testing.T) {
 	t.Parallel()
 
-	d, mock := NewMockTextDisplay(8, "", 0)
+	d, mock := NewMockTextDisplay(&TextDisplayConfig{Width: 8})
 	d.SetLines("hello", "cursor\x00")
 	assert.Equal(t, "hello   \ncursor", mock.String())
 	d.Message("padded", "msg", func() {
@@ -64,7 +64,7 @@ func TestMessage(t *testing.T) {
 func TestJustCenter(t *testing.T) {
 	t.Parallel()
 
-	d, err := NewTextDisplay(8, "", 0)
+	d, err := NewTextDisplay(&TextDisplayConfig{Width: 8})
 	if err != nil {
 		t.Fatal(err)
 	}

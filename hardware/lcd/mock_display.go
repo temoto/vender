@@ -3,12 +3,11 @@ package lcd
 import (
 	"fmt"
 	"sync"
-	"time"
 )
 
-func NewMockTextDisplay(width uint16, codepage string, scrollDelay time.Duration) (*TextDisplay, fmt.Stringer) {
+func NewMockTextDisplay(opt *TextDisplayConfig) (*TextDisplay, fmt.Stringer) {
 	dev := new(MockDevicer)
-	display, err := NewTextDisplay(width, codepage, scrollDelay)
+	display, err := NewTextDisplay(opt)
 	if err != nil {
 		// t.Fatal(err)
 		panic(err)

@@ -28,9 +28,8 @@ type Global struct {
 	initMegaOnce  sync.Once
 	initMdberOnce sync.Once
 
-	Alive  *alive.Alive
-	Engine *engine.Engine
-	// TODO input
+	Alive    *alive.Alive
+	Engine   *engine.Engine
 	Hardware struct {
 		HD44780 struct {
 			Device  *lcd.LCD
@@ -102,7 +101,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 
 	if g.c.Hardware.HD44780.Enable {
 		dev := new(lcd.LCD)
-		if err := dev.Init(g.c.Hardware.HD44780.PinChip, g.c.Hardware.HD44780.Pinmap); err != nil {
+		if err := dev.Init(g.c.Hardware.HD44780.PinChip, g.c.Hardware.HD44780.Pinmap, g.c.Hardware.HD44780.Page1); err != nil {
 			return errors.Annotatef(err, "lcd.Init config=%#v", g.c.Hardware.HD44780)
 		}
 		ctrl := lcd.ControlOn
@@ -115,11 +114,11 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 		dev.SetControl(ctrl)
 		g.Hardware.HD44780.Device = dev
 
-		d, err := lcd.NewTextDisplay(
-			uint16(g.c.Hardware.HD44780.Width),
-			g.c.Hardware.HD44780.Codepage,
-			time.Duration(g.c.Hardware.HD44780.ScrollDelay)*time.Millisecond,
-		)
+		d, err := lcd.NewTextDisplay(&lcd.TextDisplayConfig{
+			Width:       uint16(g.c.Hardware.HD44780.Width),
+			Codepage:    g.c.Hardware.HD44780.Codepage,
+			ScrollDelay: time.Duration(g.c.Hardware.HD44780.ScrollDelay) * time.Millisecond,
+		})
 		if err != nil {
 			return errors.Annotatef(err, "config: %#v", g.c.Hardware)
 		}

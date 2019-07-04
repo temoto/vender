@@ -48,7 +48,7 @@ type PinMap struct {
 	D7 string `hcl:"d7"`
 }
 
-func (self *LCD) Init(chipName string, pinmap PinMap) error {
+func (self *LCD) Init(chipName string, pinmap PinMap, page1 bool) error {
 	var err error
 	self.pinChip, err = gpio.Open(chipName, "lcd")
 	if err != nil {
@@ -76,7 +76,7 @@ func (self *LCD) Init(chipName string, pinmap PinMap) error {
 	self.pin_d6 = self.pins.SetFunc(nD6)
 	self.pin_d7 = self.pins.SetFunc(nD7)
 
-	self.init4()
+	self.init4(page1)
 	return nil
 }
 
@@ -112,14 +112,14 @@ func (self *LCD) send4(rs, d4, d5, d6, d7 byte) {
 	self.blinkE()
 }
 
-func (self *LCD) init4() {
+func (self *LCD) init4(page1 bool) {
 	time.Sleep(20 * time.Millisecond)
 
 	// special sequence
 	self.Command(0x33)
 	self.Command(0x32)
 
-	self.SetFunction(false, true)
+	self.SetFunction(false, page1)
 	self.SetControl(0) // off
 	self.SetControl(ControlOn)
 	self.Clear()

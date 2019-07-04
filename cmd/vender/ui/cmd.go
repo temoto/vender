@@ -23,8 +23,16 @@ func Main(ctx context.Context, config *state.Config) error {
 
 	g.Log.Debugf("Init display")
 	display := g.Hardware.HD44780.Display
-	display.SetLine1("loaded")
-	display.SetLine2("test long wrap bla bla hello world")
+
+	// helper to display all CLCD characters
+	var bb [32]byte
+	for b0 := 0; b0 < 256/len(bb); b0++ {
+		for i := 0; i < len(bb); i++ {
+			bb[i] = byte(b0*len(bb) + i)
+		}
+		display.SetLinesBytes(bb[:16], bb[16:])
+		time.Sleep(3 * time.Second)
+	}
 
 	moneysys := new(money.MoneySystem)
 	if err := moneysys.Start(ctx); err != nil {

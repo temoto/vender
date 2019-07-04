@@ -17,6 +17,7 @@ hardware {
   hd44780 {
     codepage = "windows-1251"
     enable   = true
+    page1    = true
 
     pinmap {
       rs = "23"
