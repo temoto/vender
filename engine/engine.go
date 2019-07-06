@@ -15,7 +15,7 @@ import (
 
 type Engine struct {
 	Log     *log2.Log
-	lk      sync.Mutex
+	lk      sync.RWMutex
 	actions map[string]Doer
 }
 
@@ -55,7 +55,8 @@ var reActionArg = regexp.MustCompile(`^(.+)\((\d+)\)$`)
 
 func (self *Engine) resolve(action string) Doer {
 	// self.Log.Debugf(action)
-	// TODO RLock?
+	self.lk.RLock()
+	defer self.lk.RUnlock()
 	d, ok := self.actions[action]
 	if ok {
 		return d
@@ -85,18 +86,20 @@ func (self *Engine) Resolve(action string) Doer {
 }
 
 func (self *Engine) List() []string {
-	self.lk.Lock()
+	self.lk.RLock()
 	r := make([]string, 0, len(self.actions))
 	for k := range self.actions {
 		r = append(r, k)
 	}
-	self.lk.Unlock()
+	self.lk.RUnlock()
 	return r
 }
 
 var reSleep = regexp.MustCompile(`sleep\((\d+m?s)\)`)
 
 func (self *Engine) ResolveOrLazy(action string) (Doer, error) {
+	self.lk.RLock()
+	defer self.lk.RUnlock()
 	d, ok := self.actions[action]
 	if ok {
 		return d, nil
