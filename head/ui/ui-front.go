@@ -130,7 +130,9 @@ func (self *UIFront) Run(ctx context.Context, alive *alive.Alive) {
 
 init:
 	self.SetCredit(moneysys.Credit(ctx))
-	moneysys.AcceptCredit(ctx, self.menu.MaxPrice())
+	if !self.broken {
+		moneysys.AcceptCredit(ctx, self.menu.MaxPrice())
+	}
 	self.result = UIMenuResult{
 		Cream: DefaultCream,
 		Sugar: DefaultSugar,
@@ -208,26 +210,26 @@ init:
 
 			case input.IsAccept(&e):
 				if len(inputBuf) == 0 {
-					self.showError(msgMenuCodeEmpty)
+					self.showError(inputCh, msgMenuCodeEmpty)
 					break
 				}
 
 				x, err := strconv.ParseUint(string(inputBuf), 10, 16)
 				if err != nil {
 					inputBuf = inputBuf[:0]
-					self.showError(msgMenuCodeInvalid)
+					self.showError(inputCh, msgMenuCodeInvalid)
 					break
 				}
 				code := uint16(x)
 
 				mitem, ok := self.menu[code]
 				if !ok {
-					self.showError(msgMenuCodeInvalid)
+					self.showError(inputCh, msgMenuCodeInvalid)
 					break
 				}
 				self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
 				if mitem.Price > credit {
-					self.showError(msgMenuInsufficientCredit)
+					self.showError(inputCh, msgMenuInsufficientCredit)
 					break
 				}
 
@@ -253,11 +255,12 @@ init:
 	self.result = UIMenuResult{Confirm: false}
 }
 
-func (self *UIFront) showError(text string) {
+func (self *UIFront) showError(inputch chan input.Event, text string) {
 	const timeout = 10 * time.Second
 
-	self.display.Message(msgError, text, func() {
+	self.display.Message(self.g.Config().UI.Front.MsgError, text, func() {
 		select {
+		case <-inputch:
 		case <-self.refreshCh:
 		case <-time.After(timeout):
 		}

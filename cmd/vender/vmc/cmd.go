@@ -68,16 +68,21 @@ func Main(ctx context.Context, config *state.Config) error {
 	g.Log.Debugf("VMC init complete")
 
 	subcmd.SdNotify("executing on_start")
-	if err := g.Engine.ExecList(ctx, "on_start", g.Config().Engine.OnStart); err != nil {
+	onStartSuccess := false
+	for i := 1; i <= 3; i++ {
+		err := g.Engine.ExecList(ctx, "on_start", g.Config().Engine.OnStart)
+		if err == nil {
+			onStartSuccess = true
+			break
+		}
+		g.Tele.Error(errors.Annotatef(err, "on_start try=%d", i))
 		g.Log.Error(err)
-
 		// TODO restart all hardware
 		evend.Enum(ctx, nil)
-
-		if err := g.Engine.ExecList(ctx, "on_start", g.Config().Engine.OnStart); err != nil {
-			g.Log.Error(err)
-			uiFront.SetBroken(true)
-		}
+	}
+	if !onStartSuccess {
+		uiFront.SetBroken(true)
+		moneysys.AcceptCredit(ctx, 0)
 	}
 
 	vmc_common.UILoop(ctx, uiFront)
