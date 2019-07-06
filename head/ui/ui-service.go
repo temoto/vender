@@ -20,6 +20,7 @@ import (
 
 // TODO move text messages to config
 const (
+	msgError            = "error"
 	msgServiceInputAuth = "\x8d %s\x00"
 	msgServiceMenu      = "Menu"
 )
@@ -28,10 +29,11 @@ const (
 	serviceModeAuth      = "auth"
 	serviceModeMenu      = "menu"
 	serviceModeInventory = "inventory"
+	serviceModeReboot    = "reboot"
 	serviceModeExit      = "exit"
 )
 
-var /*const*/ serviceMenu = []string{serviceModeInventory, serviceModeExit}
+var /*const*/ serviceMenu = []string{serviceModeInventory, serviceModeReboot, serviceModeExit}
 var /*const*/ serviceMenuMax = uint8(len(serviceMenu) - 1)
 
 type UIService struct {
@@ -128,6 +130,9 @@ loop:
 				self.display.Translate(fmt.Sprintf("%d %s\x00", invCurrent.Value(), string(self.inputBuf))),
 			)
 
+		case serviceModeReboot:
+			self.display.SetLines("for reboot", "press 1")
+
 		case serviceModeExit:
 			self.g.Log.Debugf("UIService stop mode=exit")
 			break loop
@@ -159,6 +164,8 @@ loop:
 			self.handleMenu(e)
 		case serviceModeInventory:
 			self.handleInventory(e)
+		case serviceModeReboot:
+			self.handleReboot(e)
 		}
 	}
 
@@ -264,6 +271,19 @@ func (self *UIService) handleInventory(e input.Event) {
 			self.inputBuf = self.inputBuf[:len(self.inputBuf)-1]
 			return
 		}
+		self.mode = serviceModeMenu
+	}
+}
+
+func (self *UIService) handleReboot(e input.Event) {
+	switch {
+	case e.Key == '1':
+		self.display.SetLines("reboot", "in progress")
+		// os.Exit(0)
+		self.g.Alive.Stop()
+		self.mode = serviceModeExit
+
+	default:
 		self.mode = serviceModeMenu
 	}
 }
