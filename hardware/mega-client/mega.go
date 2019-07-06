@@ -430,6 +430,7 @@ func (self *Client) parse(buf []byte, f *Frame) error {
 			case self.TwiChan <- twitem:
 			default:
 				self.Log.Errorf("CRITICAL TwiChan is full")
+				panic("code error mega TwiChan is full")
 			}
 		}
 	case RESPONSE_RESET:

@@ -25,7 +25,6 @@ const (
 
 // TODO extract text messages to catalog
 const (
-	msgError  = "Ошибка"
 	msgCream  = "Сливки"
 	msgSugar  = "Сахар"
 	msgCredit = "Кредит:"
@@ -114,19 +113,17 @@ func (self *UIFront) Tag() string { return "ui-front" }
 
 func (self *UIFront) Run(ctx context.Context, alive *alive.Alive) {
 	inputTag := self.Tag()
-	defer alive.Stop()
-	defer self.Finish(ctx, &self.result)
-	defer self.g.Hardware.Input.Unsubscribe(inputTag)
+	defer func() {
+		alive.Stop()
+		self.g.Hardware.Input.Unsubscribe(inputTag)
+		self.Finish(ctx, &self.result)
+	}()
 
 	config := self.g.Config().UI.Front
-	inputCh := make(chan input.Event)
 	moneysys := money.GetGlobal(ctx)
 	timer := time.NewTicker(200 * time.Millisecond)
 	inputBuf := make([]byte, 0, 32)
-	self.g.Hardware.Input.SubscribeFunc(inputTag, func(e input.Event) {
-		inputCh <- e
-		self.refresh()
-	}, alive.StopChan())
+	inputCh := self.g.Hardware.Input.SubscribeChan(inputTag, alive.StopChan())
 
 init:
 	self.SetCredit(moneysys.Credit(ctx))
