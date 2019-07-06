@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/state"
 )
@@ -12,7 +13,7 @@ import (
 const ConveyorDefaultTimeout = 30 * time.Second
 const ConveyorMinTimeout = 1 * time.Second
 
-type DeviceConveyor struct {
+type DeviceConveyor struct { //nolint:maligned
 	Generic
 
 	maxTimeout time.Duration
@@ -47,6 +48,7 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 }
 
 func (self *DeviceConveyor) calibrate(ctx context.Context) error {
+	const tag = "mdb.evend.conveyor.calibrate"
 	// self.dev.Log.Debugf("mdb.evend.conveyor calibrate ready=%t current=%d", self.dev.Ready(), self.currentPos)
 	if self.currentPos >= 0 {
 		return nil
@@ -56,38 +58,42 @@ func (self *DeviceConveyor) calibrate(ctx context.Context) error {
 	if err == nil {
 		self.dev.Log.Debugf("mdb.evend.conveyor calibrate success")
 	}
-	return err
+	return errors.Annotate(err, tag)
 }
 
 func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 	tag := fmt.Sprintf("mdb.evend.conveyor.move:%d", position)
 
-	if err := self.Generic.NewWaitReady(tag).Do(ctx); err != nil {
-		return err
-	}
-	if err := self.Generic.NewAction(tag, 0x01, byte(position&0xff), byte(position>>8)).Do(ctx); err != nil {
-		return err
-	}
+	doWaitDone := engine.Func{F: func(ctx context.Context) error {
+		timeout := self.maxTimeout
+		if self.dev.Ready() && self.currentPos >= 0 {
+			distance := absDiffU16(uint16(self.currentPos), position)
+			eta := speedDistanceDuration(float32(self.minSpeed), uint(distance))
+			timeout = eta * 2
+		}
+		if timeout < ConveyorMinTimeout {
+			timeout = ConveyorMinTimeout
+		}
+		self.dev.Log.Debugf("%s position current=%d target=%d timeout=%v maxtimeout=%v", tag, self.currentPos, position, timeout, self.maxTimeout)
 
-	timeout := self.maxTimeout
-	if self.dev.Ready() && self.currentPos >= 0 {
-		distance := absDiffU16(uint16(self.currentPos), position)
-		eta := speedDistanceDuration(float32(self.minSpeed), uint(distance))
-		timeout = eta * 2
-	}
-	if timeout < ConveyorMinTimeout {
-		timeout = ConveyorMinTimeout
-	}
-	self.dev.Log.Debugf("%s position current=%d target=%d timeout=%v maxtimeout=%v", tag, self.currentPos, position, timeout, self.maxTimeout)
-	if err := self.Generic.NewWaitDone(tag, timeout).Do(ctx); err != nil {
-		self.currentPos = -1
-		self.dev.SetReady(false)
+		err := self.Generic.NewWaitDone(tag, timeout).Do(ctx)
+		if err != nil {
+			self.currentPos = -1
+			self.dev.SetReady(false)
+		} else {
+			self.currentPos = int16(position)
+			self.dev.SetReady(true)
+		}
 		return err
-	} else {
-		self.currentPos = int16(position)
-		self.dev.SetReady(true)
-	}
-	return nil
+	}}
+
+	// TODO engine InlineSeq
+	seq := engine.NewSeq(tag).
+		Append(self.Generic.NewWaitReady(tag)).
+		Append(self.Generic.NewAction(tag, 0x01, byte(position&0xff), byte(position>>8))).
+		Append(doWaitDone)
+	err := seq.Do(ctx)
+	return errors.Annotate(err, tag)
 }
 
 func speedDistanceDuration(speedPerSecond float32, distance uint) time.Duration {

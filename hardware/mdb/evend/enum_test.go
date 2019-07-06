@@ -3,6 +3,7 @@ package evend
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/state"
 )
@@ -25,20 +26,14 @@ func TestRegister(t *testing.T) {
 
 	mock.ExpectMap(nil)
 	go mock.Expect([]mdb.MockR{
-		{"db", ""}, {"da010000", ""}, {"db", ""}, // conveyor calibrate
+		{"db", ""}, {"da010000", ""}, {"db", ""}, // conveyor calibrate / conveyor_move(0)
 		{"db", ""}, {"da01fa00", ""}, {"db", ""}, // conveyor move to hopper
 		{"43", ""}, {"420a", ""}, {"43", ""}, // hopper run
 	})
 
-	if err := g.Engine.RegisterParse("@hopper1(?)", "mdb.evend.conveyor_move(250) mdb.evend.hopper1_run(?)"); err != nil {
-		t.Error(err)
-	}
-	if err := g.Engine.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"); err != nil {
-		t.Error(err)
-	}
-	if err := g.Engine.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, g.Engine.RegisterParse("@hopper1(?)", "mdb.evend.conveyor_move(250) mdb.evend.hopper1_run(?)"))
+	assert.NoError(t, g.Engine.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))
+	assert.NoError(t, g.Engine.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))
 
 	g.Engine.TestDo(t, ctx, "@hopper1(10)")
 }

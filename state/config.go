@@ -73,8 +73,9 @@ type Config struct {
 
 	UI struct {
 		Front struct {
-			MsgIntro        string `hcl:"msg_intro"`
-			MsgBroken       string `hcl:"msg_broken"`
+			MsgError        string `hcl:"msg_error"`
+			MsgStateBroken  string `hcl:"msg_broken"`
+			MsgStateIntro   string `hcl:"msg_intro"`
 			ResetTimeoutSec int    `hcl:"reset_sec"`
 		}
 

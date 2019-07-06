@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/temoto/errors"
@@ -21,14 +22,48 @@ const (
 	valvePollNotHot = 0x40
 )
 
+var ErrHotWaterTemperature = fmt.Errorf("hot water")
+
 type DeviceValve struct { //nolint:maligned
 	Generic
 
 	cautionPartMl uint16
 	pourTimeout   time.Duration
-	tempHot       uint8
+	tempHot       cache
+	tempHotConfig uint8
 	waterStock    *inventory.Stock
 }
+
+type cache struct {
+	updated int64
+	value   int32
+	validms int32
+}
+
+func (c *cache) get(now int64) (int32, int32) {
+	v := atomic.LoadInt32(&c.value)
+	age := int32(now - atomic.LoadInt64(&c.updated))
+	return v, age
+}
+func (c *cache) Get() (int32, bool) {
+	v, age := c.get(time.Now().UnixNano())
+	return v, age >= 0 && age <= c.validms
+}
+func (c *cache) GetOrStale() int32 { return atomic.LoadInt32(&c.value) }
+func (c *cache) GetOrUpdate(f func()) int32 {
+	now := time.Now().UnixNano()
+	v, age := c.get(now)
+	if !(age >= 0 && age <= c.validms) {
+		f()
+		atomic.StoreInt64(&c.updated, now)
+	}
+	return v
+}
+func (c *cache) Set(new int32) {
+	atomic.StoreInt32(&c.value, new)
+	atomic.StoreInt64(&c.updated, time.Now().Unix())
+}
+func (c *cache) SetValid(ms int32) { atomic.StoreInt32(&c.validms, ms) }
 
 func (self *DeviceValve) Init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
@@ -37,6 +72,7 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, time.Hour) // big default timeout is fine, depend on valve hardware
 	self.proto2BusyMask = valvePollBusy
 	self.proto2IgnoreMask = valvePollNotHot
+	self.tempHot.SetValid(20000) // TODO config
 	err := self.Generic.Init(ctx, 0xc0, "valve", proto2)
 
 	rate := valveConfig.WaterStockRate
@@ -45,13 +81,28 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	}
 	self.waterStock = g.Inventory.Register("water", rate)
 
+	doGetTempHot := self.NewGetTempHot()
+	doCheckTempHot := engine.Func0{
+		F: func() error { return nil },
+		V: func() error {
+			temp := self.tempHot.GetOrUpdate(func() {
+				// FIXME log error
+				_ = doGetTempHot.Do(ctx)
+			})
+			if absDiffU16(uint16(temp), uint16(self.tempHotConfig)) > 10 {
+				return ErrHotWaterTemperature
+			}
+			return nil
+		}}
 	doSetTempHot := self.NewSetTempHot()
-	g.Engine.Register("mdb.evend.valve_get_temp_hot", self.NewGetTempHot())
+	g.Engine.Register("mdb.evend.valve_check_temp_hot", doCheckTempHot)
+	g.Engine.Register("mdb.evend.valve_get_temp_hot", doGetTempHot)
 	g.Engine.Register("mdb.evend.valve_set_temp_hot(?)", doSetTempHot)
 	// g.Engine.Register("mdb.evend.valve_set_temp_hot_config", engine.Func{F: func(ctx context.Context) error {
 	// 	cfg := &state.GetConfig(ctx).Hardware.Evend.Valve
 	// 	return engine.ArgApply(doSetTempHot, engine.Arg(cfg.TemperatureHot)).Do(ctx)
 	// }})
+	g.Engine.Register("mdb.evend.valve_check_temp_hot", doCheckTempHot)
 	g.Engine.Register("mdb.evend.valve_pour_coffee(?)", self.NewPourCoffee())
 	g.Engine.Register("mdb.evend.valve_pour_cold(?)", self.NewPourCold())
 	g.Engine.Register("mdb.evend.valve_pour_hot(?)", self.NewPourHot())
@@ -90,7 +141,7 @@ func (self *DeviceValve) NewGetTempHot() engine.Doer {
 		if len(bs) != 1 {
 			return errors.NotValidf("%s response=%x", tag, bs)
 		}
-		self.tempHot = bs[0]
+		self.tempHot.Set(int32(bs[0]))
 		return nil
 	}}
 }

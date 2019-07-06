@@ -149,17 +149,20 @@ init:
 		credit := self.credit.Load().(currency.Amount)
 		switch mode {
 		case frontModeStatus:
-			l1 := self.display.Translate(config.MsgIntro)
-			// TODO write state flags such as "no hot water" on line2
-			l2 := self.display.Translate("")
+			l1 := config.MsgStateIntro
+			l2 := ""
 			if (credit != 0) || (len(inputBuf) > 0) {
-				// l1 = self.display.Translate(msgCredit + credit.FormatCtx(ctx))
-				l1 = self.display.Translate(msgCredit + credit.Format100I())
-				l2 = self.display.Translate(fmt.Sprintf(msgInputCode, string(inputBuf)))
+				l1 = msgCredit + credit.Format100I()
+				l2 = fmt.Sprintf(msgInputCode, string(inputBuf))
+			} else {
+				doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot")
+				if doCheckTempHot != nil && doCheckTempHot.Validate() != nil {
+					l2 = "no hot water"
+				}
 			}
-			self.display.SetLinesBytes(l1, l2)
+			self.display.SetLines(l1, l2)
 		case frontModeBroken:
-			self.display.SetLines(config.MsgBroken, "")
+			self.display.SetLines(config.MsgStateBroken, "")
 		}
 
 		// step 2: wait for input/timeout

@@ -15,14 +15,14 @@ const DefaultShakeSpeed uint8 = 100
 type DeviceMixer struct { //nolint:maligned
 	Generic
 
-	calibrated   bool
+	currentPos   int16 // estimated
 	moveTimeout  time.Duration
 	shakeTimeout time.Duration
 	shakeSpeed   uint8
 }
 
 func (self *DeviceMixer) Init(ctx context.Context) error {
-	self.calibrated = false
+	self.currentPos = -1
 	self.shakeSpeed = DefaultShakeSpeed
 	g := state.GetGlobal(ctx)
 	config := &g.Config().Hardware.Evend.Mixer
@@ -31,7 +31,13 @@ func (self *DeviceMixer) Init(ctx context.Context) error {
 	err := self.Generic.Init(ctx, 0xc8, "mixer", proto1)
 
 	doCalibrate := engine.Func{Name: "mdb.evend.mixer_calibrate", F: self.calibrate}
-	doMove := engine.FuncArg{Name: "mdb.evend.mixer_move", F: func(ctx context.Context, arg engine.Arg) error { return self.move(uint8(arg)).Do(ctx) }}
+	doMove := engine.FuncArg{Name: "mdb.evend.mixer_move", F: func(ctx context.Context, arg engine.Arg) error {
+		if self.currentPos == 0 && arg == 0 {
+			self.dev.Log.Debugf("mdb.evend.mixer currentPos=0 skip")
+			return nil
+		}
+		return self.move(uint8(arg)).Do(ctx)
+	}}
 	moveSeq := engine.NewSeq("mdb.evend.mixer_move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register("mdb.evend.mixer_shake(?)",
 		engine.FuncArg{Name: "mdb.evend.mixer_shake", F: func(ctx context.Context, arg engine.Arg) error {
@@ -68,12 +74,12 @@ func (self *DeviceMixer) NewFan(on bool) engine.Doer {
 }
 
 func (self *DeviceMixer) calibrate(ctx context.Context) error {
-	if self.calibrated {
+	if self.currentPos >= 0 {
 		return nil
 	}
 	err := self.move(0).Do(ctx)
 	if err == nil {
-		self.calibrated = true
+		self.currentPos = 0
 	}
 	return err
 }
@@ -83,5 +89,6 @@ func (self *DeviceMixer) move(position uint8) engine.Doer {
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, position, 0x64)).
-		Append(self.NewWaitDone(tag, self.moveTimeout))
+		Append(self.NewWaitDone(tag, self.moveTimeout)).
+		Append(engine.Func0{F: func() error { self.currentPos = int16(position); return nil }})
 }
