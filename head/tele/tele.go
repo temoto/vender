@@ -235,6 +235,7 @@ func (self *Tele) qpushTagProto(tag byte, pb proto.Message) error {
 	if err := buf.Marshal(pb); err != nil {
 		return err
 	}
+	// self.log.Debugf("qpushTagProto %x", buf.Bytes())
 	return self.q.Push(buf.Bytes())
 }
 
@@ -256,5 +257,6 @@ func (self *Tele) qsendTelemetry(tm *Telemetry) bool {
 		self.log.Errorf("CRITICAL telemetry Marshal tm=%#v err=%v", tm, err)
 		return true // retry will not help
 	}
+	// self.log.Debugf("SendTelemetry %x", payload)
 	return self.transport.SendTelemetry(payload)
 }

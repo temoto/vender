@@ -84,6 +84,6 @@ func newExecutor(ctx context.Context) func(string) {
 		if err := proto.Unmarshal(b, &tm); err != nil {
 			g.Log.Errorf("proto.Unmarshal err=%v", err)
 		}
-		g.Log.Infof("%#v", tm)
+		g.Log.Info(proto.MarshalTextString(&tm))
 	}
 }
