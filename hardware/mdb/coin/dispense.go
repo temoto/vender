@@ -263,9 +263,11 @@ func (self *CoinAcceptor) NewPayout(amount currency.Amount, success *currency.No
 			return errors.Annotate(r.E, tag)
 		}
 		for i, count := range r.P.Bytes() {
-			nominal := self.nominals[i]
-			if err := success.Add(nominal, uint(count)); err != nil {
-				return errors.Annotate(err, tag)
+			if count > 0 {
+				nominal := self.nominals[i]
+				if err := success.Add(nominal, uint(count)); err != nil {
+					return errors.Annotate(err, tag)
+				}
 			}
 		}
 		return nil
