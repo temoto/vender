@@ -1,154 +1,40 @@
-.HEA
-.TIM 05/06/19 09:48:12
-.APP "Eeschema (5.1.2)-1"
 
-.ADD_COM Q2 "BC807"
-.ADD_COM Q3 "BC807"
-.ADD_COM R3 "5R6"
-.ADD_COM R4 "680R"
-.ADD_COM U1 "RC1602A"
-.ADD_COM R8 "4K7"
-.ADD_COM R9 "4K7"
-.ADD_COM J3 "Conn_02x03_Top_Bottom"
-.ADD_COM psu1 "dc24-dc5-module"
-.ADD_COM R6 "10K"
-.ADD_COM J2 "Keyboard"
-.ADD_COM Q4 "2N7002"
-.ADD_COM R11 "4k7"
-.ADD_COM R10 "10k"
-.ADD_COM R22 "10k"
-.ADD_COM Q5 "2N7002"
-.ADD_COM R13 "4k7"
-.ADD_COM R12 "10k"
-.ADD_COM R23 "10k"
-.ADD_COM Q6 "2N7002"
-.ADD_COM R15 "4k7"
-.ADD_COM R14 "10k"
-.ADD_COM R24 "10k"
-.ADD_COM R18 "10k"
-.ADD_COM R19 "15k"
-.ADD_COM R20 "10k"
-.ADD_COM R21 "15k"
-.ADD_COM D1 "B260"
-.ADD_COM J1 "Orange_pi_lite"
-.ADD_COM R5 "680R"
-.ADD_COM X1 "Arduino_Pro_Mini-1"
-.ADD_COM R2 "2K2"
-.ADD_COM J5 "Conn_01x01_Female"
-.ADD_COM J4 "Conn_01x01_Female"
-
-
-.ADD_TER R15.2 "Net-(Q6-Pad1)"
-.TER     Q6.1
-         R14.1
-.ADD_TER X1.12A "SS-5V"
-.TER     R24.2
-         Q6.3
-.ADD_TER U1.15 "+5V"
-.TER     R13.1
-         R23.1
-         R11.1
-         U1.2
-         J1.2
-         R15.1
-         R22.1
-         R24.1
-.ADD_TER X1.10A "MISO-5V"
-.TER     R18.2
-.ADD_TER J5.1 "GND"
-.TER     R10.2
-         J2.3
-         J3.6
-         psu1.3
-         psu1.2
-         X1.1B
-         J3.2
-         J1.6
-         J1.9
-         J1.25
-         U1.3
-         R21.2
-         R14.2
-         U1.1
-         R19.2
-         U1.16
-         R4.2
-         R12.2
-.ADD_TER R21.1 "INT-3V"
-.TER     R20.1
-         J1.7
-.ADD_TER R20.2 "INT-5V"
-.TER     X1.5D
-.ADD_TER R18.1 "MISO-3V"
-.TER     J1.21
-         R19.1
-.ADD_TER R22.2 "MOSI-5V"
-.TER     X1.11A
-         Q4.3
-.ADD_TER Q5.1 "Net-(Q5-Pad1)"
-.TER     R13.2
-         R12.1
-.ADD_TER Q5.3 "SCK-5V"
-.TER     R23.2
-         X1.9A
-.ADD_TER Q5.2 "SCK-3V"
-.TER     J1.23
-.ADD_TER R10.1 "Net-(Q4-Pad1)"
-.TER     R11.2
-         Q4.1
-.ADD_TER Q6.2 "SS-3V"
-.TER     J1.24
-.ADD_TER R8.1 "+5C"
-.TER     R5.1
-         R3.1
-         Q2.2
-         R9.1
-         J2.4
-         X1.4A
-.ADD_TER X1.1D "TTL-TX"
-.TER     R2.1
-.ADD_TER X1.1A "+6V"
-.TER     J4.1
-         psu1.4
-.ADD_TER J1.22 "D6"
-.TER     U1.13
-.ADD_TER U1.12 "D5"
-.TER     J1.18
-.ADD_TER U1.11 "D4"
-.TER     J1.16
-.ADD_TER J1.12 "E"
-.TER     U1.6
-.ADD_TER J1.10 "RW"
-.TER     U1.5
-.ADD_TER D1.2 "Net-(D1-Pad2)"
-.TER     J3.1
-.ADD_TER J1.8 "A0"
-.TER     U1.4
-.ADD_TER J1.26 "D7"
-.TER     U1.14
-.ADD_TER X1.5B "SCL"
-.TER     J2.2
-         R9.2
-.ADD_TER J2.1 "SDA"
-.TER     R8.2
-         X1.4B
-.ADD_TER R2.2 "Net-(Q2-Pad3)"
-.TER     Q2.3
-         Q3.1
-.ADD_TER J3.5 "MDB-MT"
-.TER     Q3.3
-         R4.1
-.ADD_TER R3.2 "Net-(Q2-Pad1)"
-.TER     Q3.2
-         Q2.1
-.ADD_TER R5.2 "MDB-MR"
-.TER     R6.1
-         J3.4
-.ADD_TER R6.2 "TTL-RX"
-.TER     X1.2D
-.ADD_TER Q4.2 "MOSI-3V"
-.TER     J1.19
-.ADD_TER psu1.1 "MDB+24V"
-.TER     D1.1
-
-.END
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <title>KiCad BOM Example 5</title>
+    </head>
+    <body>
+    <h1>C:\GitHub\vender\hardware\evend-adapter\kicad\evend-adapter\evend-adapter.sch</h1>
+    <p>29/06/19 16:55:31</p>
+    <p>Eeschema (5.1.2)-1</p>
+    <p><b>Component Count:</b>43</p>
+    <table>
+    <tr><th style='width:640px'>Ref</th><th>Qnty</th><th>Value</th><th>Part</th><th>Footprint</th><th>Description</th><th>Vendor</th></tr>
+    <tr><td>D1</td><td>1</td><td>B260</td><td>Diode:B260</td><td>Diodes_SMD:D_1206</td><td>60V 2A Schottky Barrier Rectifier Diode, SMB</td><td></td></tr>
+    <tr><td>J1</td><td>1</td><td>Orange_pi_lite</td><td>evend-adapter-rescue:Orange_pi_lite</td><td>evend-adapter:Orange_pi_lite</td><td>Orange PI Lite</td><td></td></tr>
+    <tr><td>J2</td><td>1</td><td>Keyboard</td><td>Connector:Conn_01x04_Male</td><td>evend-adapter:JST_PH_B4B-PH-K_04x2.00mm_Straight</td><td>Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)</td><td></td></tr>
+    <tr><td>J3</td><td>1</td><td>Conn_02x03_Top_Bottom</td><td>Connector_Generic:Conn_02x03_Top_Bottom</td><td>evend-adapter:Molex_MiniFit-JR-5569-06A2_2x03x4.20mm_Angled</td><td>Generic connector, double row, 02x03, top/bottom pin numbering scheme (row 1: 1...pins_per_row, row2: pins_per_row+1 ... num_pins), script generated (kicad-library-utils/schlib/autogen/connector/)</td><td></td></tr>
+    <tr><td>J4, J5</td><td>2</td><td>Conn_01x01_Female</td><td>evend-adapter-rescue:Conn_01x01_Female</td><td>evend-adapter:1pin</td><td>Generic connector, single row, 01x01, script generated (kicad-library-utils/schlib/autogen/connector/)</td><td></td></tr>
+    <tr><td>Q2, Q3</td><td>2</td><td>BC807</td><td>evend-adapter-rescue:BC807-transistors</td><td>evend-adapter:SOT-23</td><td></td><td></td></tr>
+    <tr><td>Q4, Q5, Q6</td><td>3</td><td>2N7002</td><td>Transistor_FET:2N7002</td><td>evend-adapter:SOT-23</td><td>0.115A Id, 60V Vds, N-Channel MOSFET, SOT-23</td><td></td></tr>
+    <tr><td>R2</td><td>1</td><td>2K2</td><td>Device:R</td><td>evend-adapter:C_0603_HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>R3</td><td>1</td><td>5R6</td><td>Device:R</td><td>evend-adapter:C_0603_HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>R4, R5</td><td>2</td><td>680R</td><td>Device:R</td><td>evend-adapter:C_0603_HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>R6</td><td>1</td><td>10K</td><td>Device:R</td><td>evend-adapter:C_0603_HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>R8, R9</td><td>2</td><td>4K7</td><td>Device:R</td><td>evend-adapter:C_0603_HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>R10, R12, R14, R18, R20, R22, R23, R24</td><td>8</td><td>10k</td><td>Device:R</td><td>evend-adapter:C_0603_HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>R11, R13, R15</td><td>3</td><td>4k7</td><td>Device:R</td><td>evend-adapter:C_0603_HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>R19, R21</td><td>2</td><td>15k</td><td>Device:R</td><td>evend-adapter:C_0603_HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>R25</td><td>1</td><td>300</td><td>Device:R</td><td>evend-adapter:C_1206_1-HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>R26</td><td>1</td><td>1.5k</td><td>Device:R</td><td>evend-adapter:C_1206_1-HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>U1</td><td>1</td><td>RC1602A</td><td>Display_Character:RC1602A</td><td>evend-adapter:LCD-016N002L</td><td>LCD 16x2 Alphanumeric gray backlight, 3 or 5V VDD</td><td></td></tr>
+    <tr><td>X1</td><td>1</td><td>Arduino_Pro_Mini-1</td><td>evend-adapter-rescue:Arduino_Pro_Mini-1</td><td>evend-adapter:Arduino_Pro_Mini-1</td><td>Arduino Pro Mini module</td><td></td></tr>
+    <tr><td>o1, o2, o3, o4, o5, o6, o7</td><td>7</td><td>0</td><td>Device:R</td><td>evend-adapter:C_1206_HandSoldering</td><td>Resistor</td><td></td></tr>
+    <tr><td>psu1</td><td>1</td><td>dc24-dc5-module</td><td>evend-adapter-rescue:dc24-dc5-module</td><td>evend-adapter:PSU_24-5_копия</td><td></td><td></td></tr><!--TABLEROW-->
+    </table>
+    </body>
+</html>
+    
