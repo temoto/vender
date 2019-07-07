@@ -76,8 +76,9 @@ func (self *MoneySystem) locked_credit(includeEscrow bool) currency.Amount {
 	if includeEscrow {
 		result += self.bill.EscrowAmount()
 	}
-	result += self.billCredit.Total()
-	result += self.coinCredit.Total()
+	result += self.dirty
+	// result += self.billCredit.Total()
+	// result += self.coinCredit.Total()
 	result += self.giftCredit
 	return result
 }
@@ -199,6 +200,7 @@ func (self *MoneySystem) Abort(ctx context.Context) error {
 	defer self.lk.Unlock()
 
 	total := self.locked_credit(true)
+	self.Log.Debugf("%s credit=%s", tag, total.FormatCtx(ctx))
 
 	if err := self.locked_payout(ctx, total); err != nil {
 		err = errors.Annotate(err, tag)
@@ -213,7 +215,6 @@ func (self *MoneySystem) Abort(ctx context.Context) error {
 	self.billCredit.Clear()
 	self.coinCredit.Clear()
 	self.giftCredit = 0
-	go self.EventFire(Event{name: EventAbort})
 	go self.EventFire(Event{name: EventCredit})
 
 	return nil

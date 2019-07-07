@@ -63,7 +63,6 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 			curPrice := GetCurrentPrice(ctx)
 			err := self.WithdrawCommit(ctx, curPrice)
 			return errors.Annotatef(err, "curPrice=%s", curPrice.FormatCtx(ctx))
-			// return nil
 		},
 	}
 	g.Engine.Register(doCommit.String(), doCommit)
@@ -80,12 +79,20 @@ func (self *MoneySystem) Stop(ctx context.Context) error {
 	self.Log.Debugf("money.Stop")
 	errs := make([]error, 0, 8)
 	errs = append(errs, self.Abort(ctx))
-	errs = append(errs, self.bill.AcceptMax(0).Do(ctx))
-	errs = append(errs, self.coin.AcceptMax(0).Do(ctx))
-	self.billPoll.Stop()
-	self.coinPoll.Stop()
-	self.billPoll.Wait()
-	self.coinPoll.Wait()
+	if self.billPoll != nil {
+		errs = append(errs, self.bill.AcceptMax(0).Do(ctx))
+		self.billPoll.Stop()
+	}
+	if self.coinPoll != nil {
+		errs = append(errs, self.coin.AcceptMax(0).Do(ctx))
+		self.coinPoll.Stop()
+	}
+	if self.billPoll != nil {
+		self.billPoll.Wait()
+	}
+	if self.coinPoll != nil {
+		self.coinPoll.Wait()
+	}
 	return helpers.FoldErrors(errs)
 }
 
