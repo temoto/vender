@@ -167,6 +167,18 @@ func (g *Global) MustInit(ctx context.Context, cfg *Config) {
 	}
 }
 
+func (g *Global) Error(err error, args ...interface{}) {
+	if err != nil {
+		if len(args) != 0 {
+			msg := args[0].(string)
+			args = args[1:]
+			err = errors.Annotatef(err, msg, args...)
+		}
+		g.Log.Errorf(errors.ErrorStack(err))
+		g.Tele.Error(err)
+	}
+}
+
 func NewTestContext(t testing.TB, confString string /* logLevel log2.Level*/) (context.Context, *Global) {
 	fs := NewMockFullReader(map[string]string{
 		"test-inline": confString,

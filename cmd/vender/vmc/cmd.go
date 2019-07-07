@@ -55,6 +55,7 @@ func Main(ctx context.Context, config *state.Config) error {
 		switch em.Name() {
 		case money.EventCredit:
 		case money.EventAbort:
+			g.Error(errors.Trace(moneysys.Abort(ctx)))
 		default:
 			panic("head: unknown money event: " + em.String())
 		}
