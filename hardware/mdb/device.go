@@ -10,6 +10,7 @@ import (
 
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/helpers/atomic_clock"
 	"github.com/temoto/vender/log2"
 )
 
@@ -28,14 +29,14 @@ type PacketError struct {
 }
 
 type Device struct { //nolint:maligned
-	cmdLk   sync.Mutex // TODO explore if chan approach is better
-	txfun   TxFunc
-	lastOff time.Time
-	errCode int32
+	errCode int32  // atomic
+	ready   uint32 // atomic bool "ready for useful work", with RESET, configure, calibration done.
 
-	// "ready for useful work", with RESET, configure, calibration done.
-	ready uint32 // atomic bool
+	cmdLk sync.Mutex // TODO explore if chan approach is better
+	txfun TxFunc
 
+	LastOk        *atomic_clock.Clock
+	LastOff       *atomic_clock.Clock
 	Log           *log2.Log
 	Address       uint8
 	Name          string
@@ -62,6 +63,8 @@ func (self *Device) Init(txfun TxFunc, log *log2.Log, addr uint8, name string, b
 	self.txfun = txfun
 	self.Name = name
 	self.errCode = ErrCodeNone
+	self.LastOk = atomic_clock.New(0)
+	self.LastOff = atomic_clock.New(0)
 
 	if self.DelayIdle == 0 {
 		self.DelayIdle = DefaultDelayIdle
@@ -91,10 +94,10 @@ func (self *Device) ValidateErrorCode() error {
 }
 
 func (self *Device) ValidateOnline() error {
-	if self.lastOff.IsZero() {
+	if self.LastOff.IsZero() {
 		return nil
 	}
-	return errors.Errorf("mdb.%s offline duration=%v", self.Name, time.Since(self.lastOff))
+	return errors.Errorf("mdb.%s offline duration=%v", self.Name, atomic_clock.Since(self.LastOff))
 }
 
 func (self *Device) Tx(request Packet) (r PacketError) {
@@ -108,11 +111,14 @@ func (self *Device) Tx(request Packet) (r PacketError) {
 func (self *Device) tx(request Packet) (r PacketError) {
 	r.E = self.txfun(request, &r.P)
 	if r.E == nil {
-		self.lastOff = time.Time{}
+		// self.Log.Debugf("mdb.%s since last ok %v", self.Name, atomic_clock.Since(self.LastOk))
+		self.LastOk.SetNow()
+		self.LastOff.Set(0)
 	} else {
 		self.Log.Errorf("mdb.%s request=%s err=%v", self.Name, request.Format(), r.E)
-		if self.lastOff.IsZero() && errors.Cause(r.E) == ErrTimeout {
-			self.lastOff = time.Now()
+		if self.LastOff.IsZero() && errors.Cause(r.E) == ErrTimeout {
+			self.LastOk.Set(0)
+			self.LastOff.SetNow()
 		}
 		r.E = errors.Annotatef(r.E, "request=%x", request.Bytes())
 	}
@@ -170,7 +176,8 @@ func (self *Device) locked_reset() error {
 	self.SetReady(false)
 	if r.E != nil {
 		if errors.Cause(r.E) == ErrTimeout {
-			self.lastOff = time.Now()
+			self.LastOk.Set(0)
+			self.LastOff.SetNow()
 			self.Log.Errorf("%s addr=%02x is offline RESET err=timeout", tag, self.Address)
 		} else {
 			self.Log.Errorf("%s RESET err=%s", tag, errors.ErrorStack(r.E))
