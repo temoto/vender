@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/temoto/errors"
@@ -12,6 +11,7 @@ import (
 	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/helpers/cacheval"
 	"github.com/temoto/vender/state"
 )
 
@@ -29,50 +29,20 @@ type DeviceValve struct { //nolint:maligned
 
 	cautionPartMl uint16
 	pourTimeout   time.Duration
-	tempHot       cache
+	tempHot       cacheval.Int32
 	tempHotConfig uint8
 	waterStock    *inventory.Stock
 }
-
-type cache struct {
-	updated int64
-	value   int32
-	validms int32
-}
-
-func (c *cache) get(now int64) (int32, int32) {
-	v := atomic.LoadInt32(&c.value)
-	age := int32(now - atomic.LoadInt64(&c.updated))
-	return v, age
-}
-func (c *cache) Get() (int32, bool) {
-	v, age := c.get(time.Now().UnixNano())
-	return v, age >= 0 && age <= c.validms
-}
-func (c *cache) GetOrStale() int32 { return atomic.LoadInt32(&c.value) }
-func (c *cache) GetOrUpdate(f func()) int32 {
-	now := time.Now().UnixNano()
-	v, age := c.get(now)
-	if !(age >= 0 && age <= c.validms) {
-		f()
-		atomic.StoreInt64(&c.updated, now)
-	}
-	return v
-}
-func (c *cache) Set(new int32) {
-	atomic.StoreInt32(&c.value, new)
-	atomic.StoreInt64(&c.updated, time.Now().Unix())
-}
-func (c *cache) SetValid(ms int32) { atomic.StoreInt32(&c.validms, ms) }
 
 func (self *DeviceValve) Init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 	valveConfig := &g.Config().Hardware.Evend.Valve
 	self.cautionPartMl = uint16(valveConfig.CautionPartMl)
 	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, time.Hour) // big default timeout is fine, depend on valve hardware
+	tempValid := helpers.IntMillisecondDefault(valveConfig.TemperatureValidMs, 30*time.Second)
+	self.tempHot.Init(tempValid)
 	self.proto2BusyMask = valvePollBusy
 	self.proto2IgnoreMask = valvePollNotHot
-	self.tempHot.SetValid(20000) // TODO config
 	err := self.Generic.Init(ctx, 0xc0, "valve", proto2)
 
 	rate := valveConfig.WaterStockRate

@@ -40,7 +40,7 @@ func TestValve(t *testing.T) {
 	}
 
 	g.Engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
-	assert.Equal(t, uint8(23), uint8(d.tempHot.GetOrStale()))
+	assert.Equal(t, uint8(23), uint8(d.tempHot.Get()))
 
 	g.Engine.TestDo(t, ctx, "mdb.evend.valve_set_temp_hot(73)")
 
