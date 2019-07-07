@@ -4,6 +4,7 @@ package evend_config
 
 type Config struct { //nolint:maligned
 	Conveyor struct { //nolint:maligned
+		KeepaliveMs int `hcl:"keepalive_ms"`
 		MinSpeed    int `hcl:"min_speed"`
 		PositionMax int `hcl:"position_max"`
 	} `hcl:"conveyor"`

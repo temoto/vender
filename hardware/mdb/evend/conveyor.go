@@ -7,6 +7,7 @@ import (
 
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
@@ -25,14 +26,17 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 	self.currentPos = -1
 	g := state.GetGlobal(ctx)
 	devConfig := &g.Config().Hardware.Evend.Conveyor
-	self.maxTimeout = speedDistanceDuration(float32(devConfig.MinSpeed), uint(devConfig.PositionMax))
-	if self.maxTimeout == 0 {
-		self.maxTimeout = ConveyorDefaultTimeout
-	}
+	keepaliveInterval := helpers.IntMillisecondDefault(devConfig.KeepaliveMs, 0)
 	self.minSpeed = uint16(devConfig.MinSpeed)
 	if self.minSpeed == 0 {
 		self.minSpeed = 200
 	}
+	self.maxTimeout = speedDistanceDuration(float32(self.minSpeed), uint(devConfig.PositionMax))
+	if self.maxTimeout == 0 {
+		self.maxTimeout = ConveyorDefaultTimeout
+	}
+	g.Log.Debugf("mdb.evend.conveyor minSpeed=%d maxTimeout=%v keepalive=%v", self.minSpeed, self.maxTimeout, keepaliveInterval)
+	self.dev.DelayNext = 245 * time.Millisecond // empirically found lower total WaitReady
 	err := self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
 
 	doCalibrate := engine.Func{Name: "mdb.evend.conveyor.calibrate", F: self.calibrate}
@@ -43,6 +47,10 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 		}}
 	moveSeq := engine.NewSeq("mdb.evend.conveyor_move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
+
+	if keepaliveInterval > 0 {
+		go self.Generic.dev.Keepalive(keepaliveInterval, g.Alive.StopChan())
+	}
 
 	return err
 }

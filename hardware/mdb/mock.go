@@ -79,7 +79,7 @@ func (self *MockUart) Tx(request, response []byte) (n int, err error) {
 }
 
 // ExpectMap() in random order
-func (self *MockUart) txMap(request, response []byte) (n int, err error) {
+func (self *MockUart) txMap(request, response []byte) (int, error) {
 	requestHex := hex.EncodeToString(request)
 	responseHex, found := self.m[requestHex]
 	if !found {
@@ -88,8 +88,8 @@ func (self *MockUart) txMap(request, response []byte) (n int, err error) {
 	}
 	delete(self.m, requestHex)
 	rp := MustPacketFromHex(responseHex, true)
-	n = copy(response, rp.Bytes())
-	return n, err
+	n := copy(response, rp.Bytes())
+	return n, nil
 }
 
 // Expect() requests in defined order

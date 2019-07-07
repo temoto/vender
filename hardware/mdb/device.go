@@ -219,6 +219,33 @@ func (self *PollDelay) Delay(dev *Device, active bool, err bool, stopch <-chan s
 	}
 }
 
+func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
+	okAge := atomic_clock.Since(self.LastOk)
+	wait := interval - okAge
+
+	for {
+		select {
+		case <-stopch:
+			return
+		default:
+		}
+		// self.Log.Debugf("keepalive okage=%v wait=%v", okAge, wait)
+		if wait > 0 {
+			time.Sleep(wait)
+		}
+
+		self.cmdLk.Lock()
+		// maybe LastOk was updated during Lock()
+		okAge = atomic_clock.Since(self.LastOk)
+		wait = interval - okAge
+		// self.Log.Debugf("keepalive locked okage=%v wait=%v", okAge, wait)
+		if wait <= 0 {
+			self.Tx(self.PacketPoll)
+		}
+		self.cmdLk.Unlock()
+	}
+}
+
 type PollFunc func(Packet) (stop bool, err error)
 
 func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duration, fun PollFunc) engine.Doer {
