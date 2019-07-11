@@ -71,6 +71,14 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 		F:    self.Abort,
 	}
 	g.Engine.Register(doAbort.String(), doAbort)
+	doAccept := engine.FuncArg{
+		Name: "@money.accept(?)",
+		F: func(ctx context.Context, arg engine.Arg) error {
+			self.AcceptCredit(ctx, g.Config().ScaleU(uint32(arg)))
+			return nil
+		},
+	}
+	g.Engine.Register(doAccept.Name, doAccept)
 
 	return nil
 }
@@ -124,7 +132,7 @@ func (self *MoneySystem) billInit(ctx context.Context) error {
 		case money.StatusEscrow:
 			if pi.DataCount == 1 {
 				if err := self.bill.NewEscrow(true).Do(ctx); err != nil {
-					self.Log.Errorf("money.bill escrow accept n=%s err=%v", currency.Amount(pi.DataNominal).FormatCtx(ctx))
+					self.Log.Errorf("money.bill escrow accept n=%s err=%v", currency.Amount(pi.DataNominal).FormatCtx(ctx), err)
 				}
 			}
 

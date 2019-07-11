@@ -11,8 +11,9 @@ import (
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/engine"
-	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/hardware/mdb"
+	"github.com/temoto/vender/hardware/mdb/evend"
+	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/state"
@@ -44,9 +45,14 @@ func Main(ctx context.Context, config *state.Config) error {
 		g.Log.Debugf("- money commit")
 		return nil
 	}})
+	ms := &money.MoneySystem{}
+	if err := ms.Start(ctx); err != nil {
+		g.Log.Error(errors.ErrorStack(err))
+	}
 	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
 	// right now Enum does IO implicitly
-	hardware.Enum(ctx, nil)
+	// FIXME hardware.Enum() but money system inits bill/coin devices explicitly
+	evend.Enum(ctx, nil)
 	g.Inventory.DisableAll()
 	g.Log.Debugf("devices init complete")
 
