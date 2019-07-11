@@ -36,6 +36,8 @@ func TeleCommandLoop(ctx context.Context) {
 
 func uiFrontFinish(ctx context.Context, menuResult *ui.UIMenuResult) {
 	g := state.GetGlobal(ctx)
+	display := g.Hardware.HD44780.Display
+	uiConfig := &g.Config().UI
 	moneysys := money.GetGlobal(ctx)
 	g.Log.Debugf("ui-front result=%#v", menuResult)
 	if !menuResult.Confirm {
@@ -55,6 +57,7 @@ func uiFrontFinish(ctx context.Context, menuResult *ui.UIMenuResult) {
 		g.Log.Debugf("ui-front CRITICAL error while return change")
 	}
 	itemCtx := money.SetCurrentPrice(ctx, menuResult.Item.Price)
+	display.SetLines("спасибо", "готовлю")
 	err := menuResult.Item.D.Do(itemCtx)
 	g.Log.Debugf("menu item=%s end", menuResult.Item.String())
 	if err == nil {
@@ -66,6 +69,7 @@ func uiFrontFinish(ctx context.Context, menuResult *ui.UIMenuResult) {
 		g.Log.Errorf("tele.error")
 		g.Tele.Error(err)
 
+		display.SetLines(uiConfig.Front.MsgError, "не получилось")
 		g.Log.Errorf("on_menu_error")
 		if err := g.Engine.ExecList(ctx, "on_menu_error", g.Config().Engine.OnMenuError); err != nil {
 			g.Log.Errorf("on_menu_error err=%v", err)

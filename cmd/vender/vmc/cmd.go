@@ -30,6 +30,9 @@ func Main(ctx context.Context, config *state.Config) error {
 		return err
 	}
 
+	display := g.Hardware.HD44780.Display
+	display.SetLines("boot", "please wait")
+
 	moneysys := new(money.MoneySystem)
 	if err = moneysys.Start(ctx); err != nil {
 		err = errors.Annotate(err, "money system Start()")
