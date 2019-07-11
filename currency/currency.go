@@ -36,8 +36,6 @@ type NominalGroup struct {
 	values map[Nominal]uint
 }
 
-func (self *NominalGroup) Len() uint { return uint(len(self.values)) }
-
 func (self *NominalGroup) Copy() *NominalGroup {
 	ng2 := &NominalGroup{
 		values: make(map[Nominal]uint, len(self.values)),
@@ -64,6 +62,7 @@ func (self *NominalGroup) Add(n Nominal, count uint) error {
 	self.values[n] += count
 	return nil
 }
+
 func (self *NominalGroup) AddFrom(source *NominalGroup) {
 	if self.values == nil {
 		self.values = make(map[Nominal]uint, len(source.values))
@@ -85,10 +84,6 @@ func (self *NominalGroup) Get(n Nominal) (uint, error) {
 	} else {
 		return stored, nil
 	}
-}
-
-func (self *NominalGroup) Contains(a Amount) bool {
-	return self.Copy().Withdraw(nil, a, NewExpendLeastCount()) == nil
 }
 
 func (self *NominalGroup) Iter(f func(nominal Nominal, count uint) error) error {
