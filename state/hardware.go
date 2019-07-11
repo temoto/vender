@@ -89,10 +89,15 @@ func (g *Global) Mega() (*mega.Client, error) {
 	var err error
 	g.initMegaOnce.Do(func() {
 		defer recoverFatal(g.Log) // fix sync.Once silent panic
-		mcfg := &g.c.Hardware.Mega
-		client, err = mega.NewClient(mcfg.Spi, mcfg.PinChip, mcfg.Pin, g.Log)
+		devConfig := &g.c.Hardware.Mega
+		megaConfig := &mega.Config{
+			SpiBus:        devConfig.Spi,
+			NotifyPinChip: devConfig.PinChip,
+			NotifyPinName: devConfig.Pin,
+		}
+		client, err = mega.NewClient(megaConfig, g.Log)
 		if err != nil {
-			err = errors.Annotatef(err, "config: mega=%#v", mcfg)
+			err = errors.Annotatef(err, "mega config=%#v", megaConfig)
 		}
 		g.Hardware.Mega.Store(client)
 	})
