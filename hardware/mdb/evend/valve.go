@@ -22,16 +22,28 @@ const (
 	valvePollNotHot = 0x40
 )
 
-var ErrHotWaterTemperature = fmt.Errorf("hot water")
+type ErrWaterTemperature struct {
+	Source  string
+	Current int16
+	Target  int16
+}
+
+func (e *ErrWaterTemperature) Error() string {
+	diff := e.Current - e.Target
+	return fmt.Sprintf("source=%s current=%d config=%d diff=%d", e.Source, e.Current, e.Target, diff)
+}
 
 type DeviceValve struct { //nolint:maligned
 	Generic
 
 	cautionPartMl uint16
 	pourTimeout   time.Duration
-	tempHot       cacheval.Int32
-	tempHotConfig uint8
 	waterStock    *inventory.Stock
+
+	doGetTempHot    engine.Doer
+	tempHot         cacheval.Int32
+	tempHotTarget   uint8
+	tempHotReported bool
 }
 
 func (self *DeviceValve) Init(ctx context.Context) error {
@@ -51,28 +63,16 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	}
 	self.waterStock = g.Inventory.Register("water", rate)
 
-	doGetTempHot := self.NewGetTempHot()
-	doCheckTempHot := engine.Func0{
-		F: func() error { return nil },
-		V: func() error {
-			temp := self.tempHot.GetOrUpdate(func() {
-				// FIXME log error
-				_ = doGetTempHot.Do(ctx)
-			})
-			if absDiffU16(uint16(temp), uint16(self.tempHotConfig)) > 10 {
-				return ErrHotWaterTemperature
-			}
-			return nil
-		}}
+	self.doGetTempHot = self.newGetTempHot()
+	doCheckTempHot := engine.Func0{F: func() error { return nil }, V: self.newCheckTempHotValidate(ctx)}
 	doSetTempHot := self.NewSetTempHot()
 	g.Engine.Register("mdb.evend.valve_check_temp_hot", doCheckTempHot)
-	g.Engine.Register("mdb.evend.valve_get_temp_hot", doGetTempHot)
+	g.Engine.Register("mdb.evend.valve_get_temp_hot", self.doGetTempHot)
 	g.Engine.Register("mdb.evend.valve_set_temp_hot(?)", doSetTempHot)
 	// g.Engine.Register("mdb.evend.valve_set_temp_hot_config", engine.Func{F: func(ctx context.Context) error {
 	// 	cfg := &state.GetConfig(ctx).Hardware.Evend.Valve
 	// 	return engine.ArgApply(doSetTempHot, engine.Arg(cfg.TemperatureHot)).Do(ctx)
 	// }})
-	g.Engine.Register("mdb.evend.valve_check_temp_hot", doCheckTempHot)
 	g.Engine.Register("mdb.evend.valve_pour_coffee(?)", self.NewPourCoffee())
 	g.Engine.Register("mdb.evend.valve_pour_cold(?)", self.NewPourCold())
 	g.Engine.Register("mdb.evend.valve_pour_hot(?)", self.NewPourHot())
@@ -96,7 +96,7 @@ func (self *DeviceValve) MlToTimeout(ml uint16) time.Duration {
 	return min + time.Duration(ml)*perMl
 }
 
-func (self *DeviceValve) NewGetTempHot() engine.Doer {
+func (self *DeviceValve) newGetTempHot() engine.Doer {
 	const tag = "mdb.evend.valve.get_temp_hot"
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
@@ -127,6 +127,7 @@ func (self *DeviceValve) NewSetTempHot() engine.Doer {
 		if r.E != nil {
 			return errors.Annotate(r.E, tag)
 		}
+		self.tempHotTarget = temp
 		self.dev.Log.Debugf("%s request=%s response=(%d)%s", tag, request.Format(), r.P.Len(), r.P.Format())
 		return nil
 	}}
@@ -242,4 +243,41 @@ func (self *DeviceValve) newPour(tag string, b1 byte) engine.Doer {
 func (self *DeviceValve) newCommand(cmdName, argName string, arg1, arg2 byte) engine.Doer {
 	tag := fmt.Sprintf("mdb.evend.valve.%s:%s", cmdName, argName)
 	return self.Generic.NewAction(tag, arg1, arg2)
+}
+
+func (self *DeviceValve) newCheckTempHotValidate(ctx context.Context) func() error {
+	return func() error {
+		const tag = "mdb.evend.valve.check_temp_hot"
+		var getErr error
+		temp := self.tempHot.GetOrUpdate(func() {
+			if getErr = self.doGetTempHot.Do(ctx); getErr != nil {
+				getErr = errors.Annotate(getErr, tag)
+				self.dev.Log.Error(getErr)
+			}
+		})
+		if getErr != nil {
+			return getErr
+		}
+
+		g := state.GetGlobal(ctx)
+		diff := absDiffU16(uint16(temp), uint16(self.tempHotTarget))
+		const tempHotMargin = 10 // FIXME margin from config
+		msg := fmt.Sprintf("%s current=%d config=%d diff=%d", tag, temp, self.tempHotTarget, diff)
+		self.dev.Log.Errorf(msg)
+		if diff > tempHotMargin {
+			if !self.tempHotReported {
+				g.Error(errors.New(msg))
+				self.tempHotReported = true
+			}
+			return &ErrWaterTemperature{
+				Source:  "hot",
+				Current: int16(temp),
+				Target:  int16(self.tempHotTarget),
+			}
+		} else if self.tempHotReported {
+			// TODO report OK
+			self.tempHotReported = false
+		}
+		return nil
+	}
 }

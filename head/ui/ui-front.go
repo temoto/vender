@@ -11,6 +11,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
+	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
@@ -152,9 +153,11 @@ init:
 				l1 = msgCredit + credit.Format100I()
 				l2 = fmt.Sprintf(msgInputCode, string(inputBuf))
 			} else {
-				doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot")
-				if doCheckTempHot != nil && doCheckTempHot.Validate() != nil {
-					l2 = "no hot water"
+				if doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot"); doCheckTempHot != nil {
+					err := doCheckTempHot.Validate()
+					if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
+						l2 = fmt.Sprintf("no hot water %d", errtemp.Current)
+					}
 				}
 			}
 			self.display.SetLines(l1, l2)
