@@ -77,6 +77,7 @@ type Config struct {
 			MsgError        string `hcl:"msg_error"`
 			MsgStateBroken  string `hcl:"msg_broken"`
 			MsgStateIntro   string `hcl:"msg_intro"`
+			MsgWait         string `hcl:"msg_wait"`
 			ResetTimeoutSec int    `hcl:"reset_sec"`
 		}
 
