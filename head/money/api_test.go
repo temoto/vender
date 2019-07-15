@@ -29,6 +29,7 @@ func TestEvents01(t *testing.T) {
 }
 
 func TestAbort(t *testing.T) {
+	t.Skipf("FIXME race in Expect usage")
 	t.Parallel()
 
 	ctx, g := state.NewTestContext(t, "money{scale=100}")
