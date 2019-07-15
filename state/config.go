@@ -49,9 +49,10 @@ type Config struct {
 		}
 		Mdb  mdb_config.Config `hcl:"mdb"`
 		Mega struct {
-			Spi     string `hcl:"spi"`
-			PinChip string `hcl:"pin_chip"`
-			Pin     string `hcl:"pin"`
+			LogDebug bool   `hcl:"log_debug"`
+			Spi      string `hcl:"spi"`
+			PinChip  string `hcl:"pin_chip"`
+			Pin      string `hcl:"pin"`
 		}
 	}
 

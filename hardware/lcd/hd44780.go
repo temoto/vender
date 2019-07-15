@@ -27,8 +27,8 @@ const ddramWidth = 0x40
 
 type LCD struct {
 	control Control
-	pinChip *gpio.Chip
-	pins    *gpio.LinesHandle
+	pinChip gpio.Chiper
+	pins    gpio.Lineser
 	pin_rs  gpio.LineSetFunc // command/data, aliases: A0, RS
 	pin_rw  gpio.LineSetFunc // read/write
 	pin_e   gpio.LineSetFunc // enable

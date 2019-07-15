@@ -95,7 +95,11 @@ func (g *Global) Mega() (*mega.Client, error) {
 			NotifyPinChip: devConfig.PinChip,
 			NotifyPinName: devConfig.Pin,
 		}
-		client, err = mega.NewClient(megaConfig, g.Log)
+		log := g.Log.Clone(log2.LInfo)
+		if devConfig.LogDebug {
+			log.SetLevel(log2.LDebug)
+		}
+		client, err = mega.NewClient(megaConfig, log)
 		if err != nil {
 			err = errors.Annotatef(err, "mega config=%#v", megaConfig)
 		}

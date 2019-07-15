@@ -25,7 +25,7 @@ const usage = `syntax: commands separated by whitespace
 - tXX...   (debug) transmit bytes from hex XX...
 `
 
-var log = log2.NewStderr(log2.LDebug)
+var log = log2.NewStderr(log2.LInfo)
 
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
@@ -33,14 +33,20 @@ func main() {
 	gpiochip := cmdline.String("dev", "/dev/gpiochip0", "")
 	pin := cmdline.String("pin", "25", "")
 	testmode := cmdline.Bool("testmode", false, "run tests, exit code 0 if pass")
+	rawmode := cmdline.Bool("raw", false, "raw mode skips ioLoop, if unsure do not use")
+	logDebug := cmdline.Bool("log-debug", false, "")
 	cmdline.Parse(os.Args[1:])
 
 	log.SetFlags(log2.LInteractiveFlags)
+	if *logDebug {
+		log.SetLevel(log2.LDebug)
+	}
 
 	megaConfig := &mega.Config{
-		SpiBus:        *spiPort,
-		NotifyPinChip: *gpiochip,
-		NotifyPinName: *pin,
+		SpiBus:         *spiPort,
+		NotifyPinChip:  *gpiochip,
+		NotifyPinName:  *pin,
+		DontUseRawMode: *rawmode,
 	}
 	client, err := mega.NewClient(megaConfig, log)
 	if err != nil {
@@ -112,7 +118,7 @@ func newExecutor(client *mega.Client) func(string) {
 			if strings.TrimSpace(word) == "" {
 				continue
 			}
-			log.Debugf("(%d)%s", iteration, word)
+			log.Infof("- (%d) %s", iteration, word)
 
 			if strings.HasPrefix(word, "mdb=") {
 				word = "@08" + word[4:]
@@ -167,7 +173,10 @@ func newExecutor(client *mega.Client) func(string) {
 					log.Errorf("@XX... requires at least 1 byte for command")
 					return
 				}
-				p, err := client.DoTimeout(mega.Command_t(bs[0]), bs[1:], mega.DefaultTimeout)
+				cmd := mega.Command_t(bs[0])
+				sendf := mega.NewCommand(cmd, bs[1:]...)
+				log.Debugf("send=%x", sendf.Bytes())
+				p, err := client.DoTimeout(cmd, bs[1:], mega.DefaultTimeout)
 				if err != nil {
 					log.Errorf("p rq=%x rs=%s err=%v", bs, p.ResponseString(), err)
 					return
@@ -209,18 +218,16 @@ func newExecutor(client *mega.Client) func(string) {
 				time.Sleep(time.Duration(i) * time.Millisecond)
 
 			case word[0] == 't':
-				bs := mustDecodeHex(word[1:])
-				if bs == nil {
+				send := mustDecodeHex(word[1:])
+				if send == nil {
 					return
 				}
-				f := new(mega.Frame)
-				if err := f.Parse(bs); err != nil {
-					log.Errorf("token=%x parse err=%v", bs, errors.ErrorStack(err))
-					return
-				}
-				if err := client.Tx(f, nil, 0); err != nil {
-					log.Errorf("send err=%v", err)
-					return
+				recv, err := client.XXX_RawTx(send)
+				log.Errorf("send=%x recv=%x err=%v", send, recv, err)
+				if err == nil {
+					r := mega.Frame{}
+					err := r.Parse(recv)
+					log.Errorf("parse frame=%s err=%v", r.ResponseString(), err)
 				}
 
 			default:

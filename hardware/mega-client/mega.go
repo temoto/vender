@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -13,40 +13,36 @@ import (
 	gpio "github.com/temoto/gpio-cdev-go"
 	"github.com/temoto/vender/log2"
 	"periph.io/x/periph/conn/physic"
-	"periph.io/x/periph/conn/spi"
-	"periph.io/x/periph/conn/spi/spireg"
-	"periph.io/x/periph/host"
 )
 
 const modName string = "mega-client"
-const DefaultTimeout = 200 * time.Millisecond
+const DefaultTimeout = 20 * time.Millisecond
 const DefaultSpiSpeed = 200 * physic.KiloHertz
 const busyDelay = 500 * time.Microsecond
 
 var (
-	ErrCriticalTimeout = errors.Timeoutf("CRITICAL mega response timeout")
-	ErrResponseEmpty   = errors.New("mega response empty")
-	ErrRequestBusy     = errors.New("mega request busy")
+	ErrCriticalProtocol = errors.New("CRITICAL mega protocol error")
+	ErrResponseEmpty    = errors.New("mega response empty")
+	ErrRequestBusy      = errors.New("mega request busy")
 )
 
 type Client struct { //nolint:maligned
+	refcount int32
+
 	Log      *log2.Log
 	TwiChan  chan uint16
-	pinev    *gpio.LineEventHandle
-	spiPort  spi.Port
-	spiConn  spi.Conn
-	refcount int32
 	alive    *alive.Alive
+	hw       hardware
+	notifych chan struct{}
 	stat     Stat
-	notify   chan struct{}
 	txch     chan *tx
-}
 
-type Config struct {
-	SpiBus        string
-	SpiSpeed      string
-	NotifyPinChip string
-	NotifyPinName string
+	// Do we have to redefine over-engineering yet?
+	closed struct {
+		mu  sync.Mutex
+		yes bool
+		err error
+	}
 }
 
 type Stat struct {
@@ -57,79 +53,55 @@ type Stat struct {
 }
 
 type tx struct {
-	send *Frame
-	recv *Frame
-	wait time.Duration
-	err  error
-	done chan struct{}
+	command  *Frame
+	response *Frame
+	wait     time.Duration
+	err      error
+	done     chan struct{}
 }
 
 func NewClient(config *Config, log *log2.Log) (*Client, error) {
-	notifyPinLine, err := strconv.ParseUint(config.NotifyPinName, 10, 16)
-	if err != nil {
-		return nil, errors.Annotate(err, "notify pin must be number TODO implement name lookup")
-	}
-
-	if _, err = host.Init(); err != nil {
-		return nil, errors.Annotate(err, "periph/init")
-	}
-
-	spiPort, err := spireg.Open(config.SpiBus)
-	if err != nil {
-		return nil, errors.Annotate(err, "SPI Open")
-	}
-	spiSpeed := DefaultSpiSpeed
-	if config.SpiSpeed != "" {
-		if err := spiSpeed.Set(config.SpiSpeed); err != nil {
-			return nil, errors.Annotate(err, "SPI speed parse")
-		}
-	}
-	spiMode := spi.Mode(0)
-	spiConn, err := spiPort.Connect(spiSpeed, spiMode, 8)
-	if err != nil {
-		spiPort.Close()
-		return nil, errors.Annotate(err, "SPI Connect")
-	}
-
-	pinChip, err := gpio.Open(config.NotifyPinChip, "vender-mega")
-	if err != nil {
-		spiPort.Close()
-		return nil, errors.Annotatef(err, "notify pin open chip=%s", config.NotifyPinChip)
-	}
-
 	self := &Client{
-		Log:     log,
-		TwiChan: make(chan uint16, TWI_LISTEN_MAX_LENGTH/2),
-		alive:   alive.NewAlive(),
-		notify:  make(chan struct{}),
-		spiConn: spiConn,
-		spiPort: spiPort,
-		txch:    make(chan *tx),
+		Log:      log,
+		TwiChan:  make(chan uint16, TWI_LISTEN_MAX_LENGTH/2),
+		alive:    alive.NewAlive(),
+		notifych: make(chan struct{}),
+		txch:     make(chan *tx),
+	}
+	if err := self.hw.open(config); err != nil {
+		self.Close()
+		return nil, errors.Annotate(err, "mega hw.open")
 	}
 
-	self.pinev, err = pinChip.GetLineEvent(uint32(notifyPinLine), 0,
-		gpio.GPIOEVENT_REQUEST_RISING_EDGE, "vender-mega")
-	if err != nil {
-		self.Log.Error(errors.Annotate(err, "gpio.EventLoop"))
-		self.alive.Stop()
+	if err := self.handshake(); err != nil {
+		self.Close()
+		return nil, errors.Annotate(err, "mega handshake")
 	}
 
-	self.alive.Add(2)
-	go self.ioLoop()
+	self.alive.Add(1)
 	go self.notifyLoop()
+	if !config.DontUseRawMode {
+		self.alive.Add(1)
+		go self.ioLoop()
+	}
 
-	// FIXME
-	// if err = self.expectReset(); err != nil { return nil, err }
-	var resetf Frame
-	self.Tx(nil, &resetf, 0)
 	return self, nil
 }
 
+// Thread-safe and idempotent.
 func (self *Client) Close() error {
-	close(self.TwiChan)
-	self.alive.Stop()
-	self.alive.Wait()
-	return errors.NotImplementedf("")
+	self.closed.mu.Lock()
+	defer self.closed.mu.Unlock()
+	if !self.closed.yes {
+		self.closed.yes = true
+		self.alive.Stop()
+		self.alive.Wait()
+		close(self.TwiChan)
+		close(self.notifych)
+		close(self.txch)
+		self.closed.err = self.hw.Close()
+	}
+	return self.closed.err
 }
 
 func (self *Client) IncRef(debug string) {
@@ -159,7 +131,8 @@ func (self *Client) DoMdbBusReset(d time.Duration) (Frame, error) {
 }
 
 func (self *Client) DoMdbTxSimple(data []byte) (Frame, error) {
-	return self.DoTimeout(COMMAND_MDB_TRANSACTION_SIMPLE, data, DefaultTimeout)
+	const maxMdbReadTime = 40 * time.Millisecond
+	return self.DoTimeout(COMMAND_MDB_TRANSACTION_SIMPLE, data, maxMdbReadTime+DefaultTimeout)
 }
 
 func (self *Client) DoTimeout(cmd Command_t, data []byte, timeout time.Duration) (Frame, error) {
@@ -175,23 +148,75 @@ func (self *Client) Stat() Stat {
 	return self.stat
 }
 
-func (self *Client) Tx(send, recv *Frame, timeout time.Duration) error {
+func (self *Client) Tx(command, response *Frame, timeout time.Duration) error {
 	done := make(chan struct{})
-	tx := &tx{send: send, recv: recv, wait: timeout, done: done}
+	tx := &tx{command: command, response: response, wait: timeout, done: done}
 	self.txch <- tx
 	<-tx.done
 	return tx.err
 }
 
+func (self *Client) XXX_RawTx(command []byte) ([]byte, error) {
+	buf := make([]byte, BUFFER_SIZE+totalOverheads)
+	if len(command) > BUFFER_SIZE {
+		return buf, errors.New("command buffer overflow")
+	}
+	copy(buf, command)
+	err := self.hw.spiTx(buf, buf)
+	return buf, err
+}
+
+func (self *Client) handshake() error {
+	var err error
+	var stop bool
+	var try uint8
+
+	// retry reasons:
+	// - mega had response buffered
+	// - mega had command buffered
+	// - handshake sent RESET
+	for try = 1; try <= 5; try++ {
+		var f Frame
+		stop, err = self.handshakeStep(&f)
+		if stop {
+			break
+		}
+	}
+	self.Log.Debugf("%s handshake try=%d err=%v", modName, try, err)
+	return err
+}
+
+func (self *Client) handshakeStep(f *Frame) (bool, error) {
+	err := self.ioReadParse(f)
+	switch err {
+	case nil:
+		switch f.ResponseKind() {
+		case RESPONSE_RESET: // success path
+			self.Log.Debugf("%s handshake read=RESET the best option", modName)
+			return true, nil
+		default:
+			self.Log.Errorf("%s handshake unexpected response=%s", modName, f.ResponseString())
+			return false, nil
+		}
+
+	case ErrResponseEmpty: // success path mega is inited earlier
+		self.Log.Debugf("%s handshake read=empty", modName)
+		// TODO command reset
+		return true, nil
+
+	default:
+		return false, err
+	}
+}
+
 func (self *Client) ioLoop() {
 	defer self.alive.Done()
-
-	bgrecv := Frame{}
+	stopch := self.alive.StopChan()
 
 	for self.alive.IsRunning() {
 		select {
 		case tx := <-self.txch:
-			// self.Log.Debugf("ioLoop tx=%#v", tx)
+			// self.Log.Debugf("ioLoop tx command=%s wait=%v", tx.command.CommandString(), tx.wait)
 			tx.err = self.ioTx(tx)
 			if tx.err != nil {
 				atomic.AddUint32(&self.stat.Error, 1)
@@ -199,17 +224,19 @@ func (self *Client) ioLoop() {
 			close(tx.done)
 			// self.Log.Debugf("ioLoop tx done err=%v", tx.err)
 
-		case <-self.notify:
+		case <-self.notifych:
+			// self.Log.Debugf("ioLoop notified without tx")
 			self.alive.Add(1)
+			bgrecv := Frame{}
 			err := self.ioReadParse(&bgrecv)
+			self.Log.Debugf("ioLoop bgrecv=%s", bgrecv.ResponseString())
 			switch err {
 			case nil: // success path
 				switch bgrecv.ResponseKind() {
 				case RESPONSE_TWI_LISTEN:
 				case RESPONSE_RESET:
-					// Sorry for ugly hack, I couldn't think of better way.
-					// sendToTx = atomic.LoadUint32(&self.xxx_expect_reset) == 1
 				default:
+					// So far this always has been a symptom of critical protocol error
 					self.Log.Fatalf("%s stray packet %s", modName, bgrecv.ResponseString())
 				}
 			case ErrResponseEmpty:
@@ -218,58 +245,66 @@ func (self *Client) ioLoop() {
 			default:
 				self.Log.Fatalf("%s stray err=%v", modName, err)
 			}
+
+		case <-stopch:
+			return
 		}
 	}
 }
 
-// (functionally inline) track write/wait/recv chain
+// track write/wait/recv chain
 func (self *Client) ioTx(tx *tx) error {
 	self.alive.Add(1)
 	defer self.alive.Done()
 
-	if tx.send != nil {
-		err := self.ioWrite(tx.send)
+	if tx.command != nil {
+		err := self.ioWrite(tx.command)
 		if err != nil {
-			return errors.Annotatef(err, "send=%x", tx.send.Bytes())
+			return errors.Annotatef(err, "command=%x", tx.command.Bytes())
 		}
 	}
 
 	var err error
-	if tx.recv != nil {
-		for i := 1; i <= 3; i++ {
-			notified := self.ioWait(tx.wait)
-			err = self.ioReadParse(tx.recv)
-			// self.Log.Debugf("iotx parsed wait=%t notified=%t err=%v recv=%v", tx.wait != 0, notified, err, tx.recv)
-			if err == nil {
-				// self.Log.Debugf("iotx parsed=%s", tx.recv.ResponseString())
-				switch tx.recv.ResponseKind() {
-				case RESPONSE_RESET, RESPONSE_TWI_LISTEN:
-					// wait and read again
-				default:
-					// success path when response is received
-					return nil
-				}
+	for try := 1; try <= 3; try++ {
+		notified := self.ioWait(tx.wait)
+		err = self.ioReadParse(tx.response)
+		// self.Log.Debugf("iotx try=%d parsed wait=%t notified=%t err=%v recv=%s", try, tx.wait != 0, notified, err, tx.response.ResponseString())
+		switch err {
+		case nil:
+			// self.Log.Debugf("iotx parsed=%s", tx.response.ResponseString())
+			switch tx.response.ResponseKind() {
+			case RESPONSE_RESET:
+				return errors.Annotatef(ErrCriticalProtocol, "mega reset during ioTx")
+			case RESPONSE_TWI_LISTEN:
+				// self.Log.Debugf("iotx captured background packet, must repeat")
+				// wait and read again
+			default:
+				// success path when response is received
+				return nil
 			}
-			if tx.wait == 0 && err == ErrResponseEmpty {
-				if notified {
-					// shouldn't ever happen
-					self.Log.Fatalf("mega TODO iotx try=%d wait=no notified=yes read=empty", i)
-				} else {
-					// success path for read-only Tx() when no data is available
-					return ErrResponseEmpty
-				}
+
+		case ErrResponseEmpty:
+			switch {
+			case tx.wait == 0 && !notified:
+				// success path for read-only Tx() when no data is available
+				return ErrResponseEmpty
+
+			case tx.wait != 0 && !notified:
+				// After this point we likely have lost command-response synchronisation.
+				// Need to reset mega or skip
+				return errors.Annotatef(ErrCriticalProtocol, "response timeout")
+
+			default:
+				// shouldn't ever happen
+				self.Log.Fatalf("mega TODO iotx try=%d wait=%v notified=%t read=empty", try, tx.wait, notified)
 			}
-			if tx.wait != 0 && err == ErrResponseEmpty {
-				if !notified {
-					// Sounds like a regular old timeout, but it's actually fatal error.
-					// Need to reset mega.
-					return ErrCriticalTimeout
-				}
-			}
-			time.Sleep(busyDelay)
+
+		default: // other errors
+			return errors.Wrap(err, ErrCriticalProtocol)
 		}
+		time.Sleep(busyDelay)
 	}
-	return errors.Trace(err)
+	return errors.Wrapf(err, ErrCriticalProtocol, "iotx too many tries")
 }
 
 func (self *Client) ioWait(timeout time.Duration) bool {
@@ -277,7 +312,7 @@ func (self *Client) ioWait(timeout time.Duration) bool {
 	// What we actually want with wait=0 is strong preference to reading, if available.
 	if timeout == 0 {
 		select {
-		case <-self.notify:
+		case <-self.notifych:
 			return true
 		default:
 			return false
@@ -286,7 +321,7 @@ func (self *Client) ioWait(timeout time.Duration) bool {
 		tmr := time.NewTimer(timeout)
 		defer tmr.Stop()
 		select {
-		case <-self.notify:
+		case <-self.notifych:
 			return true
 		case <-tmr.C:
 			return false
@@ -297,22 +332,29 @@ func (self *Client) ioWait(timeout time.Duration) bool {
 func (self *Client) notifyLoop() {
 	defer self.alive.Done()
 
-	if value, err := self.pinev.Read(); err != nil {
+	if value, err := self.hw.notifier.Read(); err != nil {
 		self.Log.Errorf("%s notifyLoop start Read()", modName)
 	} else if value == 1 {
 		self.Log.Debugf("%s notify=high on start", modName)
-		self.notify <- struct{}{}
+		self.notifych <- struct{}{}
 	}
 
+	// notifier.Wait timeout affects maximum time in Client.Close
+	const timeout = 2 * time.Second
+
+	// TODO replace with gpio.Eventer.Chan
 	for self.alive.IsRunning() {
-		edge, err := self.pinev.Wait( /*timeout*/ )
-		if err != nil {
-			self.Log.Errorf("%s notifyLoop Wait", modName)
-			self.Close()
+		edge, err := self.hw.notifier.Wait(timeout)
+		if err == nil {
+			if edge.ID == gpio.GPIOEVENT_EVENT_RISING_EDGE {
+				self.notifych <- struct{}{}
+			}
+		} else if gpio.IsTimeout(err) {
+			continue
+		} else {
+			self.Log.Errorf("%s notifyLoop Wait err=%v", modName, err)
+			go self.Close()
 			return
-		}
-		if edge.ID == gpio.GPIOEVENT_EVENT_RISING_EDGE {
-			self.notify <- struct{}{}
 		}
 	}
 }
@@ -330,7 +372,7 @@ func (self *Client) ioWrite(f *Frame) error {
 		copy(buf, bs)
 		busy = false
 		// self.Log.Debugf("ioWrite out=%x", buf)
-		err := self.spiConn.Tx(buf, buf)
+		err := self.hw.spiTx(buf, buf)
 		if err != nil {
 			return err
 		}
@@ -345,25 +387,25 @@ func (self *Client) ioWrite(f *Frame) error {
 		case 0:
 		case ERROR_REQUEST_OVERWRITE:
 			busy = true
-			// self.Log.Debugf("mega ioWrite: input buffer is busy -> sleep,retry")
+			self.Log.Debugf("%s ioWrite: input buffer is busy -> sleep,retry", modName)
 			time.Sleep(busyDelay)
 			continue
 		default:
 			return errors.Errorf("FIXME errcode=%d buf=%x", errcode, buf)
 		}
 		if padStart < 6 {
-			self.Log.Errorf("mega ioWrite: invalid ioAck buf=%x", buf)
+			self.Log.Errorf("%s ioWrite: invalid ioAck buf=%x", modName, buf)
 			continue
 		}
 		ackRemote := buf[padStart-6 : padStart-2]
 		if !bytes.Equal(ackRemote, ackExpect) {
-			self.Log.Errorf("mega ioWrite: invalid ioAck expected=%x actual=%x", ackExpect, ackRemote)
+			self.Log.Errorf("%s ioWrite: invalid ioAck expected=%x actual=%x", modName, ackExpect, ackRemote)
 			continue
 		}
 
 		if buf[0]&PROTOCOL_FLAG_REQUEST_BUSY != 0 {
 			busy = true
-			// self.Log.Debugf("mega ioWrite: input buffer is busy -> sleep,retry")
+			self.Log.Debugf("%s ioWrite: input buffer is busy -> sleep,retry", modName)
 			time.Sleep(busyDelay)
 			continue
 		}
@@ -373,29 +415,31 @@ func (self *Client) ioWrite(f *Frame) error {
 	if busy {
 		return ErrRequestBusy
 	}
-
 	return nil
 }
 
 func (self *Client) ioReadParse(frame *Frame) error {
-	var buf [BUFFER_SIZE + totalOverheads]byte
-	buf[0] = ProtocolVersion
-	lenBuf := buf[:2]
+	var lenBuf [2]byte
+	lenBuf[0] = ProtocolVersion
 	// self.Log.Debugf("%s read length out=%x", modName, lenBuf)
-	err := self.spiConn.Tx(lenBuf, lenBuf)
-	remoteLength := buf[1]
-	// self.Log.Debugf("%s read length -in=%x err=%v remoteLength=%d", modName, lenBuf, err, remoteLength)
+	err := self.hw.spiTx(lenBuf[:], lenBuf[:])
+	// self.Log.Debugf("%s read length -in=%x err=%v", modName, lenBuf, err)
 	if err != nil {
+		return err
+	}
+	var remoteLength uint8
+	if _, _, remoteLength, err = parseHeader(lenBuf[:]); err != nil {
 		return err
 	}
 	if remoteLength == 0 {
 		return ErrResponseEmpty
 	}
 
+	var buf [BUFFER_SIZE + totalOverheads]byte
 	bs := buf[:remoteLength+totalOverheads]
 	bs[0] = ProtocolVersion
 	// self.Log.Debugf("%s read out=%x", modName, bs)
-	err = self.spiConn.Tx(bs, bs)
+	err = self.hw.spiTx(bs, bs)
 	// self.Log.Debugf("%s read -in=%x err=%v", modName, bs, err)
 	if err != nil {
 		return err
@@ -417,7 +461,7 @@ func (self *Client) ioAck(f *Frame) error {
 	buf[3] = f.crc
 
 	// self.Log.Debugf("%s ioAck out=%x", modName, buf)
-	err := self.spiConn.Tx(buf[:], buf[:])
+	err := self.hw.spiTx(buf[:], buf[:])
 	// self.Log.Debugf("%s ioAck -in=%x err=%v", modName, buf, err)
 	if err != nil {
 		return err

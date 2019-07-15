@@ -18,6 +18,16 @@ const totalOverheads = frameOverhead + paddingOverhead + /*reserve*/ 4
 
 const ProtocolVersion = 4
 
+func parseHeader(b []byte) (flag, version, length byte, err error) {
+	flag = b[0] & PROTOCOL_HEADER_FLAG_MASK
+	version = b[0] & PROTOCOL_HEADER_VERSION_MASK
+	length = b[1]
+	if version != ProtocolVersion {
+		err = errors.NotValidf("frame=%x version=%d expected=%d", b, version, ProtocolVersion)
+	}
+	return
+}
+
 func parsePadding(b []byte, requireOK bool) (start int, code Errcode_t, err error) {
 	start = -1
 	pads := b[len(b)-4:]
@@ -94,6 +104,14 @@ func (self *Frame) HeaderString() string {
 	return fmt.Sprintf("%02x", self.buf[0])
 }
 
+func (self *Frame) CommandString() string {
+	if self == nil {
+		return ""
+	}
+	cmd := Command_t(self.buf[2])
+	return fmt.Sprintf("%s %x debug=%x", cmd.String(), self.Payload(), self.Bytes())
+}
+
 func (self *Frame) ResponseString() string {
 	kind := self.ResponseKind()
 	fields := self.Fields.String()
@@ -118,12 +136,9 @@ func (self *Frame) Parse(b []byte) error {
 		return errors.NotValidf("frame=%x before padding is too short min=%d", b, frameOverhead)
 	}
 
-	self.Flag = b[0] & PROTOCOL_HEADER_FLAG_MASK
-	self.Version = b[0] & PROTOCOL_HEADER_VERSION_MASK
-	if self.Version != ProtocolVersion {
-		return errors.NotValidf("frame=%x version=%d expected=%d", b, self.Version, ProtocolVersion)
+	if self.Flag, self.Version, self.plen, err = parseHeader(b); err != nil {
+		return err
 	}
-	self.plen = b[1]
 	if int(self.plen) > len(b)-frameOverhead {
 		return errors.NotValidf("frame=%x claims length=%d > input-overhead=%d", b, self.plen, len(b)-frameOverhead)
 	}

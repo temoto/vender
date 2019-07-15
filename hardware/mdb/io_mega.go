@@ -22,8 +22,9 @@ func NewMegaUart(client *mega.Client) Uarter {
 }
 func (self *megaUart) Open(_ string) error {
 	self.c.IncRef("mdb-uart")
-	_, err := self.c.DoTimeout(mega.COMMAND_STATUS, nil, 5*time.Second)
-	return err
+	return nil
+	// _, err := self.c.DoTimeout(mega.COMMAND_STATUS, nil, 5*time.Second)
+	// return err
 }
 func (self *megaUart) Close() error {
 	return self.c.DecRef("mdb-uart")
@@ -55,15 +56,21 @@ func (self *megaUart) Break(d, sleep time.Duration) error {
 	var err error
 	for retry := 1; retry <= 3; retry++ {
 		f, err = self.c.DoMdbBusReset(d)
-		if err != nil {
-			break
+		switch errors.Cause(err) {
+		case nil: // success path
+			err = responseError(f.Fields.MdbResult, f.Fields.MdbError)
+			if err == nil {
+				time.Sleep(sleep)
+				return nil
+			}
+			time.Sleep(DelayErr)
+
+		case mega.ErrCriticalProtocol:
+			self.c.Log.Fatal(errors.ErrorStack(err))
+
+		default:
+			return err
 		}
-		err = responseError(f.Fields.MdbResult, f.Fields.MdbError)
-		if err == nil {
-			time.Sleep(sleep)
-			break
-		}
-		time.Sleep(DelayErr)
 	}
 	return err
 }
@@ -74,20 +81,27 @@ func (self *megaUart) Tx(request, response []byte) (int, error) {
 
 	var f mega.Frame
 	var err error
-	n := 0
 	for retry := 1; retry <= 3; retry++ {
+		// FIXME should not be here, but fixes MDB busy/uart_unexpected race
 		time.Sleep(1 * time.Millisecond)
+
 		f, err = self.c.DoMdbTxSimple(request)
-		// self.c.Log.Debugf("mdb/mega/txsimple request=%x p=%s err=%v", request, p.String(), err)
-		if err != nil {
-			break
+		self.c.Log.Debugf("mdb.mega.txsimple request=%x f=%s err=%v", request, f.ResponseString(), err)
+		switch errors.Cause(err) {
+		case nil: // success path
+			err = responseError(f.Fields.MdbResult, f.Fields.MdbError)
+			if err == nil {
+				n := copy(response, f.Fields.MdbData)
+				return n, nil
+			}
+			time.Sleep(DelayErr)
+
+		case mega.ErrCriticalProtocol:
+			self.c.Log.Fatal(errors.ErrorStack(err))
+
+		default:
+			return 0, err
 		}
-		err = responseError(f.Fields.MdbResult, f.Fields.MdbError)
-		if err == nil {
-			n = copy(response, f.Fields.MdbData)
-			break
-		}
-		time.Sleep(DelayErr)
 	}
-	return n, err
+	return 0, err
 }
