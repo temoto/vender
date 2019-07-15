@@ -12,6 +12,8 @@
 #define LED_CONFIGURED
 #endif
 
+uint8_t const RESPONSE_RESERVED_FOR_ERROR = 5;
+
 static packet_t volatile request;
 static packet_t volatile response;
 static buffer_t volatile debugb;
@@ -40,6 +42,7 @@ static void spi_init_slave(void);
 static void spi_step(void);
 
 static void twi_init_slave(uint8_t const address);
+static inline void twi_flush_to_response(void);
 static void twi_step(void);
 static void nop(void) __attribute__((used, always_inline));
 
@@ -73,9 +76,8 @@ static inline void debugs(char const *const s) {
 static inline bool response_empty(void) { return response.h.response == 0; }
 
 static bool response_check_capacity(uint8_t const more) {
-  uint8_t const RESERVED_FOR_ERROR = 5;
   // FIXME length check in buffer_append_n is wasted
-  if (response.b.length + more + RESERVED_FOR_ERROR >
+  if (response.b.length + more + RESPONSE_RESERVED_FOR_ERROR >
       PACKET_FIELDS_MAX_LENGTH) {
     buffer_append((buffer_t *)&response.b, FIELD_ERROR2);
     buffer_append_2((buffer_t *)&response.b, ERROR_BUFFER_OVERFLOW, more);

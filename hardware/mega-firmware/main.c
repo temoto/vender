@@ -112,9 +112,7 @@ int main(void) {
     nop();
 
     cli();
-    if (mdb.state != MDB_STATE_IDLE) {
-      mdb_step();
-    }
+    mdb_step();
     sei();
     nop();
 
@@ -138,9 +136,6 @@ static void request_exec(void) {
   } else if (cmd == COMMAND_DEBUG) {
     cmd_debug();
   } else if (cmd == COMMAND_FLASH) {
-    // FIXME simulate bad watchdog event
-    for (;;)
-      ;
     // TODO
     response_error2(ERROR_NOT_IMPLEMENTED, 0);
   } else if (cmd == COMMAND_MDB_BUS_RESET) {

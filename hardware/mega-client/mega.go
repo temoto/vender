@@ -444,18 +444,19 @@ func (self *Client) parse(buf []byte, f *Frame) error {
 		return err
 	}
 
+	for i := 0; i+1 < len(f.Fields.TwiData); i += 2 {
+		twitem := binary.BigEndian.Uint16(f.Fields.TwiData[i : i+2])
+		select {
+		case self.TwiChan <- twitem:
+		default:
+			self.Log.Errorf("CRITICAL TwiChan is full")
+			panic("code error mega TwiChan is full")
+		}
+	}
+
 	switch f.ResponseKind() {
 	case RESPONSE_TWI_LISTEN:
 		atomic.AddUint32(&self.stat.TwiListen, 1)
-		for i := 0; i+1 < len(f.Fields.TwiData); i += 2 {
-			twitem := binary.BigEndian.Uint16(f.Fields.TwiData[i : i+2])
-			select {
-			case self.TwiChan <- twitem:
-			default:
-				self.Log.Errorf("CRITICAL TwiChan is full")
-				panic("code error mega TwiChan is full")
-			}
-		}
 	case RESPONSE_RESET:
 		atomic.AddUint32(&self.stat.Reset, 1)
 		if ResetFlag(f.Fields.Mcusr)&ResetFlagWatchdog != 0 {

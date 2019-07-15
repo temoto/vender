@@ -1,6 +1,6 @@
 # What
 
-Firmware for MDB adapter. Later called mega because ATMega328p MCU was used.
+Firmware for MDB adapter. Later called mega because ATMega MCU was used.
 
 Usage patterns:
 - VMC requests: MDB bus reset
@@ -39,6 +39,3 @@ Response (from mega) payload: `response field...`
 `field` uses binary tagged encoding, see `protocol.h` `protocol.go`
 
 Frame with `packet.header=RESET` sent by mega on reboot.
-
-
-# Issues

@@ -3,7 +3,7 @@
 
 #define F_CPU 16000000UL  // Clock Speed
 
-#define FIRMWARE_VERSION 0x0200
+#define FIRMWARE_VERSION 0x0201
 #define MDB_TIMEOUT_MS 6
 #define BUFFER_SIZE 50
 

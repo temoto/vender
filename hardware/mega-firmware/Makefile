@@ -1,5 +1,5 @@
-mmcu = atmega328p
-# mmcu = atmega128
+# mmcu = atmega328p
+mmcu = atmega168
 
 avr_gcc = avr-gcc
 avr_objcopy = avr-objcopy

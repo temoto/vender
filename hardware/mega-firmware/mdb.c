@@ -47,6 +47,7 @@ static inline bool uart_send_ready(void) __attribute__((warn_unused_result));
 static void mdb_start_receive(void);
 static void mdb_finish(mdb_result_t const result, uint8_t const error_data);
 static void mdb_bus_reset_finish(void);
+static inline void mdb_handle_done(void);
 static inline void mdb_handle_recv_end(void);
 static inline uint16_t ms_to_timer16_p1024(uint16_t const ms)
     __attribute__((const, warn_unused_result));
@@ -76,28 +77,30 @@ static void mdb_step(void) {
     mdb_handle_recv_end();
   }
   if (mdb.state == MDB_STATE_DONE) {
-    if (!response_empty()) {
-      return;
-    }
-
-    uint8_t const r = mdb.result;  // anti-volatile
-    uint8_t len = mdb_in.length;
-
-    response_begin(RESPONSE_OK);
-    response_f2(FIELD_MDB_RESULT, r, mdb.error_data);
-    response_f2(FIELD_MDB_DURATION10U, (mdb.duration >> 8),
-                (mdb.duration & 0xff));
-
-    if ((r == MDB_RESULT_SUCCESS) && (len > 0)) {
-      len--;
-    }
-    response_fn(FIELD_MDB_DATA, (uint8_t const *const)mdb_in.data, len);
-    response.filled = true;
-    mdb_reset();
+    mdb_handle_done();
+  }
+}
+static inline void mdb_handle_done(void) {
+  if (!response_empty()) {
     return;
   }
 
-  return;
+  uint8_t const r = mdb.result;  // anti-volatile
+  uint8_t len = mdb_in.length;
+
+  response_begin(RESPONSE_OK);
+  response_f2(FIELD_MDB_RESULT, r, mdb.error_data);
+  response_f2(FIELD_MDB_DURATION10U, (mdb.duration >> 8),
+              (mdb.duration & 0xff));
+
+  if ((r == MDB_RESULT_SUCCESS) && (len > 0)) {
+    len--;
+  }
+  response_fn(FIELD_MDB_DATA, (uint8_t const *const)mdb_in.data, len);
+  // Convenient place to send TWI_DATA faster than in separate packet.
+  twi_flush_to_response();
+  response.filled = true;
+  mdb_reset();
 }
 static inline void mdb_handle_recv_end(void) {
   uint8_t const len = mdb_in.length;

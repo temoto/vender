@@ -33,12 +33,22 @@ static void twi_step(void) {
     return;
   }
 
-  // TWI session is finished
-  if (response_empty()) {
+  if (response_empty() && (mdb.state == MDB_STATE_IDLE)) {
     response_begin(RESPONSE_TWI_LISTEN);
-    // keyboard sends 1 byte, encode as 2 for future compatibility
     response_fn(FIELD_TWI_DATA, (uint8_t const* const)twi_listen.data, length);
+    buffer_clear_fast((buffer_t * const) & twi_listen);
     response.filled = true;
+  }
+}
+
+static inline void twi_flush_to_response(void) {
+  uint8_t const length = twi_listen.length;  // anti-volatile
+  if (length == 0) {
+    return;
+  }
+  if (response.b.length + length + RESPONSE_RESERVED_FOR_ERROR <
+      PACKET_FIELDS_MAX_LENGTH) {
+    response_fn(FIELD_TWI_DATA, (uint8_t const* const)twi_listen.data, length);
     buffer_clear_fast((buffer_t * const) & twi_listen);
   }
 }
@@ -75,6 +85,7 @@ ISR(TWI_vect) {
     case TW_SR_GCALL_DATA_ACK:
       data = TWDR;
       TWCR = TWCR_ACK;
+      // keyboard sends 1 byte, encode as 2 for future compatibility
       buffer_append_2((buffer_t * const) & twi_listen, 0, data);
       return;
 
