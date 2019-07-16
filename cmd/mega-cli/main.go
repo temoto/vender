@@ -120,19 +120,15 @@ func newExecutor(client *mega.Client) func(string) {
 			}
 			log.Infof("- (%d) %s", iteration, word)
 
-			if strings.HasPrefix(word, "mdb=") {
-				word = "@08" + word[4:]
-			} else {
-				aliases := map[string]string{
-					"status":        "@01",
-					"reset_soft":    "@0301",
-					"reset_hard":    "@03ff",
-					"debug":         "@04",
-					"mdb_bus_reset": "@0700c8",
-				}
-				if expanded := aliases[word]; expanded != "" {
-					word = expanded
-				}
+			aliases := map[string]string{
+				"status":        "@01",
+				"reset_soft":    "@0301",
+				"reset_hard":    "@03ff",
+				"debug":         "@04",
+				"mdb_bus_reset": "@0700c8",
+			}
+			if expanded := aliases[word]; expanded != "" {
+				word = expanded
 			}
 
 			switch {
@@ -178,10 +174,23 @@ func newExecutor(client *mega.Client) func(string) {
 				log.Debugf("send=%x", sendf.Bytes())
 				p, err := client.DoTimeout(cmd, bs[1:], mega.DefaultTimeout)
 				if err != nil {
-					log.Errorf("p rq=%x rs=%s err=%v", bs, p.ResponseString(), err)
+					log.Errorf("rq=%x rs=%s err=%v", bs, p.ResponseString(), err)
 					return
 				}
 				log.Infof("response=%s", p.ResponseString())
+
+			case strings.HasPrefix(word, "mdb="):
+				bs := mustDecodeHex(word[len("mdb="):])
+				if len(bs) < 1 {
+					log.Errorf("mdb=... requires argument")
+					return
+				}
+				r, err := client.DoMdbTxSimple(bs)
+				if err != nil {
+					log.Errorf("%s err=%v", err)
+					return
+				}
+				log.Infof("response=%s", r.ResponseString())
 
 			case word[0] == 'p':
 				bs := mustDecodeHex(word[1:])
