@@ -31,7 +31,7 @@ func Main(ctx context.Context, config *state.Config) error {
 			bb[i] = byte(b0*len(bb) + i)
 		}
 		display.SetLinesBytes(bb[:16], bb[16:])
-		time.Sleep(3 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 	moneysys := new(money.MoneySystem)

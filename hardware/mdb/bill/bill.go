@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/temoto/alive"
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
@@ -120,23 +121,27 @@ func (self *BillValidator) SupportedNominals() []currency.Nominal {
 	return ns
 }
 
-func (self *BillValidator) Run(ctx context.Context, stopch <-chan struct{}, fun func(money.PollItem) bool) {
+func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func(money.PollItem) bool) {
+	var stopch <-chan struct{}
+	if alive != nil {
+		defer alive.Done()
+		stopch = alive.StopChan()
+	}
 	pd := mdb.PollDelay{}
 	var r mdb.PacketError
 	parse := self.pollFun(fun)
 	var active bool
 	var err error
-	for {
+	again := true
+	for again {
 		self.pollmu.Lock()
 		r = self.dev.Tx(self.dev.PacketPoll)
 		self.pollmu.Unlock()
 		if r.E == nil {
 			active, err = parse(r.P)
 		}
-
-		if !pd.Delay(&self.dev, active, err != nil, stopch) {
-			break
-		}
+		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.dev, active, err != nil, stopch)
+		// TODO try pollmu.Unlock() here
 	}
 }
 func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
@@ -173,10 +178,15 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 }
 
 func (self *BillValidator) newIniter() engine.Doer {
-	return engine.NewSeq(self.dev.Name + ".init").
+	const tag = "mdb.bill.init"
+	return engine.NewSeq(tag).
 		Append(self.dev.DoReset).
-		Append(engine.Func{Name: self.dev.Name + ".setup", F: self.CommandSetup}).
-		Append(engine.Func0{Name: self.dev.Name + ".expid", F: func() error {
+		Append(engine.Func{Name: tag + "/poll", F: func(ctx context.Context) error {
+			self.Run(ctx, nil, func(money.PollItem) bool { return false })
+			return nil
+		}}).
+		Append(engine.Func{Name: tag + "/setup", F: self.CommandSetup}).
+		Append(engine.Func0{Name: tag + "/expid", F: func() error {
 			if err := self.CommandExpansionIdentificationOptions(); err != nil {
 				if _, ok := err.(mdb.FeatureNotSupported); ok {
 					if err = self.CommandExpansionIdentification(); err != nil {

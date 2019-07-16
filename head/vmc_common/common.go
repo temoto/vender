@@ -2,6 +2,7 @@ package vmc_common
 
 import (
 	"context"
+	"log"
 
 	"github.com/temoto/alive"
 	"github.com/temoto/errors"
@@ -44,7 +45,6 @@ func uiFrontFinish(ctx context.Context, menuResult *ui.UIMenuResult) {
 		return
 	}
 
-	moneysys.AcceptCredit(ctx, 0)
 	teletx := tele.Telemetry_Transaction{
 		Code:  int32(menuResult.Item.Code),
 		Price: uint32(menuResult.Item.Price),
@@ -58,6 +58,8 @@ func uiFrontFinish(ctx context.Context, menuResult *ui.UIMenuResult) {
 	}
 	itemCtx := money.SetCurrentPrice(ctx, menuResult.Item.Price)
 	display.SetLines("спасибо", "готовлю")
+	log.Printf("menuResult.Item: %#v", menuResult.Item)
+	log.Printf("menuResult.Item.D: %#v", menuResult.Item.D)
 	err := menuResult.Item.D.Do(itemCtx)
 	g.Log.Debugf("menu item=%s end", menuResult.Item.String())
 	if err == nil {
@@ -106,6 +108,7 @@ func UILoop(ctx context.Context, uiFront *ui.UIFront) {
 		case <-na.StopChan():
 			na.Wait()
 		case <-gstopch:
+			na.Stop()
 			return
 		}
 	}

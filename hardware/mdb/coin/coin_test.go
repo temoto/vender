@@ -24,6 +24,10 @@ const testConfig = "money { scale=100 change_over_compensate=10 }"
 func mockInitRs() []mdb.MockR {
 	setupResponse := fmt.Sprintf("021643%02x0200170102050a0a1900000000000000000000", testScalingFactor)
 	return []mdb.MockR{
+		// initer, RESET
+		{"08", ""},
+		// initer, POLL
+		{"0b", "0b"},
 		// initer, SETUP
 		{"09", setupResponse},
 

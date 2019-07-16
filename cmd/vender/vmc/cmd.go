@@ -52,17 +52,6 @@ func Main(ctx context.Context, config *state.Config) error {
 	g.Log.Debugf("menu len=%d", len(menuMap))
 	uiFront := ui.NewUIFront(ctx, menuMap)
 
-	moneysys.EventSubscribe(func(em money.Event) {
-		g.Log.Debugf("money event: %s", em.String())
-
-		switch em.Name() {
-		case money.EventCredit:
-		case money.EventAbort:
-			g.Error(errors.Trace(moneysys.Abort(ctx)))
-		default:
-			panic("head: unknown money event: " + em.String())
-		}
-	})
 	go vmc_common.TeleCommandLoop(ctx)
 
 	// FIXME
@@ -86,7 +75,6 @@ func Main(ctx context.Context, config *state.Config) error {
 	}
 	if !onStartSuccess {
 		uiFront.SetBroken(true)
-		moneysys.AcceptCredit(ctx, 0)
 	}
 
 	vmc_common.UILoop(ctx, uiFront)

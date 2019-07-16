@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/temoto/alive"
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
@@ -132,13 +133,19 @@ func (self *CoinAcceptor) SupportedNominals() []currency.Nominal {
 	return ns
 }
 
-func (self *CoinAcceptor) Run(ctx context.Context, stopch <-chan struct{}, fun func(money.PollItem) bool) {
+func (self *CoinAcceptor) Run(ctx context.Context, alive *alive.Alive, fun func(money.PollItem) bool) {
+	var stopch <-chan struct{}
+	if alive != nil {
+		defer alive.Done()
+		stopch = alive.StopChan()
+	}
 	pd := mdb.PollDelay{}
 	var r mdb.PacketError
 	parse := self.pollFun(fun)
 	var active bool
 	var err error
-	for {
+	again := true
+	for again {
 		self.pollmu.Lock()
 		r = self.dev.Tx(self.dev.PacketPoll)
 		if r.E == nil {
@@ -146,9 +153,8 @@ func (self *CoinAcceptor) Run(ctx context.Context, stopch <-chan struct{}, fun f
 		}
 		self.pollmu.Unlock()
 
-		if !pd.Delay(&self.dev, active, err != nil, stopch) {
-			break
-		}
+		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.dev, active, err != nil, stopch)
+		// TODO try pollmu.Unlock() here
 	}
 }
 func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
@@ -186,7 +192,6 @@ func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 			case money.StatusWasReset:
 				self.dev.Log.Infof("coin was reset")
 				// TODO telemetry
-				// TODO enable coin types
 			default:
 				fun(pi)
 			}
@@ -196,8 +201,13 @@ func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 }
 
 func (self *CoinAcceptor) newIniter() engine.Doer {
-	tag := self.dev.Name + ".initer"
+	const tag = "mdb.bill.init"
 	return engine.NewSeq(tag).
+		Append(self.dev.DoReset).
+		Append(engine.Func{Name: tag + "/poll", F: func(ctx context.Context) error {
+			self.Run(ctx, nil, func(money.PollItem) bool { return false })
+			return nil
+		}}).
 		Append(self.doSetup).
 		Append(engine.Func0{Name: tag + "/expid-diag", F: func() error {
 			var err error

@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/temoto/alive"
-	"github.com/temoto/vender/currency"
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb/evend"
@@ -60,13 +59,11 @@ type UIFront struct {
 	resetTimeout time.Duration
 
 	// state
-	g         *state.Global
-	broken    bool
-	menu      Menu
-	credit    atomic.Value
-	display   *lcd.TextDisplay // FIXME
-	refreshCh chan struct{}
-	result    UIMenuResult
+	g       *state.Global
+	broken  bool
+	menu    Menu
+	display *lcd.TextDisplay // FIXME
+	result  UIMenuResult
 }
 
 type UIMenuResult struct {
@@ -78,9 +75,8 @@ type UIMenuResult struct {
 
 func NewUIFront(ctx context.Context, menu Menu) *UIFront {
 	self := &UIFront{
-		g:         state.GetGlobal(ctx),
-		menu:      menu,
-		refreshCh: make(chan struct{}),
+		g:    state.GetGlobal(ctx),
+		menu: menu,
 		result: UIMenuResult{
 			// TODO read config
 			Cream: DefaultCream,
@@ -89,12 +85,6 @@ func NewUIFront(ctx context.Context, menu Menu) *UIFront {
 	}
 	self.display = self.g.Hardware.HD44780.Display
 	self.resetTimeout = helpers.IntSecondDefault(self.g.Config().UI.Front.ResetTimeoutSec, 0)
-	moneysys := money.GetGlobal(ctx)
-	self.SetCredit(moneysys.Credit(ctx))
-	moneysys.EventSubscribe(func(em money.Event) {
-		self.SetCredit(moneysys.Credit(ctx))
-		moneysys.AcceptCredit(ctx, self.menu.MaxPrice())
-	})
 
 	return self
 }
@@ -105,31 +95,35 @@ func (self *UIFront) SetBroken(flag bool) {
 	self.g.Tele.Broken(flag)
 }
 
-func (self *UIFront) SetCredit(a currency.Amount) {
-	self.credit.Store(a)
-	self.refresh()
-}
-
 func (self *UIFront) Tag() string { return "ui-front" }
 
 func (self *UIFront) Run(ctx context.Context, alive *alive.Alive) {
+	alive.Add(1)
 	inputTag := self.Tag()
 	defer func() {
+		// stop pending AcceptCredit and SubscribeChan
 		alive.Stop()
 		self.g.Hardware.Input.Unsubscribe(inputTag)
 		self.Finish(ctx, &self.result)
+
+
+		alive.Done() // let caller UILoop observe me finished
 	}()
 
 	config := self.g.Config().UI.Front
 	moneysys := money.GetGlobal(ctx)
 	timer := time.NewTicker(200 * time.Millisecond)
 	inputBuf := make([]byte, 0, 32)
-	inputCh := self.g.Hardware.Input.SubscribeChan(inputTag, alive.StopChan())
+	maxPrice := self.menu.MaxPrice() // TODO decide if this should be recalculated during ui
+	moneych := make(chan money.Event)
+	stopch := alive.StopChan()
+	inputCh := self.g.Hardware.Input.SubscribeChan(inputTag, stopch)
 
 init:
-	self.SetCredit(moneysys.Credit(ctx))
-	if !self.broken {
-		moneysys.AcceptCredit(ctx, self.menu.MaxPrice())
+	if self.broken {
+		moneysys.AcceptCredit(ctx, 0, nil, nil)
+	} else {
+		go moneysys.AcceptCredit(ctx, maxPrice, stopch, moneych)
 	}
 	self.result = UIMenuResult{
 		Cream: DefaultCream,
@@ -144,7 +138,7 @@ init:
 		if self.broken {
 			mode = frontModeBroken
 		}
-		credit := self.credit.Load().(currency.Amount)
+		credit := moneysys.Credit(ctx)
 		switch mode {
 		case frontModeStatus:
 			l1 := config.MsgStateIntro
@@ -171,9 +165,19 @@ init:
 		select {
 		case e = <-inputCh:
 			lastActivity = time.Now()
-		case <-self.refreshCh:
+
+		case em := <-moneych:
 			lastActivity = time.Now()
-			goto handleEnd
+
+			switch em.Name() {
+			case money.EventAbort:
+				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
+			}
+			// likely redundant
+			credit = moneysys.Credit(ctx)
+
+			go moneysys.AcceptCredit(ctx, maxPrice, stopch, moneych)
+
 		case <-timer.C:
 			inactive := time.Since(lastActivity)
 			switch {
@@ -264,7 +268,6 @@ func (self *UIFront) showError(inputch chan input.Event, text string) {
 	self.display.Message(self.g.Config().UI.Front.MsgError, text, func() {
 		select {
 		case <-inputch:
-		case <-self.refreshCh:
 		case <-time.After(timeout):
 		}
 	})
@@ -320,13 +323,6 @@ func (self *UIFront) handleCreamSugar(mode string, e input.Event) string {
 		self.display.JustCenter(t2),
 	)
 	return mode
-}
-
-func (self *UIFront) refresh() {
-	select {
-	case self.refreshCh <- struct{}{}:
-	default:
-	}
 }
 
 // tightly coupled to len(alphabet)=4

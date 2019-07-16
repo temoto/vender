@@ -20,6 +20,8 @@ func mockInitRs() []mdb.MockR {
 	return []mdb.MockR{
 		// initer, SETUP
 		{"30", ""},
+		// initer, POLL
+		{"33", "0609"},
 		// FIXME put testScalingFactor here
 		{"31", "011810000a0000c8001fff01050a32640000000000000000000000"},
 
