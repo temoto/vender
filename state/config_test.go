@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/log2"
@@ -59,6 +60,7 @@ engine {
 			},
 			"",
 		},
+
 		{"menu-items",
 			`
 engine { menu {
@@ -107,6 +109,9 @@ include "money-scale-7" {}`,
 				g := GetGlobal(ctx)
 				assert.Equal(t, 7, g.Config.Money.Scale)
 			}, ""},
+
+		{"error-syntax", `hello`, nil, "key 'hello' expected start of object"},
+		{"error-include-loop", `include "include-loop" {}`, nil, "config include loop: from=include-loop include=include-loop"},
 	}
 	mkCheck := func(c Case) func(*testing.T) {
 		return func(t *testing.T) {
@@ -116,6 +121,8 @@ include "money-scale-7" {}`,
 				"test-inline":   c.input,
 				"empty":         "",
 				"money-scale-7": "money{scale=7}",
+				"error-syntax":  "hello",
+				"include-loop":  `include "include-loop" {}`,
 			})
 			cfg, err := ReadConfig(log, fs, "test-inline")
 			if err == nil {

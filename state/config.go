@@ -1,14 +1,13 @@
 package state
 
 import (
-	"fmt"
 	"path/filepath"
 	"sync"
 
 	"github.com/hashicorp/hcl"
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/currency"
-	"github.com/temoto/vender/engine"
+	engine_config "github.com/temoto/vender/engine/config"
 	"github.com/temoto/vender/hardware/lcd"
 	mdb_config "github.com/temoto/vender/hardware/mdb/config"
 	evend_config "github.com/temoto/vender/hardware/mdb/evend/config"
@@ -20,8 +19,8 @@ import (
 type Config struct {
 	// includeSeen contains absolute paths to prevent include loops
 	includeSeen map[string]struct{}
-	// Include is only used for Unmarshal
-	Include []ConfigSource `hcl:"include"`
+	// only used for Unmarshal, do not access
+	XXX_Include []ConfigSource `hcl:"include"`
 
 	Hardware struct {
 		Evend   evend_config.Config `hcl:"evend"`
@@ -56,16 +55,8 @@ type Config struct {
 		}
 	}
 
-	Engine struct {
-		Aliases     []Alias  `hcl:"alias"`
-		OnStart     []string `hcl:"on_start"`
-		OnMenuError []string `hcl:"on_menu_error"`
-		Menu        struct {
-			Items []*MenuItem `hcl:"item"`
-		}
-	}
-
-	Money struct {
+	Engine engine_config.Config
+	Money  struct {
 		Scale                int `hcl:"scale"`
 		CreditMax            int `hcl:"credit_max"`
 		ChangeOverCompensate int `hcl:"change_over_compensate"`
@@ -98,25 +89,6 @@ type ConfigSource struct {
 	Name     string `hcl:"name,key"`
 	Optional bool   `hcl:"optional"`
 }
-
-type Alias struct {
-	Name     string `hcl:"name,key"`
-	Scenario string `hcl:"scenario"`
-
-	Doer engine.Doer `hcl:"-"`
-}
-
-type MenuItem struct {
-	Code      string `hcl:"code,key"`
-	Name      string `hcl:"name"`
-	XXX_Price int    `hcl:"price"` // use scaled `Price`, this is for decoding config only
-	Scenario  string `hcl:"scenario"`
-
-	Price currency.Amount `hcl:"-"`
-	Doer  engine.Doer     `hcl:"-"`
-}
-
-func (self *MenuItem) String() string { return fmt.Sprintf("menu.%s %s", self.Code, self.Name) }
 
 func (c *Config) ScaleI(i int) currency.Amount {
 	return currency.Amount(i) * currency.Amount(c.Money.Scale)
@@ -155,7 +127,7 @@ func (c *Config) read(log *log2.Log, fs FullReader, source ConfigSource, errs *[
 	}
 
 	var includes []ConfigSource
-	includes, c.Include = c.Include, nil
+	includes, c.XXX_Include = c.XXX_Include, nil
 	for _, include := range includes {
 		includeNorm := fs.Normalize(include.Name)
 		if _, ok := c.includeSeen[includeNorm]; ok {

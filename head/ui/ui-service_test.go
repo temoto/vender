@@ -20,9 +20,9 @@ func TestServiceInventory(t *testing.T) {
 	ctx, g := state.NewTestContext(t, "")
 	g.Config.UI.Service.Auth.Enable = false
 	display, displayMock := lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: width})
-	g.Hardware.HD44780.Display = display
 	g.Inventory.Register("water", 1)
 	g.Inventory.Register("cup", 1)
+	g.Hardware.HD44780.Display.Store(display)
 	ui := NewUIService(ctx)
 	a := alive.NewAlive()
 	displayUpdated := make(chan struct{})

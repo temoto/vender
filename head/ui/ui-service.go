@@ -62,8 +62,8 @@ func NewUIService(ctx context.Context) *UIService {
 		secretSalt: []byte{0}, // FIXME read from config
 		invList:    make([]*inventory.Stock, 0, 16),
 	}
-	self.display = self.g.Hardware.HD44780.Display
 	config := self.g.Config
+	self.display = self.g.MustDisplay()
 	self.resetTimeout = helpers.IntSecondDefault(config.UI.Service.ResetTimeoutSec, 3*time.Second)
 	self.g.Inventory.Iter(func(s *inventory.Stock) {
 		self.invList = append(self.invList, s)

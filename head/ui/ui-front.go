@@ -83,7 +83,7 @@ func NewUIFront(ctx context.Context, menu Menu) *UIFront {
 			Sugar: DefaultSugar,
 		},
 	}
-	self.display = self.g.Hardware.HD44780.Display
+	self.display = self.g.MustDisplay()
 	self.resetTimeout = helpers.IntSecondDefault(self.g.Config.UI.Front.ResetTimeoutSec, 0)
 
 	return self

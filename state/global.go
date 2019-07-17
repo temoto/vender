@@ -6,7 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/temoto/alive"
 	"github.com/temoto/errors"
@@ -21,32 +20,33 @@ import (
 )
 
 type Global struct {
-	lk sync.Mutex
-
-	initInputOnce sync.Once
-	initMegaOnce  sync.Once
-	initMdberOnce sync.Once
-
 	Alive    *alive.Alive
 	Config   *Config
 	Engine   *engine.Engine
 	Hardware struct {
 		HD44780 struct {
 			Device  *lcd.LCD
-			Display *lcd.TextDisplay
+			Display atomic.Value // *lcd.TextDisplay
 		}
 		Input *input.Dispatch
 		Mdb   struct {
 			Mdber  *mdb.Mdb
 			Uarter mdb.Uarter
 		}
-		Iodin atomic.Value // *iodin.Client
-		Mega  atomic.Value // *mega.Client
+		iodin atomic.Value // *iodin.Client
+		mega  atomic.Value // *mega.Client
 	}
-
 	Inventory *inventory.Inventory
 	Log       *log2.Log
 	Tele      tele.Tele
+
+	lk sync.Mutex
+
+	initDisplayOnce sync.Once
+	initInputOnce   sync.Once
+	initMegaOnce    sync.Once
+	initMdberOnce   sync.Once
+
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
 }
 
@@ -87,35 +87,6 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 
 	errs := make([]error, 0)
 	g.Inventory.Init()
-
-	if g.c.Hardware.HD44780.Enable {
-		dev := new(lcd.LCD)
-		if err := dev.Init(g.c.Hardware.HD44780.PinChip, g.c.Hardware.HD44780.Pinmap, g.c.Hardware.HD44780.Page1); err != nil {
-			return errors.Annotatef(err, "lcd.Init config=%#v", g.c.Hardware.HD44780)
-		}
-		ctrl := lcd.ControlOn
-		if g.c.Hardware.HD44780.ControlBlink {
-			ctrl |= lcd.ControlBlink
-		}
-		if g.c.Hardware.HD44780.ControlCursor {
-			ctrl |= lcd.ControlUnderscore
-		}
-		dev.SetControl(ctrl)
-		g.Hardware.HD44780.Device = dev
-
-		d, err := lcd.NewTextDisplay(&lcd.TextDisplayConfig{
-			Width:       uint16(g.c.Hardware.HD44780.Width),
-			Codepage:    g.c.Hardware.HD44780.Codepage,
-			ScrollDelay: time.Duration(g.c.Hardware.HD44780.ScrollDelay) * time.Millisecond,
-		})
-		if err != nil {
-			return errors.Annotatef(err, "config: %#v", g.c.Hardware)
-		}
-		d.SetDevice(g.Hardware.HD44780.Device)
-		go d.Run()
-		g.Hardware.HD44780.Display = d
-	}
-
 	g.Tele.Init(ctx, g.Log, g.Config.Tele)
 	g.initInput()
 

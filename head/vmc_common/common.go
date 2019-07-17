@@ -37,7 +37,7 @@ func TeleCommandLoop(ctx context.Context) {
 
 func uiFrontFinish(ctx context.Context, menuResult *ui.UIMenuResult) {
 	g := state.GetGlobal(ctx)
-	display := g.Hardware.HD44780.Display
+	display := g.MustDisplay()
 	uiConfig := &g.Config.UI
 	moneysys := money.GetGlobal(ctx)
 	g.Log.Debugf("ui-front result=%#v", menuResult)

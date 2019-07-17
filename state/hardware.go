@@ -2,23 +2,25 @@ package state
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/temoto/errors"
 	"github.com/temoto/iodin/client/go-iodin"
 	"github.com/temoto/vender/hardware/input"
+	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/log2"
 )
 
 func (g *Global) Iodin() (*iodin.Client, error) {
-	if x := g.Hardware.Iodin.Load(); x != nil {
+	if x := g.Hardware.iodin.Load(); x != nil {
 		return x.(*iodin.Client), nil
 	}
 
 	g.lk.Lock()
 	defer g.lk.Unlock()
-	if x := g.Hardware.Iodin.Load(); x != nil {
+	if x := g.Hardware.iodin.Load(); x != nil {
 		return x.(*iodin.Client), nil
 	}
 
@@ -27,7 +29,7 @@ func (g *Global) Iodin() (*iodin.Client, error) {
 	if err != nil {
 		return nil, errors.Annotatef(err, "config: iodin_path=%s", cfg.IodinPath)
 	}
-	g.Hardware.Iodin.Store(client)
+	g.Hardware.iodin.Store(client)
 
 	return client, nil
 }
@@ -85,7 +87,6 @@ func (g *Global) Mdber() (*mdb.Mdb, error) {
 }
 
 func (g *Global) Mega() (*mega.Client, error) {
-	var client *mega.Client
 	var err error
 	g.initMegaOnce.Do(func() {
 		defer recoverFatal(g.Log) // fix sync.Once silent panic
@@ -99,14 +100,72 @@ func (g *Global) Mega() (*mega.Client, error) {
 		if devConfig.LogDebug {
 			log.SetLevel(log2.LDebug)
 		}
+		var client *mega.Client
 		client, err = mega.NewClient(megaConfig, log)
 		if err != nil {
 			err = errors.Annotatef(err, "mega config=%#v", megaConfig)
 		}
-		g.Hardware.Mega.Store(client)
+		g.Hardware.mega.Store(client)
 	})
-	x := g.Hardware.Mega.Load()
+	x := g.Hardware.mega.Load()
 	return x.(*mega.Client), err
+}
+
+func (g *Global) MustDisplay() *lcd.TextDisplay {
+	d, err := g.Display()
+	if err != nil {
+		g.Log.Fatal(err)
+	}
+	if d == nil {
+		g.Log.Fatal("display is not available")
+	}
+	return d
+}
+
+func (g *Global) Display() (*lcd.TextDisplay, error) {
+	var err error
+	g.initInputOnce.Do(func() {
+		defer recoverFatal(g.Log) // fix sync.Once silent panic
+		devConfig := &g.Config.Hardware.HD44780
+		if !devConfig.Enable {
+			g.Log.Infof("display hardware disabled")
+			return
+		}
+
+		dev := new(lcd.LCD)
+		if err := dev.Init(devConfig.PinChip, devConfig.Pinmap, devConfig.Page1); err != nil {
+			err = errors.Annotatef(err, "lcd.Init config=%#v", devConfig)
+			return
+		}
+		ctrl := lcd.ControlOn
+		if devConfig.ControlBlink {
+			ctrl |= lcd.ControlBlink
+		}
+		if devConfig.ControlCursor {
+			ctrl |= lcd.ControlUnderscore
+		}
+		dev.SetControl(ctrl)
+		g.Hardware.HD44780.Device = dev
+
+		displayConfig := &lcd.TextDisplayConfig{
+			Width:       uint16(devConfig.Width),
+			Codepage:    devConfig.Codepage,
+			ScrollDelay: time.Duration(devConfig.ScrollDelay) * time.Millisecond,
+		}
+		var d *lcd.TextDisplay
+		d, err = lcd.NewTextDisplay(displayConfig)
+		if err != nil {
+			err = errors.Annotatef(err, "lcd.NewTextDisplay config=%#v", displayConfig)
+			return
+		}
+		d.SetDevice(g.Hardware.HD44780.Device)
+		go d.Run()
+		g.Hardware.HD44780.Display.Store(d)
+	})
+	if x := g.Hardware.HD44780.Display.Load(); x != nil {
+		return x.(*lcd.TextDisplay), err
+	}
+	return nil, err
 }
 
 func (g *Global) initInput() {
