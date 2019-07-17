@@ -7,7 +7,6 @@ import (
 	"github.com/temoto/alive"
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/currency"
-	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/head/ui"
@@ -86,27 +85,19 @@ func UILoop(ctx context.Context, uiFront *ui.UIFront) {
 	gstopch := g.Alive.StopChan()
 	uiFront.Finish = uiFrontFinish
 	uiService := ui.NewUIService(ctx)
-	switchService := make(chan struct{})
-
-	g.Hardware.Input.SubscribeFunc("service", func(e input.Event) {
-		if e.Source == input.DevInputEventTag && e.Up {
-			g.Log.Debugf("input event switch to service")
-			switchService <- struct{}{}
-		}
-	}, g.Alive.StopChan())
 
 	for g.Alive.IsRunning() {
 		na := alive.NewAlive()
 		g.Log.Infof("uiloop front start")
 		go uiFront.Run(ctx, na)
 		select {
-		case <-switchService:
-			na.Stop()
-			na.Wait()
-			na = alive.NewAlive()
-			uiService.Run(ctx, na)
 		case <-na.StopChan():
 			na.Wait()
+			if uiFront.SwitchService {
+				uiFront.SwitchService = false
+				na = alive.NewAlive()
+				uiService.Run(ctx, na)
+			}
 		case <-gstopch:
 			na.Stop()
 			return

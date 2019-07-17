@@ -64,6 +64,8 @@ type UIFront struct {
 	menu    Menu
 	display *lcd.TextDisplay // FIXME
 	result  UIMenuResult
+
+	SwitchService bool // FIXME ugly crutch
 }
 
 type UIMenuResult struct {
@@ -192,6 +194,11 @@ init:
 		}
 
 		// step 3: handle input/timeout
+		if e.Source == input.DevInputEventTag && e.Up {
+			self.SwitchService = true
+			self.result = UIMenuResult{Confirm: false}
+			return
+		}
 		switch mode {
 		case frontModeStatus:
 			switch e.Key {
