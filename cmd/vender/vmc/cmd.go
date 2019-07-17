@@ -54,9 +54,6 @@ func Main(ctx context.Context, config *state.Config) error {
 
 	go vmc_common.TeleCommandLoop(ctx)
 
-	// FIXME
-	g.Inventory.DisableAll()
-
 	subcmd.SdNotify(daemon.SdNotifyReady)
 	g.Log.Debugf("VMC init complete")
 

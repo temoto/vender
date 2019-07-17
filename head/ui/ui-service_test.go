@@ -17,11 +17,12 @@ func TestServiceInventory(t *testing.T) {
 	t.Parallel()
 
 	const width = 16
-	ctx, g := state.NewTestContext(t, "")
+	ctx, g := state.NewTestContext(t, `
+engine { inventory {
+	stock "cup" { rate=1 }
+}}`)
 	g.Config.UI.Service.Auth.Enable = false
 	display, displayMock := lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: width})
-	g.Inventory.Register("water", 1)
-	g.Inventory.Register("cup", 1)
 	g.Hardware.HD44780.Display.Store(display)
 	ui := NewUIService(ctx)
 	a := alive.NewAlive()

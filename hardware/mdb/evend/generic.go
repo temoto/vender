@@ -277,7 +277,7 @@ func (self *Generic) proto2PollCommon(tag string, bs []byte) (bool, error) {
 	return false, nil
 }
 
-func (self *Generic) WithRestart(d engine.Doer) engine.Doer {
+func (self *Generic) WithRestart(d engine.Doer) *engine.RestartError {
 	return &engine.RestartError{
 		Doer: d,
 		Check: func(e error) bool {

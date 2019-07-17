@@ -5,20 +5,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
-	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
-const DefaultCoffeeRate = 9
-const DefaultEspressoTimeout = 10 * time.Second
+const DefaultEspressoTimeout = 30 * time.Second
 
 type DeviceEspresso struct {
 	Generic
 
-	coffeeStock *inventory.Stock
-	timeout     time.Duration
+	timeout time.Duration
 }
 
 func (self *DeviceEspresso) Init(ctx context.Context) error {
@@ -26,25 +24,31 @@ func (self *DeviceEspresso) Init(ctx context.Context) error {
 	espressoConfig := &g.Config.Hardware.Evend.Espresso
 	self.timeout = helpers.IntSecondDefault(espressoConfig.TimeoutSec, DefaultEspressoTimeout)
 	err := self.Generic.Init(ctx, 0xe8, "espresso", proto2)
+	if err != nil {
+		return errors.Annotate(err, "evend.espresso.Init")
+	}
 
-	self.coffeeStock = g.Inventory.Register("coffee", DefaultCoffeeRate)
+	doGrind := self.NewGrind()
+	err = g.Inventory.RegisterSource("espresso", engine.IgnoreArg{doGrind})
+	if err != nil {
+		return errors.Trace(err)
+	}
 
-	g.Engine.Register("mdb.evend.espresso_grind", self.NewGrind())
+	g.Engine.Register("mdb.evend.espresso_grind", doGrind)
 	g.Engine.Register("mdb.evend.espresso_press", self.NewPress())
 	g.Engine.Register("mdb.evend.espresso_dispose", self.Generic.WithRestart(self.NewRelease()))
 	g.Engine.Register("mdb.evend.espresso_heat_on", self.NewHeat(true))
 	g.Engine.Register("mdb.evend.espresso_heat_off", self.NewHeat(false))
 
-	return err
+	return nil
 }
 
 func (self *DeviceEspresso) NewGrind() engine.Doer {
 	const tag = "mdb.evend.espresso.grind"
-	tx := engine.NewSeq(tag).
+	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
 		Append(self.NewWaitDone(tag, self.timeout))
-	return self.coffeeStock.Wrap1(tx)
 }
 
 func (self *DeviceEspresso) NewPress() engine.Doer {

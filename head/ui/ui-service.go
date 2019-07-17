@@ -52,7 +52,7 @@ type UIService struct {
 
 	// mode=inventory
 	invIdx  uint8
-	invList []*inventory.Stock
+	invList []*inventory.Source
 }
 
 func NewUIService(ctx context.Context) *UIService {
@@ -60,12 +60,12 @@ func NewUIService(ctx context.Context) *UIService {
 		g:          state.GetGlobal(ctx),
 		inputBuf:   make([]byte, 0, 32),
 		secretSalt: []byte{0}, // FIXME read from config
-		invList:    make([]*inventory.Stock, 0, 16),
+		invList:    make([]*inventory.Source, 0, 16),
 	}
 	config := self.g.Config
 	self.display = self.g.MustDisplay()
 	self.resetTimeout = helpers.IntSecondDefault(config.UI.Service.ResetTimeoutSec, 3*time.Second)
-	self.g.Inventory.Iter(func(s *inventory.Stock) {
+	self.g.Inventory.IterSource(func(s *inventory.Source) {
 		self.invList = append(self.invList, s)
 	})
 	sort.Slice(self.invList, func(a, b int) bool {

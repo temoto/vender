@@ -124,7 +124,7 @@ func (g *Global) MustDisplay() *lcd.TextDisplay {
 
 func (g *Global) Display() (*lcd.TextDisplay, error) {
 	var err error
-	g.initInputOnce.Do(func() {
+	g.initDisplayOnce.Do(func() {
 		defer recoverFatal(g.Log) // fix sync.Once silent panic
 		devConfig := &g.Config.Hardware.HD44780
 		if !devConfig.Enable {

@@ -20,6 +20,9 @@ type ArgApplier interface {
 	Applied() bool
 }
 
+func (Fail) Applied() bool    { return true }
+func (f Fail) Apply(Arg) Doer { return f }
+
 type FuncArg struct {
 	Name string
 	F    func(context.Context, Arg) error
@@ -46,13 +49,17 @@ func (self FuncArg) String() string {
 	}
 	return fmt.Sprintf("%s:%v", self.Name, self.arg)
 }
+
 func (self FuncArg) Apply(a Arg) Doer {
 	if self.set {
 		return Fail{E: ErrArgOverwrite}
 	}
-	self.arg = a
-	self.set = true
-	return self
+	// Copied already because (self FuncArg) not pointer receiver
+	// this is redundant line to make copy clear for reading.
+	copied := self
+	copied.arg = a
+	copied.set = true
+	return copied
 }
 func (self FuncArg) Applied( /*TODO arg name?*/ ) bool { return self.set }
 
@@ -117,3 +124,14 @@ func (self *RestartError) Applied( /*TODO arg name?*/ ) bool {
 	}
 	return true
 }
+
+type IgnoreArg struct{ Doer }
+
+func (self IgnoreArg) Apply(Arg) Doer { return self.Doer }
+func (IgnoreArg) Applied() bool       { return false }
+
+// compile-time interface checks
+var _ ArgApplier = &RestartError{}
+var _ ArgApplier = &Seq{}
+var _ ArgApplier = FuncArg{}
+var _ ArgApplier = IgnoreArg{}

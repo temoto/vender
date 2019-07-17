@@ -46,8 +46,6 @@ func Main(ctx context.Context, config *state.Config) error {
 		}
 	}()
 
-	g.Inventory.DisableAll()
-
 	g.Log.Debugf("tele init complete, running")
 	// for g.Alive.IsRunning() {
 	// 	g.Log.Debugf("before telesys")

@@ -110,11 +110,82 @@ include "money-scale-7" {}`,
 				assert.Equal(t, 7, g.Config.Money.Scale)
 			}, ""},
 
+		{"inventory-single-source", `
+engine { inventory {
+	stock "hopper1" { rate=1 }
+}}`,
+			func(t testing.TB, ctx context.Context) {
+				g := GetGlobal(ctx)
+				stock, err := g.Inventory.Get("hopper1")
+				stock.Default().Set(3)
+				require.NoError(t, err)
+				called := 0
+				err = g.Inventory.RegisterSource("hopper1", engine.FuncArg{
+					F: func(ctx context.Context, arg engine.Arg) error {
+						called += int(arg)
+						return nil
+					}})
+				d := g.Engine.Resolve("@add.hopper1(3)")
+				require.NotNil(t, d)
+				assert.NoError(t, d.Do(ctx))
+				assert.Equal(t, 3, called)
+			}, ""},
+
+		{"inventory-multi-source", `
+engine { inventory {
+	stock "tea" { rate=2 min=1 sources=["hopper1", "hopper2"] }
+}}`,
+			func(t testing.TB, ctx context.Context) {
+				g := GetGlobal(ctx)
+				_, err := g.Inventory.Get("tea")
+				require.NoError(t, err)
+
+				src1, err := g.Inventory.GetSource("hopper1")
+				require.NoError(t, err)
+				src1.Set(4)
+				src2, err := g.Inventory.GetSource("hopper2")
+				require.NoError(t, err)
+				src2.Set(77)
+
+				hwunits := 0
+				spend := engine.FuncArg{
+					F: func(ctx context.Context, arg engine.Arg) error {
+						hwunits += int(arg)
+						return nil
+					}}
+				err = g.Inventory.RegisterSource("hopper1", spend)
+				assert.NoError(t, err)
+				err = g.Inventory.RegisterSource("hopper2", spend)
+				assert.NoError(t, err)
+				d := g.Engine.Resolve("@add.tea(4)")
+				require.NotNil(t, d)
+				assert.NoError(t, d.Do(ctx))
+				assert.Equal(t, 4*2, hwunits)
+				assert.Equal(t, int32(4), src1.Value())
+				assert.Equal(t, int32(77-4), src2.Value())
+			}, ""},
+
+		{"inventory-register", `
+engine { inventory {
+	stock "espresso" { rate=1 register="@espresso.grind(?)" }
+}}`,
+			func(t testing.TB, ctx context.Context) {
+				g := GetGlobal(ctx)
+				_, err := g.Inventory.Get("espresso")
+				assert.NoError(t, err)
+				d := g.Engine.Resolve("@add.espresso(1)")
+				if !assert.Nil(t, d) {
+					t.Logf("not-nil Doer.Validate=%v", d.Validate())
+				}
+				assert.NotNil(t, g.Engine.Resolve("@espresso.grind(1)"))
+			}, ""},
+
 		{"error-syntax", `hello`, nil, "key 'hello' expected start of object"},
 		{"error-include-loop", `include "include-loop" {}`, nil, "config include loop: from=include-loop include=include-loop"},
 	}
 	mkCheck := func(c Case) func(*testing.T) {
 		return func(t *testing.T) {
+			// log := log2.NewStderr(log2.LDebug) // helps with panics
 			log := log2.NewTest(t, log2.LDebug)
 			ctx, g := NewContext(log)
 			fs := NewMockFullReader(map[string]string{

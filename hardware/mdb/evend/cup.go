@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
-	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
@@ -17,22 +17,28 @@ const DefaultCupEnsureTimeout = 70 * time.Second
 
 type DeviceCup struct {
 	Generic
-
-	cupStock *inventory.Stock
 }
 
 func (self *DeviceCup) Init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 	err := self.Generic.Init(ctx, 0xe0, "cup", proto2)
+	if err != nil {
+		return errors.Annotate(err, "evend.cup.Init")
+	}
 
-	self.cupStock = g.Inventory.Register("cup", 1)
+	doDispense := self.Generic.WithRestart(self.NewDispenseProper())
+	// IgnoreArg to consume arg forced by stock logic
+	err = g.Inventory.RegisterSource("cup", engine.IgnoreArg{doDispense})
+	if err != nil {
+		return err
+	}
 
-	g.Engine.Register("mdb.evend.cup_dispense_proper", self.Generic.WithRestart(self.NewDispenseProper()))
+	g.Engine.Register("mdb.evend.cup_dispense_proper", doDispense)
 	g.Engine.Register("mdb.evend.cup_light_on", self.NewLight(true))
 	g.Engine.Register("mdb.evend.cup_light_off", self.NewLight(false))
 	g.Engine.Register("mdb.evend.cup_ensure", self.NewEnsure())
 
-	return err
+	return nil
 }
 
 func (self *DeviceCup) NewDispenseProper() engine.Doer {
@@ -44,7 +50,7 @@ func (self *DeviceCup) NewDispenseProper() engine.Doer {
 
 func (self *DeviceCup) NewDispense() engine.Doer {
 	const tag = "mdb.evend.cup.dispense"
-	tx := engine.NewSeq(tag).
+	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
 		Append(engine.Func{Name: tag + "/assert-busy", F: func(ctx context.Context) error {
@@ -71,7 +77,6 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 				return self.Generic.NewWaitDone(tag, dispenseTimeout).Do(ctx)
 			},
 		})
-	return self.cupStock.Wrap1(tx)
 }
 
 func (self *DeviceCup) NewLight(on bool) engine.Doer {

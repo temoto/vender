@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/state"
 )
@@ -12,7 +13,10 @@ import (
 func TestValve(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, "")
+	ctx, g := state.NewTestContext(t, `
+engine { inventory {
+	stock "water" { rate = 0.5 }
+}}`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{
@@ -25,7 +29,7 @@ func TestValve(t *testing.T) {
 		{"c3", "44"},
 		{"c3", "04"},
 		{"c3", ""},
-		{"c2013a", ""},
+		{"c2012d", ""},
 		{"c3", "10"},
 		{"c3", ""},
 	})
@@ -44,9 +48,11 @@ func TestValve(t *testing.T) {
 
 	g.Engine.TestDo(t, ctx, "mdb.evend.valve_set_temp_hot(73)")
 
-	water := d.waterStock.Min() + rand.Int31() + 90
+	waterSource, err := g.Inventory.GetSource("water")
+	require.NoError(t, err)
+	water := waterSource.Min + rand.Int31() + 90
 	t.Logf("water before=%d", water)
-	d.waterStock.Set(water)
-	g.Engine.TestDo(t, ctx, "mdb.evend.valve_pour_hot(90)")
-	assert.Equal(t, water-90, d.waterStock.Value())
+	waterSource.Set(water)
+	g.Engine.TestDo(t, ctx, "@add.water_hot(90)")
+	assert.Equal(t, water-90, waterSource.Value())
 }

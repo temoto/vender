@@ -5,57 +5,52 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
-	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
-const DefaultHopperRate = 10
 const DefaultHopperRunTimeout = 200 * time.Millisecond
 const HopperTimeout = 1 * time.Second
 
 type DeviceHopper struct {
 	Generic
-
-	stock *inventory.Stock
 }
 
 func (self *DeviceHopper) Init(ctx context.Context, addr uint8, nameSuffix string) error {
 	g := state.GetGlobal(ctx)
-	hopperConfig := &g.Config().Hardware.Evend.Hopper
 	name := "hopper" + nameSuffix
 	err := self.Generic.Init(ctx, addr, name, proto2)
-
-	rate := hopperConfig.DefaultStockRate
-	if rate == 0 {
-		rate = DefaultHopperRate
+	if err != nil {
+		return errors.Annotatef(err, "evend.%s.Init", name)
 	}
-	self.stock = g.Inventory.Register(name, rate)
 
-	g.Engine.Register(fmt.Sprintf("mdb.evend.%s_run(?)", name), self.NewRun())
+	do := self.NewRun()
+	g.Engine.Register(fmt.Sprintf("mdb.evend.%s_run(?)", name), do)
 
-	return err
+	err = g.Inventory.RegisterSource(name, do)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
-func (self *DeviceHopper) NewRun() engine.Doer {
+func (self *DeviceHopper) NewRun() engine.FuncArg {
 	tag := fmt.Sprintf("mdb.evend.%s.run", self.dev.Name)
 
-	do := engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
-		hopperConfig := &state.GetGlobal(ctx).Config().Hardware.Evend.Hopper
+	return engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
+		hopperConfig := &state.GetGlobal(ctx).Config.Hardware.Evend.Hopper
 		units := uint8(arg)
+		runTimeout := helpers.IntMillisecondDefault(hopperConfig.RunTimeoutMs, DefaultHopperRunTimeout)
 
 		if err := self.Generic.NewWaitReady(tag).Do(ctx); err != nil {
 			return err
 		}
-
 		if err := self.Generic.txAction([]byte{units}); err != nil {
 			return err
 		}
-
-		runTimeout := helpers.IntMillisecondDefault(hopperConfig.RunTimeoutMs, DefaultHopperRunTimeout)
 		return self.Generic.NewWaitDone(tag, runTimeout*time.Duration(units)+HopperTimeout).Do(ctx)
 	}}
-
-	return self.stock.WrapArg(do)
 }

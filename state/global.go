@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -147,6 +148,33 @@ func (g *Global) initEngine() []error {
 		}
 		// g.Log.Debugf("config.engine.menu %s pxxx=%d ps=%d", x.String(), x.XXX_Price, x.Price)
 		g.Engine.Register("menu."+x.Code, x.Doer)
+	}
+
+	for _, x := range g.Config.Engine.Inventory.Stocks {
+		stock, err := g.Inventory.RegisterStock(x)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		switch x.Register {
+		case "-": // skip
+
+		case "": // default
+			x.Register = "@add.%[1]s(?)"
+			fallthrough
+
+		default:
+			name := x.Register
+			if strings.Contains(name, "%[") {
+				name = fmt.Sprintf(x.Register, x.Name)
+				if strings.Contains(name, "(MISSING)") || strings.Contains(name, "(EXTRA") {
+					errs = append(errs, errors.Errorf("invalid stock register='%s'", x.Register))
+					continue
+				}
+			}
+			g.Log.Debugf("reg=%s s=%v", name, stock)
+			g.Engine.Register(name, stock)
+		}
 	}
 
 	return errs

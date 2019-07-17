@@ -8,14 +8,11 @@ import (
 
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
-	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/helpers/cacheval"
 	"github.com/temoto/vender/state"
 )
-
-const DefaultValveRate float32 = 1 / 1.538462
 
 const (
 	valvePollBusy   = 0x10
@@ -36,9 +33,8 @@ func (e *ErrWaterTemperature) Error() string {
 type DeviceValve struct { //nolint:maligned
 	Generic
 
-	cautionPartMl uint16
-	pourTimeout   time.Duration
-	waterStock    *inventory.Stock
+	cautionPartUnit uint8
+	pourTimeout     time.Duration
 
 	doGetTempHot    engine.Doer
 	tempHot         cacheval.Int32
@@ -48,24 +44,32 @@ type DeviceValve struct { //nolint:maligned
 
 func (self *DeviceValve) Init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
-	self.cautionPartMl = uint16(valveConfig.CautionPartMl)
 	valveConfig := &g.Config.Hardware.Evend.Valve
 	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, time.Hour) // big default timeout is fine, depend on valve hardware
 	tempValid := helpers.IntMillisecondDefault(valveConfig.TemperatureValidMs, 30*time.Second)
 	self.tempHot.Init(tempValid)
 	self.proto2BusyMask = valvePollBusy
 	self.proto2IgnoreMask = valvePollNotHot
-	err := self.Generic.Init(ctx, 0xc0, "valve", proto2)
-
-	rate := valveConfig.WaterStockRate
-	if rate == 0 {
-		rate = DefaultValveRate
+	if err := self.Generic.Init(ctx, 0xc0, "valve", proto2); err != nil {
+		return errors.Annotate(err, "evend.valve.Init")
 	}
-	self.waterStock = g.Inventory.Register("water", rate)
+
+	waterStock, err := g.Inventory.Get("water")
+	if err != nil {
+		return errors.Trace(err)
+	}
+	self.cautionPartUnit = uint8(waterStock.Translate(engine.Arg(valveConfig.CautionPartMl)))
 
 	self.doGetTempHot = self.newGetTempHot()
 	doCheckTempHot := engine.Func0{F: func() error { return nil }, V: self.newCheckTempHotValidate(ctx)}
 	doSetTempHot := self.NewSetTempHot()
+	doPourCold := self.NewPourCold()
+	doPourHot := self.NewPourHot()
+	doPourEspresso := self.NewPourEspresso()
+	g.Engine.Register("@add.water_hot(?)", waterStock.WithSpender(doPourHot))
+	g.Engine.Register("@add.water_cold(?)", waterStock.WithSpender(doPourCold))
+	g.Engine.Register("@add.water_espresso(?)", waterStock.WithSpender(doPourEspresso))
+
 	g.Engine.Register("mdb.evend.valve_check_temp_hot", doCheckTempHot)
 	g.Engine.Register("mdb.evend.valve_get_temp_hot", self.doGetTempHot)
 	g.Engine.Register("mdb.evend.valve_set_temp_hot(?)", doSetTempHot)
@@ -73,27 +77,27 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	// 	cfg := &state.GetConfig(ctx).Hardware.Evend.Valve
 	// 	return engine.ArgApply(doSetTempHot, engine.Arg(cfg.TemperatureHot)).Do(ctx)
 	// }})
-	g.Engine.Register("mdb.evend.valve_pour_coffee(?)", self.NewPourCoffee())
-	g.Engine.Register("mdb.evend.valve_pour_cold(?)", self.NewPourCold())
-	g.Engine.Register("mdb.evend.valve_pour_hot(?)", self.NewPourHot())
+	g.Engine.Register("mdb.evend.valve_pour_espresso(?)", doPourEspresso)
+	g.Engine.Register("mdb.evend.valve_pour_cold(?)", doPourCold)
+	g.Engine.Register("mdb.evend.valve_pour_hot(?)", doPourHot)
 	g.Engine.Register("mdb.evend.valve_cold_open", self.NewValveCold(true))
 	g.Engine.Register("mdb.evend.valve_cold_close", self.NewValveCold(false))
 	g.Engine.Register("mdb.evend.valve_hot_open", self.NewValveHot(true))
 	g.Engine.Register("mdb.evend.valve_hot_close", self.NewValveHot(false))
 	g.Engine.Register("mdb.evend.valve_boiler_open", self.NewValveBoiler(true))
 	g.Engine.Register("mdb.evend.valve_boiler_close", self.NewValveBoiler(false))
-	g.Engine.Register("mdb.evend.valve_pump_coffee_start", self.NewPumpCoffee(true))
-	g.Engine.Register("mdb.evend.valve_pump_coffee_stop", self.NewPumpCoffee(false))
+	g.Engine.Register("mdb.evend.valve_pump_espresso_start", self.NewPumpEspresso(true))
+	g.Engine.Register("mdb.evend.valve_pump_espresso_stop", self.NewPumpEspresso(false))
 	g.Engine.Register("mdb.evend.valve_pump_start", self.NewPump(true))
 	g.Engine.Register("mdb.evend.valve_pump_stop", self.NewPump(false))
 
-	return err
+	return nil
 }
 
-func (self *DeviceValve) MlToTimeout(ml uint16) time.Duration {
+func (self *DeviceValve) UnitToTimeout(unit uint8) time.Duration {
 	const min = 500 * time.Millisecond
-	const perMl = 50 * time.Millisecond // FIXME
-	return min + time.Duration(ml)*perMl
+	const perUnit = 50 * time.Millisecond // FIXME
+	return min + time.Duration(unit)*perUnit
 }
 
 func (self *DeviceValve) newGetTempHot() engine.Doer {
@@ -140,27 +144,28 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 	doPour := engine.FuncArg{
 		Name: tag + "/careful",
 		F: func(ctx context.Context, arg engine.Arg) error {
-			ml := uint16(arg)
-			if ml > self.cautionPartMl {
-				cautionTimeout := self.MlToTimeout(self.cautionPartMl)
-				cautionPartUnit := uint8(self.waterStock.TranslateArg(engine.Arg(self.cautionPartMl)))
-				err := self.newCommand(tagPour, strconv.Itoa(int(self.cautionPartMl)), arg1, cautionPartUnit).Do(ctx)
+			if arg >= 256 {
+				return errors.Errorf("arg=%d overflows hardware units", arg)
+			}
+			units := uint8(arg)
+			if units > self.cautionPartUnit {
+				cautionTimeout := self.UnitToTimeout(self.cautionPartUnit)
+				err := self.newCommand(tagPour, strconv.Itoa(int(self.cautionPartUnit)), arg1, self.cautionPartUnit).Do(ctx)
 				if err != nil {
 					return err
 				}
 				err = self.Generic.NewWaitDone(tag, cautionTimeout).Do(ctx)
 				if err != nil {
-					_ = abort.Do(ctx)
+					_ = abort.Do(ctx) // TODO likely redundant
 					return err
 				}
-				ml -= self.cautionPartMl
+				units -= self.cautionPartUnit
 			}
-			units := uint8(self.waterStock.TranslateArg(engine.Arg(ml)))
-			err := self.newCommand(tagPour, strconv.Itoa(int(ml)), arg1, units).Do(ctx)
+			err := self.newCommand(tagPour, strconv.Itoa(int(units)), arg1, units).Do(ctx)
 			if err != nil {
 				return err
 			}
-			err = self.Generic.NewWaitDone(tag, self.MlToTimeout(ml)).Do(ctx)
+			err = self.Generic.NewWaitDone(tag, self.UnitToTimeout(units)).Do(ctx)
 			return err
 		}}
 
@@ -169,27 +174,24 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 		Append(doPour)
 }
 
-func (self *DeviceValve) NewPourCoffee() engine.Doer {
-	tx := self.newPourCareful("coffee", 0x03, self.NewPumpCoffee(false))
-	return self.waterStock.WrapArg(tx)
+func (self *DeviceValve) NewPourEspresso() engine.Doer {
+	return self.newPourCareful("espresso", 0x03, self.NewPumpEspresso(false))
 }
 
 func (self *DeviceValve) NewPourCold() engine.Doer {
 	const tag = "mdb.evend.valve.pour_cold"
-	tx := engine.NewSeq(tag).
+	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.newPour(tag, 0x02)).
 		Append(self.Generic.NewWaitDone(tag, self.pourTimeout))
-	return self.waterStock.WrapArg(tx)
 }
 
 func (self *DeviceValve) NewPourHot() engine.Doer {
 	const tag = "mdb.evend.valve.pour_hot"
-	tx := engine.NewSeq(tag).
+	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.newPour(tag, 0x01)).
 		Append(self.Generic.NewWaitDone(tag, self.pourTimeout))
-	return self.waterStock.WrapArg(tx)
 }
 
 func (self *DeviceValve) NewValveCold(open bool) engine.Doer {
@@ -213,11 +215,11 @@ func (self *DeviceValve) NewValveBoiler(open bool) engine.Doer {
 		return self.newCommand("valve_boiler", "close", 0x12, 0x00)
 	}
 }
-func (self *DeviceValve) NewPumpCoffee(start bool) engine.Doer {
+func (self *DeviceValve) NewPumpEspresso(start bool) engine.Doer {
 	if start {
-		return self.newCommand("pump_coffee", "start", 0x13, 0x01)
+		return self.newCommand("pump_espresso", "start", 0x13, 0x01)
 	} else {
-		return self.newCommand("pump_coffee", "stop", 0x13, 0x00)
+		return self.newCommand("pump_espresso", "stop", 0x13, 0x00)
 	}
 }
 func (self *DeviceValve) NewPump(start bool) engine.Doer {
@@ -232,9 +234,8 @@ func (self *DeviceValve) newPour(tag string, b1 byte) engine.Doer {
 	return engine.FuncArg{
 		Name: tag,
 		F: func(ctx context.Context, arg engine.Arg) error {
-			units := self.waterStock.TranslateArg(arg)
-			self.dev.Log.Debugf("%s arg=%d units=%d", tag, arg, units)
-			bs := []byte{b1, uint8(units)}
+			self.dev.Log.Debugf("%s arg=%d", tag, arg)
+			bs := []byte{b1, uint8(arg)}
 			return self.txAction(bs)
 		},
 	}

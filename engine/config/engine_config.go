@@ -37,3 +37,17 @@ type MenuItem struct {
 }
 
 func (self *MenuItem) String() string { return fmt.Sprintf("menu.%s %s", self.Code, self.Name) }
+
+type StockItem struct { //nolint:maligned
+	Name     string   `hcl:"name,key"`
+	Disabled bool     `hcl:"disable"`
+	Min      int32    `hcl:"min"`
+	Rate     float32  `hcl:"rate"`
+	Sources  []string `hcl:"sources"`
+	Strategy string   `hcl:"strategy"` // even|order
+	Register string   `hcl:"register"`
+}
+
+func (self *StockItem) String() string {
+	return fmt.Sprintf("inventory.%s enabled=%t rate=%f min=%d", self.Name, !self.Disabled, self.Rate, self.Min)
+}

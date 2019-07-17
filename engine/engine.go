@@ -118,7 +118,7 @@ func (self *Engine) ResolveOrLazy(action string) (Doer, error) {
 func (self *Engine) MustResolveOrLazy(action string) Doer {
 	d, err := self.ResolveOrLazy(action)
 	if err != nil {
-		return Fail{err}
+		return Fail{E: err}
 	}
 	return d
 }

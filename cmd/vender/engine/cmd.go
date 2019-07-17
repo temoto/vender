@@ -11,6 +11,7 @@ import (
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
@@ -45,6 +46,23 @@ func Main(ctx context.Context, config *state.Config) error {
 		g.Log.Debugf("- money commit")
 		return nil
 	}})
+	g.Engine.Register("@stock.all.add(?)", engine.FuncArg{F: func(ctx context.Context, arg engine.Arg) error {
+		g.Inventory.IterSource(func(src *inventory.Source) {
+			current := src.Value()
+			g.Log.Debugf("- source=%s value=%d", src.Name, current)
+			src.Set(current + int32(arg))
+		})
+		return nil
+	}})
+	g.Engine.Register("@stock.dump", engine.Func0{F: func() error {
+		g.Inventory.IterStock(func(stock *inventory.Stock) {
+			g.Log.Debugf("- stock %#v", stock)
+		})
+		g.Inventory.IterSource(func(src *inventory.Source) {
+			g.Log.Debugf("- source %#v", src)
+		})
+		return nil
+	}})
 	ms := &money.MoneySystem{}
 	if err := ms.Start(ctx); err != nil {
 		g.Log.Error(errors.ErrorStack(err))
@@ -53,7 +71,6 @@ func Main(ctx context.Context, config *state.Config) error {
 	// right now Enum does IO implicitly
 	// FIXME hardware.Enum() but money system inits bill/coin devices explicitly
 	evend.Enum(ctx, nil)
-	g.Inventory.DisableAll()
 	g.Log.Debugf("devices init complete")
 
 	cli.MainLoop("vender-engine-cli", newExecutor(ctx), newCompleter(ctx))
