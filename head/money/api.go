@@ -69,7 +69,7 @@ func (self *MoneySystem) locked_credit(includeEscrow bool) currency.Amount {
 func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amount, stopAccept <-chan struct{}, out chan<- Event) bool {
 	const tag = "money.accept-credit"
 
-	config := state.GetGlobal(ctx).Config()
+	config := state.GetGlobal(ctx).Config
 	maxConfig := currency.Amount(config.Money.CreditMax)
 	// Accept limit = lesser of: configured max credit or highest menu price.
 	limit := maxConfig

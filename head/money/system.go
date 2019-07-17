@@ -72,7 +72,7 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	doAccept := engine.FuncArg{
 		Name: "@money.accept(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
-			self.AcceptCredit(ctx, g.Config().ScaleU(uint32(arg)), nil, nil)
+			self.AcceptCredit(ctx, g.Config.ScaleU(uint32(arg)), nil, nil)
 			return nil
 		},
 	}
@@ -82,7 +82,7 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 		Name: "@money.dispense(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
 			dispensed := currency.NominalGroup{}
-			err := self.coin.NewDispenseSmart(g.Config().ScaleU(uint32(arg)), false, &dispensed).Do(ctx)
+			err := self.coin.NewDispenseSmart(g.Config.ScaleU(uint32(arg)), false, &dispensed).Do(ctx)
 			self.Log.Infof("dispensed=%s", dispensed.String())
 			return err
 		}}

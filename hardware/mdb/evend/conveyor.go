@@ -25,7 +25,7 @@ type DeviceConveyor struct { //nolint:maligned
 func (self *DeviceConveyor) Init(ctx context.Context) error {
 	self.currentPos = -1
 	g := state.GetGlobal(ctx)
-	devConfig := &g.Config().Hardware.Evend.Conveyor
+	devConfig := &g.Config.Hardware.Evend.Conveyor
 	keepaliveInterval := helpers.IntMillisecondDefault(devConfig.KeepaliveMs, 0)
 	self.minSpeed = uint16(devConfig.MinSpeed)
 	if self.minSpeed == 0 {

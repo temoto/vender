@@ -22,7 +22,7 @@ func (g *Global) Iodin() (*iodin.Client, error) {
 		return x.(*iodin.Client), nil
 	}
 
-	cfg := &g.c.Hardware
+	cfg := &g.Config.Hardware
 	client, err := iodin.NewClient(cfg.IodinPath)
 	if err != nil {
 		return nil, errors.Annotatef(err, "config: iodin_path=%s", cfg.IodinPath)
@@ -44,7 +44,7 @@ func (g *Global) Mdber() (*mdb.Mdb, error) {
 			return
 		}
 
-		switch g.c.Hardware.Mdb.UartDriver {
+		switch g.Config.Hardware.Mdb.UartDriver {
 		case "file":
 			g.Hardware.Mdb.Uarter = mdb.NewFileUart(g.Log)
 		case "mega":
@@ -64,18 +64,18 @@ func (g *Global) Mdber() (*mdb.Mdb, error) {
 			}
 			g.Hardware.Mdb.Uarter = mdb.NewIodinUart(iodin)
 		default:
-			err = fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, mega, iodin", g.c.Hardware.Mdb.UartDriver)
+			err = fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, mega, iodin", g.Config.Hardware.Mdb.UartDriver)
 			return
 		}
 		mdbLog := g.Log.Clone(log2.LInfo)
-		if g.c.Hardware.Mdb.LogDebug {
+		if g.Config.Hardware.Mdb.LogDebug {
 			mdbLog.SetLevel(log2.LDebug)
 		}
 
 		var mdber *mdb.Mdb
-		mdber, err = mdb.NewMDB(g.Hardware.Mdb.Uarter, g.c.Hardware.Mdb.UartDevice, mdbLog)
+		mdber, err = mdb.NewMDB(g.Hardware.Mdb.Uarter, g.Config.Hardware.Mdb.UartDevice, mdbLog)
 		if err != nil {
-			err = errors.Annotatef(err, "config: mdb=%v", g.c.Hardware.Mdb)
+			err = errors.Annotatef(err, "config: mdb=%v", g.Config.Hardware.Mdb)
 			return
 		}
 		g.Hardware.Mdb.Mdber = mdber
@@ -89,7 +89,7 @@ func (g *Global) Mega() (*mega.Client, error) {
 	var err error
 	g.initMegaOnce.Do(func() {
 		defer recoverFatal(g.Log) // fix sync.Once silent panic
-		devConfig := &g.c.Hardware.Mega
+		devConfig := &g.Config.Hardware.Mega
 		megaConfig := &mega.Config{
 			SpiBus:        devConfig.Spi,
 			NotifyPinChip: devConfig.PinChip,
@@ -123,10 +123,10 @@ func (g *Global) initInput() {
 			sources = append(sources, src)
 		}
 
-		if !g.c.Hardware.Input.DevInputEvent.Enable {
+		if !g.Config.Hardware.Input.DevInputEvent.Enable {
 			g.Log.Infof("input=%s disabled", input.DevInputEventTag)
 		} else {
-			src, err := input.NewDevInputEventSource(g.c.Hardware.Input.DevInputEvent.Device)
+			src, err := input.NewDevInputEventSource(g.Config.Hardware.Input.DevInputEvent.Device)
 			err = errors.Annotatef(err, "input=%s", input.DevInputEventTag)
 			if err != nil {
 				g.Log.Error(errors.ErrorStack(err))
@@ -141,7 +141,7 @@ func (g *Global) initInput() {
 
 func (g *Global) initInputEvendKeyboard() (input.Source, error) {
 	const tag = input.EvendKeyboardSourceTag
-	if !g.c.Hardware.Input.EvendKeyboard.Enable {
+	if !g.Config.Hardware.Input.EvendKeyboard.Enable {
 		g.Log.Infof("input=%s disabled", tag)
 		return nil, nil
 	}
@@ -155,7 +155,7 @@ func (g *Global) initInputEvendKeyboard() (input.Source, error) {
 	ekb, err := input.NewEvendKeyboard(mc)
 	if err != nil {
 		err = errors.Annotatef(err, "input=%s", tag)
-		err = errors.Annotatef(err, "config: %#v", g.c.Hardware.Input)
+		err = errors.Annotatef(err, "config: %#v", g.Config.Hardware.Input)
 		return nil, err
 	}
 	return ekb, nil

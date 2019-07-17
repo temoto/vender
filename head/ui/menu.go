@@ -26,7 +26,7 @@ func (self *MenuItem) String() string {
 }
 
 func (self Menu) Init(ctx context.Context) error {
-	config := state.GetGlobal(ctx).Config()
+	config := state.GetGlobal(ctx).Config
 
 	errs := make([]error, 0, 16)
 	for _, x := range config.Engine.Menu.Items {

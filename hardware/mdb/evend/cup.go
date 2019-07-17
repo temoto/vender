@@ -48,7 +48,7 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
 		Append(engine.Func{Name: tag + "/assert-busy", F: func(ctx context.Context) error {
-			cupConfig := &state.GetGlobal(ctx).Config().Hardware.Evend.Cup
+			cupConfig := &state.GetGlobal(ctx).Config.Hardware.Evend.Cup
 			time.Sleep(helpers.IntMillisecondDefault(cupConfig.AssertBusyDelayMs, DefaultCupAssertBusyDelay))
 			r := self.dev.Tx(self.dev.PacketPoll)
 			if r.E != nil {
@@ -66,7 +66,7 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 		}}).
 		Append(engine.Func{
 			F: func(ctx context.Context) error {
-				cupConfig := &state.GetGlobal(ctx).Config().Hardware.Evend.Cup
+				cupConfig := &state.GetGlobal(ctx).Config.Hardware.Evend.Cup
 				dispenseTimeout := helpers.IntSecondDefault(cupConfig.DispenseTimeoutSec, DefaultCupDispenseTimeout)
 				return self.Generic.NewWaitDone(tag, dispenseTimeout).Do(ctx)
 			},
@@ -90,7 +90,7 @@ func (self *DeviceCup) NewEnsure() engine.Doer {
 		Append(self.Generic.NewAction(tag, 0x04)).
 		Append(engine.Func{
 			F: func(ctx context.Context) error {
-				cupConfig := &state.GetGlobal(ctx).Config().Hardware.Evend.Cup
+				cupConfig := &state.GetGlobal(ctx).Config.Hardware.Evend.Cup
 				ensureTimeout := helpers.IntSecondDefault(cupConfig.EnsureTimeoutSec, DefaultCupEnsureTimeout)
 				return self.Generic.NewWaitDone(tag, ensureTimeout).Do(ctx)
 			},

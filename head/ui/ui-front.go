@@ -84,7 +84,7 @@ func NewUIFront(ctx context.Context, menu Menu) *UIFront {
 		},
 	}
 	self.display = self.g.Hardware.HD44780.Display
-	self.resetTimeout = helpers.IntSecondDefault(self.g.Config().UI.Front.ResetTimeoutSec, 0)
+	self.resetTimeout = helpers.IntSecondDefault(self.g.Config.UI.Front.ResetTimeoutSec, 0)
 
 	return self
 }
@@ -106,11 +106,10 @@ func (self *UIFront) Run(ctx context.Context, alive *alive.Alive) {
 		self.g.Hardware.Input.Unsubscribe(inputTag)
 		self.Finish(ctx, &self.result)
 
-
 		alive.Done() // let caller UILoop observe me finished
 	}()
 
-	config := self.g.Config().UI.Front
+	config := self.g.Config.UI.Front
 	moneysys := money.GetGlobal(ctx)
 	timer := time.NewTicker(200 * time.Millisecond)
 	inputBuf := make([]byte, 0, 32)
@@ -265,7 +264,7 @@ init:
 func (self *UIFront) showError(inputch chan input.Event, text string) {
 	const timeout = 10 * time.Second
 
-	self.display.Message(self.g.Config().UI.Front.MsgError, text, func() {
+	self.display.Message(self.g.Config.UI.Front.MsgError, text, func() {
 		select {
 		case <-inputch:
 		case <-time.After(timeout):

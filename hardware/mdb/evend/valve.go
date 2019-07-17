@@ -48,8 +48,8 @@ type DeviceValve struct { //nolint:maligned
 
 func (self *DeviceValve) Init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
-	valveConfig := &g.Config().Hardware.Evend.Valve
 	self.cautionPartMl = uint16(valveConfig.CautionPartMl)
+	valveConfig := &g.Config.Hardware.Evend.Valve
 	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, time.Hour) // big default timeout is fine, depend on valve hardware
 	tempValid := helpers.IntMillisecondDefault(valveConfig.TemperatureValidMs, 30*time.Second)
 	self.tempHot.Init(tempValid)

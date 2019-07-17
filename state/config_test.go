@@ -25,14 +25,16 @@ func TestReadConfig(t *testing.T) {
 			// c := GetConfig(ctx)
 			// TODO check defaults
 		}, ""},
+
 		{"mdb",
 			`hardware { mdb { uart_device = "/dev/shmoo" } } money { scale = 1 }`,
 			func(t testing.TB, ctx context.Context) {
-				c := GetGlobal(ctx).Config()
-				assert.Equal(t, "/dev/shmoo", c.Hardware.Mdb.UartDevice)
+				g := GetGlobal(ctx)
+				assert.Equal(t, "/dev/shmoo", g.Config.Hardware.Mdb.UartDevice)
 			},
 			"",
 		},
+
 		{"alias", `
 engine {
 	alias "simple(?)" { scenario = "mock1 mock2(?)" }
@@ -65,8 +67,8 @@ engine { menu {
 } }
 money { scale = 10 }`,
 			func(t testing.TB, ctx context.Context) {
-				c := GetGlobal(ctx).Config()
-				items := c.Engine.Menu.Items
+				g := GetGlobal(ctx)
+				items := g.Config.Engine.Menu.Items
 				ok := len(items) == 2 &&
 					items[0].Name == "first" &&
 					items[0].Doer.String() == items[0].Name &&
@@ -84,23 +86,26 @@ money { scale = 10 }`,
 			},
 			"",
 		},
+
 		{"include-normalize", `
 money { scale = 1 }
 include "./empty" {}`,
 			nil, ""},
+
 		{"include-optional", `
 include "money-scale-7" {}
 include "non-exist" { optional = true }`,
 			func(t testing.TB, ctx context.Context) {
-				c := GetGlobal(ctx).Config()
-				assert.Equal(t, 7, c.Money.Scale)
+				g := GetGlobal(ctx)
+				assert.Equal(t, 7, g.Config.Money.Scale)
 			}, ""},
+
 		{"include-overwrites", `
 money { scale = 1 }
 include "money-scale-7" {}`,
 			func(t testing.TB, ctx context.Context) {
-				c := GetGlobal(ctx).Config()
-				assert.Equal(t, 7, c.Money.Scale)
+				g := GetGlobal(ctx)
+				assert.Equal(t, 7, g.Config.Money.Scale)
 			}, ""},
 	}
 	mkCheck := func(c Case) func(*testing.T) {

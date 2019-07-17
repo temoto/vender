@@ -25,7 +25,7 @@ func (self *DeviceMixer) Init(ctx context.Context) error {
 	self.currentPos = -1
 	self.shakeSpeed = DefaultShakeSpeed
 	g := state.GetGlobal(ctx)
-	config := &g.Config().Hardware.Evend.Mixer
+	config := &g.Config.Hardware.Evend.Mixer
 	self.moveTimeout = helpers.IntSecondDefault(config.MoveTimeoutSec, 10*time.Second)
 	self.shakeTimeout = helpers.IntMillisecondDefault(config.ShakeTimeoutMs, 300*time.Millisecond)
 	err := self.Generic.Init(ctx, 0xc8, "mixer", proto1)

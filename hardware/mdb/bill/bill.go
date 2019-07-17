@@ -74,7 +74,7 @@ func (self *BillValidator) Init(ctx context.Context) error {
 		return errors.Annotate(err, tag)
 	}
 	self.dev.Init(m.Tx, g.Log, 0x30, "bill", binary.BigEndian)
-	config := g.Config().Hardware.Mdb.Bill
+	config := g.Config.Hardware.Mdb.Bill
 	self.configScaling = 100
 	if config.ScalingFactor != 0 {
 		self.configScaling = config.ScalingFactor

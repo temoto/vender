@@ -1,6 +1,10 @@
 engine {
   // alias "cup_dispense" { scenario = "conveyor_move_cup cup_drop" }
 
+  inventory {
+    // stock "water" { rate = 0.649999805 } stock "cup" { rate = 1 }
+  }
+
   menu {
     item "1" {
       name     = "example"

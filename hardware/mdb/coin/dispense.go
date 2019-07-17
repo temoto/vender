@@ -69,7 +69,7 @@ func (self *CoinAcceptor) NewDispenseSmart(requestAmount currency.Amount, over b
 		successAmount = success.Total()
 		self.dev.Log.Errorf("%s dispensed=%s < requested=%s debt=%s",
 			tag, successAmount.FormatCtx(ctx), requestAmount.FormatCtx(ctx), leftAmount.FormatCtx(ctx))
-		config := state.GetGlobal(ctx).Config()
+		config := state.GetGlobal(ctx).Config
 		if leftAmount <= currency.Amount(config.Money.ChangeOverCompensate) {
 			return self.NewDispenseLeastOver(leftAmount, success).Do(ctx)
 		}
@@ -127,7 +127,7 @@ func (self *CoinAcceptor) dispenseSmartManual(ctx context.Context, amount curren
 		return nil // TODO more sensible error
 	}
 
-	config := state.GetGlobal(ctx).Config()
+	config := state.GetGlobal(ctx).Config
 	_ = config
 	// TODO read preferred strategy from config
 	strategy := currency.NewExpendLeastCount()

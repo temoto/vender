@@ -29,7 +29,7 @@ func TestAbort(t *testing.T) {
 	require.NoError(t, ms.Start(ctx))
 	mock.ExpectMap(nil)
 
-	ms.dirty += g.Config().ScaleU(11)
+	ms.dirty += g.Config.ScaleU(11)
 	go mock.Expect([]mdb.MockR{
 		{"0f020b", ""},
 		{"0f04", "00"},

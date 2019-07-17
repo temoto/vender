@@ -18,7 +18,7 @@ var Mod = subcmd.Mod{Name: "vmc", Main: Main}
 func Main(ctx context.Context, config *state.Config) error {
 	g := state.GetGlobal(ctx)
 	g.MustInit(ctx, config)
-	g.Log.Debugf("config=%+v", g.Config())
+	g.Log.Debugf("config=%+v", g.Config)
 
 	mdber, err := g.Mdber()
 	if err != nil {
@@ -31,7 +31,7 @@ func Main(ctx context.Context, config *state.Config) error {
 	}
 
 	display := g.Hardware.HD44780.Display
-	display.SetLines("boot", g.Config().UI.Front.MsgWait)
+	display.SetLines("boot", g.Config.UI.Front.MsgWait)
 
 	moneysys := new(money.MoneySystem)
 	if err = moneysys.Start(ctx); err != nil {
@@ -63,7 +63,7 @@ func Main(ctx context.Context, config *state.Config) error {
 	subcmd.SdNotify("executing on_start")
 	onStartSuccess := false
 	for i := 1; i <= 3; i++ {
-		err := g.Engine.ExecList(ctx, "on_start", g.Config().Engine.OnStart)
+		err := g.Engine.ExecList(ctx, "on_start", g.Config.Engine.OnStart)
 		if err == nil {
 			onStartSuccess = true
 			break

@@ -87,7 +87,7 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 		return errors.Annotate(err, tag)
 	}
 	self.dev.Init(m.Tx, g.Log, 0x08, "coin", binary.BigEndian)
-	config := g.Config().Hardware.Mdb.Coin
+	config := g.Config.Hardware.Mdb.Coin
 	self.dispenseSmart = config.DispenseSmart
 	self.dispenseTimeout = helpers.IntSecondDefault(config.DispenseTimeoutSec, defaultDispenseTimeout)
 	self.scalingFactor = 1

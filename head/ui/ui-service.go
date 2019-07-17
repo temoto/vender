@@ -62,8 +62,8 @@ func NewUIService(ctx context.Context) *UIService {
 		secretSalt: []byte{0}, // FIXME read from config
 		invList:    make([]*inventory.Stock, 0, 16),
 	}
-	config := self.g.Config()
 	self.display = self.g.Hardware.HD44780.Display
+	config := self.g.Config
 	self.resetTimeout = helpers.IntSecondDefault(config.UI.Service.ResetTimeoutSec, 3*time.Second)
 	self.g.Inventory.Iter(func(s *inventory.Stock) {
 		self.invList = append(self.invList, s)
@@ -83,7 +83,7 @@ func (self *UIService) Run(ctx context.Context, alive *alive.Alive) {
 
 	self.inputCh = self.g.Hardware.Input.SubscribeChan(inputTag, alive.StopChan())
 	timer := time.NewTicker(200 * time.Millisecond)
-	serviceConfig := &self.g.Config().UI.Service
+	serviceConfig := &self.g.Config.UI.Service
 
 	self.inputBuf = self.inputBuf[:0]
 	self.mode = serviceModeAuth
@@ -199,7 +199,7 @@ func (self *UIService) handleAuth(e input.Event) {
 
 		// FIXME fnv->secure hash for actual password comparison
 		inputHash := visualHash(self.inputBuf, self.secretSalt)
-		for i, p := range self.g.Config().UI.Service.Auth.Passwords {
+		for i, p := range self.g.Config.UI.Service.Auth.Passwords {
 			if inputHash == p {
 				self.g.Log.Infof("service auth ok i=%d hash=%s", i, inputHash)
 				self.mode = serviceModeMenu

@@ -20,7 +20,7 @@ type DeviceElevator struct {
 func (self *DeviceElevator) Init(ctx context.Context) error {
 	self.currentPos = -1
 	g := state.GetGlobal(ctx)
-	config := &g.Config().Hardware.Evend.Elevator
+	config := &g.Config.Hardware.Evend.Elevator
 	self.timeout = helpers.IntSecondDefault(config.TimeoutSec, 10*time.Second)
 	err := self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
