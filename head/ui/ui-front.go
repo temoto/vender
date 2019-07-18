@@ -245,6 +245,12 @@ init:
 					self.showError(inputCh, msgMenuInsufficientCredit)
 					break
 				}
+				self.g.Log.Debugf("mitem=%s validate", mitem.String())
+				if err := mitem.D.Validate(); err != nil {
+					self.g.Log.Errorf("ui-front selected=%s Validate err=%v", mitem.String(), err)
+					self.showError(inputCh, "сейчас недоступно")
+					return
+				}
 
 				self.result.Confirm = true
 				self.result.Item = mitem

@@ -2,7 +2,6 @@ package vmc_common
 
 import (
 	"context"
-	"log"
 
 	"github.com/temoto/alive"
 	"github.com/temoto/errors"
@@ -44,39 +43,40 @@ func uiFrontFinish(ctx context.Context, menuResult *ui.UIMenuResult) {
 		return
 	}
 
+	selected := &menuResult.Item
 	teletx := tele.Telemetry_Transaction{
-		Code:  int32(menuResult.Item.Code),
-		Price: uint32(menuResult.Item.Price),
+		Code:  int32(selected.Code),
+		Price: uint32(selected.Price),
 		// TODO options
 		// TODO payment method
 		// TODO bills, coins
 	}
-	g.Log.Debugf("menu item=%s begin", menuResult.Item.String())
-	if err := moneysys.WithdrawPrepare(ctx, menuResult.Item.Price); err != nil {
+	g.Log.Debugf("ui-front selected=%s begin", selected.String())
+	if err := moneysys.WithdrawPrepare(ctx, selected.Price); err != nil {
 		g.Log.Debugf("ui-front CRITICAL error while return change")
 	}
-	itemCtx := money.SetCurrentPrice(ctx, menuResult.Item.Price)
+	itemCtx := money.SetCurrentPrice(ctx, selected.Price)
 	display.SetLines("спасибо", "готовлю")
-	log.Printf("menuResult.Item: %#v", menuResult.Item)
-	log.Printf("menuResult.Item.D: %#v", menuResult.Item.D)
-	err := menuResult.Item.D.Do(itemCtx)
-	g.Log.Debugf("menu item=%s end", menuResult.Item.String())
+
+	err := selected.D.Do(itemCtx)
+	g.Log.Debugf("ui-front selected=%s end err=%v", selected.String(), err)
 	if err == nil {
 		g.Tele.Transaction(teletx)
+		return
+	}
+
+	err = errors.Annotatef(err, "execute %s", selected.String())
+	g.Log.Errorf(errors.ErrorStack(err))
+
+	g.Log.Errorf("tele.error")
+	g.Tele.Error(err)
+
+	display.SetLines(uiConfig.Front.MsgError, "не получилось")
+	g.Log.Errorf("on_menu_error")
+	if err := g.Engine.ExecList(ctx, "on_menu_error", g.Config.Engine.OnMenuError); err != nil {
+		g.Log.Errorf("on_menu_error err=%v", err)
 	} else {
-		err = errors.Annotatef(err, "execute %s", menuResult.Item.String())
-		g.Log.Errorf(errors.ErrorStack(err))
-
-		g.Log.Errorf("tele.error")
-		g.Tele.Error(err)
-
-		display.SetLines(uiConfig.Front.MsgError, "не получилось")
-		g.Log.Errorf("on_menu_error")
-		if err := g.Engine.ExecList(ctx, "on_menu_error", g.Config.Engine.OnMenuError); err != nil {
-			g.Log.Errorf("on_menu_error err=%v", err)
-		} else {
-			g.Log.Infof("on_menu_error success")
-		}
+		g.Log.Infof("on_menu_error success")
 	}
 }
 

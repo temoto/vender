@@ -11,7 +11,8 @@ var ErrArgNotApplied = errors.Errorf("Argument is not applied")
 var ErrArgOverwrite = errors.Errorf("Argument already applied")
 
 func ArgApply(d Doer, a Arg) Doer {
-	return ForceLazy(d).(ArgApplier).Apply(a)
+	f, _ := ForceLazy(d)
+	return f.(ArgApplier).Apply(a)
 }
 
 type Arg int32 // maybe interface{}
@@ -76,18 +77,19 @@ func (seq *Seq) Apply(arg Arg) Doer {
 	for i, child := range seq.items {
 		result.items[i] = child
 
-		forced := ForceLazy(child)
+		forced, _ := ForceLazy(child)
+		// log.Printf("seq.apply force child=%#v forced=%#v", child, forced)
 		if x, ok := forced.(ArgApplier); ok && !x.Applied() {
 			if found == -1 {
 				found = i
 				result.items[i] = x.Apply(arg)
 			} else {
-				panic(fmt.Sprintf("code error Seq.Apply: multiple arg placeholders in %s at %#v", seq.String(), forced))
+				return Fail{E: errors.Errorf("Seq.Apply: multiple arg placeholders in %s at %#v", seq.String(), forced)}
 			}
 		}
 	}
 	if found == -1 {
-		panic(fmt.Sprintf("code error Seq.Apply: no arg placeholders in %s", seq.String()))
+		return Fail{E: errors.Errorf("Seq.Apply: no arg placeholders in %s", seq.String())}
 	}
 
 	return result
@@ -103,7 +105,7 @@ func (seq *Seq) Applied( /*TODO arg name?*/ ) bool {
 }
 
 func (self *RestartError) Apply(a Arg) Doer {
-	d := ForceLazy(self.Doer)
+	d, _ := ForceLazy(self.Doer)
 	if x, ok := d.(ArgApplier); ok {
 		if !x.Applied() { // success path
 			return &RestartError{

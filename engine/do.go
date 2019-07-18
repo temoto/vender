@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/temoto/errors"
@@ -80,49 +79,6 @@ type Fail struct{ E error }
 func (self Fail) Validate() error              { return self.E }
 func (self Fail) Do(ctx context.Context) error { return self.E }
 func (self Fail) String() string               { return self.E.Error() }
-
-type Lazy struct {
-	Name  string
-	mu    sync.Mutex
-	r     func(string) Doer
-	cache Doer
-}
-
-const errLazyNotResolved = "lazy action=%s not resolved"
-
-func (self *Lazy) Resolve() Doer {
-	self.mu.Lock()
-	d := self.cache
-	if d == nil {
-		d = self.r(self.Name)
-		if d != nil {
-			self.cache = d
-		}
-	}
-	self.mu.Unlock()
-	return d
-}
-
-func (self *Lazy) Validate() error {
-	if d := self.Resolve(); d != nil {
-		return d.Validate()
-	}
-	return errors.Errorf(errLazyNotResolved, self.Name)
-}
-func (self *Lazy) Do(ctx context.Context) error {
-	if d := self.Resolve(); d != nil {
-		return d.Do(ctx)
-	}
-	return errors.Errorf(errLazyNotResolved, self.Name)
-}
-func (self *Lazy) String() string { return self.Name }
-
-func ForceLazy(d Doer) Doer {
-	if lazy, ok := d.(*Lazy); ok {
-		return lazy.Resolve()
-	}
-	return d
-}
 
 type RestartError struct {
 	Doer
