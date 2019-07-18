@@ -198,6 +198,9 @@ type Source struct {
 func (self *Source) Value() int32     { return atomic.LoadInt32(&self.value) }
 func (self *Source) Set(v int32)      { atomic.StoreInt32(&self.value, v) }
 func (self *Source) Has(v int32) bool { return self.Value()-v >= self.Min }
+func (self *Source) String() string {
+	return fmt.Sprintf("source(name=%s spender_set=%t value=%d)", self.Name, self.do != nil, self.Value())
+}
 
 // Stock.Doer with applied Arg
 type do struct {

@@ -60,17 +60,10 @@ func NewUIService(ctx context.Context) *UIService {
 		g:          state.GetGlobal(ctx),
 		inputBuf:   make([]byte, 0, 32),
 		secretSalt: []byte{0}, // FIXME read from config
-		invList:    make([]*inventory.Source, 0, 16),
 	}
 	config := self.g.Config
 	self.display = self.g.MustDisplay()
 	self.resetTimeout = helpers.IntSecondDefault(config.UI.Service.ResetTimeoutSec, 3*time.Second)
-	self.g.Inventory.IterSource(func(s *inventory.Source) {
-		self.invList = append(self.invList, s)
-	})
-	sort.Slice(self.invList, func(a, b int) bool {
-		return self.invList[a].Name < self.invList[b].Name
-	})
 	return self
 }
 
@@ -92,10 +85,20 @@ func (self *UIService) Run(ctx context.Context, alive *alive.Alive) {
 	self.lastActivity = time.Now()
 	self.g.Tele.Service("mode=" + self.mode)
 
+	self.invList = make([]*inventory.Source, 0, 16)
+	self.g.Inventory.IterSource(func(s *inventory.Source) {
+		self.g.Log.Debugf("UIService inventory: - %s", s.String())
+		self.invList = append(self.invList, s)
+	})
+	sort.Slice(self.invList, func(a, b int) bool {
+		return self.invList[a].Name < self.invList[b].Name
+	})
+
 	self.g.Log.Debugf("UIService begin")
 
 loop:
 	for alive.IsRunning() {
+		// self.g.Log.Debugf("invlist=%v, invidx=%d", self.invList, self.invIdx)
 		// step 1: refresh display
 		switch self.mode {
 		case serviceModeAuth:
@@ -126,7 +129,7 @@ loop:
 
 			invCurrent := self.invList[self.invIdx]
 			self.display.SetLinesBytes(
-				self.display.Translate(fmt.Sprintf("I%d %s", self.menuIdx+1, invCurrent.Name)),
+				self.display.Translate(fmt.Sprintf("I%d %s", self.invIdx+1, invCurrent.Name)),
 				self.display.Translate(fmt.Sprintf("%d %s\x00", invCurrent.Value(), string(self.inputBuf))),
 			)
 
@@ -237,7 +240,7 @@ func (self *UIService) handleMenu(e input.Event) {
 }
 
 func (self *UIService) handleInventory(e input.Event) {
-	invIdxMax := uint8(len(self.invList) - 1)
+	invIdxMax := uint8(len(self.invList))
 	switch {
 	case e.Key == input.EvendKeyCreamLess:
 		self.invIdx = (self.invIdx + invIdxMax - 1) % invIdxMax
@@ -251,6 +254,7 @@ func (self *UIService) handleInventory(e input.Event) {
 
 	case input.IsAccept(&e):
 		if len(self.inputBuf) == 0 {
+			self.g.Log.Errorf("ui-service handleInventory input=accept inputBuf=empty")
 			self.ConveyText(msgError, "empty") // FIXME extract message string
 			return
 		}
@@ -258,6 +262,7 @@ func (self *UIService) handleInventory(e input.Event) {
 		x, err := strconv.ParseUint(string(self.inputBuf), 10, 16)
 		self.inputBuf = self.inputBuf[:0]
 		if err != nil {
+			self.g.Log.Errorf("ui-service handleInventory input=accept inputBuf='%s'", string(self.inputBuf))
 			self.ConveyText(msgError, "int-invalid")
 			return
 		}

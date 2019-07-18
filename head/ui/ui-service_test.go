@@ -20,6 +20,7 @@ func TestServiceInventory(t *testing.T) {
 	ctx, g := state.NewTestContext(t, `
 engine { inventory {
 	stock "cup" { rate=1 }
+	stock "water" { rate=1 }
 }}`)
 	g.Config.UI.Service.Auth.Enable = false
 	display, displayMock := lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: width})
@@ -41,8 +42,15 @@ engine { inventory {
 	steps := []Step{
 		{expect: _T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
 		{expect: _T("I1 cup", "0 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '3'}},
-		{expect: _T("I1 cup", "0 3\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
-		{expect: _T("I1 cup", "3 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
+		{expect: _T("I1 cup", "0 3\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '2'}},
+		{expect: _T("I1 cup", "0 32\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
+		{expect: _T("I1 cup", "32 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}},
+		{expect: _T("I2 water", "0 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '7'}},
+		{expect: _T("I2 water", "0 7\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '5'}},
+		{expect: _T("I2 water", "0 75\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '0'}},
+		{expect: _T("I2 water", "0 750\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
+		{expect: _T("I2 water", "750 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}},
+		{expect: _T("I1 cup", "32 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
 		{expect: _T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
 		{expect: "", inev: input.Event{}},
 	}
