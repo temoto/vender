@@ -12,13 +12,8 @@ type Stat struct { //nolint:maligned
 	Telemetry_Stat
 }
 
-// func (self *Stat) Flush() ([]byte, error) {
-// 	self.Lock()
-// 	defer self.Unlock()
-//
-// 	self.Reset()
-// 	self.BillReject
-// 	b, err := proto.Marshal(&self)
-//
-// 	return b, err
-// }
+func (self *Stat) reset() {
+	self.Telemetry_Stat.Reset()
+	self.BillRejected = make(map[uint32]uint32, 16)
+	self.CoinRejected = make(map[uint32]uint32, 16)
+}

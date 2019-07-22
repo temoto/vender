@@ -54,6 +54,7 @@ func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	self.cmdCh = make(chan Command, 2)
 	self.vmId = int32(teleConfig.VmId)
 	self.stateInterval = helpers.IntSecondDefault(teleConfig.StateIntervalSec, defaultStateInterval)
+	self.stat.reset()
 
 	if teleConfig.PersistPath == "" {
 		panic("code error must set teleConfig.PersistPath")
@@ -225,7 +226,7 @@ func (self *Tele) qpushTelemetry(tm *Telemetry) error {
 	self.stat.Lock()
 	tm.Stat = &self.stat.Telemetry_Stat
 	err := self.qpushTagProto(qTelemetry, tm)
-	self.stat.Telemetry_Stat.Reset()
+	self.stat.reset()
 	self.stat.Unlock()
 	return err
 }
