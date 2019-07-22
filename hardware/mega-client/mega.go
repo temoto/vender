@@ -265,7 +265,7 @@ func (self *Client) ioTx(tx *tx) error {
 	}
 
 	var err error
-	for try := 1; try <= 3; try++ {
+	for try := 1; try <= 13; try++ {
 		notified := self.ioWait(tx.wait)
 		err = self.ioReadParse(tx.response)
 		// self.Log.Debugf("iotx try=%d parsed wait=%t notified=%t err=%v recv=%s", try, tx.wait != 0, notified, err, tx.response.ResponseString())
@@ -302,7 +302,7 @@ func (self *Client) ioTx(tx *tx) error {
 		default: // other errors
 			return errors.Wrap(err, ErrCriticalProtocol)
 		}
-		time.Sleep(busyDelay)
+		time.Sleep(time.Duration(try) * busyDelay)
 	}
 	return errors.Wrapf(err, ErrCriticalProtocol, "iotx too many tries")
 }
