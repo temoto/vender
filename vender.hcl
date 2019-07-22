@@ -2,7 +2,9 @@ engine {
   // alias "cup_dispense" { scenario = "conveyor_move_cup cup_drop" }
 
   inventory {
-    // stock "water" { rate = 0.649999805 } stock "cup" { rate = 1 }
+    persist = true
+
+    // stock "water" { hw_rate = 0.649999805 } stock "cup" { }
   }
 
   menu {
@@ -90,15 +92,18 @@ money {
   change_over_compensate = 10
 }
 
+persist {
+  root = "./"
+}
+
 tele {
-  enable          = false
-  vm_id           = -1
-  log_debug       = true
-  mqtt_log_debug  = false
-  mqtt_broker     = "tls://TODO_EDIT:8884"
-  mqtt_password   = "TODO_EDIT"
-  mqtt_store_path = ""
-  tls_ca_file     = "TODO_EDIT"
+  enable         = false
+  vm_id          = -1
+  log_debug      = true
+  mqtt_log_debug = false
+  mqtt_broker    = "tls://TODO_EDIT:8884"
+  mqtt_password  = "TODO_EDIT"
+  tls_ca_file    = "TODO_EDIT"
 }
 
 ui {

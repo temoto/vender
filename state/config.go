@@ -61,6 +61,9 @@ type Config struct {
 		CreditMax            int `hcl:"credit_max"`
 		ChangeOverCompensate int `hcl:"change_over_compensate"`
 	}
+	Persist struct {
+		Root string `hcl:"root"`
+	}
 	Tele tele_config.Config
 
 	UI struct {

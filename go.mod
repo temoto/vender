@@ -18,6 +18,7 @@ require (
 	github.com/stretchr/testify v1.3.0
 	github.com/temoto/alive v1.0.2
 	github.com/temoto/errors v0.0.0-20190624114038-cc113d523821
+	github.com/temoto/extremofile v0.5.0
 	github.com/temoto/gpio-cdev-go v0.12.0
 	github.com/temoto/inputevent-go v1.0.0
 	github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
-	"testing"
 
 	"github.com/temoto/alive"
 	"github.com/temoto/errors"
@@ -86,9 +86,23 @@ func GetGlobal(ctx context.Context) *Global {
 func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	g.Config = cfg
 
+	if g.Config.Persist.Root == "" {
+		g.Config.Persist.Root = "./tmp-vender-db"
+		g.Log.Errorf("config: persist.root=empty changed=%s", g.Config.Persist.Root)
+		// return errors.Errorf("config: persist.root=empty")
+	}
+	g.Log.Debugf("config: persist.root=%s", g.Config.Persist.Root)
+
+	// Since tele is remote error reporting mechanism, it must be inited before anything else
+	if g.Config.Tele.PersistPath == "" {
+		g.Config.Tele.PersistPath = filepath.Join(g.Config.Persist.Root, "tele")
+	}
+	if err := g.Tele.Init(ctx, g.Log, g.Config.Tele); err != nil {
+		return errors.Annotate(err, "tele init")
+	}
+
 	errs := make([]error, 0)
 	g.Inventory.Init()
-	g.Tele.Init(ctx, g.Log, g.Config.Tele)
 	g.initInput()
 
 	if g.Config.Money.Scale == 0 {
@@ -105,6 +119,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 
 	return helpers.FoldErrors(errs)
 }
+
 func (g *Global) MustInit(ctx context.Context, cfg *Config) {
 	err := g.Init(ctx, cfg)
 	if err != nil {
@@ -178,26 +193,6 @@ func (g *Global) initEngine() []error {
 	}
 
 	return errs
-}
-
-func NewTestContext(t testing.TB, confString string /* logLevel log2.Level*/) (context.Context, *Global) {
-	fs := NewMockFullReader(map[string]string{
-		"test-inline": confString,
-	})
-
-	log := log2.NewTest(t, log2.LDebug)
-	log.SetFlags(log2.LTestFlags)
-	ctx, g := NewContext(log)
-	g.MustInit(ctx, MustReadConfig(log, fs, "test-inline"))
-
-	mdber, mdbMock := mdb.NewTestMdber(t)
-	g.Hardware.Mdb.Mdber = mdber
-	if _, err := g.Mdber(); err != nil {
-		t.Fatal(errors.Trace(err))
-	}
-	ctx = context.WithValue(ctx, mdb.MockContextKey, mdbMock)
-
-	return ctx, g
 }
 
 func recoverFatal(f helpers.Fataler) {

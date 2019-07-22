@@ -28,4 +28,5 @@ cover.out
 coverage*.info
 coverage*.txt
 local.hcl
+tmp-vender-db/
 vender.sublime-*
