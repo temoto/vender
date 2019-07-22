@@ -49,8 +49,8 @@ func TestConveyor(t *testing.T) {
 	d.dev.DelayReset = 1
 	require.Nil(t, d.Init(ctx))
 
-	assert.NoError(t, g.Engine.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))
-	assert.NoError(t, g.Engine.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))
-	g.Engine.TestDo(t, ctx, "@conveyor_move_cup")
-	g.Engine.TestDo(t, ctx, "@conveyor_move_elevator")
+	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))
+	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))
+	g.Engine.TestDo(t, ctx, "conveyor_move_cup")
+	g.Engine.TestDo(t, ctx, "conveyor_move_elevator")
 }

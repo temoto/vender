@@ -58,7 +58,7 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	self.cautionPartUnit = uint8(waterStock.Translate(engine.Arg(valveConfig.CautionPartMl)))
+	self.cautionPartUnit = uint8(waterStock.TranslateHw(engine.Arg(valveConfig.CautionPartMl)))
 
 	self.doGetTempHot = self.newGetTempHot()
 	doCheckTempHot := engine.Func0{F: func() error { return nil }, V: self.newCheckTempHotValidate(ctx)}
@@ -66,9 +66,9 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	doPourCold := self.NewPourCold()
 	doPourHot := self.NewPourHot()
 	doPourEspresso := self.NewPourEspresso()
-	g.Engine.Register("@add.water_hot(?)", waterStock.WithSpender(doPourHot))
-	g.Engine.Register("@add.water_cold(?)", waterStock.WithSpender(doPourCold))
-	g.Engine.Register("@add.water_espresso(?)", waterStock.WithSpender(doPourEspresso))
+	g.Engine.Register("add.water_hot(?)", waterStock.Wrap(doPourHot.(engine.ArgApplier)))
+	g.Engine.Register("add.water_cold(?)", waterStock.Wrap(doPourCold.(engine.ArgApplier)))
+	g.Engine.Register("add.water_espresso(?)", waterStock.Wrap(doPourEspresso.(engine.ArgApplier)))
 
 	g.Engine.Register("mdb.evend.valve_check_temp_hot", doCheckTempHot)
 	g.Engine.Register("mdb.evend.valve_get_temp_hot", self.doGetTempHot)

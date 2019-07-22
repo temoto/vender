@@ -29,11 +29,6 @@ func (self *DeviceHopper) Init(ctx context.Context, addr uint8, nameSuffix strin
 	do := self.NewRun()
 	g.Engine.Register(fmt.Sprintf("mdb.evend.%s_run(?)", name), do)
 
-	err = g.Inventory.RegisterSource(name, do)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
 	return nil
 }
 

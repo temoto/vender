@@ -22,8 +22,11 @@ type Engine struct {
 func NewEngine(log *log2.Log) *Engine {
 	self := &Engine{
 		Log:     log,
-		actions: make(map[string]Doer, 64),
+		actions: make(map[string]Doer, 128),
 	}
+	self.actions["ignore(?)"] = FuncArg{
+		Name: "ignore(?)",
+		F:    func(context.Context, Arg) error { return nil }}
 	return self
 }
 

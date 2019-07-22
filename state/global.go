@@ -3,7 +3,6 @@ package state
 import (
 	"context"
 	"fmt"
-	"strings"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -102,7 +101,23 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	}
 
 	errs := make([]error, 0)
-	g.Inventory.Init()
+
+	// TODO ctx should be enough
+	if err := g.Inventory.Init(ctx, &g.Config.Engine.Inventory, g.Engine); err != nil {
+		errs = append(errs, err)
+	}
+	{
+		err := g.Inventory.Persist.Init("inventory", g.Inventory, g.Config.Persist.Root, g.Config.Engine.Inventory.Persist, g.Log)
+		if err == nil {
+			err = g.Inventory.Persist.Load()
+		}
+		if err != nil {
+			g.Error(err)
+			g.Tele.Broken(true)
+			errs = append(errs, err)
+		}
+	}
+
 	g.initInput()
 
 	if g.Config.Money.Scale == 0 {
@@ -116,6 +131,8 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	g.Config.Money.ChangeOverCompensate *= g.Config.Money.Scale
 
 	errs = append(errs, g.initEngine()...)
+
+	// TODO engine.try-resolve-all-lazy
 
 	return helpers.FoldErrors(errs)
 }
@@ -163,33 +180,6 @@ func (g *Global) initEngine() []error {
 		}
 		// g.Log.Debugf("config.engine.menu %s pxxx=%d ps=%d", x.String(), x.XXX_Price, x.Price)
 		g.Engine.Register("menu."+x.Code, x.Doer)
-	}
-
-	for _, x := range g.Config.Engine.Inventory.Stocks {
-		stock, err := g.Inventory.RegisterStock(x)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		switch x.Register {
-		case "-": // skip
-
-		case "": // default
-			x.Register = "@add.%[1]s(?)"
-			fallthrough
-
-		default:
-			name := x.Register
-			if strings.Contains(name, "%[") {
-				name = fmt.Sprintf(x.Register, x.Name)
-				if strings.Contains(name, "(MISSING)") || strings.Contains(name, "(EXTRA") {
-					errs = append(errs, errors.Errorf("invalid stock register='%s'", x.Register))
-					continue
-				}
-			}
-			g.Log.Debugf("reg=%s s=%v", name, stock)
-			g.Engine.Register(name, stock)
-		}
 	}
 
 	return errs

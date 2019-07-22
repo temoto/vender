@@ -11,10 +11,8 @@ type Config struct {
 	Aliases     []Alias  `hcl:"alias"`
 	OnStart     []string `hcl:"on_start"`
 	OnMenuError []string `hcl:"on_menu_error"`
-	Inventory   struct {
-		Stocks []StockItem `hcl:"stock"`
-	}
-	Menu struct {
+	Inventory   Inventory
+	Menu        struct {
 		Items []*MenuItem `hcl:"item"`
 	}
 }
@@ -38,16 +36,21 @@ type MenuItem struct {
 
 func (self *MenuItem) String() string { return fmt.Sprintf("menu.%s %s", self.Code, self.Name) }
 
-type StockItem struct { //nolint:maligned
-	Name     string   `hcl:"name,key"`
-	Disabled bool     `hcl:"disable"`
-	Min      int32    `hcl:"min"`
-	Rate     float32  `hcl:"rate"`
-	Sources  []string `hcl:"sources"`
-	Strategy string   `hcl:"strategy"` // even|order
-	Register string   `hcl:"register"`
+type Inventory struct {
+	Persist bool    `hcl:"persist"`
+	Stocks  []Stock `hcl:"stock"`
 }
 
-func (self *StockItem) String() string {
-	return fmt.Sprintf("inventory.%s enabled=%t rate=%f min=%d", self.Name, !self.Disabled, self.Rate, self.Min)
+type Stock struct { //nolint:maligned
+	Name        string  `hcl:"name,key"`
+	Check       bool    `hcl:"check"`
+	Min         int32   `hcl:"min"`
+	HwRate      float32 `hcl:"hw_rate"`
+	SpendRate   float32 `hcl:"spend_rate"`
+	RegisterAdd string  `hcl:"register_add"`
+}
+
+func (self *Stock) String() string {
+	return fmt.Sprintf("inventory.%s check=%t hw_rate=%f spend_rate=%f min=%d",
+		self.Name, self.Check, self.HwRate, self.SpendRate, self.Min)
 }

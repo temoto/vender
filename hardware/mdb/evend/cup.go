@@ -27,13 +27,7 @@ func (self *DeviceCup) Init(ctx context.Context) error {
 	}
 
 	doDispense := self.Generic.WithRestart(self.NewDispenseProper())
-	// IgnoreArg to consume arg forced by stock logic
-	err = g.Inventory.RegisterSource("cup", engine.IgnoreArg{doDispense})
-	if err != nil {
-		return err
-	}
-
-	g.Engine.Register("mdb.evend.cup_dispense_proper", doDispense)
+	g.Engine.Register("mdb.evend.cup_dispense", doDispense)
 	g.Engine.Register("mdb.evend.cup_light_on", self.NewLight(true))
 	g.Engine.Register("mdb.evend.cup_light_off", self.NewLight(false))
 	g.Engine.Register("mdb.evend.cup_ensure", self.NewEnsure())

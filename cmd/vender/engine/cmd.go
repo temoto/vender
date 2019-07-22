@@ -42,24 +42,21 @@ func Main(ctx context.Context, config *state.Config) error {
 	}
 
 	g.Engine.Register("mdb.bus_reset", doMdbBusReset)
-	g.Engine.Register("@money.commit", engine.Func0{Name: "@money.commit", F: func() error {
+	g.Engine.Register("money.commit", engine.Func0{Name: "money.commit", F: func() error {
 		g.Log.Debugf("- money commit")
 		return nil
 	}})
-	g.Engine.Register("@stock.all.add(?)", engine.FuncArg{F: func(ctx context.Context, arg engine.Arg) error {
-		g.Inventory.IterSource(func(src *inventory.Source) {
-			current := src.Value()
-			g.Log.Debugf("- source=%s value=%d", src.Name, current)
-			src.Set(current + int32(arg))
+	g.Engine.Register("stock.all.add(?)", engine.FuncArg{F: func(ctx context.Context, arg engine.Arg) error {
+		g.Inventory.Iter(func(stock *inventory.Stock) {
+			current := stock.Value()
+			g.Log.Debugf("- source=%s value=%d", stock.Name, current)
+			stock.Set(current + int32(arg))
 		})
 		return nil
 	}})
-	g.Engine.Register("@stock.dump", engine.Func0{F: func() error {
-		g.Inventory.IterStock(func(stock *inventory.Stock) {
+	g.Engine.Register("stock.dump", engine.Func0{F: func() error {
+		g.Inventory.Iter(func(stock *inventory.Stock) {
 			g.Log.Debugf("- stock %#v", stock)
-		})
-		g.Inventory.IterSource(func(src *inventory.Source) {
-			g.Log.Debugf("- source %#v", src)
 		})
 		return nil
 	}})

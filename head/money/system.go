@@ -56,7 +56,7 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	self.coinCredit.SetValid(self.coin.SupportedNominals())
 
 	doCommit := engine.Func{
-		Name: "@money.commit",
+		Name: "money.commit",
 		F: func(ctx context.Context) error {
 			curPrice := GetCurrentPrice(ctx)
 			err := self.WithdrawCommit(ctx, curPrice)
@@ -65,12 +65,12 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	}
 	g.Engine.Register(doCommit.String(), doCommit)
 	doAbort := engine.Func{
-		Name: "@money.abort",
+		Name: "money.abort",
 		F:    self.Abort,
 	}
 	g.Engine.Register(doAbort.String(), doAbort)
 	doAccept := engine.FuncArg{
-		Name: "@money.accept(?)",
+		Name: "money.accept(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
 			self.AcceptCredit(ctx, g.Config.ScaleU(uint32(arg)), nil, nil)
 			return nil
@@ -79,7 +79,7 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	g.Engine.Register(doAccept.Name, doAccept)
 
 	doDispense := engine.FuncArg{
-		Name: "@money.dispense(?)",
+		Name: "money.dispense(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
 			dispensed := currency.NominalGroup{}
 			err := self.coin.NewDispenseSmart(g.Config.ScaleU(uint32(arg)), false, &dispensed).Do(ctx)

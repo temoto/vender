@@ -28,13 +28,7 @@ func (self *DeviceEspresso) Init(ctx context.Context) error {
 		return errors.Annotate(err, "evend.espresso.Init")
 	}
 
-	doGrind := self.NewGrind()
-	err = g.Inventory.RegisterSource("espresso", engine.IgnoreArg{doGrind})
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	g.Engine.Register("mdb.evend.espresso_grind", doGrind)
+	g.Engine.Register("mdb.evend.espresso_grind", self.NewGrind())
 	g.Engine.Register("mdb.evend.espresso_press", self.NewPress())
 	g.Engine.Register("mdb.evend.espresso_dispose", self.Generic.WithRestart(self.NewRelease()))
 	g.Engine.Register("mdb.evend.espresso_heat_on", self.NewHeat(true))
@@ -48,6 +42,7 @@ func (self *DeviceEspresso) NewGrind() engine.Doer {
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
+		// TODO expect delay like in cup dispense, ignore immediate error, retry
 		Append(self.NewWaitDone(tag, self.timeout))
 }
 

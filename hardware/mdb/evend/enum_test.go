@@ -31,9 +31,9 @@ func TestRegister(t *testing.T) {
 		{"43", ""}, {"420a", ""}, {"43", ""}, // hopper run
 	})
 
-	assert.NoError(t, g.Engine.RegisterParse("@hopper1(?)", "mdb.evend.conveyor_move(250) mdb.evend.hopper1_run(?)"))
-	assert.NoError(t, g.Engine.RegisterParse("@conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))
-	assert.NoError(t, g.Engine.RegisterParse("@conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))
+	assert.NoError(t, g.Engine.RegisterParse("hopper1(?)", "mdb.evend.conveyor_move(250) mdb.evend.hopper1_run(?)"))
+	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))
+	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))
 
-	g.Engine.TestDo(t, ctx, "@hopper1(10)")
+	g.Engine.TestDo(t, ctx, "hopper1(10)")
 }

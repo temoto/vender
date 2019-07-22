@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/errors"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
 
@@ -110,74 +111,39 @@ include "money-scale-7" {}`,
 				assert.Equal(t, 7, g.Config.Money.Scale)
 			}, ""},
 
-		{"inventory-single-source", `
+		{"inventory-simple", `
 engine { inventory {
-	stock "hopper1" { rate=1 }
+	stock "espresso" { spend_rate=9 }
 }}`,
 			func(t testing.TB, ctx context.Context) {
 				g := GetGlobal(ctx)
-				stock, err := g.Inventory.Get("hopper1")
-				stock.Default().Set(3)
-				require.NoError(t, err)
-				called := 0
-				err = g.Inventory.RegisterSource("hopper1", engine.FuncArg{
-					F: func(ctx context.Context, arg engine.Arg) error {
-						called += int(arg)
-						return nil
-					}})
-				d := g.Engine.Resolve("@add.hopper1(3)")
-				require.NotNil(t, d)
-				assert.NoError(t, d.Do(ctx))
-				assert.Equal(t, 3, called)
-			}, ""},
-
-		{"inventory-multi-source", `
-engine { inventory {
-	stock "tea" { rate=2 min=1 sources=["hopper1", "hopper2"] }
-}}`,
-			func(t testing.TB, ctx context.Context) {
-				g := GetGlobal(ctx)
-				_, err := g.Inventory.Get("tea")
-				require.NoError(t, err)
-
-				src1, err := g.Inventory.GetSource("hopper1")
-				require.NoError(t, err)
-				src1.Set(4)
-				src2, err := g.Inventory.GetSource("hopper2")
-				require.NoError(t, err)
-				src2.Set(77)
-
-				hwunits := 0
-				spend := engine.FuncArg{
-					F: func(ctx context.Context, arg engine.Arg) error {
-						hwunits += int(arg)
-						return nil
-					}}
-				err = g.Inventory.RegisterSource("hopper1", spend)
+				stock, err := g.Inventory.Get("espresso")
 				assert.NoError(t, err)
-				err = g.Inventory.RegisterSource("hopper2", spend)
-				assert.NoError(t, err)
-				d := g.Engine.Resolve("@add.tea(4)")
-				require.NotNil(t, d)
-				assert.NoError(t, d.Do(ctx))
-				assert.Equal(t, 4*2, hwunits)
-				assert.Equal(t, int32(4), src1.Value())
-				assert.Equal(t, int32(77-4), src2.Value())
+				initial := helpers.RandUnix().Int31()
+				stock.Set(initial)
+				g.Engine.TestDo(t, ctx, "stock.espresso.spend1")
+				g.Engine.TestDo(t, ctx, "stock.espresso.spend(3)")
+				assert.Equal(t, int32(initial-4*9), stock.Value())
 			}, ""},
 
 		{"inventory-register", `
 engine { inventory {
-	stock "espresso" { rate=1 register="@espresso.grind(?)" }
+	stock "tea" { check=true hw_rate=0.5 register_add="tea.drop(?)" spend_rate=3 }
 }}`,
 			func(t testing.TB, ctx context.Context) {
 				g := GetGlobal(ctx)
-				_, err := g.Inventory.Get("espresso")
-				assert.NoError(t, err)
-				d := g.Engine.Resolve("@add.espresso(1)")
-				if !assert.Nil(t, d) {
-					t.Logf("not-nil Doer.Validate=%v", d.Validate())
-				}
-				assert.NotNil(t, g.Engine.Resolve("@espresso.grind(1)"))
+				stock, err := g.Inventory.Get("tea")
+				stock.Set(13)
+				require.NoError(t, err)
+				hwarg := int32(0)
+				g.Engine.Register("tea.drop(?)", engine.FuncArg{
+					F: func(ctx context.Context, arg engine.Arg) error {
+						hwarg = int32(arg)
+						return nil
+					}})
+				g.Engine.TestDo(t, ctx, "add.tea(4)")
+				assert.Equal(t, int32(2), hwarg)
+				assert.Equal(t, int32(13-4*3), stock.Value())
 			}, ""},
 
 		{"error-syntax", `hello`, nil, "key 'hello' expected start of object"},

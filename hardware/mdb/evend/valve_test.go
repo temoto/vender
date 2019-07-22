@@ -15,7 +15,7 @@ func TestValve(t *testing.T) {
 
 	ctx, g := state.NewTestContext(t, `
 engine { inventory {
-	stock "water" { rate = 0.5 }
+	stock "water" { check=false hw_rate = 0.6 min = 500 }
 }}`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
@@ -29,7 +29,7 @@ engine { inventory {
 		{"c3", "44"},
 		{"c3", "04"},
 		{"c3", ""},
-		{"c2012d", ""},
+		{"c20136", ""},
 		{"c3", "10"},
 		{"c3", ""},
 	})
@@ -48,11 +48,11 @@ engine { inventory {
 
 	g.Engine.TestDo(t, ctx, "mdb.evend.valve_set_temp_hot(73)")
 
-	waterSource, err := g.Inventory.GetSource("water")
+	water, err := g.Inventory.Get("water")
 	require.NoError(t, err)
-	water := waterSource.Min + rand.Int31() + 90
-	t.Logf("water before=%d", water)
-	waterSource.Set(water)
-	g.Engine.TestDo(t, ctx, "@add.water_hot(90)")
-	assert.Equal(t, water-90, waterSource.Value())
+	initial := rand.Int31() - 10000 // check=false may go negative, not error
+	t.Logf("water before=%d", initial)
+	water.Set(initial)
+	g.Engine.TestDo(t, ctx, "add.water_hot(90)")
+	assert.Equal(t, initial-90, water.Value())
 }

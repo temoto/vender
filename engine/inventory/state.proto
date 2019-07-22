@@ -1,0 +1,12 @@
+syntax = "proto3";
+package inventory;
+
+message State {
+  repeated Stock stocks = 1;
+
+  message Stock {
+    string name = 1;
+    bool enabled = 2;
+    int32 value = 3;
+  }
+}

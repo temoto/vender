@@ -3,6 +3,7 @@ package evend
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/state"
@@ -12,9 +13,10 @@ func TestCup(t *testing.T) {
 	t.Parallel()
 
 	ctx, g := state.NewTestContext(t, `
-engine { inventory {
-	stock "cup" { rate = 1 }
-}}`)
+engine {
+inventory { stock "cup" { } }
+alias "add.cup" { scenario = "mdb.evend.cup_dispense stock.cup.spend1" }
+}`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{
@@ -38,8 +40,9 @@ engine { inventory {
 		t.Fatalf("Init err=%v", err)
 	}
 
-	source, err := g.Inventory.GetSource("cup")
+	stock, err := g.Inventory.Get("cup")
 	require.NoError(t, err)
-	source.Set(7)
-	g.Engine.TestDo(t, ctx, "@add.cup(1)")
+	stock.Set(7)
+	g.Engine.TestDo(t, ctx, "add.cup")
+	assert.Equal(t, int32(6), stock.Value())
 }

@@ -13,7 +13,7 @@ func TestEspresso(t *testing.T) {
 
 	ctx, g := state.NewTestContext(t, `
 engine { inventory {
-	stock "espresso" { rate = 1 }
+	stock "espresso" { register_add="ignore(?) mdb.evend.espresso_grind" spend_rate=7 }
 }}`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
@@ -34,8 +34,8 @@ engine { inventory {
 		t.Fatalf("Init err=%v", err)
 	}
 
-	source, err := g.Inventory.GetSource("espresso")
+	stock, err := g.Inventory.Get("espresso")
 	require.NoError(t, err)
-	source.Set(7)
-	g.Engine.TestDo(t, ctx, "@add.espresso(1)")
+	stock.Set(7)
+	g.Engine.TestDo(t, ctx, "add.espresso(1)")
 }

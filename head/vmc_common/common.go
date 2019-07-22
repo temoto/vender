@@ -59,6 +59,7 @@ func uiFrontFinish(ctx context.Context, menuResult *ui.UIMenuResult) {
 	display.SetLines("спасибо", "готовлю")
 
 	err := selected.D.Do(itemCtx)
+	_ = g.Inventory.Persist.Store()
 	g.Log.Debugf("ui-front selected=%s end err=%v", selected.String(), err)
 	if err == nil {
 		g.Tele.Transaction(teletx)
@@ -97,9 +98,11 @@ func UILoop(ctx context.Context, uiFront *ui.UIFront) {
 				uiFront.SwitchService = false
 				na = alive.NewAlive()
 				uiService.Run(ctx, na)
+				_ = g.Inventory.Persist.Store()
 			}
 		case <-gstopch:
 			na.Stop()
+			na.Wait()
 			return
 		}
 	}

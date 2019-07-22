@@ -52,7 +52,7 @@ type UIService struct {
 
 	// mode=inventory
 	invIdx  uint8
-	invList []*inventory.Source
+	invList []*inventory.Stock
 }
 
 func NewUIService(ctx context.Context) *UIService {
@@ -85,8 +85,8 @@ func (self *UIService) Run(ctx context.Context, alive *alive.Alive) {
 	self.lastActivity = time.Now()
 	self.g.Tele.Service("mode=" + self.mode)
 
-	self.invList = make([]*inventory.Source, 0, 16)
-	self.g.Inventory.IterSource(func(s *inventory.Source) {
+	self.invList = make([]*inventory.Stock, 0, 16)
+	self.g.Inventory.Iter(func(s *inventory.Stock) {
 		self.g.Log.Debugf("UIService inventory: - %s", s.String())
 		self.invList = append(self.invList, s)
 	})
@@ -259,7 +259,7 @@ func (self *UIService) handleInventory(e input.Event) {
 			return
 		}
 
-		x, err := strconv.ParseUint(string(self.inputBuf), 10, 16)
+		x, err := strconv.ParseUint(string(self.inputBuf), 10, 32)
 		self.inputBuf = self.inputBuf[:0]
 		if err != nil {
 			self.g.Log.Errorf("ui-service handleInventory input=accept inputBuf='%s'", string(self.inputBuf))
