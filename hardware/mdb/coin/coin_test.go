@@ -18,7 +18,7 @@ import (
 
 type _PI = money.PollItem
 
-const testScalingFactor = 100
+const testScalingFactor currency.Nominal = 100
 const testConfig = "money { scale=100 change_over_compensate=10 }"
 
 func mockInitRs() []mdb.MockR {
@@ -62,9 +62,7 @@ func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
 	ca.dev.DelayNext = 1
 	ca.dev.DelayReset = 1
 	err := ca.Init(ctx)
-	if err != nil {
-		t.Fatalf("ca.Init err=%v", err)
-	}
+	require.NoError(t, err)
 	return ca
 }
 
@@ -74,15 +72,12 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 	defer mdb.MockFromContext(ctx).Close()
 	// ca.AcceptMax(ctx, 1000)
 	r := ca.dev.Tx(ca.dev.PacketPoll)
-	if r.E != nil {
-		t.Fatalf("POLL err=%v", r.E)
-	}
+	require.NoError(t, r.E, "POLL")
 	pis := make([]_PI, 0, len(input)/2)
 	poll := ca.pollFun(func(pi money.PollItem) bool { pis = append(pis, pi); return false })
-	if _, err := poll(r.P); err != nil {
-		t.Fatal(err)
-	}
-	money.TestPollItemsEqual(t, pis, expected)
+	_, err := poll(r.P)
+	require.NoError(t, err)
+	assert.Equal(t, expected, pis)
 }
 
 func TestCoinPoll(t *testing.T) {
@@ -99,15 +94,11 @@ func TestCoinPoll(t *testing.T) {
 		Case{"reset", "0b", []_PI{}},
 		// TODO Case{"slugs", "21", []_PI{_PI{Status: money.StatusInfo, Error: ErrSlugs, DataCount: 1}}},
 		Case{"slugs", "21", []_PI{}},
-		Case{"deposited-cashbox", "4109", []_PI{{
-			Status:      money.StatusCredit,
-			DataNominal: currency.Nominal(2) * testScalingFactor,
-			DataCount:   1,
-			DataCashbox: true,
-		}}},
-		Case{"deposited-tube", "521e", []_PI{{Status: money.StatusCredit, DataNominal: currency.Nominal(5) * testScalingFactor, DataCount: 1}}},
-		Case{"deposited-reject", "7300", []_PI{{Status: money.StatusRejected, DataNominal: currency.Nominal(10) * testScalingFactor, DataCount: 1}}},
-		Case{"dispensed", "9251", []_PI{{Status: money.StatusDispensed, DataNominal: currency.Nominal(5) * testScalingFactor, DataCount: 1}}},
+		Case{"deposited-cashbox", "4109", []_PI{{Status: money.StatusCredit, DataNominal: 2 * testScalingFactor, DataCount: 1, DataCashbox: true}}},
+		Case{"return-request", "01", []_PI{{Status: money.StatusReturnRequest}}},
+		Case{"deposited-tube", "521e", []_PI{{Status: money.StatusCredit, DataNominal: 5 * testScalingFactor, DataCount: 1}}},
+		Case{"deposited-reject", "7300", []_PI{{Status: money.StatusRejected, DataNominal: 10 * testScalingFactor, DataCount: 1}}},
+		Case{"dispensed", "9251", []_PI{{Status: money.StatusDispensed, DataNominal: 5 * testScalingFactor, DataCount: 1}}},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
 	for _, c := range cases {
@@ -135,9 +126,7 @@ func TestCoinPayout(t *testing.T) {
 	dispensed := new(currency.NominalGroup)
 	dispensed.SetValid(ca.SupportedNominals())
 	err := ca.NewPayout(7*currency.Amount(ca.scalingFactor), dispensed).Do(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	assert.Equal(t, "1:7,total:7", dispensed.String())
 }
 
@@ -149,9 +138,7 @@ func TestCoinAccept(t *testing.T) {
 	ca := newDevice(t, ctx)
 
 	err := ca.AcceptMax(1000).Do(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestCoinDispenseSmart(t *testing.T) {
@@ -218,17 +205,12 @@ func checkDiag(t testing.TB, input string, expected DiagResult) {
 	ca := newDevice(t, ctx)
 	dr := new(DiagResult)
 	err := ca.CommandExpansionSendDiagStatus(dr)
-	if err != nil {
-		t.Fatalf("CommandExpansionSendDiagStatus() err=%v", err)
-	}
-	s := fmt.Sprintf("checkDiag input=%s dr=(%d)%s expect=(%d)%s", input, len(*dr), dr.Error(), len(expected), expected.Error())
-	if len(*dr) != len(expected) {
-		t.Fatal(s)
-	}
+	require.NoError(t, err, "CommandExpansionSendDiagStatus()")
+
+	msg := fmt.Sprintf("checkDiag input=%s dr=(%d)%s expect=(%d)%s", input, len(*dr), dr.Error(), len(expected), expected.Error())
+	require.Equal(t, len(expected), len(*dr), msg)
 	for i, ds := range *dr {
-		if ds != expected[i] {
-			t.Fatal(s)
-		}
+		assert.Equal(t, expected[i], ds, msg)
 	}
 }
 

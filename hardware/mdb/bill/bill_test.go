@@ -2,8 +2,11 @@ package bill
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
@@ -14,16 +17,17 @@ import (
 type _PI = money.PollItem
 
 const testConfig = "money { scale=100 }"
-const testScalingFactor = 500 // FIXME put into SETUP response
+const testScalingFactor currency.Nominal = 10
+const devScaling currency.Nominal = 100
 
 func mockInitRs() []mdb.MockR {
 	return []mdb.MockR{
-		// initer, SETUP
+		// initer, RESET
 		{"30", ""},
 		// initer, POLL
 		{"33", "0609"},
-		// FIXME put testScalingFactor here
-		{"31", "011810000a0000c8001fff01050a32640000000000000000000000"},
+		// initer, SETUP
+		{"31", fmt.Sprintf("01181000%02x0000c8001fff01050a32640000000000000000000000", testScalingFactor)},
 
 		// initer, EXPANSION IDENTIFICATION
 		// TODO fill real response
@@ -55,23 +59,18 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 	ctx, bv := testMake(t, []mdb.MockR{{"33", input}})
 	defer mdb.MockFromContext(ctx).Close()
 	err := bv.Init(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	pis := make([]_PI, 0, len(input)/2)
 	r := bv.dev.Tx(bv.dev.PacketPoll)
-	if r.E != nil {
-		t.Fatalf("POLL err=%v", r.E)
-	}
+	require.NoError(t, r.E, "POLL")
 	poll := bv.pollFun(func(pi money.PollItem) bool {
 		pis = append(pis, pi)
 		return false
 	})
-	if _, err = poll(r.P); err != nil {
-		t.Fatal(err)
-	}
-	money.TestPollItemsEqual(t, pis, expected)
+	_, err = poll(r.P)
+	require.NoError(t, err)
+	assert.Equal(t, expected, pis)
 }
 
 func TestBillPoll(t *testing.T) {
@@ -92,7 +91,7 @@ func TestBillPoll(t *testing.T) {
 			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
 		{"escrow", "9209", []_PI{
-			_PI{HardwareCode: 0x90, Status: money.StatusEscrow, DataNominal: 20 * currency.Nominal(testScalingFactor), DataCount: 1},
+			_PI{HardwareCode: 0x90, Status: money.StatusEscrow, DataNominal: 10 * devScaling * testScalingFactor, DataCount: 1},
 			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
 	}
@@ -112,10 +111,8 @@ func TestBillAcceptMax(t *testing.T) {
 	// FIXME explicit enable/disable escrow in config
 	ctx, bv := testMake(t, []mdb.MockR{{"3400070007", ""}})
 	defer mdb.MockFromContext(ctx).Close()
-	if err := bv.Init(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if err := bv.AcceptMax(10000).Do(ctx); err != nil {
-		t.Fatal(err)
-	}
+	err := bv.Init(ctx)
+	require.NoError(t, err)
+	err = bv.AcceptMax(10000).Do(ctx)
+	require.NoError(t, err)
 }

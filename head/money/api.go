@@ -225,7 +225,7 @@ func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Am
 
 		billEscrowAmount := self.bill.EscrowAmount()
 		if billEscrowAmount != 0 {
-			if err := self.bill.NewEscrow(true).Do(ctx); err != nil {
+			if err := self.bill.DoEscrowAccept.Do(ctx); err != nil {
 				err = errors.Annotate(err, tag)
 				self.Log.Errorf("%s CRITICAL escrow release err=%v", tag, err)
 				state.GetGlobal(ctx).Tele.Error(err)
@@ -294,7 +294,7 @@ func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amou
 
 	billEscrowAmount := self.bill.EscrowAmount()
 	if billEscrowAmount != 0 && billEscrowAmount <= amount {
-		if err = self.bill.NewEscrow(false).Do(ctx); err != nil {
+		if err = self.bill.DoEscrowReject.Do(ctx); err != nil {
 			return errors.Annotate(err, tag)
 		}
 		amount -= billEscrowAmount

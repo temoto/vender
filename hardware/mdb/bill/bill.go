@@ -32,10 +32,14 @@ const (
 
 const DefaultEscrowTimeout = 30 * time.Second
 
-type BillValidator struct {
+type BillValidator struct { //nolint:maligned
 	dev           mdb.Device
 	pollmu        sync.Mutex // isolate active/idle polling
 	configScaling uint16
+
+	DoEscrowAccept engine.Func
+	DoEscrowReject engine.Func
+	DoStacker      engine.Func
 
 	// parsed from SETUP
 	featureLevel      uint8
@@ -79,6 +83,12 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	if config.ScalingFactor != 0 {
 		self.configScaling = config.ScalingFactor
 	}
+
+	self.DoEscrowAccept = self.newEscrow(true)
+	self.DoEscrowReject = self.newEscrow(false)
+	self.DoStacker = self.newStacker()
+	g.Engine.Register(self.DoEscrowAccept.Name, self.DoEscrowAccept)
+	g.Engine.Register(self.DoEscrowReject.Name, self.DoEscrowReject)
 
 	doInit := self.newIniter()
 	if err = doInit.Do(ctx); err != nil {
@@ -183,6 +193,7 @@ func (self *BillValidator) newIniter() engine.Doer {
 		Append(self.dev.DoReset).
 		Append(engine.Func{Name: tag + "/poll", F: func(ctx context.Context) error {
 			self.Run(ctx, nil, func(money.PollItem) bool { return false })
+			// POLL until it settles on empty response
 			return nil
 		}}).
 		Append(engine.Func{Name: tag + "/setup", F: self.CommandSetup}).
@@ -198,7 +209,7 @@ func (self *BillValidator) newIniter() engine.Doer {
 			}
 			return nil
 		}}).
-		Append(self.NewStacker()).
+		Append(self.DoStacker).
 		Append(engine.Sleep{Duration: self.dev.DelayNext})
 }
 
@@ -218,84 +229,6 @@ func (self *BillValidator) setEscrowBill(n currency.Nominal) {
 func (self *BillValidator) EscrowAmount() currency.Amount {
 	u32 := atomic.LoadUint32((*uint32)(&self.escrowBill))
 	return currency.Amount(u32)
-}
-
-func (self *BillValidator) NewEscrow(accept bool) engine.Doer {
-	var tag string
-	var request mdb.Packet
-	if accept {
-		tag = "mdb.bill.escrow-accept"
-		request = packetEscrowAccept
-	} else {
-		tag = "mdb.bill.escrow-reject"
-		request = packetEscrowReject
-	}
-
-	// FIXME passive poll loop (`Run`) will wrongly consume response to this
-	// TODO find a good way to isolate this code from `Run` loop
-	// - silly `Mutex` will do the job
-	// - serializing via channel on mdb.Device would be better
-
-	return engine.Func{Name: tag, F: func(ctx context.Context) error {
-		self.pollmu.Lock()
-		defer self.pollmu.Unlock()
-
-		r := self.dev.Tx(request)
-		if r.E != nil {
-			return r.E
-		}
-
-		// > After an ESCROW command the bill validator should respond to a POLL command
-		// > with the BILL STACKED, BILL RETURNED, INVALID ESCROW or BILL TO RECYCLER
-		// > message within 30 seconds. If a bill becomes jammed in a position where
-		// > the customer may be able to retrieve it, the bill validator
-		// > should send a BILL RETURNED message.
-		var result error
-		fun := self.pollFun(func(pi money.PollItem) bool {
-			code := pi.HardwareCode
-			switch code {
-			case StatusValidatorDisabled:
-				self.dev.Log.Errorf("CRITICAL likely code error: escrow request while disabled")
-				result = ErrEscrowImpossible
-				return true
-			case StatusInvalidEscrowRequest:
-				self.dev.Log.Errorf("CRITICAL likely code error: escrow request invalid")
-				result = ErrEscrowImpossible
-				return true
-			case StatusRoutingBillStacked, StatusRoutingBillReturned, StatusRoutingBillToRecycler:
-				self.dev.Log.Infof("escrow result code=%02x", code) // TODO string
-				return true
-			default:
-				return false
-			}
-		})
-		err := self.dev.NewPollLoop(tag, self.dev.PacketPoll, DefaultEscrowTimeout, fun).Do(ctx)
-		if err != nil {
-			return err
-		}
-		return result
-	}}
-}
-
-func (self *BillValidator) NewStacker() engine.Doer {
-	const tag = "mdb.bill.stacker"
-
-	return engine.Func{Name: tag, F: func(ctx context.Context) error {
-		request := packetStacker
-		r := self.dev.Tx(request)
-		if r.E != nil {
-			return errors.Annotate(r.E, tag)
-		}
-		rb := r.P.Bytes()
-		if len(rb) != 2 {
-			return errors.Errorf("%s response length=%d expected=2", tag, len(rb))
-		}
-		x := self.dev.ByteOrder.Uint16(rb)
-		self.stackerFull = (x & 0x8000) != 0
-		self.stackerCount = uint32(x & 0x7fff)
-		self.dev.Log.Debugf("%s full=%t count=%d", tag, self.stackerFull, self.stackerCount)
-		return nil
-	}}
 }
 
 func (self *BillValidator) CommandSetup(ctx context.Context) error {
@@ -393,6 +326,84 @@ func (self *BillValidator) CommandExpansionIdentificationOptions() error {
 	self.dev.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
 	self.dev.Log.Debugf("%s Optional Features: %b", tag, self.supportedFeatures)
 	return nil
+}
+
+func (self *BillValidator) newEscrow(accept bool) engine.Func {
+	var tag string
+	var request mdb.Packet
+	if accept {
+		tag = "mdb.bill.escrow-accept"
+		request = packetEscrowAccept
+	} else {
+		tag = "mdb.bill.escrow-reject"
+		request = packetEscrowReject
+	}
+
+	// FIXME passive poll loop (`Run`) will wrongly consume response to this
+	// TODO find a good way to isolate this code from `Run` loop
+	// - silly `Mutex` will do the job
+	// - serializing via channel on mdb.Device would be better
+
+	return engine.Func{Name: tag, F: func(ctx context.Context) error {
+		self.pollmu.Lock()
+		defer self.pollmu.Unlock()
+
+		r := self.dev.Tx(request)
+		if r.E != nil {
+			return r.E
+		}
+
+		// > After an ESCROW command the bill validator should respond to a POLL command
+		// > with the BILL STACKED, BILL RETURNED, INVALID ESCROW or BILL TO RECYCLER
+		// > message within 30 seconds. If a bill becomes jammed in a position where
+		// > the customer may be able to retrieve it, the bill validator
+		// > should send a BILL RETURNED message.
+		var result error
+		fun := self.pollFun(func(pi money.PollItem) bool {
+			code := pi.HardwareCode
+			switch code {
+			case StatusValidatorDisabled:
+				self.dev.Log.Errorf("CRITICAL likely code error: escrow request while disabled")
+				result = ErrEscrowImpossible
+				return true
+			case StatusInvalidEscrowRequest:
+				self.dev.Log.Errorf("CRITICAL likely code error: escrow request invalid")
+				result = ErrEscrowImpossible
+				return true
+			case StatusRoutingBillStacked, StatusRoutingBillReturned, StatusRoutingBillToRecycler:
+				self.dev.Log.Infof("escrow result code=%02x", code) // TODO string
+				return true
+			default:
+				return false
+			}
+		})
+		err := self.dev.NewPollLoop(tag, self.dev.PacketPoll, DefaultEscrowTimeout, fun).Do(ctx)
+		if err != nil {
+			return err
+		}
+		return result
+	}}
+}
+
+func (self *BillValidator) newStacker() engine.Func {
+	const tag = "mdb.bill.stacker"
+
+	return engine.Func{Name: tag, F: func(ctx context.Context) error {
+		request := packetStacker
+		r := self.dev.Tx(request)
+		if r.E != nil {
+			return errors.Annotate(r.E, tag)
+		}
+		rb := r.P.Bytes()
+		if len(rb) != 2 {
+			return errors.Errorf("%s response length=%d expected=2", tag, len(rb))
+		}
+		x := self.dev.ByteOrder.Uint16(rb)
+		self.stackerFull = (x & 0x8000) != 0
+		self.stackerCount = uint32(x & 0x7fff)
+		self.dev.Log.Debugf("%s full=%t count=%d", tag, self.stackerFull, self.stackerCount)
+		return nil
+	}}
 }
 
 const (
