@@ -44,36 +44,17 @@ func Main(ctx context.Context, config *state.Config) error {
 	// FIXME hardware.Enum() but money system inits bill/coin devices explicitly
 	evend.Enum(ctx, nil)
 
-	menuMap := make(ui.Menu)
-	if err = menuMap.Init(ctx); err != nil {
-		err = errors.Annotate(err, "menuMap.Init")
+	ui := ui.UI{State: ui.StateBoot}
+	if err := ui.Init(ctx); err != nil {
+		err = errors.Annotate(err, "ui Init()")
 		return err
 	}
-	g.Log.Debugf("menu len=%d", len(menuMap))
-	uiFront := ui.NewUIFront(ctx, menuMap)
 
 	go vmc_common.TeleCommandLoop(ctx)
 
 	subcmd.SdNotify(daemon.SdNotifyReady)
 	g.Log.Debugf("VMC init complete")
 
-	subcmd.SdNotify("executing on_start")
-	onStartSuccess := false
-	for i := 1; i <= 3; i++ {
-		err := g.Engine.ExecList(ctx, "on_start", g.Config.Engine.OnStart)
-		if err == nil {
-			onStartSuccess = true
-			break
-		}
-		g.Tele.Error(errors.Annotatef(err, "on_start try=%d", i))
-		g.Log.Error(err)
-		// TODO restart all hardware
-		evend.Enum(ctx, nil)
-	}
-	if !onStartSuccess {
-		uiFront.SetBroken(true)
-	}
-
-	vmc_common.UILoop(ctx, uiFront)
+	ui.Loop(ctx)
 	return nil
 }

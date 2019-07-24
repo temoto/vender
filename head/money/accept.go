@@ -46,7 +46,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 		tag, maxConfig.FormatCtx(ctx), maxPrice.FormatCtx(ctx), available.FormatCtx(ctx), limit.FormatCtx(ctx))
 
 	err := self.SetAcceptMax(ctx, limit)
-	if err != nil || limit == 0 {
+	if err != nil {
 		return err
 	}
 

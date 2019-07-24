@@ -1,78 +1,65 @@
 package ui
 
 import (
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/temoto/alive"
 	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/state"
 )
+
+func TestServiceAuth(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state.NewTestContext(t, "")
+	env := &tenv{ctx: ctx, g: g}
+	g.Config.UI.Service.Auth.Enable = true
+	g.Config.UI.Service.Auth.Passwords = []string{"lemz1g"}
+	uiTestSetup(t, env, StateServiceBegin, StateServiceEnd)
+	env.ui.service.secretSalt = []byte("test")
+	go env.ui.Loop(ctx)
+
+	steps := []step{
+		{expect: env._T(" ", "\x8d fflcrq\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '1'}},
+		{expect: env._T(" ", "\x8d qtky0g\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '9'}},
+		{expect: env._T(" ", "\x8d nfiinw\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '7'}},
+		{expect: env._T(" ", "\x8d 2grymg\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '0'}},
+		{expect: env._T(" ", "\x8d lemz1g\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
+		{expect: env._T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
+		{expect: "", inev: input.Event{}},
+	}
+	uiTestWait(t, env, steps)
+}
 
 func TestServiceInventory(t *testing.T) {
 	t.Parallel()
 
-	const width = 16
 	ctx, g := state.NewTestContext(t, `
 engine { inventory {
-	stock "cup" { rate=1 }
-	stock "water" { rate=1 }
+	stock "cup" { }
+	stock "water" { }
 }}`)
+	env := &tenv{ctx: ctx, g: g}
 	g.Config.UI.Service.Auth.Enable = false
-	display, displayMock := lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: width})
-	g.Hardware.HD44780.Display.Store(display)
-	ui := NewUIService(ctx)
-	a := alive.NewAlive()
-	displayUpdated := make(chan struct{})
-	display.SetUpdateChan(displayUpdated)
-	stopch := a.StopChan()
-	go ui.Run(ctx, a)
+	uiTestSetup(t, env, StateServiceBegin, StateServiceEnd)
+	go env.ui.Loop(ctx)
 
-	type Step struct {
-		expect string
-		inev   input.Event
-	}
-	_T := func(l1, l2 string) string {
-		return fmt.Sprintf("%s\n%s", display.Translate(l1), display.Translate(l2))
-	}
-	steps := []Step{
-		{expect: _T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
-		{expect: _T("I1 cup", "0 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '3'}},
-		{expect: _T("I1 cup", "0 3\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '2'}},
-		{expect: _T("I1 cup", "0 32\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
-		{expect: _T("I1 cup", "32 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}},
-		{expect: _T("I2 water", "0 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '7'}},
-		{expect: _T("I2 water", "0 7\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '5'}},
-		{expect: _T("I2 water", "0 75\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '0'}},
-		{expect: _T("I2 water", "0 750\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
-		{expect: _T("I2 water", "750 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}},
-		{expect: _T("I1 cup", "32 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
-		{expect: _T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
+	steps := []step{
+		{expect: env._T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
+		{expect: env._T("I1 cup", "0 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '3'}},
+		{expect: env._T("I1 cup", "0 3\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '2'}},
+		{expect: env._T("I1 cup", "0 32\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
+		{expect: env._T("I1 cup", "32 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}},
+		{expect: env._T("I2 water", "0 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '7'}},
+		{expect: env._T("I2 water", "0 7\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '5'}},
+		{expect: env._T("I2 water", "0 75\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '0'}},
+		{expect: env._T("I2 water", "0 750\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
+		{expect: env._T("I2 water", "750 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}},
+		{expect: env._T("I1 cup", "32 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
+		{expect: env._T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
 		{expect: "", inev: input.Event{}},
 	}
-expectLoop:
-	for _, step := range steps {
-		select {
-		case <-displayUpdated:
-		case <-stopch:
-			if !(step.expect == "" && step.inev.IsZero()) {
-				t.Error("ui stopped before end of test")
-			}
-			break expectLoop
-		}
-		current := displayMock.String()
-		t.Logf("display:\n%s\n%s\ninput=%v", current, strings.Repeat("-", width), step.inev)
-		require.Equal(t, step.expect, current)
-		g.Hardware.Input.Emit(step.inev)
-	}
-	if a.IsRunning() {
-		t.Logf("display:\n%s", displayMock.String())
-		t.Error("ui still running")
-	}
+	uiTestWait(t, env, steps)
 }
 
 func TestVisualHash(t *testing.T) {

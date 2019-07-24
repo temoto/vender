@@ -10,243 +10,181 @@ import (
 	"strings"
 	"time"
 
-	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
 // TODO move text messages to config
 const (
-	msgError            = "error"
 	msgServiceInputAuth = "\x8d %s\x00"
 	msgServiceMenu      = "Menu"
 )
 
 const (
-	serviceModeAuth      = "auth"
-	serviceModeMenu      = "menu"
-	serviceModeInventory = "inventory"
-	serviceModeReboot    = "reboot"
-	serviceModeExit      = "exit"
+	serviceMenuInventory = "inventory"
+	serviceMenuReboot    = "reboot"
 )
 
-var /*const*/ serviceMenu = []string{serviceModeInventory, serviceModeReboot, serviceModeExit}
+var /*const*/ serviceMenu = []string{serviceMenuInventory, serviceMenuReboot}
 var /*const*/ serviceMenuMax = uint8(len(serviceMenu) - 1)
 
-type UIService struct {
+type uiService struct {
 	// config
 	resetTimeout time.Duration
 	secretSalt   []byte
 
 	// state
-	g            *state.Global
-	display      *lcd.TextDisplay // FIXME
-	inputBuf     []byte
-	inputCh      <-chan input.Event
-	lastActivity time.Time
-	mode         string
-	menuIdx      uint8
-
-	// mode=inventory
+	menuIdx uint8
 	invIdx  uint8
 	invList []*inventory.Stock
 }
 
-func NewUIService(ctx context.Context) *UIService {
-	self := &UIService{
-		g:          state.GetGlobal(ctx),
-		inputBuf:   make([]byte, 0, 32),
-		secretSalt: []byte{0}, // FIXME read from config
-	}
-	config := self.g.Config
-	self.display = self.g.MustDisplay()
-	self.resetTimeout = helpers.IntSecondDefault(config.UI.Service.ResetTimeoutSec, 3*time.Second)
-	return self
+func (self *uiService) Init(ctx context.Context) {
+	g := state.GetGlobal(ctx)
+	self.secretSalt = []byte{0} // FIXME read from config
+	self.resetTimeout = helpers.IntSecondDefault(g.Config.UI.Service.ResetTimeoutSec, 3*time.Second)
 }
 
-func (self *UIService) Tag() string { return "ui-service" }
-
-func (self *UIService) Run(ctx context.Context, alive *alive.Alive) {
-	inputTag := self.Tag()
-	defer alive.Stop()
-	defer self.g.Hardware.Input.Unsubscribe(inputTag)
-
-	self.inputCh = self.g.Hardware.Input.SubscribeChan(inputTag, alive.StopChan())
-	timer := time.NewTicker(200 * time.Millisecond)
-	serviceConfig := &self.g.Config.UI.Service
-
+func (self *UI) onServiceBegin() State {
 	self.inputBuf = self.inputBuf[:0]
-	self.mode = serviceModeAuth
-	self.menuIdx = 0
-	self.invIdx = 0
 	self.lastActivity = time.Now()
-	self.g.Tele.Service("mode=" + self.mode)
-
-	self.invList = make([]*inventory.Stock, 0, 16)
+	self.service.menuIdx = 0
+	self.service.invIdx = 0
+	self.service.invList = make([]*inventory.Stock, 0, 16)
 	self.g.Inventory.Iter(func(s *inventory.Stock) {
-		self.g.Log.Debugf("UIService inventory: - %s", s.String())
-		self.invList = append(self.invList, s)
+		self.g.Log.Debugf("ui service inventory: - %s", s.String())
+		self.service.invList = append(self.service.invList, s)
 	})
-	sort.Slice(self.invList, func(a, b int) bool {
-		return self.invList[a].Name < self.invList[b].Name
+	sort.Slice(self.service.invList, func(a, b int) bool {
+		return self.service.invList[a].Name < self.service.invList[b].Name
 	})
+	// self.g.Log.Debugf("invlist=%v, invidx=%d", self.service.invList, self.service.invIdx)
 
-	self.g.Log.Debugf("UIService begin")
+	self.g.Tele.Service("begin")
+	self.g.Log.Debugf("ui service begin")
+	return StateServiceAuth
+}
 
-loop:
-	for alive.IsRunning() {
-		// self.g.Log.Debugf("invlist=%v, invidx=%d", self.invList, self.invIdx)
-		// step 1: refresh display
-		switch self.mode {
-		case serviceModeAuth:
-			if !serviceConfig.Auth.Enable {
-				self.mode = serviceModeMenu
-				continue loop
-			}
-
-			passVisualHash := visualHash(self.inputBuf, self.secretSalt)
-			self.display.SetLinesBytes(
-				self.display.Translate(serviceConfig.MsgAuth),
-				self.display.Translate(fmt.Sprintf(msgServiceInputAuth, passVisualHash)),
-			)
-
-		case serviceModeMenu:
-			menuName := serviceMenu[self.menuIdx]
-			self.display.SetLinesBytes(
-				self.display.Translate(msgServiceMenu),
-				self.display.Translate(fmt.Sprintf("%d %s", self.menuIdx+1, menuName)),
-			)
-
-		case serviceModeInventory:
-			if len(self.invList) == 0 {
-				self.ConveyText(msgError, "inv empty")
-				self.mode = serviceModeMenu
-				continue loop
-			}
-
-			invCurrent := self.invList[self.invIdx]
-			self.display.SetLinesBytes(
-				self.display.Translate(fmt.Sprintf("I%d %s", self.invIdx+1, invCurrent.Name)),
-				self.display.Translate(fmt.Sprintf("%d %s\x00", invCurrent.Value(), string(self.inputBuf))),
-			)
-
-		case serviceModeReboot:
-			self.display.SetLines("for reboot", "press 1")
-
-		case serviceModeExit:
-			self.g.Log.Debugf("UIService stop mode=exit")
-			break loop
-		}
-
-		// step 2: wait for input/timeout
-	waitInput:
-		var e input.Event
-		select {
-		case e = <-self.inputCh:
-			self.lastActivity = time.Now()
-		case <-timer.C:
-			inactive := time.Since(self.lastActivity)
-			// self.g.Log.Infof("inactive=%v", inactive)
-			switch {
-			case inactive >= self.resetTimeout:
-				self.g.Log.Debugf("UIService stop resettimeout")
-				break loop
-			default:
-				goto waitInput
-			}
-		}
-
-		// step 3: handle input/timeout
-		switch self.mode {
-		case serviceModeAuth:
-			self.handleAuth(e)
-		case serviceModeMenu:
-			self.handleMenu(e)
-		case serviceModeInventory:
-			self.handleInventory(e)
-		case serviceModeReboot:
-			self.handleReboot(e)
-		}
+func (self *UI) onServiceAuth() State {
+	serviceConfig := &self.g.Config.UI.Service
+	if !serviceConfig.Auth.Enable {
+		return StateServiceMenu
 	}
 
-	self.g.Tele.Service("mode=" + self.mode)
-}
+	passVisualHash := visualHash(self.inputBuf, self.service.secretSalt)
+	self.display.SetLinesBytes(
+		self.display.Translate(serviceConfig.MsgAuth),
+		self.display.Translate(fmt.Sprintf(msgServiceInputAuth, passVisualHash)),
+	)
 
-func (self *UIService) ConveyText(line1, line2 string) {
-	self.display.Message(line1, line2, func() {
-		<-self.inputCh
-	})
-}
+	next, e := self.serviceWaitInput()
+	if next != StateInvalid {
+		return next
+	}
 
-func (self *UIService) handleAuth(e input.Event) {
 	switch {
 	case e.IsDigit():
 		self.inputBuf = append(self.inputBuf, byte(e.Key))
 		if len(self.inputBuf) > 16 {
 			self.ConveyText(msgError, "len") // FIXME extract message string
-			self.mode = serviceModeExit
+			return StateServiceEnd
 		}
+		return self.State
 
 	case e.IsZero() || input.IsReject(&e):
-		self.mode = serviceModeExit
+		return StateServiceEnd
 
 	case input.IsAccept(&e):
 		if len(self.inputBuf) == 0 {
 			self.ConveyText(msgError, "empty") // FIXME extract message string
-			self.mode = serviceModeExit
-			return
+			return StateServiceEnd
 		}
 
 		// FIXME fnv->secure hash for actual password comparison
-		inputHash := visualHash(self.inputBuf, self.secretSalt)
+		inputHash := visualHash(self.inputBuf, self.service.secretSalt)
 		for i, p := range self.g.Config.UI.Service.Auth.Passwords {
 			if inputHash == p {
 				self.g.Log.Infof("service auth ok i=%d hash=%s", i, inputHash)
-				self.mode = serviceModeMenu
-				return
+				return StateServiceMenu
 			}
 		}
 
 		self.ConveyText(msgError, "sorry") // FIXME extract message string
-		self.mode = serviceModeExit
+		return StateServiceEnd
 	}
+	self.g.Log.Errorf("ui onServiceAuth unhandled branch")
+	self.ConveyText(msgError, "code error")
+	return StateServiceEnd
 }
 
-func (self *UIService) handleMenu(e input.Event) {
+func (self *UI) onServiceMenu() State {
+	menuName := serviceMenu[self.service.menuIdx]
+	self.display.SetLinesBytes(
+		self.display.Translate(msgServiceMenu),
+		self.display.Translate(fmt.Sprintf("%d %s", self.service.menuIdx+1, menuName)),
+	)
+
+	next, e := self.serviceWaitInput()
+	if next != StateInvalid {
+		return next
+	}
+
 	switch {
 	case e.Key == input.EvendKeyCreamLess:
-		self.menuIdx = (self.menuIdx + serviceMenuMax - 1) % serviceMenuMax
+		self.service.menuIdx = (self.service.menuIdx + serviceMenuMax - 1) % (serviceMenuMax + 1)
 	case e.Key == input.EvendKeyCreamMore:
-		self.menuIdx = (self.menuIdx + 1) % serviceMenuMax
+		self.service.menuIdx = (self.service.menuIdx + 1) % (serviceMenuMax + 1)
 
 	case input.IsAccept(&e):
-		if int(self.menuIdx) >= len(serviceMenu) {
+		if int(self.service.menuIdx) >= len(serviceMenu) {
 			panic("code error service menuIdx out of range")
 		}
-		self.mode = serviceMenu[self.menuIdx]
+		switch serviceMenu[self.service.menuIdx] {
+		case serviceMenuInventory:
+			return StateServiceInventory
+		case serviceMenuReboot:
+			return StateServiceReboot
+		default:
+			panic("code error")
+		}
 
 	case input.IsReject(&e):
-		self.mode = serviceModeExit
+		return StateServiceEnd
 
 	case e.IsDigit():
 		x := byte(e.Key) - byte('0')
 		if x > 0 && x <= serviceMenuMax {
-			self.menuIdx = x - 1
+			self.service.menuIdx = x - 1
 		}
 	}
+	return StateServiceMenu
 }
 
-func (self *UIService) handleInventory(e input.Event) {
-	invIdxMax := uint8(len(self.invList))
+func (self *UI) onServiceInventory() State {
+	if len(self.service.invList) == 0 {
+		self.ConveyText(msgError, "inv empty")
+		return StateServiceMenu
+	}
+	invCurrent := self.service.invList[self.service.invIdx]
+	self.display.SetLinesBytes(
+		self.display.Translate(fmt.Sprintf("I%d %s", self.service.invIdx+1, invCurrent.Name)),
+		self.display.Translate(fmt.Sprintf("%d %s\x00", invCurrent.Value(), string(self.inputBuf))),
+	)
+
+	next, e := self.serviceWaitInput()
+	if next != StateInvalid {
+		return next
+	}
+
+	invIdxMax := uint8(len(self.service.invList))
 	switch {
 	case e.Key == input.EvendKeyCreamLess:
-		self.invIdx = (self.invIdx + invIdxMax - 1) % invIdxMax
+		self.service.invIdx = (self.service.invIdx + invIdxMax - 1) % invIdxMax
 		self.inputBuf = self.inputBuf[:0]
 	case e.Key == input.EvendKeyCreamMore:
-		self.invIdx = (self.invIdx + 1) % invIdxMax
+		self.service.invIdx = (self.service.invIdx + 1) % invIdxMax
 		self.inputBuf = self.inputBuf[:0]
 
 	case e.IsDigit():
@@ -254,42 +192,64 @@ func (self *UIService) handleInventory(e input.Event) {
 
 	case input.IsAccept(&e):
 		if len(self.inputBuf) == 0 {
-			self.g.Log.Errorf("ui-service handleInventory input=accept inputBuf=empty")
+			self.g.Log.Errorf("ui onServiceInventory input=accept inputBuf=empty")
 			self.ConveyText(msgError, "empty") // FIXME extract message string
-			return
+			return StateServiceInventory
 		}
 
 		x, err := strconv.ParseUint(string(self.inputBuf), 10, 32)
 		self.inputBuf = self.inputBuf[:0]
 		if err != nil {
-			self.g.Log.Errorf("ui-service handleInventory input=accept inputBuf='%s'", string(self.inputBuf))
+			self.g.Log.Errorf("ui onServiceInventory input=accept inputBuf='%s'", string(self.inputBuf))
 			self.ConveyText(msgError, "int-invalid")
-			return
+			return StateServiceInventory
 		}
 
-		invCurrent := self.invList[self.invIdx]
+		invCurrent := self.service.invList[self.service.invIdx]
 		invCurrent.Set(int32(x))
 
 	case input.IsReject(&e):
 		// backspace semantic
 		if len(self.inputBuf) > 0 {
 			self.inputBuf = self.inputBuf[:len(self.inputBuf)-1]
-			return
+			return StateServiceInventory
 		}
-		self.mode = serviceModeMenu
+		return StateServiceMenu
 	}
+	return StateServiceInventory
 }
 
-func (self *UIService) handleReboot(e input.Event) {
+func (self *UI) onServiceReboot() State {
+	self.display.SetLines("for reboot", "press 1")
+
+	next, e := self.serviceWaitInput()
+	if next != StateInvalid {
+		return next
+	}
+
 	switch {
 	case e.Key == '1':
 		self.display.SetLines("reboot", "in progress")
 		// os.Exit(0)
 		self.g.Alive.Stop()
-		self.mode = serviceModeExit
+		return StateServiceEnd
+	}
+	return StateServiceMenu
+}
 
-	default:
-		self.mode = serviceModeMenu
+func (self *UI) serviceWaitInput() (State, input.Event) {
+	var e input.Event
+	select {
+	case e = <-self.inputch:
+		self.lastActivity = time.Now()
+		return StateInvalid, e
+	case <-time.After(self.service.resetTimeout):
+		// self.g.Log.Infof("inactive=%v", inactive)
+		self.g.Log.Debugf("serviceWaitInput resetTimeout")
+		return StateServiceEnd, e
+	case <-self.g.Alive.StopChan():
+		self.g.Log.Debugf("serviceWaitInput global stop")
+		return StateServiceEnd, e
 	}
 }
 
