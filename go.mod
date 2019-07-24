@@ -16,7 +16,7 @@ require (
 	github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.3.0
-	github.com/temoto/alive v1.0.2
+	github.com/temoto/alive v1.1.0
 	github.com/temoto/errors v0.0.0-20190624114038-cc113d523821
 	github.com/temoto/extremofile v0.5.0
 	github.com/temoto/gpio-cdev-go v0.12.0

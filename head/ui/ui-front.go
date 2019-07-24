@@ -187,7 +187,8 @@ init:
 				mode = frontModeStatus // "return to previous mode"
 				goto handleEnd
 			case inactive >= self.resetTimeout:
-				goto init
+				self.result = UIMenuResult{Confirm: false}
+				return
 			default:
 				goto waitInput
 			}

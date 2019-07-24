@@ -151,6 +151,8 @@ func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func
 			active, err = parse(r.P)
 		}
 		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.dev, active, err != nil, stopch)
+		// self.dev.Log.Debugf("bill.Run r.E=%v perr=%v pactive=%t alive_not_nil=%t alive_running=%t -> again=%t",
+		// 	r.E, err, active, alive != nil, (alive != nil) && alive.IsRunning(), again)
 		// TODO try pollmu.Unlock() here
 	}
 }
