@@ -58,9 +58,7 @@ func mockContext(t testing.TB, rs []mdb.MockR) context.Context {
 func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
 	ca := &CoinAcceptor{}
 	ca.dispenseTimeout = 1
-	ca.dev.DelayIdle = 1
-	ca.dev.DelayNext = 1
-	ca.dev.DelayReset = 1
+	ca.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
 	err := ca.Init(ctx)
 	require.NoError(t, err)
 	return ca

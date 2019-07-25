@@ -17,10 +17,11 @@ import (
 const ErrCodeNone int32 = -1
 
 const (
-	DefaultDelayIdle     = 700 * time.Millisecond
-	DefaultDelayNext     = 200 * time.Millisecond
-	DefaultDelayReset    = 500 * time.Millisecond
-	DefaultIdleThreshold = 30 * time.Second
+	DefaultDelayIdle        = 700 * time.Millisecond
+	DefaultDelayNext        = 200 * time.Millisecond
+	DefaultDelayBeforeReset = 0
+	DefaultDelayAfterReset  = 500 * time.Millisecond
+	DefaultIdleThreshold    = 30 * time.Second
 )
 
 type PacketError struct {
@@ -35,20 +36,22 @@ type Device struct { //nolint:maligned
 	cmdLk sync.Mutex // TODO explore if chan approach is better
 	txfun TxFunc
 
-	LastOk        *atomic_clock.Clock
-	LastOff       *atomic_clock.Clock
-	Log           *log2.Log
-	Address       uint8
-	Name          string
-	ByteOrder     binary.ByteOrder
-	DelayIdle     time.Duration
-	DelayNext     time.Duration
-	DelayReset    time.Duration
-	IdleThreshold time.Duration
-	PacketReset   Packet
-	PacketSetup   Packet
-	PacketPoll    Packet
-	DoReset       engine.Doer
+	LastOk      *atomic_clock.Clock
+	LastOff     *atomic_clock.Clock
+	Log         *log2.Log
+	Address     uint8
+	Name        string
+	ByteOrder   binary.ByteOrder
+	PacketReset Packet
+	PacketSetup Packet
+	PacketPoll  Packet
+	DoReset     engine.Doer
+
+	DelayAfterReset  time.Duration
+	DelayBeforeReset time.Duration
+	DelayIdle        time.Duration
+	DelayNext        time.Duration
+	IdleThreshold    time.Duration
 
 	SetupResponse Packet
 }
@@ -72,8 +75,11 @@ func (self *Device) Init(txfun TxFunc, log *log2.Log, addr uint8, name string, b
 	if self.DelayNext == 0 {
 		self.DelayNext = DefaultDelayNext
 	}
-	if self.DelayReset == 0 {
-		self.DelayReset = DefaultDelayReset
+	if self.DelayBeforeReset == 0 {
+		self.DelayBeforeReset = DefaultDelayBeforeReset
+	}
+	if self.DelayAfterReset == 0 {
+		self.DelayAfterReset = DefaultDelayAfterReset
 	}
 	if self.IdleThreshold == 0 {
 		self.IdleThreshold = DefaultIdleThreshold
@@ -171,6 +177,7 @@ func (self *Device) Reset() error {
 func (self *Device) locked_reset() error {
 	tag := fmt.Sprintf("mdb.%s.reset", self.Name)
 	request := self.PacketReset
+	time.Sleep(self.DelayBeforeReset)
 	r := self.tx(request)
 	atomic.StoreInt32(&self.errCode, ErrCodeNone)
 	self.SetReady(false)
@@ -185,38 +192,8 @@ func (self *Device) locked_reset() error {
 		return r.E
 	}
 	self.Log.Infof("%s addr=%02x is working", tag, self.Address)
-	time.Sleep(self.DelayReset)
+	time.Sleep(self.DelayAfterReset)
 	return nil
-}
-
-// "Idle mode" polling, runs forever until receive on `stopch`.
-// Switches between fast/idle delays.
-// Used by bill/coin devices.
-type PollDelay struct {
-	lastActive time.Time
-	lastDelay  time.Duration
-}
-
-func (self *PollDelay) Delay(dev *Device, active bool, err bool, stopch <-chan struct{}) bool {
-	delay := dev.DelayNext
-
-	if err {
-		delay = dev.DelayIdle
-	} else if active {
-		self.lastActive = time.Now()
-	} else if self.lastDelay != dev.DelayIdle { // save time syscall while idle continues
-		if time.Since(self.lastActive) > dev.IdleThreshold {
-			delay = dev.DelayIdle
-		}
-	}
-	self.lastDelay = delay
-
-	select {
-	case <-stopch:
-		return false
-	case <-time.After(delay):
-		return true
-	}
 }
 
 func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
@@ -278,4 +255,42 @@ func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duratio
 			return errors.Annotate(err, tag)
 		}
 	}}
+}
+
+// Used by tests to avoid waiting.
+func (self *Device) XXX_FIXME_SetAllDelays(d time.Duration) {
+	self.DelayIdle = d
+	self.DelayNext = d
+	self.DelayBeforeReset = d
+	self.DelayAfterReset = d
+}
+
+// "Idle mode" polling, runs forever until receive on `stopch`.
+// Switches between fast/idle delays.
+// Used by bill/coin devices.
+type PollDelay struct {
+	lastActive time.Time
+	lastDelay  time.Duration
+}
+
+func (self *PollDelay) Delay(dev *Device, active bool, err bool, stopch <-chan struct{}) bool {
+	delay := dev.DelayNext
+
+	if err {
+		delay = dev.DelayIdle
+	} else if active {
+		self.lastActive = time.Now()
+	} else if self.lastDelay != dev.DelayIdle { // save time syscall while idle continues
+		if time.Since(self.lastActive) > dev.IdleThreshold {
+			delay = dev.DelayIdle
+		}
+	}
+	self.lastDelay = delay
+
+	select {
+	case <-stopch:
+		return false
+	case <-time.After(delay):
+		return true
+	}
 }

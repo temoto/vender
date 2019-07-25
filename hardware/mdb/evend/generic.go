@@ -58,8 +58,11 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 	}
 	self.proto = proto
 
-	if self.dev.DelayReset == 0 {
-		self.dev.DelayReset = DefaultResetDelay
+	if self.dev.DelayBeforeReset == 0 {
+		self.dev.DelayBeforeReset = 2 * DefaultResetDelay
+	}
+	if self.dev.DelayAfterReset == 0 {
+		self.dev.DelayAfterReset = DefaultResetDelay
 	}
 	g := state.GetGlobal(ctx)
 	m, err := g.Mdber()

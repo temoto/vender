@@ -43,10 +43,7 @@ func TestConveyor(t *testing.T) {
 		// {"db", "54"}, // oops
 	})
 	d := new(DeviceConveyor)
-	// TODO make small delay default in tests
-	d.dev.DelayIdle = 1
-	d.dev.DelayNext = 1
-	d.dev.DelayReset = 1
+	d.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
 	require.Nil(t, d.Init(ctx))
 
 	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))

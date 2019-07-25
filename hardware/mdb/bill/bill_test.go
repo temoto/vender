@@ -48,9 +48,9 @@ func testMake(t testing.TB, rs []mdb.MockR) (context.Context, *BillValidator) {
 	}()
 
 	bv := new(BillValidator)
-	bv.dev.DelayIdle = 1
-	bv.dev.DelayNext = 1
-	bv.dev.DelayReset = 1
+	bv.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
+	err := bv.Init(ctx)
+	require.NoError(t, err)
 
 	return ctx, bv
 }
@@ -58,8 +58,6 @@ func testMake(t testing.TB, rs []mdb.MockR) (context.Context, *BillValidator) {
 func checkPoll(t *testing.T, input string, expected []_PI) {
 	ctx, bv := testMake(t, []mdb.MockR{{"33", input}})
 	defer mdb.MockFromContext(ctx).Close()
-	err := bv.Init(ctx)
-	require.NoError(t, err)
 
 	pis := make([]_PI, 0, len(input)/2)
 	r := bv.dev.Tx(bv.dev.PacketPoll)
@@ -68,7 +66,7 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 		pis = append(pis, pi)
 		return false
 	})
-	_, err = poll(r.P)
+	_, err := poll(r.P)
 	require.NoError(t, err)
 	assert.Equal(t, expected, pis)
 }
@@ -111,8 +109,6 @@ func TestBillAcceptMax(t *testing.T) {
 	// FIXME explicit enable/disable escrow in config
 	ctx, bv := testMake(t, []mdb.MockR{{"3400070007", ""}})
 	defer mdb.MockFromContext(ctx).Close()
-	err := bv.Init(ctx)
-	require.NoError(t, err)
-	err = bv.AcceptMax(10000).Do(ctx)
+	err := bv.AcceptMax(10000).Do(ctx)
 	require.NoError(t, err)
 }

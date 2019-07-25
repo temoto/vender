@@ -59,6 +59,9 @@ base+2 (42,5A,etc) XX - run motor for XX * 0.1s
 Multiplexer commands:
 BA XX YY - run motor XX for YY * 0.1s
 
+Error codes:
+20 hopper motor high load
+
 
 === Valve block (C0) ===
 
@@ -104,7 +107,10 @@ Elevator:
 D2 03 XX 00 - move elevator up/down (XX: 0-100%, 00-64 hex)
 
 Error codes:
-20 motor high load
+24 reverse motor high load
+25 reverse top sensor
+26 reverse bottom sensor
+27 reverse not in top position
 
 
 === Conveyor (D8) ===

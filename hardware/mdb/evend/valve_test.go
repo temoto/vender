@@ -34,10 +34,7 @@ engine { inventory {
 		{"c3", ""},
 	})
 	d := new(DeviceValve)
-	// TODO make small delay default in tests
-	d.dev.DelayIdle = 1
-	d.dev.DelayNext = 1
-	d.dev.DelayReset = 1
+	d.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
 	err := d.Init(ctx)
 	if err != nil {
 		t.Fatalf("Init err=%v", err)
