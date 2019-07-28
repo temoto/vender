@@ -104,7 +104,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return StateFrontBegin
 
 	case StateServiceBegin:
-		return self.onServiceBegin()
+		return self.onServiceBegin(ctx)
 	case StateServiceAuth:
 		return self.onServiceAuth()
 	case StateServiceMenu:
@@ -118,6 +118,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		_ = self.g.Inventory.Persist.Store()
 		self.inputBuf = self.inputBuf[:0]
 		self.g.Tele.Service("end")
+		self.g.Engine.ExecList(ctx, "on_service_end", self.g.Config.Engine.OnServiceEnd)
 		return StateFrontBegin
 
 	default:

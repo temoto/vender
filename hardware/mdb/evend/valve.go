@@ -37,6 +37,11 @@ type DeviceValve struct { //nolint:maligned
 	pourTimeout     time.Duration
 
 	doGetTempHot    engine.Doer
+	doCheckTempHot  engine.Doer
+	DoSetTempHot    engine.FuncArg
+	DoPourCold      engine.ArgApplier
+	DoPourHot       engine.ArgApplier
+	DoPourEspresso  engine.ArgApplier
 	tempHot         cacheval.Int32
 	tempHotTarget   uint8
 	tempHotReported bool
@@ -54,32 +59,32 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 		return errors.Annotate(err, "evend.valve.Init")
 	}
 
-	waterStock, err := g.Inventory.Get("water")
-	if err != nil {
-		return errors.Trace(err)
-	}
-	self.cautionPartUnit = uint8(waterStock.TranslateHw(engine.Arg(valveConfig.CautionPartMl)))
-
 	self.doGetTempHot = self.newGetTempHot()
-	doCheckTempHot := engine.Func0{F: func() error { return nil }, V: self.newCheckTempHotValidate(ctx)}
-	doSetTempHot := self.NewSetTempHot()
-	doPourCold := self.NewPourCold()
-	doPourHot := self.NewPourHot()
-	doPourEspresso := self.NewPourEspresso()
-	g.Engine.Register("add.water_hot(?)", waterStock.Wrap(doPourHot.(engine.ArgApplier)))
-	g.Engine.Register("add.water_cold(?)", waterStock.Wrap(doPourCold.(engine.ArgApplier)))
-	g.Engine.Register("add.water_espresso(?)", waterStock.Wrap(doPourEspresso.(engine.ArgApplier)))
+	self.doCheckTempHot = engine.Func0{F: func() error { return nil }, V: self.newCheckTempHotValidate(ctx)}
+	self.DoSetTempHot = self.newSetTempHot()
+	self.DoPourCold = self.newPourCold()
+	self.DoPourHot = self.newPourHot()
+	self.DoPourEspresso = self.newPourEspresso()
 
-	g.Engine.Register("mdb.evend.valve_check_temp_hot", doCheckTempHot)
+	waterStock, err := g.Inventory.Get("water")
+	if err == nil {
+		g.Engine.Register("add.water_hot(?)", waterStock.Wrap(self.DoPourHot))
+		g.Engine.Register("add.water_cold(?)", waterStock.Wrap(self.DoPourCold))
+		g.Engine.Register("add.water_espresso(?)", waterStock.Wrap(self.DoPourEspresso))
+		self.cautionPartUnit = uint8(waterStock.TranslateHw(engine.Arg(valveConfig.CautionPartMl)))
+	} else {
+		self.dev.Log.Errorf("invalid config, stock water not found err=%v", err)
+	}
+
+	g.Engine.Register("mdb.evend.valve_check_temp_hot", self.doCheckTempHot)
 	g.Engine.Register("mdb.evend.valve_get_temp_hot", self.doGetTempHot)
-	g.Engine.Register("mdb.evend.valve_set_temp_hot(?)", doSetTempHot)
-	// g.Engine.Register("mdb.evend.valve_set_temp_hot_config", engine.Func{F: func(ctx context.Context) error {
-	// 	cfg := &state.GetConfig(ctx).Hardware.Evend.Valve
-	// 	return engine.ArgApply(doSetTempHot, engine.Arg(cfg.TemperatureHot)).Do(ctx)
-	// }})
-	g.Engine.Register("mdb.evend.valve_pour_espresso(?)", doPourEspresso)
-	g.Engine.Register("mdb.evend.valve_pour_cold(?)", doPourCold)
-	g.Engine.Register("mdb.evend.valve_pour_hot(?)", doPourHot)
+	g.Engine.Register("mdb.evend.valve_set_temp_hot(?)", self.DoSetTempHot)
+	g.Engine.Register("mdb.evend.valve_set_temp_hot_config", engine.Func{F: func(ctx context.Context) error {
+		return self.DoSetTempHot.Apply(engine.Arg(valveConfig.TemperatureHot)).Do(ctx)
+	}})
+	g.Engine.Register("mdb.evend.valve_pour_espresso(?)", self.DoPourEspresso.(engine.Doer))
+	g.Engine.Register("mdb.evend.valve_pour_cold(?)", self.DoPourCold.(engine.Doer))
+	g.Engine.Register("mdb.evend.valve_pour_hot(?)", self.DoPourHot.(engine.Doer))
 	g.Engine.Register("mdb.evend.valve_cold_open", self.NewValveCold(true))
 	g.Engine.Register("mdb.evend.valve_cold_close", self.NewValveCold(false))
 	g.Engine.Register("mdb.evend.valve_hot_open", self.NewValveHot(true))
@@ -91,7 +96,7 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	g.Engine.Register("mdb.evend.valve_pump_start", self.NewPump(true))
 	g.Engine.Register("mdb.evend.valve_pump_stop", self.NewPump(false))
 
-	return nil
+	return err
 }
 
 func (self *DeviceValve) UnitToTimeout(unit uint8) time.Duration {
@@ -100,7 +105,7 @@ func (self *DeviceValve) UnitToTimeout(unit uint8) time.Duration {
 	return min + time.Duration(unit)*perUnit
 }
 
-func (self *DeviceValve) newGetTempHot() engine.Doer {
+func (self *DeviceValve) newGetTempHot() engine.Func {
 	const tag = "mdb.evend.valve.get_temp_hot"
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
@@ -120,7 +125,7 @@ func (self *DeviceValve) newGetTempHot() engine.Doer {
 	}}
 }
 
-func (self *DeviceValve) NewSetTempHot() engine.Doer {
+func (self *DeviceValve) newSetTempHot() engine.FuncArg {
 	const tag = "mdb.evend.valve.set_temp_hot"
 
 	return engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
@@ -137,7 +142,7 @@ func (self *DeviceValve) NewSetTempHot() engine.Doer {
 	}}
 }
 
-func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doer) engine.Doer {
+func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doer) engine.ArgApplier {
 	tagPour := "pour_" + name
 	tag := "mdb.evend.valve." + tagPour
 
@@ -174,11 +179,11 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 		Append(doPour)
 }
 
-func (self *DeviceValve) NewPourEspresso() engine.Doer {
+func (self *DeviceValve) newPourEspresso() engine.ArgApplier {
 	return self.newPourCareful("espresso", 0x03, self.NewPumpEspresso(false))
 }
 
-func (self *DeviceValve) NewPourCold() engine.Doer {
+func (self *DeviceValve) newPourCold() engine.ArgApplier {
 	const tag = "mdb.evend.valve.pour_cold"
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
@@ -186,7 +191,7 @@ func (self *DeviceValve) NewPourCold() engine.Doer {
 		Append(self.Generic.NewWaitDone(tag, self.pourTimeout))
 }
 
-func (self *DeviceValve) NewPourHot() engine.Doer {
+func (self *DeviceValve) newPourHot() engine.ArgApplier {
 	const tag = "mdb.evend.valve.pour_hot"
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).

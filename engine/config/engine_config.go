@@ -8,11 +8,13 @@ import (
 )
 
 type Config struct {
-	Aliases     []Alias  `hcl:"alias"`
-	OnStart     []string `hcl:"on_start"`
-	OnMenuError []string `hcl:"on_menu_error"`
-	Inventory   Inventory
-	Menu        struct {
+	Aliases        []Alias  `hcl:"alias"`
+	OnStart        []string `hcl:"on_start"`
+	OnMenuError    []string `hcl:"on_menu_error"`
+	OnServiceBegin []string `hcl:"on_service_begin"`
+	OnServiceEnd   []string `hcl:"on_service_end"`
+	Inventory      Inventory
+	Menu           struct {
 		Items []*MenuItem `hcl:"item"`
 	}
 }

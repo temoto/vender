@@ -47,7 +47,7 @@ func (self *uiService) Init(ctx context.Context) {
 	self.resetTimeout = helpers.IntSecondDefault(g.Config.UI.Service.ResetTimeoutSec, 3*time.Second)
 }
 
-func (self *UI) onServiceBegin() State {
+func (self *UI) onServiceBegin(ctx context.Context) State {
 	self.inputBuf = self.inputBuf[:0]
 	self.lastActivity = time.Now()
 	self.service.menuIdx = 0
@@ -63,6 +63,9 @@ func (self *UI) onServiceBegin() State {
 	// self.g.Log.Debugf("invlist=%v, invidx=%d", self.service.invList, self.service.invIdx)
 
 	self.g.Tele.Service("begin")
+
+	self.g.Engine.ExecList(ctx, "on_service_begin", self.g.Config.Engine.OnServiceBegin)
+
 	self.g.Log.Debugf("ui service begin")
 	return StateServiceAuth
 }
