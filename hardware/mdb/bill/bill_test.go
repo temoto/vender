@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
@@ -69,6 +70,22 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 	_, err := poll(r.P)
 	require.NoError(t, err)
 	assert.Equal(t, expected, pis)
+}
+
+func TestBillOffline(t *testing.T) {
+	t.Parallel()
+
+	ctx, _ := state.NewTestContext(t, testConfig)
+	mock := mdb.MockFromContext(ctx)
+	mock.ExpectMap(map[string]string{"": ""})
+	defer mock.Close()
+
+	bv := new(BillValidator)
+	bv.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
+	err := bv.Init(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mdb.bill RESET: offline")
+	assert.Equal(t, errors.Cause(err), mdb.ErrOffline)
 }
 
 func TestBillPoll(t *testing.T) {

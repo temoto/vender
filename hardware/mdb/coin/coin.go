@@ -58,7 +58,6 @@ type CoinAcceptor struct { //nolint:maligned
 	tubesmu sync.Mutex
 	tubes   currency.NominalGroup
 
-	doSetup      engine.Doer
 	DoTubeStatus engine.Doer
 }
 
@@ -92,14 +91,14 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	self.dispenseTimeout = helpers.IntSecondDefault(config.DispenseTimeoutSec, defaultDispenseTimeout)
 	self.scalingFactor = 1
 
-	self.doSetup = self.newSetuper()
+	self.dev.DoInit = self.newIniter()
 	self.DoTubeStatus = self.NewTubeStatus()
 
-	engine := state.GetGlobal(ctx).Engine
-	engine.Register("mdb.coin.restart", self.Restarter())
+	// engine := state.GetGlobal(ctx).Engine
+	// TODO register payout,etc
 
-	// TODO (Enum idea) no IO in Init(), call Restarter() outside
-	err = self.newIniter().Do(ctx)
+	// TODO (Enum idea) no IO in Init()
+	err = self.dev.DoInit.Do(ctx)
 	return errors.Annotate(err, tag)
 }
 
@@ -201,26 +200,26 @@ func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 }
 
 func (self *CoinAcceptor) newIniter() engine.Doer {
-	const tag = "mdb.bill.init"
+	const tag = "mdb.coin.init"
 	return engine.NewSeq(tag).
 		Append(self.dev.DoReset).
 		Append(engine.Func{Name: tag + "/poll", F: func(ctx context.Context) error {
 			self.Run(ctx, nil, func(money.PollItem) bool { return false })
 			return nil
 		}}).
-		Append(self.doSetup).
+		Append(self.newSetuper()).
 		Append(engine.Func0{Name: tag + "/expid-diag", F: func() error {
 			var err error
 			// FIXME Append(IgnoreTimeout(...))
 			// timeout is unfortunately common "response" for unsupported commands
-			if err = self.CommandExpansionIdentification(); err != nil && !errors.IsTimeout(err) {
+			if err = self.CommandExpansionIdentification(); err != nil && errors.Cause(err) != mdb.ErrTimeout {
 				return err
 			}
-			if err = self.CommandFeatureEnable(FeatureExtendedDiagnostic); err != nil && !errors.IsTimeout(err) {
+			if err = self.CommandFeatureEnable(FeatureExtendedDiagnostic); err != nil && errors.Cause(err) != mdb.ErrTimeout {
 				return err
 			}
 			diagResult := new(DiagResult)
-			if err = self.CommandExpansionSendDiagStatus(diagResult); err != nil && !errors.IsTimeout(err) {
+			if err = self.CommandExpansionSendDiagStatus(diagResult); err != nil && errors.Cause(err) != mdb.ErrTimeout {
 				return err
 			}
 			return nil
@@ -228,14 +227,8 @@ func (self *CoinAcceptor) newIniter() engine.Doer {
 		Append(self.NewTubeStatus())
 }
 
-func (self *CoinAcceptor) Restarter() engine.Doer {
-	return engine.NewSeq(self.dev.Name + ".restarter").
-		Append(self.dev.DoReset).
-		Append(self.newIniter())
-}
-
 func (self *CoinAcceptor) newSetuper() engine.Doer {
-	const tag = "mdb.coin.setuper"
+	const tag = "mdb.coin.setup"
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		const expectLengthMin = 7
 		err := self.dev.DoSetup(ctx)

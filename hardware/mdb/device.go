@@ -16,11 +16,14 @@ import (
 
 const ErrCodeNone int32 = -1
 
+var ErrOffline = errors.Errorf("offline")
+
 const (
+	DefaultDelayAfterReset  = 500 * time.Millisecond
+	DefaultDelayBeforeReset = 0
 	DefaultDelayIdle        = 700 * time.Millisecond
 	DefaultDelayNext        = 200 * time.Millisecond
-	DefaultDelayBeforeReset = 0
-	DefaultDelayAfterReset  = 500 * time.Millisecond
+	DefaultDelayOffline     = 10 * time.Second
 	DefaultIdleThreshold    = 30 * time.Second
 )
 
@@ -36,8 +39,9 @@ type Device struct { //nolint:maligned
 	cmdLk sync.Mutex // TODO explore if chan approach is better
 	txfun TxFunc
 
-	LastOk      *atomic_clock.Clock
-	LastOff     *atomic_clock.Clock
+	LastOk      *atomic_clock.Clock // last successful tx(), 0 at init, monotonic
+	LastOff     *atomic_clock.Clock // last change from online to offline (MDB timeout), 0=online
+	lastReset   *atomic_clock.Clock // last RESET attempt, 0 only at init, monotonic
 	Log         *log2.Log
 	Address     uint8
 	Name        string
@@ -46,11 +50,13 @@ type Device struct { //nolint:maligned
 	PacketSetup Packet
 	PacketPoll  Packet
 	DoReset     engine.Doer
+	DoInit      engine.Doer // likely Seq starting with DoReset
 
 	DelayAfterReset  time.Duration
 	DelayBeforeReset time.Duration
 	DelayIdle        time.Duration
 	DelayNext        time.Duration
+	DelayOffline     time.Duration
 	IdleThreshold    time.Duration
 
 	SetupResponse Packet
@@ -67,19 +73,23 @@ func (self *Device) Init(txfun TxFunc, log *log2.Log, addr uint8, name string, b
 	self.Name = name
 	self.errCode = ErrCodeNone
 	self.LastOk = atomic_clock.New(0)
-	self.LastOff = atomic_clock.New(0)
+	self.LastOff = atomic_clock.Now()
+	self.lastReset = atomic_clock.New(0)
 
+	if self.DelayAfterReset == 0 {
+		self.DelayAfterReset = DefaultDelayAfterReset
+	}
+	if self.DelayBeforeReset == 0 {
+		self.DelayBeforeReset = DefaultDelayBeforeReset
+	}
 	if self.DelayIdle == 0 {
 		self.DelayIdle = DefaultDelayIdle
 	}
 	if self.DelayNext == 0 {
 		self.DelayNext = DefaultDelayNext
 	}
-	if self.DelayBeforeReset == 0 {
-		self.DelayBeforeReset = DefaultDelayBeforeReset
-	}
-	if self.DelayAfterReset == 0 {
-		self.DelayAfterReset = DefaultDelayAfterReset
+	if self.DelayOffline == 0 {
+		self.DelayOffline = DefaultDelayOffline
 	}
 	if self.IdleThreshold == 0 {
 		self.IdleThreshold = DefaultIdleThreshold
@@ -91,6 +101,10 @@ func (self *Device) Init(txfun TxFunc, log *log2.Log, addr uint8, name string, b
 	self.DoReset = engine.Func0{Name: fmt.Sprintf("mdb.%s.reset", self.Name), F: self.Reset}
 }
 
+func (self *Device) IsOnline() bool {
+	return self.LastOff.IsZero()
+}
+
 func (self *Device) ValidateErrorCode() error {
 	value := atomic.LoadInt32(&self.errCode)
 	if value == ErrCodeNone {
@@ -100,7 +114,7 @@ func (self *Device) ValidateErrorCode() error {
 }
 
 func (self *Device) ValidateOnline() error {
-	if self.LastOff.IsZero() {
+	if self.IsOnline() {
 		return nil
 	}
 	return errors.Errorf("mdb.%s offline duration=%v", self.Name, atomic_clock.Since(self.LastOff))
@@ -114,31 +128,13 @@ func (self *Device) Tx(request Packet) (r PacketError) {
 	return self.tx(request)
 }
 
-func (self *Device) tx(request Packet) (r PacketError) {
-	r.E = self.txfun(request, &r.P)
-	if r.E == nil {
-		// self.Log.Debugf("mdb.%s since last ok %v", self.Name, atomic_clock.Since(self.LastOk))
-		self.LastOk.SetNow()
-		self.LastOff.Set(0)
-	} else {
-		self.Log.Errorf("mdb.%s request=%s err=%v", self.Name, request.Format(), r.E)
-		if self.LastOff.IsZero() && errors.Cause(r.E) == ErrTimeout {
-			self.LastOk.Set(0)
-			self.LastOff.SetNow()
-		}
-		r.E = errors.Annotatef(r.E, "request=%x", request.Bytes())
-	}
-	return
-}
-
 func (self *Device) DoSetup(ctx context.Context) error {
 	self.cmdLk.Lock()
 	defer self.cmdLk.Unlock()
-
-	request := self.PacketSetup
-	r := self.tx(request)
+	self.SetupResponse = *PacketEmpty
+	r := self.tx(self.PacketSetup)
 	if r.E != nil {
-		return r.E
+		return errors.Annotatef(r.E, "mdb.%s SETUP", self.Name)
 	}
 	self.SetupResponse = r.P
 	return nil
@@ -173,51 +169,42 @@ func (self *Device) Reset() error {
 	return self.locked_reset()
 }
 
-// cmdLk used to ensure no concurrent commands between tx() and Sleep()
-func (self *Device) locked_reset() error {
-	tag := fmt.Sprintf("mdb.%s.reset", self.Name)
-	request := self.PacketReset
-	time.Sleep(self.DelayBeforeReset)
-	r := self.tx(request)
-	atomic.StoreInt32(&self.errCode, ErrCodeNone)
-	self.SetReady(false)
-	if r.E != nil {
-		if errors.Cause(r.E) == ErrTimeout {
-			self.LastOk.Set(0)
-			self.LastOff.SetNow()
-			self.Log.Errorf("%s addr=%02x is offline RESET err=timeout", tag, self.Address)
-		} else {
-			self.Log.Errorf("%s RESET err=%s", tag, errors.ErrorStack(r.E))
-		}
-		return r.E
-	}
-	self.Log.Infof("%s addr=%02x is working", tag, self.Address)
-	time.Sleep(self.DelayAfterReset)
-	return nil
-}
-
+// Main purpose is to keep certain manufacturer devices "hot" to reduce useless POLL time.
+// Incidentally this is also adequate place to put regular RESET attempts for offline devices.
 func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
-	okAge := atomic_clock.Since(self.LastOk)
-	wait := interval - okAge
+	wait := interval
 
 	for {
+		// TODO try and benchmark time.After vs NewTimer vs NewTicker
+		// self.Log.Debugf("keepalive wait=%v", wait)
+		if wait <= 0 {
+			wait = 1
+		}
 		select {
 		case <-stopch:
 			return
-		default:
+		case <-time.After(wait):
 		}
-		// self.Log.Debugf("keepalive okage=%v wait=%v", okAge, wait)
-		if wait > 0 {
-			time.Sleep(wait)
+		if online := self.IsOnline(); !online {
+			self.cmdLk.Lock()
+			wait, online, _ = self.locked_delayedReset()
+			self.cmdLk.Unlock()
+			if !online {
+				continue
+			}
 		}
 
 		self.cmdLk.Lock()
-		// maybe LastOk was updated during Lock()
-		okAge = atomic_clock.Since(self.LastOk)
-		wait = interval - okAge
-		// self.Log.Debugf("keepalive locked okage=%v wait=%v", okAge, wait)
-		if wait <= 0 {
-			self.Tx(self.PacketPoll)
+		// Could become offline during Lock()
+		if self.IsOnline() {
+			okAge := atomic_clock.Since(self.LastOk)
+			wait = interval - okAge
+			// self.Log.Debugf("keepalive locked okage=%v wait=%v", okAge, wait)
+			if wait <= 0 {
+				// TODO validate err code?
+				self.txInternal(self.PacketPoll)
+				wait = interval
+			}
 		}
 		self.cmdLk.Unlock()
 	}
@@ -234,7 +221,8 @@ func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duratio
 		self.cmdLk.Lock()
 		defer self.cmdLk.Unlock()
 		for {
-			r = self.Tx(request)
+			// TODO validate err code?
+			r = self.tx(request)
 			if r.E != nil {
 				return errors.Annotate(r.E, tag)
 			}
@@ -263,6 +251,72 @@ func (self *Device) XXX_FIXME_SetAllDelays(d time.Duration) {
 	self.DelayNext = d
 	self.DelayBeforeReset = d
 	self.DelayAfterReset = d
+	self.DelayOffline = d
+}
+
+// Returns retry delay and online status.
+func (self *Device) locked_delayedReset() (time.Duration, bool, error) {
+	// LastOff could be updated during Lock()
+	if self.IsOnline() {
+		return 0, true, nil
+	}
+	resetAge := atomic_clock.Since(self.lastReset)
+	if resetAge < self.DelayOffline { // don't RESET too often
+		return self.DelayOffline - resetAge, false, nil
+	}
+
+	if err := self.locked_reset(); err != nil {
+		return self.DelayOffline, false, err
+	}
+	return 0, true, nil
+}
+
+// cmdLk used to ensure no concurrent commands during delay
+func (self *Device) locked_reset() error {
+	tag := fmt.Sprintf("mdb.%s", self.Name)
+	self.LastOff.SetNowIfZero() // consider device offline from now till successful response
+	self.SetReady(false)
+	time.Sleep(self.DelayBeforeReset)
+	r := self.txInternal(self.PacketReset)
+	self.lastReset.SetNow()
+	atomic.StoreInt32(&self.errCode, ErrCodeNone)
+	if r.E != nil {
+		err := r.E
+		if errors.Cause(err) == ErrTimeout {
+			// err = errors.Annotatef(err, "%s is offline", tag)
+			err = errors.Wrap(err, ErrOffline)
+		} else {
+			// TODO remove log here when ensured that error is logged in all callers
+			// - Keepalive() ignores err
+			// - Reset() returns err to caller without logging
+			self.Log.Errorf("%s RESET err=%s", tag, errors.ErrorStack(err))
+		}
+		err = errors.Annotatef(err, "%s RESET", tag)
+		return err
+	}
+	self.Log.Infof("%s addr=%02x is working", tag, self.Address)
+	time.Sleep(self.DelayAfterReset)
+	return nil
+}
+
+func (self *Device) tx(request Packet) PacketError {
+	if err := self.ValidateOnline(); err != nil {
+		return PacketError{E: err}
+	}
+	return self.txInternal(request)
+}
+
+func (self *Device) txInternal(request Packet) (r PacketError) {
+	r.E = self.txfun(request, &r.P)
+	if r.E == nil {
+		// self.Log.Debugf("mdb.%s since last ok %v", self.Name, atomic_clock.Since(self.LastOk))
+		self.LastOk.SetNow()
+		self.LastOff.Set(0)
+	} else {
+		r.E = errors.Annotatef(r.E, "request=%x", request.Bytes())
+		self.Log.Errorf("mdb.%s err=%v", self.Name, r.E)
+	}
+	return
 }
 
 // "Idle mode" polling, runs forever until receive on `stopch`.

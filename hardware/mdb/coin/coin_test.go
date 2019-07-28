@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/temoto/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
@@ -71,11 +72,50 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 	// ca.AcceptMax(ctx, 1000)
 	r := ca.dev.Tx(ca.dev.PacketPoll)
 	require.NoError(t, r.E, "POLL")
+	assert.True(t, ca.dev.IsOnline())
 	pis := make([]_PI, 0, len(input)/2)
 	poll := ca.pollFun(func(pi money.PollItem) bool { pis = append(pis, pi); return false })
 	_, err := poll(r.P)
 	require.NoError(t, err)
 	assert.Equal(t, expected, pis)
+}
+
+func TestCoinOffline(t *testing.T) {
+	t.Parallel()
+
+	ctx, _ := state.NewTestContext(t, testConfig)
+	mock := mdb.MockFromContext(ctx)
+	mock.ExpectMap(map[string]string{"": ""})
+	defer mock.Close()
+
+	ca := new(CoinAcceptor)
+	ca.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
+	err := ca.Init(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mdb.coin RESET: offline")
+	assert.Equal(t, errors.Cause(err), mdb.ErrOffline)
+	assert.False(t, ca.dev.IsOnline())
+}
+
+func TestCoinNoDiag(t *testing.T) {
+	t.Parallel()
+
+	ctx, _ := state.NewTestContext(t, testConfig)
+	mock := mdb.MockFromContext(ctx)
+	mock.ExpectMap(map[string]string{
+		"08": "",                                               // initer, RESET
+		"0b": "0b",                                             // initer, POLL
+		"09": "021643640200170102050a0a1900000000000000000000", // initer, SETUP
+		"0a": "0000110008",                                     // initer, TUBE STATUS
+		"":   "",
+	})
+	defer mock.Close()
+
+	ca := new(CoinAcceptor)
+	ca.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
+	err := ca.Init(ctx)
+	require.NoError(t, err)
+	assert.True(t, ca.dev.IsOnline())
 }
 
 func TestCoinPoll(t *testing.T) {

@@ -90,8 +90,10 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	g.Engine.Register(self.DoEscrowAccept.Name, self.DoEscrowAccept)
 	g.Engine.Register(self.DoEscrowReject.Name, self.DoEscrowReject)
 
-	doInit := self.newIniter()
-	if err = doInit.Do(ctx); err != nil {
+	self.dev.DoInit = self.newIniter()
+
+	// TODO remove IO from Init()
+	if err = self.dev.DoInit.Do(ctx); err != nil {
 		return errors.Annotate(err, tag)
 	}
 

@@ -84,7 +84,7 @@ func (self *MockUart) txMap(request, response []byte) (int, error) {
 	responseHex, found := self.m[requestHex]
 	if !found {
 		// must not call self.t.Error() here
-		return 0, errors.Timeoutf("mdb-mock: emulating") // "... timeout" word is appended
+		return 0, ErrTimeout
 	}
 	delete(self.m, requestHex)
 	rp := MustPacketFromHex(responseHex, true)

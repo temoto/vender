@@ -84,7 +84,7 @@ func (self *Mdb) Tx(request Packet, response *Packet) error {
 	response.l = n
 
 	if err != nil {
-		return errors.Annotatef(err, "mdb.Tx send=%s recv=%s err=%v", request.Format(), response.Format(), err)
+		return errors.Annotatef(err, "mdb.Tx send=%x recv=%x", request.Bytes(), response.Bytes())
 	}
 	if self.Log.Enabled(log2.LDebug) {
 		self.Log.Debugf("mdb.Tx (%02d) %s -> (%02d) %s",
