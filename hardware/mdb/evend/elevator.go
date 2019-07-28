@@ -21,6 +21,7 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 	self.currentPos = -1
 	g := state.GetGlobal(ctx)
 	config := &g.Config.Hardware.Evend.Elevator
+	keepaliveInterval := helpers.IntMillisecondDefault(config.KeepaliveMs, 0)
 	self.timeout = helpers.IntSecondDefault(config.TimeoutSec, 10*time.Second)
 	err := self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
@@ -51,6 +52,10 @@ func (self *DeviceElevator) Init(ctx context.Context) error {
 	}
 	moveSeq := engine.NewSeq("mdb.evend.elevator_move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
+
+	if keepaliveInterval > 0 {
+		go self.Generic.dev.Keepalive(keepaliveInterval, g.Alive.StopChan())
+	}
 
 	return err
 }

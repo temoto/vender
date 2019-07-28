@@ -14,7 +14,8 @@ type Config struct { //nolint:maligned
 		EnsureTimeoutSec   int `hcl:"ensure_timeout_sec"`
 	} `hcl:"cup"`
 	Elevator struct { //nolint:maligned
-		TimeoutSec int `hcl:"timeout_sec"`
+		KeepaliveMs int `hcl:"keepalive_ms"`
+		TimeoutSec  int `hcl:"timeout_sec"`
 	} `hcl:"elevator"`
 	Espresso struct { //nolint:maligned
 		TimeoutSec int `hcl:"timeout_sec"`
@@ -23,6 +24,7 @@ type Config struct { //nolint:maligned
 		RunTimeoutMs int `hcl:"run_timeout_ms"`
 	} `hcl:"hopper"`
 	Mixer struct { //nolint:maligned
+		KeepaliveMs    int `hcl:"keepalive_ms"`
 		MoveTimeoutSec int `hcl:"move_timeout_sec"`
 		ShakeTimeoutMs int `hcl:"shake_timeout_ms"`
 	} `hcl:"mixer"`
