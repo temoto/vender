@@ -59,6 +59,15 @@ func (self *Inventory) Get(name string) (*Stock, error) {
 	return nil, errors.Errorf("stock=%s is not registered", name)
 }
 
+func (self *Inventory) MustGet(f interface{ Fatal(...interface{}) }, name string) *Stock {
+	s, err := self.Get(name)
+	if err != nil {
+		f.Fatal(err)
+		return nil
+	}
+	return s
+}
+
 func (self *Inventory) Iter(fun func(s *Stock)) {
 	self.mu.Lock()
 	for _, stock := range self.ss {

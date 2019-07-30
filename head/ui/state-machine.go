@@ -89,9 +89,8 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	case StateFrontSelect:
 		return self.onFrontSelect(ctx)
 
-	// TODO
-	// case StateFrontTune:
-	// 	return self.onFrontTune(ctx)
+	case StateFrontTune:
+		return self.onFrontTune(ctx)
 
 	case StateFrontAccept:
 		return self.onFrontAccept(ctx)

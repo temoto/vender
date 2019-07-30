@@ -8,6 +8,7 @@ import (
 
 	"github.com/temoto/alive"
 	"github.com/temoto/errors"
+	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb/evend"
@@ -20,13 +21,6 @@ const (
 	MaxCream     = 6
 	DefaultSugar = 4
 	MaxSugar     = 8
-)
-
-const (
-	frontModeStatus = "menu-status"
-	frontModeCream  = "cream"
-	frontModeSugar  = "sugar"
-	frontModeBroken = "broken"
 )
 
 const modTuneTimeout = 3 * time.Second
@@ -55,53 +49,30 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 }
 
 func (self *UI) onFrontSelect(ctx context.Context) State {
-	if self.broken {
-		panic("self.broken")
-	}
-
 	alive := alive.NewAlive()
 	defer func() {
 		alive.Stop() // stop pending AcceptCredit
 		alive.Wait()
 	}()
 
-	config := self.g.Config.UI.Front
 	moneysys := money.GetGlobal(ctx)
 	maxPrice := self.menu.MaxPrice() // TODO decide if this should be recalculated during ui
-	mode := frontModeStatus
 	go moneysys.AcceptCredit(ctx, maxPrice, alive.StopChan(), self.moneych)
 
 	for alive.IsRunning() {
 		// step 1: refresh display
-		if self.broken {
-			mode = frontModeBroken
-		}
 		credit := moneysys.Credit(ctx)
-		switch mode {
-		case frontModeStatus:
-			l1 := config.MsgStateIntro
-			l2 := ""
-			if (credit != 0) || (len(self.inputBuf) > 0) {
-				l1 = msgCredit + credit.Format100I()
-				l2 = fmt.Sprintf(msgInputCode, string(self.inputBuf))
-			} else {
-				if doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot"); doCheckTempHot != nil {
-					err := doCheckTempHot.Validate()
-					if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
-						l2 = fmt.Sprintf("no hot water %d", errtemp.Current)
-					}
-				}
-			}
-			self.display.SetLines(l1, l2)
-		case frontModeBroken:
-			self.display.SetLines(config.MsgStateBroken, "")
+		// XXX FIXME
+		if self.State == StateFrontTune {
+			goto waitInput
 		}
+		self.frontSelectShow(ctx, credit)
 
 		// step 2: wait for input/timeout
+	waitInput:
 		var e input.Event
 		timeout := self.frontResetTimeout
-		switch mode {
-		case frontModeCream, frontModeSugar:
+		if self.State == StateFrontTune {
 			timeout = modTuneTimeout
 		}
 		select {
@@ -116,15 +87,11 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			case money.EventAbort:
 				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
 			}
-			// likely redundant
-			credit = moneysys.Credit(ctx)
-
 			go moneysys.AcceptCredit(ctx, maxPrice, alive.StopChan(), self.moneych)
 
 		case <-time.After(timeout):
-			switch mode {
-			case frontModeCream, frontModeSugar:
-				mode = frontModeStatus
+			switch self.State {
+			case StateFrontTune:
 				// "return to previous mode"
 				return StateFrontSelect
 			default:
@@ -136,68 +103,25 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		if e.Source == input.DevInputEventTag && e.Up {
 			return StateServiceBegin
 		}
-		switch mode {
-		case frontModeStatus:
-			switch e.Key {
-			case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
-				return self.onFrontCreamSugar(mode, e)
-			}
+		switch e.Key {
+		case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
+			return self.onFrontTuneInput(e)
+		}
+		if e.IsDigit() {
+			return self.onFrontSelectInput(ctx, e)
+		}
 
-			switch {
-			case e.IsDigit():
-				self.inputBuf = append(self.inputBuf, byte(e.Key))
+		switch self.State {
+		case StateFrontSelect:
+			return self.onFrontSelectInput(ctx, e)
 
-			case input.IsReject(&e):
-				// backspace semantic
-				if len(self.inputBuf) > 0 {
-					self.inputBuf = self.inputBuf[:len(self.inputBuf)-1]
-					break
-				}
-				return StateFrontEnd
+		case StateFrontTune:
+			// if input.IsAccept(&e) || input.IsReject(&e) {
+			return StateFrontSelect
+			// }
 
-			case input.IsAccept(&e):
-				if len(self.inputBuf) == 0 {
-					self.showError(msgMenuCodeEmpty)
-					break
-				}
-
-				x, err := strconv.ParseUint(string(self.inputBuf), 10, 16)
-				if err != nil {
-					self.inputBuf = self.inputBuf[:0]
-					self.showError(msgMenuCodeInvalid)
-					break
-				}
-				code := uint16(x)
-
-				mitem, ok := self.menu[code]
-				if !ok {
-					self.showError(msgMenuCodeInvalid)
-					break
-				}
-				self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
-				if mitem.Price > credit {
-					self.showError(msgMenuInsufficientCredit)
-					break
-				}
-				self.g.Log.Debugf("mitem=%s validate", mitem.String())
-				if err := mitem.D.Validate(); err != nil {
-					self.g.Log.Errorf("ui-front selected=%s Validate err=%v", mitem.String(), err)
-					self.showError("сейчас недоступно")
-					return StateFrontBegin
-				}
-
-				self.FrontResult.Item = mitem
-				return StateFrontAccept
-			}
-
-		case frontModeCream, frontModeSugar:
-			switch e.Key {
-			case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
-				return self.onFrontCreamSugar(mode, e)
-			}
-			if input.IsAccept(&e) || input.IsReject(&e) {
-				return StateFrontSelect
-			}
+		default:
+			panic(fmt.Sprintf("ui-front unhandled state=%s", self.State.String()))
 		}
 	}
 
@@ -205,7 +129,83 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 	return StateFrontEnd
 }
 
-func (self *UI) onFrontCreamSugar(mode string, e input.Event) State {
+func (self *UI) frontSelectShow(ctx context.Context, credit currency.Amount) {
+	config := self.g.Config.UI.Front
+	l1 := config.MsgStateIntro
+	l2 := ""
+	if (credit != 0) || (len(self.inputBuf) > 0) {
+		l1 = msgCredit + credit.FormatCtx(ctx)
+		l2 = fmt.Sprintf(msgInputCode, string(self.inputBuf))
+	} else {
+		if doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot"); doCheckTempHot != nil {
+			err := doCheckTempHot.Validate()
+			if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
+				l2 = fmt.Sprintf("no hot water %d", errtemp.Current)
+			}
+		}
+	}
+	self.display.SetLines(l1, l2)
+}
+func (self *UI) onFrontSelectInput(ctx context.Context, e input.Event) State {
+	switch {
+	case e.IsDigit():
+		self.inputBuf = append(self.inputBuf, byte(e.Key))
+		return StateFrontSelect
+
+	case input.IsReject(&e):
+		// backspace semantic
+		if len(self.inputBuf) > 0 {
+			self.inputBuf = self.inputBuf[:len(self.inputBuf)-1]
+			return StateFrontSelect
+		}
+		// TODO maybe ignore reject on empty buffer?
+		return StateFrontEnd
+
+	case input.IsAccept(&e):
+		if len(self.inputBuf) == 0 {
+			self.showError(msgMenuCodeEmpty)
+			return StateFrontSelect
+		}
+
+		x, err := strconv.ParseUint(string(self.inputBuf), 10, 16)
+		if err != nil {
+			self.inputBuf = self.inputBuf[:0]
+			self.showError(msgMenuCodeInvalid)
+			return StateFrontSelect
+		}
+		code := uint16(x)
+
+		mitem, ok := self.menu[code]
+		if !ok {
+			self.showError(msgMenuCodeInvalid)
+			return StateFrontSelect
+		}
+		moneysys := money.GetGlobal(ctx)
+		credit := moneysys.Credit(ctx)
+		self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
+		if mitem.Price > credit {
+			self.showError(msgMenuInsufficientCredit)
+			return StateFrontSelect
+		}
+		self.g.Log.Debugf("mitem=%s validate", mitem.String())
+		if err := mitem.D.Validate(); err != nil {
+			self.g.Log.Errorf("ui-front selected=%s Validate err=%v", mitem.String(), err)
+			self.showError("сейчас недоступно")
+			return StateFrontBegin
+		}
+
+		self.FrontResult.Item = mitem
+		return StateFrontAccept
+	}
+	return StateFrontSelect
+}
+
+func (self *UI) onFrontTune(ctx context.Context) State {
+	// XXX FIXME
+	return self.onFrontSelect(ctx)
+}
+
+func (self *UI) onFrontTuneInput(e input.Event) State {
 	switch e.Key {
 	case input.EvendKeyCreamLess:
 		if self.FrontResult.Cream > 0 {
@@ -236,25 +236,26 @@ func (self *UI) onFrontCreamSugar(mode string, e input.Event) State {
 			// TODO notify "impossible input" (sound?)
 		}
 	default:
-		return StateFrontTune
+		return StateFrontSelect
 	}
 	var t1, t2 []byte
+	next := StateFrontSelect
 	switch e.Key {
 	case input.EvendKeyCreamLess, input.EvendKeyCreamMore:
 		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", msgCream, self.FrontResult.Cream))
 		t2 = formatScale(self.FrontResult.Cream, 0, MaxCream, ScaleAlpha)
-		mode = frontModeCream
+		next = StateFrontTune
 	case input.EvendKeySugarLess, input.EvendKeySugarMore:
 		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", msgSugar, self.FrontResult.Sugar))
 		t2 = formatScale(self.FrontResult.Sugar, 0, MaxSugar, ScaleAlpha)
-		mode = frontModeSugar
+		next = StateFrontTune
 	}
 	t2 = append(append(append(make([]byte, 0, lcd.MaxWidth), '-', ' '), t2...), ' ', '+')
 	self.display.SetLinesBytes(
 		self.display.JustCenter(t1),
 		self.display.JustCenter(t2),
 	)
-	return StateFrontTune
+	return next
 }
 
 func (self *UI) onFrontAccept(ctx context.Context) State {
@@ -270,10 +271,26 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	}
 	self.g.Log.Debugf("ui-front selected=%s begin", selected.String())
 	if err := moneysys.WithdrawPrepare(ctx, selected.Price); err != nil {
-		self.g.Log.Debugf("ui-front CRITICAL error while return change")
+		self.g.Log.Errorf("ui-front CRITICAL error while return change")
 	}
 	itemCtx := money.SetCurrentPrice(ctx, selected.Price)
-	self.display.SetLines("спасибо", "готовлю")
+	if tuneCream := scaleTuneRate(self.FrontResult.Cream, MaxCream, DefaultCream); tuneCream != 1 {
+		const name = "cream"
+		var err error
+		self.g.Log.Errorf("ui-front tuning stock=%s tune=%v", name, tuneCream)
+		if itemCtx, err = self.g.Inventory.WithTuning(itemCtx, name, tuneCream); err != nil {
+			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
+		}
+	}
+	if tuneSugar := scaleTuneRate(self.FrontResult.Sugar, MaxSugar, DefaultSugar); tuneSugar != 1 {
+		const name = "sugar"
+		var err error
+		self.g.Log.Errorf("ui-front tuning stock=%s tune=%v", name, tuneSugar)
+		if itemCtx, err = self.g.Inventory.WithTuning(itemCtx, name, tuneSugar); err != nil {
+			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
+		}
+	}
+	self.display.SetLines(msgMaking1, msgMaking2)
 
 	err := selected.D.Do(itemCtx)
 	_ = self.g.Inventory.Persist.Store()
@@ -333,4 +350,23 @@ func formatScale(value, min, max uint8, alphabet []byte) []byte {
 		vicon[i] = alphabet[vicon[i]]
 	}
 	return vicon[:]
+}
+
+func scaleTuneRate(value, max, center uint8) float32 {
+	switch {
+	case value == center: // most common path
+		return 1
+	case value == 0:
+		return 0
+	}
+	if value > max {
+		value = max
+	}
+	if value > 0 && value < center {
+		return 1 - (0.25 * float32(center-value))
+	}
+	if value > center && value <= max {
+		return 1 + (0.25 * float32(value-center))
+	}
+	panic("code error")
 }

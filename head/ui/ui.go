@@ -14,10 +14,12 @@ import (
 
 // TODO move text messages to config
 const (
-	msgError  = "error"
-	msgCream  = "Сливки"
-	msgSugar  = "Сахар"
-	msgCredit = "Кредит:"
+	msgError   = "error"
+	msgCream   = "Сливки"
+	msgSugar   = "Сахар"
+	msgCredit  = "Кредит:"
+	msgMaking1 = "спасибо"
+	msgMaking2 = "готовлю"
 
 	msgMenuCodeEmpty          = "нажимайте цифры"
 	msgMenuCodeInvalid        = "проверьте код"

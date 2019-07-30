@@ -15,6 +15,7 @@ func NewTestContext(t testing.TB, confString string /* logLevel log2.Level*/) (c
 	})
 
 	log := log2.NewTest(t, log2.LDebug)
+	// log := log2.NewStderr(log2.LDebug) // useful with panics
 	log.SetFlags(log2.LTestFlags)
 	ctx, g := NewContext(log)
 	g.MustInit(ctx, MustReadConfig(log, fs, "test-inline"))
