@@ -7,6 +7,6 @@ message State {
   message Stock {
     string name = 1;
     bool enabled = 2;
-    int32 value = 3;
+    float value = 3;
   }
 }

@@ -18,15 +18,13 @@ var (
 
 type Inventory struct {
 	persist.Persist
-	engine *engine.Engine
-	log    *log2.Log
-	mu     sync.RWMutex
-	ss     map[string]*Stock
+	log *log2.Log
+	mu  sync.RWMutex
+	ss  map[string]*Stock
 }
 
 func (self *Inventory) Init(ctx context.Context, c *engine_config.Inventory, engine *engine.Engine) error {
 	self.log = log2.ContextValueLogger(ctx)
-	self.engine = engine
 
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -38,7 +36,7 @@ func (self *Inventory) Init(ctx context.Context, c *engine_config.Inventory, eng
 			continue
 		}
 
-		stock, err := NewStock(stockConfig, self.engine)
+		stock, err := NewStock(stockConfig, engine)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -67,4 +65,13 @@ func (self *Inventory) Iter(fun func(s *Stock)) {
 		fun(stock)
 	}
 	self.mu.Unlock()
+}
+
+func (self *Inventory) WithTuning(ctx context.Context, stockName string, adj float32) (context.Context, error) {
+	stock, err := self.Get(stockName)
+	if err != nil {
+		return ctx, errors.Annotate(err, "WithTuning")
+	}
+	ctx = context.WithValue(ctx, stock.tuneKey, adj)
+	return ctx, nil
 }

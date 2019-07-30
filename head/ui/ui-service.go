@@ -173,7 +173,7 @@ func (self *UI) onServiceInventory() State {
 	invCurrent := self.service.invList[self.service.invIdx]
 	self.display.SetLinesBytes(
 		self.display.Translate(fmt.Sprintf("I%d %s", self.service.invIdx+1, invCurrent.Name)),
-		self.display.Translate(fmt.Sprintf("%d %s\x00", invCurrent.Value(), string(self.inputBuf))),
+		self.display.Translate(fmt.Sprintf("%d %s\x00", int32(invCurrent.Value()), string(self.inputBuf))),
 	)
 
 	next, e := self.serviceWaitInput()
@@ -209,7 +209,7 @@ func (self *UI) onServiceInventory() State {
 		}
 
 		invCurrent := self.service.invList[self.service.invIdx]
-		invCurrent.Set(int32(x))
+		invCurrent.Set(float32(x))
 
 	case input.IsReject(&e):
 		// backspace semantic

@@ -47,8 +47,8 @@ engine { inventory {
 
 	water, err := g.Inventory.Get("water")
 	require.NoError(t, err)
-	initial := rand.Int31() - 10000 // check=false may go negative, not error
-	t.Logf("water before=%d", initial)
+	initial := (rand.Float32() - 0.5) * 10000 // check=false may go negative, not error
+	t.Logf("water before=%f", initial)
 	water.Set(initial)
 	g.Engine.TestDo(t, ctx, "add.water_hot(90)")
 	assert.Equal(t, initial-90, water.Value())

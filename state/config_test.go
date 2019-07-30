@@ -119,11 +119,11 @@ engine { inventory {
 				g := GetGlobal(ctx)
 				stock, err := g.Inventory.Get("espresso")
 				assert.NoError(t, err)
-				initial := helpers.RandUnix().Int31()
+				initial := helpers.RandUnix().Float32() * (1 << 20)
 				stock.Set(initial)
 				g.Engine.TestDo(t, ctx, "stock.espresso.spend1")
 				g.Engine.TestDo(t, ctx, "stock.espresso.spend(3)")
-				assert.Equal(t, int32(initial-4*9), stock.Value())
+				assert.Equal(t, float32(initial-4*9), stock.Value())
 			}, ""},
 
 		{"inventory-register", `
@@ -143,7 +143,7 @@ engine { inventory {
 					}})
 				g.Engine.TestDo(t, ctx, "add.tea(4)")
 				assert.Equal(t, int32(2), hwarg)
-				assert.Equal(t, int32(13-4*3), stock.Value())
+				assert.Equal(t, float32(13-4*3), stock.Value())
 			}, ""},
 
 		{"error-syntax", `hello`, nil, "key 'hello' expected start of object"},

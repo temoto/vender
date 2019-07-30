@@ -29,7 +29,7 @@ func (m *State) Reset()         { *m = State{} }
 func (m *State) String() string { return proto.CompactTextString(m) }
 func (*State) ProtoMessage()    {}
 func (*State) Descriptor() ([]byte, []int) {
-	return fileDescriptor_state_f4ee70690c614098, []int{0}
+	return fileDescriptor_state_23037db7bb8fe8db, []int{0}
 }
 func (m *State) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_State.Unmarshal(m, b)
@@ -59,7 +59,7 @@ func (m *State) GetStocks() []*State_Stock {
 type State_Stock struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Enabled              bool     `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Value                int32    `protobuf:"varint,3,opt,name=value,proto3" json:"value,omitempty"`
+	Value                float32  `protobuf:"fixed32,3,opt,name=value,proto3" json:"value,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -69,7 +69,7 @@ func (m *State_Stock) Reset()         { *m = State_Stock{} }
 func (m *State_Stock) String() string { return proto.CompactTextString(m) }
 func (*State_Stock) ProtoMessage()    {}
 func (*State_Stock) Descriptor() ([]byte, []int) {
-	return fileDescriptor_state_f4ee70690c614098, []int{0, 0}
+	return fileDescriptor_state_23037db7bb8fe8db, []int{0, 0}
 }
 func (m *State_Stock) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_State_Stock.Unmarshal(m, b)
@@ -103,7 +103,7 @@ func (m *State_Stock) GetEnabled() bool {
 	return false
 }
 
-func (m *State_Stock) GetValue() int32 {
+func (m *State_Stock) GetValue() float32 {
 	if m != nil {
 		return m.Value
 	}
@@ -115,9 +115,9 @@ func init() {
 	proto.RegisterType((*State_Stock)(nil), "inventory.State.Stock")
 }
 
-func init() { proto.RegisterFile("state.proto", fileDescriptor_state_f4ee70690c614098) }
+func init() { proto.RegisterFile("state.proto", fileDescriptor_state_23037db7bb8fe8db) }
 
-var fileDescriptor_state_f4ee70690c614098 = []byte{
+var fileDescriptor_state_23037db7bb8fe8db = []byte{
 	// 153 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2e, 0x2e, 0x49, 0x2c,
 	0x49, 0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0xcc, 0xcc, 0x2b, 0x4b, 0xcd, 0x2b, 0xc9,
@@ -127,6 +127,6 @@ var fileDescriptor_state_f4ee70690c614098 = []byte{
 	0x85, 0x84, 0xb8, 0x58, 0xf2, 0x12, 0x73, 0x53, 0x25, 0x18, 0x15, 0x18, 0x35, 0x38, 0x83, 0xc0,
 	0x6c, 0x21, 0x09, 0x2e, 0xf6, 0xd4, 0xbc, 0xc4, 0xa4, 0x9c, 0xd4, 0x14, 0x09, 0x26, 0x05, 0x46,
 	0x0d, 0x8e, 0x20, 0x18, 0x57, 0x48, 0x84, 0x8b, 0xb5, 0x2c, 0x31, 0xa7, 0x34, 0x55, 0x82, 0x59,
-	0x81, 0x51, 0x83, 0x35, 0x08, 0xc2, 0x49, 0x62, 0x03, 0x3b, 0xcc, 0x18, 0x10, 0x00, 0x00, 0xff,
-	0xff, 0x20, 0x53, 0x23, 0x8f, 0xa7, 0x00, 0x00, 0x00,
+	0x81, 0x51, 0x83, 0x29, 0x08, 0xc2, 0x49, 0x62, 0x03, 0x3b, 0xcc, 0x18, 0x10, 0x00, 0x00, 0xff,
+	0xff, 0x55, 0xab, 0xda, 0x72, 0xa7, 0x00, 0x00, 0x00,
 }

@@ -41,5 +41,5 @@ alias "add.cup" { scenario = "mdb.evend.cup_dispense stock.cup.spend1" }
 	require.NoError(t, err)
 	stock.Set(7)
 	g.Engine.TestDo(t, ctx, "add.cup")
-	assert.Equal(t, int32(6), stock.Value())
+	assert.Equal(t, float32(6), stock.Value())
 }

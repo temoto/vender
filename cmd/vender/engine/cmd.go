@@ -49,8 +49,8 @@ func Main(ctx context.Context, config *state.Config) error {
 	g.Engine.Register("stock.all.add(?)", engine.FuncArg{F: func(ctx context.Context, arg engine.Arg) error {
 		g.Inventory.Iter(func(stock *inventory.Stock) {
 			current := stock.Value()
-			g.Log.Debugf("- source=%s value=%d", stock.Name, current)
-			stock.Set(current + int32(arg))
+			g.Log.Debugf("- source=%s value=%f", stock.Name, current)
+			stock.Set(current + float32(arg))
 		})
 		return nil
 	}})

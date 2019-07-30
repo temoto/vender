@@ -46,13 +46,13 @@ type Inventory struct {
 type Stock struct { //nolint:maligned
 	Name        string  `hcl:"name,key"`
 	Check       bool    `hcl:"check"`
-	Min         int32   `hcl:"min"`
+	Min         float32 `hcl:"min"`
 	HwRate      float32 `hcl:"hw_rate"`
 	SpendRate   float32 `hcl:"spend_rate"`
 	RegisterAdd string  `hcl:"register_add"`
 }
 
 func (self *Stock) String() string {
-	return fmt.Sprintf("inventory.%s check=%t hw_rate=%f spend_rate=%f min=%d",
+	return fmt.Sprintf("inventory.%s check=%t hw_rate=%f spend_rate=%f min=%f",
 		self.Name, self.Check, self.HwRate, self.SpendRate, self.Min)
 }
