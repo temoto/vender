@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/coreos/go-systemd/daemon"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"

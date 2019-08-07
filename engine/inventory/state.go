@@ -2,7 +2,7 @@ package inventory
 
 import (
 	"github.com/golang/protobuf/proto"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/state/persist"
 )
 

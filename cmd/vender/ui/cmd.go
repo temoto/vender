@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	engine_config "github.com/temoto/vender/engine/config"
 	"github.com/temoto/vender/head/money"

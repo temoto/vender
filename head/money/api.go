@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/state"
 )

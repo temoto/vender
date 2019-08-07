@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/c-bata/go-prompt"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/log2"

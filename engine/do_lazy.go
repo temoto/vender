@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 )
 
 func ForceLazy(d Doer) (Doer, bool) {

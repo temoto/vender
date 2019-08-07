@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/hcl"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	engine_config "github.com/temoto/vender/engine/config"
 	"github.com/temoto/vender/hardware/lcd"

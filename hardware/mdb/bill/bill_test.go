@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"

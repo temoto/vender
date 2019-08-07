@@ -4,7 +4,7 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	gpio "github.com/temoto/gpio-cdev-go"
 	"github.com/temoto/vender/helpers"
 	"periph.io/x/periph/conn/spi"

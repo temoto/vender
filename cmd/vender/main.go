@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/engine"
 	"github.com/temoto/vender/cmd/vender/mdb"
 	"github.com/temoto/vender/cmd/vender/subcmd"

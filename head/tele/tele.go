@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/spq"
 	tele_config "github.com/temoto/vender/head/tele/config"
 	"github.com/temoto/vender/helpers"

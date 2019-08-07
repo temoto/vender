@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 )
 
 // Amount is integer counting lowest currency unit, e.g. $1.20 = 120

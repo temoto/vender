@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )

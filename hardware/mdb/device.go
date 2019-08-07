@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/helpers/atomic_clock"
 	"github.com/temoto/vender/log2"

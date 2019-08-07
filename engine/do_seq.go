@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
 )
 

@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
 )

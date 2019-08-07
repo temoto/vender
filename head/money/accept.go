@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/temoto/alive"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/head/tele"

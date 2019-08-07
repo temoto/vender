@@ -12,7 +12,7 @@ import (
 	// TODO try github.com/256dpi/gomqtt
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	tele_config "github.com/temoto/vender/head/tele/config"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"

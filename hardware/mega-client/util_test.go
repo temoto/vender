@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	gpio "github.com/temoto/gpio-cdev-go"
 	gpio_mock "github.com/temoto/gpio-cdev-go/mock"
 	"github.com/temoto/vender/helpers"

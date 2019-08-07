@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/head/money"

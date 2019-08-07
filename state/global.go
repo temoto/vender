@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/temoto/alive"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/input"

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 )
 
 type FullReader interface {

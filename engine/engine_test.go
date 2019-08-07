@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/log2"
 )
 

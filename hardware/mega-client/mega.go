@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/temoto/alive"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	gpio "github.com/temoto/gpio-cdev-go"
 	"github.com/temoto/vender/log2"
 	"periph.io/x/periph/conn/physic"

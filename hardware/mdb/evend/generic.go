@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/state"

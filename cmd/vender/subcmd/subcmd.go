@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-systemd/daemon"
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/state"
 )
 

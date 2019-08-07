@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	engine_config "github.com/temoto/vender/engine/config"
 	"github.com/temoto/vender/helpers/atomic_float"

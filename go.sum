@@ -20,6 +20,8 @@ github.com/hpcloud/tail v1.0.0 h1:nfCOvKYfkgYP8hkirhJocXT2+zOD8yUNjXaWfTlyFKI=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/juju/errors v0.0.0-20190207033735-e65537c515d7 h1:dMIPRDg6gi7CUp0Kj2+HxqJ5kTr1iAdzsXYIrLCNSmU=
 github.com/juju/errors v0.0.0-20190207033735-e65537c515d7/go.mod h1:W54LbzXuIE0boCoNJfwqpmkKJ1O4TCTZMetAt6jGk7Q=
+github.com/juju/errors v0.0.0-20190806202954-0232dcc7464d h1:hJXjZMxj0SWlMoQkzeZDLi2cmeiWKa7y1B8Rg+qaoEc=
+github.com/juju/errors v0.0.0-20190806202954-0232dcc7464d/go.mod h1:W54LbzXuIE0boCoNJfwqpmkKJ1O4TCTZMetAt6jGk7Q=
 github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 h1:UUHMLvzt/31azWTN/ifGWef4WUqvXk0iRqdhdy/2uzI=
 github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8/go.mod h1:vgyd7OREkbtVEN/8IXZe5Ooef3LQePvuBm9UWj6ZL8U=
 github.com/juju/testing v0.0.0-20190613124551-e81189438503 h1:ZUgTbk8oHgP0jpMieifGC9Lv47mHn8Pb3mFX3/Ew4iY=
@@ -59,8 +61,6 @@ github.com/syndtr/goleveldb v1.0.0 h1:fBdIW9lB4Iz0n9khmH8w27SJ3QEJ7+IgjPEwGSZiFd
 github.com/syndtr/goleveldb v1.0.0/go.mod h1:ZVVdQEZoIme9iO1Ch2Jdy24qqXrMMOU6lpPAyBWyWuQ=
 github.com/temoto/alive v1.1.0 h1:0g3gV4WwoebCUnBpt8RmB10nKXUYoUWR9lzbpxVcCUA=
 github.com/temoto/alive v1.1.0/go.mod h1:s19nS19zLsjSlTv44kDgq8OoQavtzwwVZP5gOK9Ph68=
-github.com/temoto/errors v0.0.0-20190624114038-cc113d523821 h1:uZYDvE7ltGH2sYvAz/Yt3WCX/67SqnbaZ88YsyvqaXE=
-github.com/temoto/errors v0.0.0-20190624114038-cc113d523821/go.mod h1:lkho/n/D4hzxzG8iN25OMd8pNfGDNTk1tk/WHudU/iI=
 github.com/temoto/extremofile v0.5.0 h1:eadF+qMsK8krR2GqemEdUcSttfCnkzs6LcE85G3BQZw=
 github.com/temoto/extremofile v0.5.0/go.mod h1:kvFLb1SHVqYRp91AnHNn1OA9o8I1ZHMMOd4a/u/D++w=
 github.com/temoto/gpio-cdev-go v0.12.0 h1:DmVauZx8ZdxoT1IHibGJ1p9S0+JspBn71mVYiWYAfaE=

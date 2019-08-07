@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/temoto/errors"
+	"github.com/juju/errors"
 	"github.com/temoto/extremofile"
 	"github.com/temoto/vender/log2"
 )
