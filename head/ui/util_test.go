@@ -34,7 +34,6 @@ func uiTestSetup(t testing.TB, env *tenv, initState, endState State) {
 	env.display, env.displayMock = lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: testDisplayWidth})
 	env.g.Hardware.HD44780.Display.Store(env.display)
 	env.ui = &UI{
-		State: initState,
 		testHook: func(s State) {
 			t.Logf("testHook %s", s.String())
 			switch s {
@@ -48,6 +47,7 @@ func uiTestSetup(t testing.TB, env *tenv, initState, endState State) {
 	}
 	err := env.ui.Init(env.ctx)
 	require.NoError(t, err)
+	env.ui.State = initState
 	env.displayUpdated = make(chan struct{})
 	env.display.SetUpdateChan(env.displayUpdated)
 	env._T = func(l1, l2 string) string {

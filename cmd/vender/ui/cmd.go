@@ -48,7 +48,7 @@ func Main(ctx context.Context, config *state.Config) error {
 	go vmc_common.TeleCommandLoop(ctx)
 
 	g.Log.Debugf("init complete, enter main loop")
-	ui := ui.UI{State: ui.StateBoot}
+	ui := ui.UI{}
 	if err := ui.Init(ctx); err != nil {
 		err = errors.Annotate(err, "ui Init()")
 		return err

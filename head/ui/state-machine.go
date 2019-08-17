@@ -122,8 +122,8 @@ func (self *UI) enter(ctx context.Context, s State) State {
 
 	default:
 		self.g.Log.Fatalf("unhandled ui state=%s", s.String())
+		return StateInvalid
 	}
-	return StateInvalid
 }
 
 func (self *UI) exit(ctx context.Context, current, next State) {

@@ -49,6 +49,7 @@ type UI struct { //nolint:maligned
 
 func (self *UI) Init(ctx context.Context) error {
 	self.g = state.GetGlobal(ctx)
+	self.State = StateBoot
 
 	self.menu = make(Menu)
 	if err := self.menu.Init(ctx); err != nil {

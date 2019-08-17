@@ -44,7 +44,7 @@ func Main(ctx context.Context, config *state.Config) error {
 	// FIXME hardware.Enum() but money system inits bill/coin devices explicitly
 	evend.Enum(ctx, nil)
 
-	ui := ui.UI{State: ui.StateBoot}
+	ui := ui.UI{}
 	if err := ui.Init(ctx); err != nil {
 		err = errors.Annotate(err, "ui Init()")
 		return err
