@@ -32,6 +32,9 @@ engine { inventory {
 		{"c20136", ""},
 		{"c3", "10"},
 		{"c3", ""},
+
+		{"c411", "00"}, // when hot temp sensor is broken
+		{"c51000", ""}, // must disable boiler
 	})
 	d := new(DeviceValve)
 	d.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
@@ -52,4 +55,12 @@ engine { inventory {
 	water.Set(initial)
 	g.Engine.TestDo(t, ctx, "add.water_hot(90)")
 	assert.Equal(t, initial-90, water.Value())
+
+	{
+		getTemp := g.Engine.Resolve("mdb.evend.valve_get_temp_hot")
+		require.NotNil(t, getTemp)
+		err := getTemp.Do(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "sensor problem")
+	}
 }

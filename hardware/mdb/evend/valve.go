@@ -120,7 +120,21 @@ func (self *DeviceValve) newGetTempHot() engine.Func {
 		if len(bs) != 1 {
 			return errors.NotValidf("%s response=%x", tag, bs)
 		}
-		self.tempHot.Set(int32(bs[0]))
+
+		temp := int32(bs[0])
+		if temp == 0 {
+			self.dev.SetReady(false)
+			self.DoSetTempHot.Apply(0).Do(ctx)
+			sensorErr := errors.Errorf("%s current=0 sensor problem", tag)
+			if !self.tempHotReported {
+				g := state.GetGlobal(ctx)
+				g.Error(sensorErr)
+				self.tempHotReported = true
+			}
+			return sensorErr
+		}
+
+		self.tempHot.Set(temp)
 		return nil
 	}}
 }
@@ -262,6 +276,7 @@ func (self *DeviceValve) newCheckTempHotValidate(ctx context.Context) func() err
 			}
 		})
 		if getErr != nil {
+			self.DoSetTempHot.Apply(0).Do(ctx)
 			return getErr
 		}
 
@@ -269,7 +284,7 @@ func (self *DeviceValve) newCheckTempHotValidate(ctx context.Context) func() err
 		diff := absDiffU16(uint16(temp), uint16(self.tempHotTarget))
 		const tempHotMargin = 10 // FIXME margin from config
 		msg := fmt.Sprintf("%s current=%d config=%d diff=%d", tag, temp, self.tempHotTarget, diff)
-		self.dev.Log.Errorf(msg)
+		self.dev.Log.Debugf(msg)
 		if diff > tempHotMargin {
 			if !self.tempHotReported {
 				g.Error(errors.New(msg))
