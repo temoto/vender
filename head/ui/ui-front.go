@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/temoto/alive"
 	"github.com/juju/errors"
+	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
@@ -49,21 +49,25 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 }
 
 func (self *UI) onFrontSelect(ctx context.Context) State {
+	moneysys := money.GetGlobal(ctx)
+	maxPrice, menuErr := self.menu.MaxPrice(self.g.Log)
+	if menuErr != nil {
+		self.g.Error(menuErr)
+		return StateBroken
+	}
+
 	alive := alive.NewAlive()
 	defer func() {
 		alive.Stop() // stop pending AcceptCredit
 		alive.Wait()
 	}()
-
-	moneysys := money.GetGlobal(ctx)
-	maxPrice := self.menu.MaxPrice() // TODO decide if this should be recalculated during ui
 	go moneysys.AcceptCredit(ctx, maxPrice, alive.StopChan(), self.moneych)
 
-	for alive.IsRunning() {
+	for {
+	refresh:
 		// step 1: refresh display
 		credit := moneysys.Credit(ctx)
-		// XXX FIXME
-		if self.State == StateFrontTune {
+		if self.State == StateFrontTune { // XXX onFrontTune
 			goto waitInput
 		}
 		self.frontSelectShow(ctx, credit)
@@ -88,15 +92,13 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
 			}
 			go moneysys.AcceptCredit(ctx, maxPrice, alive.StopChan(), self.moneych)
+			goto refresh
 
 		case <-time.After(timeout):
-			switch self.State {
-			case StateFrontTune:
-				// "return to previous mode"
-				return StateFrontSelect
-			default:
-				return StateFrontTimeout
+			if self.State == StateFrontTune { // XXX onFrontTune
+				return StateFrontSelect // "return to previous mode"
 			}
+			return StateFrontTimeout
 		}
 
 		// step 3: handle input/timeout
@@ -116,9 +118,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			return self.onFrontSelectInput(ctx, e)
 
 		case StateFrontTune:
-			// if input.IsAccept(&e) || input.IsReject(&e) {
 			return StateFrontSelect
-			// }
 
 		default:
 			panic(fmt.Sprintf("ui-front unhandled state=%s", self.State.String()))
@@ -196,6 +196,9 @@ func (self *UI) onFrontSelectInput(ctx context.Context, e input.Event) State {
 
 		self.FrontResult.Item = mitem
 		return StateFrontAccept
+
+	default:
+		self.g.Log.Errorf("ui-front unhandled input=%v", e)
 	}
 	return StateFrontSelect
 }

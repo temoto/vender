@@ -15,7 +15,12 @@ import (
 func TestFrontSimple(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, "")
+	ctx, g := state.NewTestContext(t, `
+engine {
+	menu {
+		item "1" { scenario = "" }
+	}
+}`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{
