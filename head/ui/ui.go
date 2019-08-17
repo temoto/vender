@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/head/money"
@@ -29,8 +30,9 @@ const (
 )
 
 type UI struct { //nolint:maligned
-	State       State
-	FrontResult UIMenuResult
+	State         State
+	FrontMaxPrice currency.Amount
+	FrontResult   UIMenuResult
 
 	g            *state.Global
 	broken       bool

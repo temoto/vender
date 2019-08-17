@@ -45,23 +45,24 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		Cream: DefaultCream,
 		Sugar: DefaultSugar,
 	}
+	var err error
+	self.FrontMaxPrice, err = self.menu.MaxPrice(self.g.Log)
+	if err != nil {
+		self.g.Error(err)
+		return StateBroken
+	}
 	return StateFrontSelect
 }
 
 func (self *UI) onFrontSelect(ctx context.Context) State {
 	moneysys := money.GetGlobal(ctx)
-	maxPrice, menuErr := self.menu.MaxPrice(self.g.Log)
-	if menuErr != nil {
-		self.g.Error(menuErr)
-		return StateBroken
-	}
 
 	alive := alive.NewAlive()
 	defer func() {
 		alive.Stop() // stop pending AcceptCredit
 		alive.Wait()
 	}()
-	go moneysys.AcceptCredit(ctx, maxPrice, alive.StopChan(), self.moneych)
+	go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.moneych)
 
 	for {
 	refresh:
@@ -91,7 +92,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			case money.EventAbort:
 				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
 			}
-			go moneysys.AcceptCredit(ctx, maxPrice, alive.StopChan(), self.moneych)
+			go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.moneych)
 			goto refresh
 
 		case <-time.After(timeout):

@@ -128,11 +128,12 @@ func (self *UI) enter(ctx context.Context, s State) State {
 
 func (self *UI) exit(ctx context.Context, current, next State) {
 	self.g.Log.Debugf("ui exit %s -> %s", current.String(), next.String())
-	switch current {
-	case StateBroken:
-		if next != StateBroken {
-			self.broken = false
-			self.g.Tele.Broken(false)
-		}
+
+	if next == StateBroken {
+		self.broken = true
+		self.g.Tele.Broken(true)
+	} else {
+		self.broken = false
+		self.g.Tele.Broken(false)
 	}
 }

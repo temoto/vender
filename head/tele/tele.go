@@ -117,9 +117,11 @@ func (self *Tele) stateWorker() {
 	tmrRetry := time.NewTicker(retryInterval)
 	for {
 		select {
-		case s := <-self.stateCh:
-			b[0] = byte(s)
-			sent = self.transport.SendState(b[:])
+		case next := <-self.stateCh:
+			if next != State(b[0]) {
+				b[0] = byte(next)
+				sent = self.transport.SendState(b[:])
+			}
 
 		case <-tmrRegular.C:
 			sent = self.transport.SendState(b[:])
