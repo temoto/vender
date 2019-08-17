@@ -76,6 +76,7 @@ func (self *megaUart) Break(d, sleep time.Duration) error {
 }
 
 func (self *megaUart) Tx(request, response []byte) (int, error) {
+	const tag = "mdb.mega.Tx"
 	self.lk.Lock()
 	defer self.lk.Unlock()
 
@@ -86,9 +87,9 @@ func (self *megaUart) Tx(request, response []byte) (int, error) {
 		time.Sleep(1 * time.Millisecond)
 
 		f, err = self.c.DoMdbTxSimple(request)
-		self.c.Log.Debugf("mdb.mega.txsimple request=%x f=%s err=%v", request, f.ResponseString(), err)
 		switch errors.Cause(err) {
 		case nil: // success path
+			self.c.Log.Debugf("%s request=%x f=%s", tag, request, f.ResponseString())
 			err = responseError(f.Fields.MdbResult, f.Fields.MdbError)
 			if err == nil {
 				n := copy(response, f.Fields.MdbData)
@@ -97,9 +98,10 @@ func (self *megaUart) Tx(request, response []byte) (int, error) {
 			time.Sleep(DelayErr)
 
 		case mega.ErrCriticalProtocol:
-			self.c.Log.Fatal(errors.ErrorStack(err))
+			self.c.Log.Fatalf("%s CRITICAL request=%x err=%s", tag, request, errors.ErrorStack(err))
 
 		default:
+			self.c.Log.Errorf("%s request=%x err=%s", tag, request, errors.ErrorStack(err))
 			return 0, err
 		}
 	}
