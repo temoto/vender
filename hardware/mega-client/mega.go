@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/temoto/alive"
 	"github.com/juju/errors"
+	"github.com/temoto/alive"
 	gpio "github.com/temoto/gpio-cdev-go"
 	"github.com/temoto/vender/log2"
 	"periph.io/x/periph/conn/physic"
@@ -256,6 +257,8 @@ func (self *Client) ioLoop() {
 func (self *Client) ioTx(tx *tx) error {
 	self.alive.Add(1)
 	defer self.alive.Done()
+	saveGCPercent := debug.SetGCPercent(-1) // workaround for protocol error under GC stress
+	defer debug.SetGCPercent(saveGCPercent)
 
 	if tx.command != nil {
 		err := self.ioWrite(tx.command)
