@@ -151,6 +151,9 @@ func (self *Engine) ExecList(ctx context.Context, tag string, list []string) err
 		itemTag := fmt.Sprintf("%s:%d", tag, i)
 		d, err := self.ParseText(itemTag, text)
 		if err == nil {
+			err = d.Validate()
+		}
+		if err == nil {
 			err = d.Do(ctx)
 		}
 		if err != nil {
