@@ -45,12 +45,35 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		Cream: DefaultCream,
 		Sugar: DefaultSugar,
 	}
+
+	// XXX FIXME custom business logic creeped into code TODO move to config
+	if doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot"); doCheckTempHot != nil {
+		err := doCheckTempHot.Validate()
+		if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
+			line1 := fmt.Sprintf(self.g.Config.UI.Front.MsgWaterTemp, errtemp.Current)
+			self.display.SetLines(line1, self.g.Config.UI.Front.MsgWait)
+			if e := self.wait(5 * time.Second); e.Kind == EventService {
+				return StateServiceBegin
+			}
+			return StateFrontEnd
+		} else if err != nil {
+			self.g.Error(err)
+			return StateBroken
+		}
+	}
+
+	if err := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); err != nil {
+		self.g.Log.Errorf("on_front_begin err=%v", err)
+		return StateBroken
+	}
+
 	var err error
 	self.FrontMaxPrice, err = self.menu.MaxPrice(self.g.Log)
 	if err != nil {
 		self.g.Error(err)
 		return StateBroken
 	}
+	self.g.Tele.State(tele.State_Nominal)
 	return StateFrontSelect
 }
 
@@ -69,60 +92,63 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		// step 1: refresh display
 		credit := moneysys.Credit(ctx)
 		if self.State == StateFrontTune { // XXX onFrontTune
-			goto waitInput
+			goto waitEvent
 		}
 		self.frontSelectShow(ctx, credit)
 
 		// step 2: wait for input/timeout
-	waitInput:
-		var e input.Event
+	waitEvent:
 		timeout := self.frontResetTimeout
 		if self.State == StateFrontTune {
 			timeout = modTuneTimeout
 		}
-		select {
-		case e = <-self.inputch:
-			self.lastActivity = time.Now()
+		e := self.wait(timeout)
+		switch e.Kind {
+		case EventInput:
+			switch e.Input.Key {
+			case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
+				if next := self.onFrontTuneInput(e.Input); next != StateInvalid {
+					return next
+				}
+				goto waitEvent // assume display was updated
+			}
+			if e.Input.IsDigit() {
+				if next := self.onFrontSelectInput(ctx, e.Input); next != StateInvalid {
+					return next
+				}
+				goto waitEvent // assume display was updated
+			}
+			switch self.State {
+			case StateFrontSelect:
+				if next := self.onFrontSelectInput(ctx, e.Input); next != StateInvalid {
+					return next
+				}
+				goto waitEvent // assume display was updated
 
-		case em := <-self.moneych:
-			self.lastActivity = time.Now()
+			case StateFrontTune:
+				return StateFrontSelect
 
-			self.g.Log.Errorf("ui-front money event=%v", em)
-			switch em.Name() {
+			default:
+				panic(fmt.Sprintf("ui-front unhandled state=%s", self.State.String()))
+			}
+
+		case EventMoney:
+			self.g.Log.Errorf("ui-front money event=%v", e.Money)
+			switch e.Money.Name() {
 			case money.EventAbort:
 				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
 			}
 			go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.moneych)
 			goto refresh
 
-		case <-time.After(timeout):
+		case EventService:
+			return StateServiceBegin
+
+		case EventTime:
 			if self.State == StateFrontTune { // XXX onFrontTune
 				return StateFrontSelect // "return to previous mode"
 			}
 			return StateFrontTimeout
-		}
-
-		// step 3: handle input/timeout
-		if e.Source == input.DevInputEventTag && e.Up {
-			return StateServiceBegin
-		}
-		switch e.Key {
-		case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
-			return self.onFrontTuneInput(e)
-		}
-		if e.IsDigit() {
-			return self.onFrontSelectInput(ctx, e)
-		}
-
-		switch self.State {
-		case StateFrontSelect:
-			return self.onFrontSelectInput(ctx, e)
-
-		case StateFrontTune:
-			return StateFrontSelect
-
-		default:
-			panic(fmt.Sprintf("ui-front unhandled state=%s", self.State.String()))
 		}
 	}
 
@@ -137,13 +163,6 @@ func (self *UI) frontSelectShow(ctx context.Context, credit currency.Amount) {
 	if (credit != 0) || (len(self.inputBuf) > 0) {
 		l1 = msgCredit + credit.FormatCtx(ctx)
 		l2 = fmt.Sprintf(msgInputCode, string(self.inputBuf))
-	} else {
-		if doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot"); doCheckTempHot != nil {
-			err := doCheckTempHot.Validate()
-			if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
-				l2 = fmt.Sprintf("no hot water %d", errtemp.Current)
-			}
-		}
 	}
 	self.display.SetLines(l1, l2)
 }
@@ -164,35 +183,35 @@ func (self *UI) onFrontSelectInput(ctx context.Context, e input.Event) State {
 
 	case input.IsAccept(&e):
 		if len(self.inputBuf) == 0 {
-			self.showError(msgMenuCodeEmpty)
-			return StateFrontSelect
+			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeEmpty)
+			return StateInvalid
 		}
 
 		x, err := strconv.ParseUint(string(self.inputBuf), 10, 16)
 		if err != nil {
 			self.inputBuf = self.inputBuf[:0]
-			self.showError(msgMenuCodeInvalid)
-			return StateFrontSelect
+			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeInvalid)
+			return StateInvalid
 		}
 		code := uint16(x)
 
 		mitem, ok := self.menu[code]
 		if !ok {
-			self.showError(msgMenuCodeInvalid)
-			return StateFrontSelect
+			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeInvalid)
+			return StateInvalid
 		}
 		moneysys := money.GetGlobal(ctx)
 		credit := moneysys.Credit(ctx)
 		self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
 		if mitem.Price > credit {
-			self.showError(msgMenuInsufficientCredit)
-			return StateFrontSelect
+			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuInsufficientCredit)
+			return StateInvalid
 		}
 		self.g.Log.Debugf("mitem=%s validate", mitem.String())
 		if err := mitem.D.Validate(); err != nil {
 			self.g.Log.Errorf("ui-front selected=%s Validate err=%v", mitem.String(), err)
-			self.showError("сейчас недоступно")
-			return StateFrontBegin
+			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuNotAvailable)
+			return StateInvalid
 		}
 
 		self.FrontResult.Item = mitem
@@ -299,26 +318,21 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	err := selected.D.Do(itemCtx)
 	_ = self.g.Inventory.Persist.Store()
 	self.g.Log.Debugf("ui-front selected=%s end err=%v", selected.String(), err)
-	if err == nil {
+	if err == nil { // success path
 		self.g.Tele.Transaction(teletx)
 		return StateFrontEnd
 	}
 
+	self.display.SetLines(uiConfig.Front.MsgError, uiConfig.Front.MsgMenuError)
 	err = errors.Annotatef(err, "execute %s", selected.String())
-	self.g.Log.Errorf(errors.ErrorStack(err))
+	self.g.Error(err)
 
-	self.g.Log.Errorf("tele.error")
-	self.g.Tele.Error(err)
-
-	self.display.SetLines(uiConfig.Front.MsgError, "не получилось")
-	self.g.Log.Errorf("on_menu_error")
 	if err := self.g.Engine.ExecList(ctx, "on_menu_error", self.g.Config.Engine.OnMenuError); err != nil {
-		self.g.Log.Errorf("on_menu_error err=%v", err)
-		return StateBroken
+		self.g.Error(err)
 	} else {
 		self.g.Log.Infof("on_menu_error success")
 	}
-	return StateFrontEnd
+	return StateBroken
 }
 
 func (self *UI) onFrontTimeout(ctx context.Context) State {

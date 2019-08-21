@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/input"
+	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
@@ -62,11 +64,14 @@ func (self *UI) onServiceBegin(ctx context.Context) State {
 	})
 	// self.g.Log.Debugf("invlist=%v, invidx=%d", self.service.invList, self.service.invIdx)
 
-	self.g.Tele.Service("begin")
-
-	self.g.Engine.ExecList(ctx, "on_service_begin", self.g.Config.Engine.OnServiceBegin)
+	err := self.g.Engine.ExecList(ctx, "on_service_begin", self.g.Config.Engine.OnServiceBegin)
+	if err != nil {
+		self.g.Error(err)
+		return StateBroken
+	}
 
 	self.g.Log.Debugf("ui service begin")
+	self.g.Tele.State(tele.State_Service)
 	return StateServiceAuth
 }
 
@@ -77,9 +82,9 @@ func (self *UI) onServiceAuth() State {
 	}
 
 	passVisualHash := visualHash(self.inputBuf, self.service.secretSalt)
-	self.display.SetLinesBytes(
-		self.display.Translate(serviceConfig.MsgAuth),
-		self.display.Translate(fmt.Sprintf(msgServiceInputAuth, passVisualHash)),
+	self.display.SetLines(
+		serviceConfig.MsgAuth,
+		fmt.Sprintf(msgServiceInputAuth, passVisualHash),
 	)
 
 	next, e := self.serviceWaitInput()
@@ -91,7 +96,8 @@ func (self *UI) onServiceAuth() State {
 	case e.IsDigit():
 		self.inputBuf = append(self.inputBuf, byte(e.Key))
 		if len(self.inputBuf) > 16 {
-			self.ConveyText(msgError, "len") // FIXME extract message string
+			self.display.SetLines(msgError, "len") // FIXME extract message string
+			self.serviceWaitInput()
 			return StateServiceEnd
 		}
 		return self.State
@@ -101,7 +107,8 @@ func (self *UI) onServiceAuth() State {
 
 	case input.IsAccept(&e):
 		if len(self.inputBuf) == 0 {
-			self.ConveyText(msgError, "empty") // FIXME extract message string
+			self.display.SetLines(msgError, "empty") // FIXME extract message string
+			self.serviceWaitInput()
 			return StateServiceEnd
 		}
 
@@ -114,19 +121,21 @@ func (self *UI) onServiceAuth() State {
 			}
 		}
 
-		self.ConveyText(msgError, "sorry") // FIXME extract message string
+		self.display.SetLines(msgError, "sorry") // FIXME extract message string
+		self.serviceWaitInput()
 		return StateServiceEnd
 	}
 	self.g.Log.Errorf("ui onServiceAuth unhandled branch")
-	self.ConveyText(msgError, "code error")
+	self.display.SetLines(msgError, "code error") // FIXME extract message string
+	self.serviceWaitInput()
 	return StateServiceEnd
 }
 
 func (self *UI) onServiceMenu() State {
 	menuName := serviceMenu[self.service.menuIdx]
-	self.display.SetLinesBytes(
-		self.display.Translate(msgServiceMenu),
-		self.display.Translate(fmt.Sprintf("%d %s", self.service.menuIdx+1, menuName)),
+	self.display.SetLines(
+		msgServiceMenu,
+		fmt.Sprintf("%d %s", self.service.menuIdx+1, menuName),
 	)
 
 	next, e := self.serviceWaitInput()
@@ -167,13 +176,14 @@ func (self *UI) onServiceMenu() State {
 
 func (self *UI) onServiceInventory() State {
 	if len(self.service.invList) == 0 {
-		self.ConveyText(msgError, "inv empty")
+		self.display.SetLines(msgError, "inv empty") // FIXME extract message string
+		self.serviceWaitInput()
 		return StateServiceMenu
 	}
 	invCurrent := self.service.invList[self.service.invIdx]
-	self.display.SetLinesBytes(
-		self.display.Translate(fmt.Sprintf("I%d %s", self.service.invIdx+1, invCurrent.Name)),
-		self.display.Translate(fmt.Sprintf("%d %s\x00", int32(invCurrent.Value()), string(self.inputBuf))),
+	self.display.SetLines(
+		fmt.Sprintf("I%d %s", self.service.invIdx+1, invCurrent.Name),
+		fmt.Sprintf("%d %s\x00", int32(invCurrent.Value()), string(self.inputBuf)),
 	)
 
 	next, e := self.serviceWaitInput()
@@ -196,7 +206,8 @@ func (self *UI) onServiceInventory() State {
 	case input.IsAccept(&e):
 		if len(self.inputBuf) == 0 {
 			self.g.Log.Errorf("ui onServiceInventory input=accept inputBuf=empty")
-			self.ConveyText(msgError, "empty") // FIXME extract message string
+			self.display.SetLines(msgError, "empty") // FIXME extract message string
+			self.serviceWaitInput()
 			return StateServiceInventory
 		}
 
@@ -204,7 +215,8 @@ func (self *UI) onServiceInventory() State {
 		self.inputBuf = self.inputBuf[:0]
 		if err != nil {
 			self.g.Log.Errorf("ui onServiceInventory input=accept inputBuf='%s'", string(self.inputBuf))
-			self.ConveyText(msgError, "int-invalid")
+			self.display.SetLines(msgError, "int-invalid") // FIXME extract message string
+			self.serviceWaitInput()
 			return StateServiceInventory
 		}
 
@@ -223,7 +235,7 @@ func (self *UI) onServiceInventory() State {
 }
 
 func (self *UI) onServiceReboot() State {
-	self.display.SetLines("for reboot", "press 1")
+	self.display.SetLines("for reboot", "press 1") // FIXME extract message string
 
 	next, e := self.serviceWaitInput()
 	if next != StateInvalid {
@@ -232,7 +244,7 @@ func (self *UI) onServiceReboot() State {
 
 	switch {
 	case e.Key == '1':
-		self.display.SetLines("reboot", "in progress")
+		self.display.SetLines("reboot", "in progress") // FIXME extract message string
 		// os.Exit(0)
 		self.g.Alive.Stop()
 		return StateServiceEnd
@@ -241,18 +253,26 @@ func (self *UI) onServiceReboot() State {
 }
 
 func (self *UI) serviceWaitInput() (State, input.Event) {
-	var e input.Event
-	select {
-	case e = <-self.inputch:
-		self.lastActivity = time.Now()
-		return StateInvalid, e
-	case <-time.After(self.service.resetTimeout):
+	e := self.wait(self.service.resetTimeout)
+	switch e.Kind {
+	case EventInput:
+		return StateInvalid, e.Input
+
+	case EventMoney:
+		self.g.Log.Debugf("serviceWaitInput money event=%v", e.Money)
+		return StateInvalid, input.Event{}
+
+	case EventTime:
 		// self.g.Log.Infof("inactive=%v", inactive)
 		self.g.Log.Debugf("serviceWaitInput resetTimeout")
-		return StateServiceEnd, e
-	case <-self.g.Alive.StopChan():
+		return StateServiceEnd, input.Event{}
+
+	case EventStop:
 		self.g.Log.Debugf("serviceWaitInput global stop")
-		return StateServiceEnd, e
+		return StateServiceEnd, input.Event{}
+
+	default:
+		panic(fmt.Sprintf("code error serviceWaitInput unhandled event=%#v", e))
 	}
 }
 

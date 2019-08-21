@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/state"
 )
 
@@ -20,13 +19,13 @@ func TestServiceAuth(t *testing.T) {
 	go env.ui.Loop(ctx)
 
 	steps := []step{
-		{expect: env._T(" ", "\x8d fflcrq\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '1'}},
-		{expect: env._T(" ", "\x8d qtky0g\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '9'}},
-		{expect: env._T(" ", "\x8d nfiinw\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '7'}},
-		{expect: env._T(" ", "\x8d 2grymg\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '0'}},
-		{expect: env._T(" ", "\x8d lemz1g\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
-		{expect: env._T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
-		{expect: "", inev: input.Event{}},
+		{expect: env._T(" ", "\x8d fflcrq\x00"), inev: env._Key('1')},
+		{expect: env._T(" ", "\x8d qtky0g\x00"), inev: env._Key('9')},
+		{expect: env._T(" ", "\x8d nfiinw\x00"), inev: env._Key('7')},
+		{expect: env._T(" ", "\x8d 2grymg\x00"), inev: env._Key('0')},
+		{expect: env._T(" ", "\x8d lemz1g\x00"), inev: env._KeyAccept},
+		{expect: env._T("Menu", "1 inventory"), inev: env._KeyReject},
+		{expect: "", inev: Event{}},
 	}
 	uiTestWait(t, env, steps)
 }
@@ -45,19 +44,39 @@ engine { inventory {
 	go env.ui.Loop(ctx)
 
 	steps := []step{
-		{expect: env._T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
-		{expect: env._T("I1 cup", "0 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '3'}},
-		{expect: env._T("I1 cup", "0 3\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '2'}},
-		{expect: env._T("I1 cup", "0 32\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
-		{expect: env._T("I1 cup", "32 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}},
-		{expect: env._T("I2 water", "0 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '7'}},
-		{expect: env._T("I2 water", "0 7\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '5'}},
-		{expect: env._T("I2 water", "0 75\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '0'}},
-		{expect: env._T("I2 water", "0 750\x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
-		{expect: env._T("I2 water", "750 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}},
-		{expect: env._T("I1 cup", "32 \x00"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
-		{expect: env._T("Menu", "1 inventory"), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
-		{expect: "", inev: input.Event{}},
+		{expect: env._T("Menu", "1 inventory"), inev: env._KeyAccept},
+		{expect: env._T("I1 cup", "0 \x00"), inev: env._Key('3')},
+		{expect: env._T("I1 cup", "0 3\x00"), inev: env._Key('2')},
+		{expect: env._T("I1 cup", "0 32\x00"), inev: env._KeyAccept},
+		{expect: env._T("I1 cup", "32 \x00"), inev: env._KeyNext},
+		{expect: env._T("I2 water", "0 \x00"), inev: env._Key('7')},
+		{expect: env._T("I2 water", "0 7\x00"), inev: env._Key('5')},
+		{expect: env._T("I2 water", "0 75\x00"), inev: env._Key('0')},
+		{expect: env._T("I2 water", "0 750\x00"), inev: env._KeyAccept},
+		{expect: env._T("I2 water", "750 \x00"), inev: env._KeyNext},
+		{expect: env._T("I1 cup", "32 \x00"), inev: env._KeyReject},
+		{expect: env._T("Menu", "1 inventory"), inev: env._KeyReject},
+		{expect: "", inev: Event{}},
+	}
+	uiTestWait(t, env, steps)
+}
+
+func TestServiceReboot(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state.NewTestContext(t, `
+engine {}`)
+	env := &tenv{ctx: ctx, g: g}
+	g.Config.UI.Service.Auth.Enable = false
+	uiTestSetup(t, env, StateServiceBegin, StateServiceEnd)
+	go env.ui.Loop(ctx)
+
+	steps := []step{
+		{expect: env._T("Menu", "1 inventory"), inev: env._KeyNext},
+		{expect: env._T("Menu", "2 test"), inev: env._KeyNext},
+		{expect: env._T("Menu", "3 reboot"), inev: env._KeyAccept},
+		{expect: env._T("for reboot", "press 1"), inev: env._Key('1')},
+		{expect: env._T("reboot", "in progress"), inev: Event{}},
 	}
 	uiTestWait(t, env, steps)
 }

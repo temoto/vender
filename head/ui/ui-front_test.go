@@ -35,8 +35,8 @@ engine {
 	go env.ui.Loop(ctx)
 
 	steps := []step{
-		{expect: env._T("hello simple", " "), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}},
-		{expect: "", inev: input.Event{}},
+		{expect: env._T("hello simple", " "), inev: env._KeyReject},
+		{expect: "", inev: Event{}},
 	}
 	uiTestWait(t, env, steps)
 }
@@ -75,13 +75,13 @@ ui {
 	sugarStock.Set(200)
 
 	steps := []step{
-		{expect: env._T("hello tune", " "), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}},
-		{expect: env._T(fmt.Sprintf("%s  /5", msgCream), "   - \x97\x97\x97\x97\x97\x94 +   "), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeySugarLess}},
-		{expect: env._T(fmt.Sprintf("%s  /3", msgSugar), "   - \x97\x97\x95\x94\x94\x94 +   "), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeySugarLess}},
-		{expect: env._T(fmt.Sprintf("%s  /2", msgSugar), "   - \x97\x96\x94\x94\x94\x94 +   "), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: '1'}},
-		{expect: env._T(fmt.Sprintf("%s0", msgCredit), fmt.Sprintf(msgInputCode, "1")), inev: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}},
-		{expect: env._T(msgMaking1, msgMaking2), inev: input.Event{}},
-		{expect: "", inev: input.Event{}},
+		{expect: env._T("hello tune", " "), inev: env._Key(input.EvendKeyCreamMore)},
+		{expect: env._T(fmt.Sprintf("%s  /5", msgCream), "   - \x97\x97\x97\x97\x97\x94 +   "), inev: env._Key(input.EvendKeySugarLess)},
+		{expect: env._T(fmt.Sprintf("%s  /3", msgSugar), "   - \x97\x97\x95\x94\x94\x94 +   "), inev: env._Key(input.EvendKeySugarLess)},
+		{expect: env._T(fmt.Sprintf("%s  /2", msgSugar), "   - \x97\x96\x94\x94\x94\x94 +   "), inev: env._Key('1')},
+		{expect: env._T(fmt.Sprintf("%s0", msgCredit), fmt.Sprintf(msgInputCode, "1")), inev: env._KeyAccept},
+		{expect: env._T(msgMaking1, msgMaking2), inev: Event{}},
+		{expect: "", inev: Event{}},
 	}
 	uiTestWait(t, env, steps)
 	assert.Equal(t, float32(100-13), creamStock.Value())

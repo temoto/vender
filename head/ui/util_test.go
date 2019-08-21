@@ -23,11 +23,17 @@ type tenv struct {
 	displayMock    fmt.Stringer
 	displayUpdated chan struct{}
 	_T             func(l1, l2 string) string
+	_Key           func(input.Key) Event
+	_KeyAccept     Event
+	_KeyReject     Event
+	_KeyNext       Event
+	_KeyPrev       Event
+	_KeyService    Event
 }
 
 type step struct {
 	expect string
-	inev   input.Event
+	inev   Event
 }
 
 func uiTestSetup(t testing.TB, env *tenv, initState, endState State) {
@@ -53,6 +59,14 @@ func uiTestSetup(t testing.TB, env *tenv, initState, endState State) {
 	env._T = func(l1, l2 string) string {
 		return fmt.Sprintf("%s\n%s", env.display.Translate(l1), env.display.Translate(l2))
 	}
+	env._Key = func(k input.Key) Event {
+		return Event{Kind: EventInput, Input: input.Event{Source: input.EvendKeyboardSourceTag, Key: k}}
+	}
+	env._KeyAccept = Event{Kind: EventInput, Input: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyAccept}}
+	env._KeyReject = Event{Kind: EventInput, Input: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyReject}}
+	env._KeyNext = Event{Kind: EventInput, Input: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}}
+	env._KeyPrev = Event{Kind: EventInput, Input: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamLess}}
+	env._KeyService = Event{Kind: EventInput, Input: input.Event{Source: input.DevInputEventTag}}
 }
 
 func uiTestWait(t testing.TB, env *tenv, steps []step) {
@@ -60,15 +74,17 @@ func uiTestWait(t testing.TB, env *tenv, steps []step) {
 		select {
 		case <-env.displayUpdated:
 		case <-env.g.Alive.WaitChan():
-			if !(step.expect == "" && step.inev.IsZero()) {
+			if !(step.expect == "" && step.inev.Kind == EventInvalid) {
 				t.Error("ui stopped before end of test")
 			}
 			return
 		}
 		current := env.displayMock.String()
-		t.Logf("display:\n%s\n%s\ninput=%v", current, strings.Repeat("-", testDisplayWidth), step.inev)
+		t.Logf("display:\n%s\n%s\nevent=%s", current, strings.Repeat("-", testDisplayWidth), step.inev.String())
 		require.Equal(t, step.expect, current)
-		env.g.Hardware.Input.Emit(step.inev)
+		if step.inev.Kind == EventInput {
+			env.g.Hardware.Input.Emit(step.inev.Input)
+		}
 	}
 	if env.g.Alive.IsRunning() {
 		t.Logf("display:\n%s", env.displayMock.String())

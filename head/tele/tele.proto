@@ -4,7 +4,7 @@ package tele;
 enum State {
   Invalid = 0;
   Boot = 1;
-  Work = 2;
+  Nominal = 2;
   Disconnected = 3;
   Problem = 4;
   Service = 5;

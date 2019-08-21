@@ -2,10 +2,12 @@ package ui
 
 import (
 	"context"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
+	"github.com/temoto/vender/head/tele"
 )
 
 //go:generate stringer -type=State -trimprefix=State
@@ -72,15 +74,24 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	case StateBroken:
 		self.g.Log.Infof("state=broken")
 		if !self.broken {
-			self.broken = true
-			self.g.Tele.Broken(true)
+			self.g.Tele.State(tele.State_Problem)
+			err := self.g.Engine.ExecList(ctx, "on_broken", self.g.Config.Engine.OnBroken)
+			if err != nil {
+				self.g.Log.Error(errors.ErrorStack(err))
+			}
 			moneysys := money.GetGlobal(ctx)
 			_ = moneysys.SetAcceptMax(ctx, 0)
 		}
-		self.display.Message(self.g.Config.UI.Front.MsgStateBroken, "", func() {
-			<-self.inputch
-		})
-		return s
+		self.broken = true
+		self.display.SetLines(self.g.Config.UI.Front.MsgStateBroken, "")
+		for self.g.Alive.IsRunning() {
+			e := self.wait(time.Second)
+			// TODO receive tele command to reboot or change state
+			if e.Kind == EventService {
+				return StateServiceBegin
+			}
+		}
+		return StateInvalid
 
 	case StateFrontBegin:
 		self.inputBuf = self.inputBuf[:0]
@@ -117,8 +128,11 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	case StateServiceEnd:
 		_ = self.g.Inventory.Persist.Store()
 		self.inputBuf = self.inputBuf[:0]
-		self.g.Tele.Service("end")
-		self.g.Engine.ExecList(ctx, "on_service_end", self.g.Config.Engine.OnServiceEnd)
+		err := self.g.Engine.ExecList(ctx, "on_service_end", self.g.Config.Engine.OnServiceEnd)
+		if err != nil {
+			self.g.Error(err)
+			return StateBroken
+		}
 		return StateFrontBegin
 
 	default:
@@ -130,11 +144,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 func (self *UI) exit(ctx context.Context, current, next State) {
 	self.g.Log.Debugf("ui exit %s -> %s", current.String(), next.String())
 
-	if next == StateBroken {
-		self.broken = true
-		self.g.Tele.Broken(true)
-	} else {
+	if next != StateBroken {
 		self.broken = false
-		self.g.Tele.Broken(false)
 	}
 }

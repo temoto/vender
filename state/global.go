@@ -113,7 +113,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 		}
 		if err != nil {
 			g.Error(err)
-			g.Tele.Broken(true)
+			g.Tele.State(tele.State_Problem)
 			errs = append(errs, err)
 		}
 	}

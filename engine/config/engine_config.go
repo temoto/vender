@@ -13,6 +13,8 @@ type Config struct {
 	OnMenuError    []string `hcl:"on_menu_error"`
 	OnServiceBegin []string `hcl:"on_service_begin"`
 	OnServiceEnd   []string `hcl:"on_service_end"`
+	OnFrontBegin   []string `hcl:"on_front_begin"`
+	OnBroken       []string `hcl:"on_broken"`
 	Inventory      Inventory
 	Menu           struct {
 		Items []*MenuItem `hcl:"item"`

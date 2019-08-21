@@ -2,18 +2,14 @@ package tele
 
 const logMsgDisabled = "tele disabled"
 
-func (self *Tele) Broken(flag bool) {
+func (self *Tele) State(s State) {
 	if !self.enabled {
 		self.log.Errorf(logMsgDisabled)
 		return
 	}
 
-	newState := State_Problem
-	if !flag {
-		newState = State_Work
-	}
-	self.log.Infof("tele.Broken flag=%t state=%v", flag, newState)
-	self.stateCh <- newState
+	self.log.Infof("tele.State s=%v", s)
+	self.stateCh <- s
 }
 
 func (self *Tele) Error(e error) {
@@ -57,17 +53,6 @@ func (self *Tele) CommandReplyErr(c *Command, e error) {
 	if err != nil {
 		self.log.Errorf("CRITICAL command=%#v response=%#v err=%v", c, r, err)
 	}
-}
-
-func (self *Tele) Service(msg string) {
-	if !self.enabled {
-		self.log.Errorf(logMsgDisabled)
-		return
-	}
-
-	self.log.Infof("tele.Service msg=%s", msg)
-	self.stateCh <- State_Service
-	// FIXME send msg
 }
 
 func (self *Tele) StatModify(fun func(s *Stat)) {
