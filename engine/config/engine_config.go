@@ -9,7 +9,7 @@ import (
 
 type Config struct {
 	Aliases        []Alias  `hcl:"alias"`
-	OnStart        []string `hcl:"on_start"`
+	OnBoot         []string `hcl:"on_boot"`
 	OnMenuError    []string `hcl:"on_menu_error"`
 	OnServiceBegin []string `hcl:"on_service_begin"`
 	OnServiceEnd   []string `hcl:"on_service_end"`

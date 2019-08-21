@@ -50,14 +50,15 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	self.g.Log.Debugf("ui enter %s", s.String())
 	switch s {
 	case StateBoot:
+		self.g.Tele.State(tele.State_Boot)
 		onStartSuccess := false
 		for i := 1; i <= 3; i++ {
-			err := self.g.Engine.ExecList(ctx, "on_start", self.g.Config.Engine.OnStart)
+			err := self.g.Engine.ExecList(ctx, "on_boot", self.g.Config.Engine.OnBoot)
 			if err == nil {
 				onStartSuccess = true
 				break
 			}
-			self.g.Tele.Error(errors.Annotatef(err, "on_start try=%d", i))
+			self.g.Tele.Error(errors.Annotatef(err, "on_boot try=%d", i))
 			self.g.Log.Error(err)
 			// TODO restart all hardware
 			evend.Enum(ctx, nil)

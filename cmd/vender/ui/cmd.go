@@ -18,7 +18,7 @@ var Mod = subcmd.Mod{Name: "ui", Main: Main}
 
 func Main(ctx context.Context, config *state.Config) error {
 	g := state.GetGlobal(ctx)
-	config.Engine.OnStart = nil
+	config.Engine.OnBoot = nil
 	config.Engine.OnMenuError = nil
 	config.Engine.Menu.Items = []*engine_config.MenuItem{
 		&engine_config.MenuItem{Code: "333", Name: "test item", XXX_Price: 5, Scenario: "sleep(3s)"},
