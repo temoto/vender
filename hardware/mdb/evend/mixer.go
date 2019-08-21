@@ -42,7 +42,7 @@ func (self *DeviceMixer) Init(ctx context.Context) error {
 	moveSeq := engine.NewSeq("mdb.evend.mixer_move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register("mdb.evend.mixer_shake(?)",
 		engine.FuncArg{Name: "mdb.evend.mixer_shake", F: func(ctx context.Context, arg engine.Arg) error {
-			return self.shake(uint8(arg)).Do(ctx)
+			return self.Generic.WithRestart(self.shake(uint8(arg))).Do(ctx)
 		}})
 	g.Engine.Register("mdb.evend.mixer_fan_on", self.NewFan(true))
 	g.Engine.Register("mdb.evend.mixer_fan_off", self.NewFan(false))
