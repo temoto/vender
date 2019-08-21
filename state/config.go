@@ -84,6 +84,10 @@ type Config struct {
 			}
 			MsgAuth         string `hcl:"msg_auth"`
 			ResetTimeoutSec int    `hcl:"reset_sec"`
+			Tests           []struct {
+				Name     string `hcl:"name,key"`
+				Scenario string `hcl:"scenario"`
+			} `hcl:"test"`
 		}
 	}
 

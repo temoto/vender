@@ -26,10 +26,11 @@ const (
 
 const (
 	serviceMenuInventory = "inventory"
+	serviceMenuTest      = "test"
 	serviceMenuReboot    = "reboot"
 )
 
-var /*const*/ serviceMenu = []string{serviceMenuInventory, serviceMenuReboot}
+var /*const*/ serviceMenu = []string{serviceMenuInventory, serviceMenuTest, serviceMenuReboot}
 var /*const*/ serviceMenuMax = uint8(len(serviceMenu) - 1)
 
 type uiService struct {
@@ -38,15 +39,29 @@ type uiService struct {
 	secretSalt   []byte
 
 	// state
-	menuIdx uint8
-	invIdx  uint8
-	invList []*inventory.Stock
+	menuIdx  uint8
+	invIdx   uint8
+	invList  []*inventory.Stock
+	testIdx  uint8
+	testList []engine.Doer
 }
 
 func (self *uiService) Init(ctx context.Context) {
 	g := state.GetGlobal(ctx)
+	config := g.Config.UI.Service
 	self.secretSalt = []byte{0} // FIXME read from config
-	self.resetTimeout = helpers.IntSecondDefault(g.Config.UI.Service.ResetTimeoutSec, 3*time.Second)
+	self.resetTimeout = helpers.IntSecondDefault(config.ResetTimeoutSec, 3*time.Second)
+	errs := make([]error, 0, len(config.Tests))
+	for _, t := range config.Tests {
+		if d, err := g.Engine.ParseText(t.Name, t.Scenario); err != nil {
+			errs = append(errs, err)
+		} else {
+			self.testList = append(self.testList, d)
+		}
+	}
+	if err := helpers.FoldErrors(errs); err != nil {
+		g.Log.Fatal(err)
+	}
 }
 
 func (self *UI) onServiceBegin(ctx context.Context) State {
@@ -55,6 +70,7 @@ func (self *UI) onServiceBegin(ctx context.Context) State {
 	self.service.menuIdx = 0
 	self.service.invIdx = 0
 	self.service.invList = make([]*inventory.Stock, 0, 16)
+	self.service.testIdx = 0
 	self.g.Inventory.Iter(func(s *inventory.Stock) {
 		self.g.Log.Debugf("ui service inventory: - %s", s.String())
 		self.service.invList = append(self.service.invList, s)
@@ -156,6 +172,8 @@ func (self *UI) onServiceMenu() State {
 		switch serviceMenu[self.service.menuIdx] {
 		case serviceMenuInventory:
 			return StateServiceInventory
+		case serviceMenuTest:
+			return StateServiceTest
 		case serviceMenuReboot:
 			return StateServiceReboot
 		default:
@@ -232,6 +250,47 @@ func (self *UI) onServiceInventory() State {
 		return StateServiceMenu
 	}
 	return StateServiceInventory
+}
+
+func (self *UI) onServiceTest(ctx context.Context) State {
+	self.inputBuf = self.inputBuf[:0]
+	if len(self.service.testList) == 0 {
+		self.display.SetLines(msgError, "no tests") // FIXME extract message string
+		self.serviceWaitInput()
+		return StateServiceMenu
+	}
+	testCurrent := self.service.testList[self.service.testIdx]
+	line1 := fmt.Sprintf("T%d %s", self.service.testIdx+1, testCurrent.String())
+	self.display.SetLines(line1, "")
+
+wait:
+	next, e := self.serviceWaitInput()
+	if next != StateInvalid {
+		return next
+	}
+
+	testIdxMax := uint8(len(self.service.testList))
+	switch {
+	case e.Key == input.EvendKeyCreamLess:
+		self.service.testIdx = (self.service.testIdx + testIdxMax - 1) % testIdxMax
+	case e.Key == input.EvendKeyCreamMore:
+		self.service.testIdx = (self.service.testIdx + 1) % testIdxMax
+
+	case input.IsAccept(&e):
+		self.display.SetLines(line1, "in progress")
+		err := testCurrent.Do(ctx)
+		if err == nil {
+			self.display.SetLines(line1, "OK")
+		} else {
+			self.g.Error(err)
+			self.display.SetLines(line1, "error")
+		}
+		goto wait
+
+	case input.IsReject(&e):
+		return StateServiceMenu
+	}
+	return StateServiceTest
 }
 
 func (self *UI) onServiceReboot() State {

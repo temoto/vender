@@ -21,13 +21,14 @@ func _() {
 	_ = x[StateServiceAuth-10]
 	_ = x[StateServiceMenu-11]
 	_ = x[StateServiceInventory-12]
-	_ = x[StateServiceReboot-13]
-	_ = x[StateServiceEnd-14]
+	_ = x[StateServiceTest-13]
+	_ = x[StateServiceReboot-14]
+	_ = x[StateServiceEnd-15]
 }
 
-const _State_name = "InvalidBootBrokenFrontBeginFrontSelectFrontTuneFrontAcceptFrontTimeoutFrontEndServiceBeginServiceAuthServiceMenuServiceInventoryServiceRebootServiceEnd"
+const _State_name = "InvalidBootBrokenFrontBeginFrontSelectFrontTuneFrontAcceptFrontTimeoutFrontEndServiceBeginServiceAuthServiceMenuServiceInventoryServiceTestServiceRebootServiceEnd"
 
-var _State_index = [...]uint8{0, 7, 11, 17, 27, 38, 47, 58, 70, 78, 90, 101, 112, 128, 141, 151}
+var _State_index = [...]uint8{0, 7, 11, 17, 27, 38, 47, 58, 70, 78, 90, 101, 112, 128, 139, 152, 162}
 
 func (i State) String() string {
 	if i >= State(len(_State_index)-1) {

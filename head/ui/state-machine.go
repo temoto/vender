@@ -30,6 +30,7 @@ const (
 	StateServiceAuth  // +inputAccept+OK=ServiceMenu
 	StateServiceMenu
 	StateServiceInventory
+	StateServiceTest
 	StateServiceReboot
 	StateServiceEnd // ->FrontBegin
 )
@@ -122,6 +123,8 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return self.onServiceMenu()
 	case StateServiceInventory:
 		return self.onServiceInventory()
+	case StateServiceTest:
+		return self.onServiceTest(ctx)
 	case StateServiceReboot:
 		return self.onServiceReboot()
 
