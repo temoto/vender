@@ -20,8 +20,7 @@ type tenv struct {
 	ui  *UI
 
 	display        *lcd.TextDisplay
-	displayMock    fmt.Stringer
-	displayUpdated chan struct{}
+	displayUpdated chan lcd.State
 	_T             func(l1, l2 string) string
 	_Key           func(input.Key) Event
 	_KeyAccept     Event
@@ -37,7 +36,7 @@ type step struct {
 }
 
 func uiTestSetup(t testing.TB, env *tenv, initState, endState State) {
-	env.display, env.displayMock = lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: testDisplayWidth})
+	env.display = lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: testDisplayWidth})
 	env.g.Hardware.HD44780.Display.Store(env.display)
 	env.ui = &UI{
 		testHook: func(s State) {
@@ -54,10 +53,13 @@ func uiTestSetup(t testing.TB, env *tenv, initState, endState State) {
 	err := env.ui.Init(env.ctx)
 	require.NoError(t, err)
 	env.ui.State = initState
-	env.displayUpdated = make(chan struct{})
+	env.displayUpdated = make(chan lcd.State)
 	env.display.SetUpdateChan(env.displayUpdated)
 	env._T = func(l1, l2 string) string {
-		return fmt.Sprintf("%s\n%s", env.display.Translate(l1), env.display.Translate(l2))
+		return fmt.Sprintf("%s\n%s",
+			lcd.PadSpace(env.display.Translate(l1), testDisplayWidth),
+			lcd.PadSpace(env.display.Translate(l2), testDisplayWidth),
+		)
 	}
 	env._Key = func(k input.Key) Event {
 		return Event{Kind: EventInput, Input: input.Event{Source: input.EvendKeyboardSourceTag, Key: k}}
@@ -72,22 +74,21 @@ func uiTestSetup(t testing.TB, env *tenv, initState, endState State) {
 func uiTestWait(t testing.TB, env *tenv, steps []step) {
 	for _, step := range steps {
 		select {
-		case <-env.displayUpdated:
+		case current := <-env.displayUpdated:
+			t.Logf("display:\n%s\n%s\nevent=%s", current, strings.Repeat("-", testDisplayWidth), step.inev.String())
+			require.Equal(t, step.expect, current.Format(testDisplayWidth))
+			if step.inev.Kind == EventInput {
+				env.g.Hardware.Input.Emit(step.inev.Input)
+			}
 		case <-env.g.Alive.WaitChan():
 			if !(step.expect == "" && step.inev.Kind == EventInvalid) {
 				t.Error("ui stopped before end of test")
 			}
 			return
 		}
-		current := env.displayMock.String()
-		t.Logf("display:\n%s\n%s\nevent=%s", current, strings.Repeat("-", testDisplayWidth), step.inev.String())
-		require.Equal(t, step.expect, current)
-		if step.inev.Kind == EventInput {
-			env.g.Hardware.Input.Emit(step.inev.Input)
-		}
 	}
 	if env.g.Alive.IsRunning() {
-		t.Logf("display:\n%s", env.displayMock.String())
+		t.Logf("display:\n%s", env.display.State().Format(testDisplayWidth))
 		t.Error("ui still running")
 	}
 }

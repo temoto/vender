@@ -2,14 +2,15 @@ package lcd
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/paulrosania/go-charset/charset"
 	_ "github.com/paulrosania/go-charset/data"
 	"github.com/temoto/alive"
-	"github.com/juju/errors"
 )
 
 // TODO extract this generic text display code
@@ -25,18 +26,17 @@ type TextDisplay struct { //nolint:maligned
 	dev   Devicer
 	tr    atomic.Value
 	width uint32
-	line1 []byte
-	line2 []byte
+	state State
 
 	tickd time.Duration
-	tick  uint16
-	upd   chan<- struct{}
+	tick  uint32
+	upd   chan<- State
 }
 
 type TextDisplayConfig struct {
 	Codepage    string
 	ScrollDelay time.Duration
-	Width       uint16
+	Width       uint32
 }
 
 type Devicer interface {
@@ -53,8 +53,8 @@ func NewTextDisplay(opt *TextDisplayConfig) (*TextDisplay, error) {
 	}
 	self := &TextDisplay{
 		alive: alive.NewAlive(),
-		width: uint32(opt.Width),
 		tickd: opt.ScrollDelay,
+		width: uint32(opt.Width),
 	}
 
 	if opt.Codepage != "" {
@@ -94,25 +94,27 @@ func (self *TextDisplay) Clear() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	self.line1 = nil
-	self.line2 = nil
+	self.state.Clear()
 	self.flush()
 }
 
 func (self *TextDisplay) Message(s1, s2 string, wait func()) {
-	next1, next2 := self.Translate(s1), self.Translate(s2)
+	next := State{
+		L1: self.Translate(s1),
+		L2: self.Translate(s2),
+	}
 
 	self.mu.Lock()
-	prev1, prev2 := self.line1, self.line2
-	self.line1, self.line2 = next1, next2
-	// self.tick = 0
+	prev := self.state
+	self.state = next
+	// atomic.StoreUint32(&self.tick, 0)
 	self.flush()
 	self.mu.Unlock()
 
 	wait()
 
 	self.mu.Lock()
-	self.line1, self.line2 = prev1, prev2
+	self.state = prev
 	self.flush()
 	self.mu.Unlock()
 }
@@ -124,20 +126,15 @@ func (self *TextDisplay) SetLinesBytes(b1, b2 []byte) {
 	defer self.mu.Unlock()
 
 	if b1 != nil {
-		self.line1 = b1
+		self.state.L1 = b1
 	}
 	if b2 != nil {
-		self.line2 = b2
+		self.state.L2 = b2
 	}
-	self.tick = 0
+	atomic.StoreUint32(&self.tick, 0)
 	self.flush()
 }
-func (self *TextDisplay) SetLine1(line1 string) {
-	self.SetLinesBytes(self.Translate(line1), nil)
-}
-func (self *TextDisplay) SetLine2(line2 string) {
-	self.SetLinesBytes(nil, self.Translate(line2))
-}
+
 func (self *TextDisplay) SetLines(line1, line2 string) {
 	self.SetLinesBytes(
 		self.Translate(line1),
@@ -148,12 +145,18 @@ func (self *TextDisplay) Tick() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	self.tick++
+	atomic.AddUint32(&self.tick, 1)
 	self.flush()
 }
 
 func (self *TextDisplay) Run() {
-	tmr := time.NewTicker(self.tickd)
+	self.mu.Lock()
+	delay := self.tickd
+	self.mu.Unlock()
+	if delay == 0 {
+		return
+	}
+	tmr := time.NewTicker(delay)
 	stopch := self.alive.StopChan()
 
 	for self.alive.IsRunning() {
@@ -193,18 +196,7 @@ func (self *TextDisplay) JustCenter(b []byte) []byte {
 // returns `b` when len>=width
 // otherwise pads with spaces
 func (self *TextDisplay) PadRight(b []byte) []byte {
-	l := len(b)
-	w := int(atomic.LoadUint32(&self.width))
-
-	if l == 0 {
-		return spaceBytes[:w]
-	}
-	if l >= w {
-		return b
-	}
-	buf := make([]byte, 0, w)
-	buf = append(append(buf, b...), spaceBytes[:w-l]...)
-	return buf
+	return PadSpace(b, self.width)
 }
 
 func (self *TextDisplay) Translate(s string) []byte {
@@ -236,17 +228,20 @@ func (self *TextDisplay) Translate(s string) []byte {
 	return result
 }
 
-func (self *TextDisplay) SetUpdateChan(ch chan<- struct{}) {
+func (self *TextDisplay) SetUpdateChan(ch chan<- State) {
 	self.upd = ch
 }
+
+func (self *TextDisplay) State() State { return self.state.Copy() }
 
 func (self *TextDisplay) flush() {
 	var buf1 [MaxWidth]byte
 	var buf2 [MaxWidth]byte
 	b1 := buf1[:self.width]
 	b2 := buf2[:self.width]
-	n1 := scrollWrap(b1, self.line1, self.tick)
-	n2 := scrollWrap(b2, self.line2, self.tick)
+	tick := atomic.LoadUint32(&self.tick)
+	n1 := scrollWrap(b1, self.state.L1, tick)
+	n2 := scrollWrap(b2, self.state.L2, tick)
 
 	// === Option 1: clear
 	// self.dev.Clear()
@@ -260,7 +255,7 @@ func (self *TextDisplay) flush() {
 		self.dev.CursorYX(1, 1)
 		self.dev.Write(spaceBytes[:self.width])
 	}
-	if len(self.line1) > 0 {
+	if len(self.state.L1) > 0 {
 		self.dev.CursorYX(1, 1)
 		self.dev.Write(b1[:n1])
 	}
@@ -269,33 +264,74 @@ func (self *TextDisplay) flush() {
 		self.dev.CursorYX(2, 1)
 		self.dev.Write(spaceBytes[:self.width])
 	}
-	if len(self.line2) > 0 {
+	if len(self.state.L2) > 0 {
 		self.dev.CursorYX(2, 1)
 		self.dev.Write(b2[:n2])
 	}
 
 	if self.upd != nil {
-		self.upd <- struct{}{}
+		self.upd <- self.state.Copy()
 	}
 }
 
+type State struct {
+	L1, L2 []byte
+}
+
+func (s *State) Clear() {
+	s.L1 = nil
+	s.L2 = nil
+}
+
+func (s State) Copy() State {
+	return State{
+		L1: append([]byte(nil), s.L1...),
+		L2: append([]byte(nil), s.L2...),
+	}
+}
+
+func (s State) Format(width uint32) string {
+	return fmt.Sprintf("%s\n%s",
+		PadSpace(s.L1, width),
+		PadSpace(s.L2, width),
+	)
+}
+
+func (s State) String() string {
+	return fmt.Sprintf("%s\n%s", s.L1, s.L2)
+}
+
+func PadSpace(b []byte, width uint32) []byte {
+	l := uint32(len(b))
+
+	if l == 0 {
+		return spaceBytes[:width]
+	}
+	if l >= width {
+		return b
+	}
+	buf := make([]byte, 0, width)
+	buf = append(append(buf, b...), spaceBytes[:width-l]...)
+	return buf
+}
+
 // relies that len(buf) == display width
-func scrollWrap(buf []byte, content []byte, tick uint16) uint32 {
-	length := len(content)
-	width := uint16(len(buf))
-	gap := uint16(width / 2)
+func scrollWrap(buf []byte, content []byte, tick uint32) uint32 {
+	length := uint32(len(content))
+	width := uint32(len(buf))
+	gap := uint32(width / 2)
 	n := 0
-	if uint16(length) <= width {
+	if length <= width {
 		n = copy(buf, content)
 		copy(buf[n:], spaceBytes)
 		return uint32(n)
 	}
 
-	offset := tick % (uint16(length) + gap)
-	if offset < uint16(length) {
+	offset := tick % (length + gap)
+	if offset < length {
 		n = copy(buf, content[offset:])
 	} else {
-		gap = gap - (offset - uint16(length))
+		gap = gap - (offset - length)
 	}
 	n += copy(buf[n:], spaceBytes[:gap])
 	n += copy(buf[n:], content[0:])

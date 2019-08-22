@@ -148,7 +148,7 @@ func (g *Global) Display() (*lcd.TextDisplay, error) {
 		g.Hardware.HD44780.Device = dev
 
 		displayConfig := &lcd.TextDisplayConfig{
-			Width:       uint16(devConfig.Width),
+			Width:       uint32(devConfig.Width),
 			Codepage:    devConfig.Codepage,
 			ScrollDelay: time.Duration(devConfig.ScrollDelay) * time.Millisecond,
 		}

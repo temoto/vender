@@ -10,15 +10,16 @@ import (
 func TestWrap(t *testing.T) {
 	t.Parallel()
 
-	const width uint16 = 16
+	const width uint32 = 16
 	spaces := strings.Repeat(" ", MaxWidth*2)
-	canonical := func(input string, tick uint16) string {
+	canonical := func(input string, tick uint32) string {
 		gap := width / 2
-		if uint16(len(input)) <= width {
+		length := uint32(len(input))
+		if length <= width {
 			return (input + spaces)[:width]
 		}
 		help := input + spaces[:gap] + input
-		offset := tick % (uint16(len(input)) + gap)
+		offset := tick % (length + gap)
 		return help[offset : offset+width]
 	}
 
@@ -35,7 +36,7 @@ func TestWrap(t *testing.T) {
 	for _, c := range cases {
 		c := c
 		t.Run(c.name, func(t *testing.T) {
-			for tick := uint16(0); tick < uint16(len(c.input)*3); tick++ {
+			for tick := uint32(0); tick < uint32(len(c.input)*3); tick++ {
 				var buf [width]byte
 				scrollWrap(buf[:], []byte(c.input), tick)
 				expect := canonical(c.input, tick)
@@ -52,13 +53,15 @@ func TestWrap(t *testing.T) {
 func TestMessage(t *testing.T) {
 	t.Parallel()
 
-	d, mock := NewMockTextDisplay(&TextDisplayConfig{Width: 8})
+	d := NewMockTextDisplay(&TextDisplayConfig{Width: 8})
+	ch := make(chan State, 1)
+	d.SetUpdateChan(ch)
 	d.SetLines("hello", "cursor\x00")
-	assert.Equal(t, "hello   \ncursor", mock.String())
+	assert.Equal(t, "hello   \ncursor", (<-ch).String())
 	d.Message("padded", "msg", func() {
-		assert.Equal(t, "padded  \nmsg     ", mock.String())
+		assert.Equal(t, "padded  \nmsg     ", (<-ch).String())
 	})
-	assert.Equal(t, "hello   \ncursor", mock.String())
+	assert.Equal(t, "hello   \ncursor", (<-ch).String())
 }
 
 func TestJustCenter(t *testing.T) {

@@ -27,5 +27,13 @@ type Event struct { //nolint:maligned
 }
 
 func (e *Event) String() string {
-	return fmt.Sprintf("ui.Event(%s input=%v money=%v)", e.Kind.String(), e.Input, e.Money)
+	inner := ""
+	switch e.Kind {
+	case EventInput:
+		inner = fmt.Sprintf(" source=%s key=%v up=%t", e.Input.Source, e.Input.Key, e.Input.Up)
+	case EventMoney:
+		// TODO
+		inner = fmt.Sprintf(" %#v", e.Money)
+	}
+	return fmt.Sprintf("ui.Event(%s%s)", e.Kind.String(), inner)
 }

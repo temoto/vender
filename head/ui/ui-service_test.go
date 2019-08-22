@@ -79,9 +79,7 @@ ui { service {
 		{expect: env._T("Menu", "2 test"), inev: env._KeyAccept},
 		{expect: env._T("T1 first", " "), inev: env._KeyNext},
 		{expect: env._T("T2 second", " "), inev: env._KeyAccept},
-		// TODO catch "in progress"
-		// {expect: env._T("T2 second", "in progress"), inev: Event{}},
-		{expect: env._T("T2 second", "OK"), inev: env._KeyReject},
+		{expect: env._T("T2 second", "in progress"), inev: Event{}},
 		{expect: env._T("T2 second", "OK"), inev: env._KeyReject},
 		{expect: env._T("Menu", "2 test"), inev: env._KeyReject},
 		{expect: "", inev: Event{}},
