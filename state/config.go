@@ -50,6 +50,7 @@ type Config struct {
 		Mega struct {
 			LogDebug bool   `hcl:"log_debug"`
 			Spi      string `hcl:"spi"`
+			SpiSpeed string `hcl:"spi_speed"`
 			PinChip  string `hcl:"pin_chip"`
 			Pin      string `hcl:"pin"`
 		}

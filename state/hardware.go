@@ -93,6 +93,7 @@ func (g *Global) Mega() (*mega.Client, error) {
 		devConfig := &g.Config.Hardware.Mega
 		megaConfig := &mega.Config{
 			SpiBus:        devConfig.Spi,
+			SpiSpeed:      devConfig.SpiSpeed,
 			NotifyPinChip: devConfig.PinChip,
 			NotifyPinName: devConfig.Pin,
 		}

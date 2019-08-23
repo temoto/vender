@@ -57,9 +57,10 @@ hardware {
   iodin_path = "TODO_EDIT"
 
   mega {
-    spi      = ""
-    pin_chip = "/dev/gpiochip0"
-    pin      = "25"
+    spi       = ""
+    spi_speed = "200kHz"
+    pin_chip  = "/dev/gpiochip0"
+    pin       = "25"
   }
 
   mdb {

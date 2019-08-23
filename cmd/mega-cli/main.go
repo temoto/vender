@@ -30,6 +30,7 @@ var log = log2.NewStderr(log2.LInfo)
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	spiPort := cmdline.String("spi", "", "")
+	spiSpeed := cmdline.String("spi-speed", "", "")
 	gpiochip := cmdline.String("dev", "/dev/gpiochip0", "")
 	pin := cmdline.String("pin", "25", "")
 	testmode := cmdline.Bool("testmode", false, "run tests, exit code 0 if pass")
@@ -44,6 +45,7 @@ func main() {
 
 	megaConfig := &mega.Config{
 		SpiBus:         *spiPort,
+		SpiSpeed:       *spiSpeed,
 		NotifyPinChip:  *gpiochip,
 		NotifyPinName:  *pin,
 		DontUseRawMode: *rawmode,
