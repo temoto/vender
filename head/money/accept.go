@@ -4,9 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/temoto/alive"
 	"github.com/juju/errors"
+	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
+	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/head/tele"
 	"github.com/temoto/vender/helpers"
@@ -28,8 +29,8 @@ func (self *MoneySystem) SetAcceptMax(ctx context.Context, limit currency.Amount
 func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amount, stopAccept <-chan struct{}, out chan<- Event) error {
 	const tag = "money.accept-credit"
 
-	config := state.GetGlobal(ctx).Config
-	maxConfig := currency.Amount(config.Money.CreditMax)
+	g := state.GetGlobal(ctx)
+	maxConfig := currency.Amount(g.Config.Money.CreditMax)
 	// Accept limit = lesser of: configured max credit or highest menu price.
 	limit := maxConfig
 
@@ -75,7 +76,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			self.dirty += pi.Amount()
 			alive.Stop()
 			if out != nil {
-				out <- Event{created: itemTime, name: EventCredit, amount: pi.Amount()}
+				out <- Event{Created: itemTime, Kind: EventCredit, Amount: pi.Amount()}
 			}
 		}
 		return false
@@ -90,15 +91,16 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			self.Log.Debugf("%s manual dispense: %s", tag, pi.String())
 			_ = self.coin.DoTubeStatus.Do(ctx)
 			_ = self.coin.CommandExpansionSendDiagStatus(nil)
+
 		case money.StatusReturnRequest:
-			alive.Stop()
-			if out != nil {
-				out <- Event{created: itemTime, name: EventAbort}
-			}
+			// XXX maybe this should be in coin driver
+			g.Hardware.Input.Emit(input.Event{Source: input.MoneySourceTag, Key: input.MoneyKeyAbort})
+
 		case money.StatusRejected:
 			state.GetGlobal(ctx).Tele.StatModify(func(s *tele.Stat) {
 				s.CoinRejected[uint32(pi.DataNominal)] += uint32(pi.DataCount)
 			})
+
 		case money.StatusCredit:
 			err := self.coinCredit.Add(pi.DataNominal, uint(pi.DataCount))
 			if err != nil {
@@ -109,7 +111,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			self.dirty += pi.Amount()
 			alive.Stop()
 			if out != nil {
-				out <- Event{created: itemTime, name: EventCredit, amount: pi.Amount()}
+				out <- Event{Created: itemTime, Kind: EventCredit, Amount: pi.Amount()}
 			}
 		default:
 			panic("unhandled coin POLL item: " + pi.String())

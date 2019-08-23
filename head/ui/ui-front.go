@@ -92,12 +92,12 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		// step 1: refresh display
 		credit := moneysys.Credit(ctx)
 		if self.State == StateFrontTune { // XXX onFrontTune
-			goto waitEvent
+			goto wait
 		}
 		self.frontSelectShow(ctx, credit)
 
 		// step 2: wait for input/timeout
-	waitEvent:
+	wait:
 		timeout := self.frontResetTimeout
 		if self.State == StateFrontTune {
 			timeout = modTuneTimeout
@@ -105,41 +105,74 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		e := self.wait(timeout)
 		switch e.Kind {
 		case EventInput:
+			if input.IsMoneyAbort(&e.Input) {
+				moneysys := money.GetGlobal(ctx)
+				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
+				return StateFrontEnd
+			}
+
 			switch e.Input.Key {
 			case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
-				if next := self.onFrontTuneInput(e.Input); next != StateInvalid {
-					return next
-				}
-				goto waitEvent // assume display was updated
+				// could skip state machine transition and just State=StateFrontTune; goto refresh
+				return self.onFrontTuneInput(e.Input)
 			}
-			if e.Input.IsDigit() {
-				if next := self.onFrontSelectInput(ctx, e.Input); next != StateInvalid {
-					return next
-				}
-				goto waitEvent // assume display was updated
-			}
-			switch self.State {
-			case StateFrontSelect:
-				if next := self.onFrontSelectInput(ctx, e.Input); next != StateInvalid {
-					return next
-				}
-				goto waitEvent // assume display was updated
 
-			case StateFrontTune:
-				return StateFrontSelect
+			switch {
+			case e.Input.IsDigit():
+				self.inputBuf = append(self.inputBuf, byte(e.Input.Key))
+				goto refresh
+
+			case input.IsReject(&e.Input):
+				// backspace semantic
+				if len(self.inputBuf) > 0 {
+					self.inputBuf = self.inputBuf[:len(self.inputBuf)-1]
+				}
+				goto refresh
+
+			case input.IsAccept(&e.Input):
+				if len(self.inputBuf) == 0 {
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeEmpty)
+					goto wait
+				}
+
+				x, err := strconv.ParseUint(string(self.inputBuf), 10, 16)
+				if err != nil {
+					self.inputBuf = self.inputBuf[:0]
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeInvalid)
+					goto wait
+				}
+				code := uint16(x)
+
+				mitem, ok := self.menu[code]
+				if !ok {
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeInvalid)
+					goto wait
+				}
+				moneysys := money.GetGlobal(ctx)
+				credit := moneysys.Credit(ctx)
+				self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
+				if mitem.Price > credit {
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuInsufficientCredit)
+					goto wait
+				}
+				self.g.Log.Debugf("mitem=%s validate", mitem.String())
+				if err := mitem.D.Validate(); err != nil {
+					self.g.Log.Errorf("ui-front selected=%s Validate err=%v", mitem.String(), err)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuNotAvailable)
+					goto wait
+				}
+
+				self.FrontResult.Item = mitem
+				return StateFrontAccept // success path
 
 			default:
-				panic(fmt.Sprintf("ui-front unhandled state=%s", self.State.String()))
+				self.g.Log.Errorf("ui-front unhandled input=%v", e)
+				return StateFrontSelect
 			}
 
 		case EventMoney:
 			self.g.Log.Errorf("ui-front money event=%v", e.Money)
-			switch e.Money.Name() {
-			case money.EventAbort:
-				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
-			}
 			go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.moneych)
-			goto refresh
 
 		case EventService:
 			return StateServiceBegin
@@ -149,11 +182,14 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 				return StateFrontSelect // "return to previous mode"
 			}
 			return StateFrontTimeout
+
+		case EventStop:
+			return StateFrontEnd
+
+		default:
+			panic(fmt.Sprintf("code error state=%v unhandled event=%v", self.State, e))
 		}
 	}
-
-	// external stop
-	return StateFrontEnd
 }
 
 func (self *UI) frontSelectShow(ctx context.Context, credit currency.Amount) {
@@ -165,62 +201,6 @@ func (self *UI) frontSelectShow(ctx context.Context, credit currency.Amount) {
 		l2 = fmt.Sprintf(msgInputCode, string(self.inputBuf))
 	}
 	self.display.SetLines(l1, l2)
-}
-func (self *UI) onFrontSelectInput(ctx context.Context, e input.Event) State {
-	switch {
-	case e.IsDigit():
-		self.inputBuf = append(self.inputBuf, byte(e.Key))
-		return StateFrontSelect
-
-	case input.IsReject(&e):
-		// backspace semantic
-		if len(self.inputBuf) > 0 {
-			self.inputBuf = self.inputBuf[:len(self.inputBuf)-1]
-			return StateFrontSelect
-		}
-		// TODO maybe ignore reject on empty buffer?
-		return StateFrontEnd
-
-	case input.IsAccept(&e):
-		if len(self.inputBuf) == 0 {
-			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeEmpty)
-			return StateInvalid
-		}
-
-		x, err := strconv.ParseUint(string(self.inputBuf), 10, 16)
-		if err != nil {
-			self.inputBuf = self.inputBuf[:0]
-			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeInvalid)
-			return StateInvalid
-		}
-		code := uint16(x)
-
-		mitem, ok := self.menu[code]
-		if !ok {
-			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeInvalid)
-			return StateInvalid
-		}
-		moneysys := money.GetGlobal(ctx)
-		credit := moneysys.Credit(ctx)
-		self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
-		if mitem.Price > credit {
-			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuInsufficientCredit)
-			return StateInvalid
-		}
-		self.g.Log.Debugf("mitem=%s validate", mitem.String())
-		if err := mitem.D.Validate(); err != nil {
-			self.g.Log.Errorf("ui-front selected=%s Validate err=%v", mitem.String(), err)
-			self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuNotAvailable)
-			return StateInvalid
-		}
-
-		self.FrontResult.Item = mitem
-		return StateFrontAccept
-
-	default:
-		self.g.Log.Errorf("ui-front unhandled input=%v", e)
-	}
-	return StateFrontSelect
 }
 
 func (self *UI) onFrontTune(ctx context.Context) State {

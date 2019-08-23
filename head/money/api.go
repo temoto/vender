@@ -9,41 +9,11 @@ package money
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/state"
 )
-
-const (
-	EventAbort  = "abort"
-	EventCredit = "credit"
-	// EventError = "error"
-	EventPing = "ping"
-)
-
-type Event struct {
-	created time.Time
-	name    string
-	amount  currency.Amount
-	err     error
-}
-
-func (e *Event) Time() time.Time         { return e.created }
-func (e *Event) Name() string            { return e.name }
-func (e *Event) Amount() currency.Amount { return e.amount }
-func (e *Event) Err() error              { return e.err }
-func (e *Event) Error() string {
-	if e.err == nil {
-		return ""
-	}
-	return e.err.Error()
-}
-func (e *Event) String() string {
-	return fmt.Sprintf("money.Event<name=%s err='%s' created=%s amount=%s>", e.name, e.Error(), e.created.Format(time.RFC3339Nano), e.amount.Format100I())
-}
 
 var (
 	ErrNeedMoreMoney        = errors.New("add-money")

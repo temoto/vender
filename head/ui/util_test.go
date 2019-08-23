@@ -28,6 +28,8 @@ type tenv struct {
 	_KeyNext       Event
 	_KeyPrev       Event
 	_KeyService    Event
+	_MoneyAbort    Event
+	_Timeout       Event
 }
 
 type step struct {
@@ -69,18 +71,30 @@ func uiTestSetup(t testing.TB, env *tenv, initState, endState State) {
 	env._KeyNext = Event{Kind: EventInput, Input: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamMore}}
 	env._KeyPrev = Event{Kind: EventInput, Input: input.Event{Source: input.EvendKeyboardSourceTag, Key: input.EvendKeyCreamLess}}
 	env._KeyService = Event{Kind: EventInput, Input: input.Event{Source: input.DevInputEventTag}}
+	env._MoneyAbort = Event{Kind: EventInput, Input: input.Event{Source: input.MoneySourceTag, Key: input.MoneyKeyAbort}}
+	env._Timeout = Event{Kind: EventTime}
 }
 
 func uiTestWait(t testing.TB, env *tenv, steps []step) {
+	waitch := env.g.Alive.WaitChan()
+
 	for _, step := range steps {
 		select {
 		case current := <-env.displayUpdated:
 			t.Logf("display:\n%s\n%s\nevent=%s", current, strings.Repeat("-", testDisplayWidth), step.inev.String())
 			require.Equal(t, step.expect, current.Format(testDisplayWidth))
-			if step.inev.Kind == EventInput {
+			switch step.inev.Kind {
+			case EventInput:
 				env.g.Hardware.Input.Emit(step.inev.Input)
+
+			case EventStop:
+				env.g.Log.Debugf("emit EventStop")
+				env.g.Alive.Stop()
+				env.g.Alive.Wait()
+				return
 			}
-		case <-env.g.Alive.WaitChan():
+
+		case <-waitch:
 			if !(step.expect == "" && step.inev.Kind == EventInvalid) {
 				t.Error("ui stopped before end of test")
 			}
