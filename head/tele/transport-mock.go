@@ -11,7 +11,7 @@ import (
 
 type transportMock struct {
 	t              testing.TB
-	onCommand      func([]byte) bool
+	onCommand      CommandCallback
 	networkTimeout time.Duration
 	outBuffer      int
 	outTelemetry   chan []byte
@@ -19,11 +19,8 @@ type transportMock struct {
 	outResponse    chan []byte
 }
 
-func (self *transportMock) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand func([]byte) bool, willPayload []byte) error {
-	self.onCommand = func(payload []byte) bool {
-		self.t.Logf("mock command=%x", payload)
-		return onCommand(payload)
-	}
+func (self *transportMock) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback, willPayload []byte) error {
+	self.onCommand = onCommand // self.t.Logf("mock command=%x", payload)
 	if self.networkTimeout == 0 {
 		self.networkTimeout = defaultNetworkTimeout
 	}

@@ -31,7 +31,7 @@ type transportMqtt struct {
 	topicCommand   string
 }
 
-func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand func([]byte) bool, willPayload []byte) error {
+func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback, willPayload []byte) error {
 	mqttLog := self.log.Clone(log2.LDebug)
 	// TODO wrap with level filter and prefix "tele.mqtt critical/error/warn/debug"
 	mqtt.CRITICAL = mqttLog
@@ -46,6 +46,9 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 		return mqttClientId, teleConfig.MqttPassword
 	}
 
+	self.onCommand = func(payload []byte) bool {
+		return onCommand(ctx, payload)
+	}
 	self.topicPrefix = mqttClientId // coincidence
 	self.topicState = fmt.Sprintf("%s/w/1s", self.topicPrefix)
 	self.topicTelemetry = fmt.Sprintf("%s/w/1t", self.topicPrefix)
@@ -119,6 +122,7 @@ func (self *transportMqtt) SendTelemetry(payload []byte) bool {
 
 func (self *transportMqtt) SendCommandResponse(topicSuffix string, payload []byte) bool {
 	topic := fmt.Sprintf("%s/%s", self.topicPrefix, topicSuffix)
+	self.log.Debugf("mqtt publish command response to topic=%s", topic)
 	t := self.m.Publish(topic, 1, false, payload)
 	err := self.tokenWait(t, "publish command response")
 	return err == nil

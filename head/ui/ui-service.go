@@ -13,7 +13,7 @@ import (
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/head/tele"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
@@ -87,7 +87,7 @@ func (self *UI) onServiceBegin(ctx context.Context) State {
 	}
 
 	self.g.Log.Debugf("ui service begin")
-	self.g.Tele.State(tele.State_Service)
+	self.g.Tele.State(tele_api.State_Service)
 	return StateServiceAuth
 }
 

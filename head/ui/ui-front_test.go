@@ -9,13 +9,13 @@ import (
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/money"
-	"github.com/temoto/vender/state"
+	state_new "github.com/temoto/vender/state/new"
 )
 
 func TestFrontTune(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, `
 engine {
 	inventory {
 		stock "cream" { register_add="ignore(?)" }
@@ -62,7 +62,7 @@ ui {
 func TestFrontMoneyAbort(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, `
 engine {
 	inventory {
 		stock "cream" { register_add="ignore(?)" }

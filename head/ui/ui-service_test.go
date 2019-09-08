@@ -4,13 +4,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/temoto/vender/state"
+	state_new "github.com/temoto/vender/state/new"
 )
 
 func TestServiceAuth(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, "")
+	ctx, g := state_new.NewTestContext(t, "")
 	env := &tenv{ctx: ctx, g: g}
 	g.Config.UI.Service.Auth.Enable = true
 	g.Config.UI.Service.Auth.Passwords = []string{"lemz1g"}
@@ -33,7 +33,7 @@ func TestServiceAuth(t *testing.T) {
 func TestServiceInventory(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, `
 engine { inventory {
 	stock "cup" { }
 	stock "water" { }
@@ -64,7 +64,7 @@ engine { inventory {
 func TestServiceTest(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, `
 ui { service {
 	test "first" { scenario="" }
 	test "second" { scenario="" }
@@ -90,7 +90,7 @@ ui { service {
 func TestServiceReboot(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, `
 engine {}`)
 	env := &tenv{ctx: ctx, g: g}
 	g.Config.UI.Service.Auth.Enable = false

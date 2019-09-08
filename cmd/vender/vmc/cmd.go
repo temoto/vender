@@ -9,7 +9,6 @@ import (
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/ui"
-	"github.com/temoto/vender/head/vmc_common"
 	"github.com/temoto/vender/state"
 )
 
@@ -49,8 +48,6 @@ func Main(ctx context.Context, config *state.Config) error {
 		err = errors.Annotate(err, "ui Init()")
 		return err
 	}
-
-	go vmc_common.TeleCommandLoop(ctx)
 
 	subcmd.SdNotify(daemon.SdNotifyReady)
 	g.Log.Debugf("VMC init complete")

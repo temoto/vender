@@ -1,8 +1,12 @@
 package tele
 
+import (
+	tele_api "github.com/temoto/vender/head/tele/api"
+)
+
 const logMsgDisabled = "tele disabled"
 
-func (self *Tele) State(s State) {
+func (self *Tele) State(s tele_api.State) {
 	if !self.enabled {
 		self.log.Errorf(logMsgDisabled)
 		return
@@ -19,24 +23,15 @@ func (self *Tele) Error(e error) {
 	}
 
 	self.log.Errorf("tele.Error e=%v", e)
-	tmerr := Telemetry_Error{
+	tmerr := tele_api.Telemetry_Error{
 		Message: e.Error(),
 	}
-	if err := self.qpushTelemetry(&Telemetry{Error: &tmerr}); err != nil {
+	if err := self.qpushTelemetry(&tele_api.Telemetry{Error: &tmerr}); err != nil {
 		self.log.Errorf("CRITICAL qpushTelemetry telemetry_error=%#v err=%v", tmerr, err)
 	}
 }
 
-func (self *Tele) CommandChan() <-chan Command {
-	if !self.enabled {
-		self.log.Errorf(logMsgDisabled)
-		return nil
-	}
-
-	return self.cmdCh
-}
-
-func (self *Tele) CommandReplyErr(c *Command, e error) {
+func (self *Tele) CommandReplyErr(c *tele_api.Command, e error) {
 	if !self.enabled {
 		self.log.Errorf(logMsgDisabled)
 		return
@@ -45,7 +40,7 @@ func (self *Tele) CommandReplyErr(c *Command, e error) {
 	if e != nil {
 		errText = e.Error()
 	}
-	r := Response{
+	r := tele_api.Response{
 		CommandId: c.Id,
 		Error:     errText,
 	}
@@ -55,7 +50,7 @@ func (self *Tele) CommandReplyErr(c *Command, e error) {
 	}
 }
 
-func (self *Tele) StatModify(fun func(s *Stat)) {
+func (self *Tele) StatModify(fun func(s *tele_api.Stat)) {
 	if !self.enabled {
 		self.log.Errorf(logMsgDisabled)
 		return
@@ -66,12 +61,12 @@ func (self *Tele) StatModify(fun func(s *Stat)) {
 	self.stat.Unlock()
 }
 
-func (self *Tele) Transaction(tx Telemetry_Transaction) {
+func (self *Tele) Transaction(tx tele_api.Telemetry_Transaction) {
 	if !self.enabled {
 		self.log.Errorf(logMsgDisabled)
 		return
 	}
-	err := self.qpushTelemetry(&Telemetry{Transaction: &tx})
+	err := self.qpushTelemetry(&tele_api.Telemetry{Transaction: &tx})
 	if err != nil {
 		self.log.Errorf("CRITICAL transaction=%#v err=%v", tx, err)
 	}

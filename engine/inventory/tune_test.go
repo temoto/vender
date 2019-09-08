@@ -9,14 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/helpers"
-	"github.com/temoto/vender/state"
+	state_new "github.com/temoto/vender/state/new"
 )
 
 func TestTuneDrink(t *testing.T) {
 	t.Parallel()
 
 	rand := helpers.RandUnix()
-	ctx, g := state.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, `
 engine {
 inventory {
 	stock "sugar" { register_add="sugar.drop(?)" spend_rate=0.98 }

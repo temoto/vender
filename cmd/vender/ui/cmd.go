@@ -10,7 +10,6 @@ import (
 	engine_config "github.com/temoto/vender/engine/config"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/ui"
-	"github.com/temoto/vender/head/vmc_common"
 	"github.com/temoto/vender/state"
 )
 
@@ -44,8 +43,6 @@ func Main(ctx context.Context, config *state.Config) error {
 		err = errors.Annotate(err, "money system Start()")
 		return err
 	}
-
-	go vmc_common.TeleCommandLoop(ctx)
 
 	g.Log.Debugf("init complete, enter main loop")
 	ui := ui.UI{}

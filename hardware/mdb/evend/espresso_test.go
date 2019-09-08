@@ -5,13 +5,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/state"
+	state_new "github.com/temoto/vender/state/new"
 )
 
 func TestEspresso(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, `
 engine { inventory {
 	stock "espresso" { register_add="ignore(?) mdb.evend.espresso_grind" spend_rate=7 }
 }}`)

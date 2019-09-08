@@ -7,14 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state"
+	state_new "github.com/temoto/vender/state/new"
 )
 
 type _PI = money.PollItem
@@ -47,7 +48,7 @@ func mockInitRs() []mdb.MockR {
 }
 
 func mockContext(t testing.TB, rs []mdb.MockR) context.Context {
-	ctx, _ := state.NewTestContext(t, testConfig)
+	ctx, _ := state_new.NewTestContext(t, testConfig)
 	mock := mdb.MockFromContext(ctx)
 	go func() {
 		mock.Expect(mockInitRs())
@@ -83,7 +84,7 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 func TestCoinOffline(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := state.NewTestContext(t, testConfig)
+	ctx, _ := state_new.NewTestContext(t, testConfig)
 	mock := mdb.MockFromContext(ctx)
 	mock.ExpectMap(map[string]string{"": ""})
 	defer mock.Close()
@@ -100,7 +101,7 @@ func TestCoinOffline(t *testing.T) {
 func TestCoinNoDiag(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := state.NewTestContext(t, testConfig)
+	ctx, _ := state_new.NewTestContext(t, testConfig)
 	mock := mdb.MockFromContext(ctx)
 	mock.ExpectMap(map[string]string{
 		"08": "",                                               // initer, RESET

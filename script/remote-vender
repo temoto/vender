@@ -13,4 +13,4 @@ go test "${test_flag[@]}" ./... >/dev/null || go test -v "${test_flag[@]}" ./...
 GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
 rsync -a $base/$target $base/vender.hcl $remote:~/
 cmd=$1 ; shift
-ssh -t $remote time sudo -n env GODEBUG=gctrace=1 chrt --fifo 99 \~/$name "$cmd" -config=vender.hcl "$@"
+ssh -t $remote time sudo -n env GODEBUG=gctrace=1 chrt --fifo 99 \~/$name -config=vender.hcl "$cmd" "$@"

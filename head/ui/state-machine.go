@@ -7,7 +7,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
-	"github.com/temoto/vender/head/tele"
+	tele_api "github.com/temoto/vender/head/tele/api"
 )
 
 //go:generate stringer -type=State -trimprefix=State
@@ -53,7 +53,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	self.g.Log.Debugf("ui enter %s", s.String())
 	switch s {
 	case StateBoot:
-		self.g.Tele.State(tele.State_Boot)
+		self.g.Tele.State(tele_api.State_Boot)
 		onStartSuccess := false
 		for i := 1; i <= 3; i++ {
 			err := self.g.Engine.ExecList(ctx, "on_boot", self.g.Config.Engine.OnBoot)
@@ -75,7 +75,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	case StateBroken:
 		self.g.Log.Infof("state=broken")
 		if !self.broken {
-			self.g.Tele.State(tele.State_Problem)
+			self.g.Tele.State(tele_api.State_Problem)
 			err := self.g.Engine.ExecList(ctx, "on_broken", self.g.Config.Engine.OnBroken)
 			if err != nil {
 				self.g.Log.Error(errors.ErrorStack(err))

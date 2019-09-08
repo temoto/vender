@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/temoto/alive"
 	"github.com/juju/errors"
+	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb/bill"
@@ -87,6 +87,16 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 			return err
 		}}
 	g.Engine.Register(doDispense.Name, doDispense)
+
+	doSetGiftCredit := engine.FuncArg{
+		Name: "money.set_gift_credit(?)",
+		F: func(ctx context.Context, arg engine.Arg) error {
+			amount := g.Config.ScaleU(uint32(arg))
+			self.SetGiftCredit(ctx, amount)
+			return nil
+		},
+	}
+	g.Engine.Register(doSetGiftCredit.String(), doSetGiftCredit)
 
 	return nil
 }

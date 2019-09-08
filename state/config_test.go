@@ -5,10 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/juju/errors"
+	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/engine/inventory"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
@@ -153,7 +156,20 @@ engine { inventory {
 		return func(t *testing.T) {
 			// log := log2.NewStderr(log2.LDebug) // helps with panics
 			log := log2.NewTest(t, log2.LDebug)
-			ctx, g := NewContext(log)
+
+			// XXX FIXME code duplicate from NewContext but stupid import cycle
+			// ctx, g := NewContext(log)
+			g := &Global{
+				Alive:     alive.NewAlive(),
+				Engine:    engine.NewEngine(log),
+				Inventory: new(inventory.Inventory),
+				Log:       log,
+				Tele:      tele_api.NewStub(),
+			}
+			ctx := context.Background()
+			ctx = context.WithValue(ctx, log2.ContextKey, log)
+			ctx = context.WithValue(ctx, ContextKey, g)
+
 			fs := NewMockFullReader(map[string]string{
 				"test-inline":   c.input,
 				"empty":         "",

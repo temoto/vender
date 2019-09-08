@@ -14,7 +14,7 @@ import (
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/head/tele"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
@@ -38,7 +38,7 @@ type Global struct {
 	}
 	Inventory *inventory.Inventory
 	Log       *log2.Log
-	Tele      tele.Tele
+	Tele      tele_api.Teler
 
 	lk sync.Mutex
 
@@ -50,35 +50,17 @@ type Global struct {
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
 }
 
-const contextKey = "run/state-global"
-
-func NewContext(log *log2.Log) (context.Context, *Global) {
-	if log == nil {
-		panic("code error state.NewContext() log=nil")
-	}
-
-	g := &Global{
-		Alive:     alive.NewAlive(),
-		Engine:    engine.NewEngine(log),
-		Inventory: new(inventory.Inventory),
-		Log:       log,
-	}
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log)
-	ctx = context.WithValue(ctx, contextKey, g)
-
-	return ctx, g
-}
+const ContextKey = "run/state-global"
 
 func GetGlobal(ctx context.Context) *Global {
-	v := ctx.Value(contextKey)
+	v := ctx.Value(ContextKey)
 	if v == nil {
-		panic(fmt.Sprintf("context['%s'] is nil", contextKey))
+		panic(fmt.Sprintf("context['%s'] is nil", ContextKey))
 	}
 	if g, ok := v.(*Global); ok {
 		return g
 	}
-	panic(fmt.Sprintf("context['%s'] expected type *Global actual=%#v", contextKey, v))
+	panic(fmt.Sprintf("context['%s'] expected type *Global actual=%#v", ContextKey, v))
 }
 
 // If `Init` fails, consider `Global` is in broken state.
@@ -113,7 +95,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 		}
 		if err != nil {
 			g.Error(err)
-			g.Tele.State(tele.State_Problem)
+			g.Tele.State(tele_api.State_Problem)
 			errs = append(errs, err)
 		}
 	}

@@ -1,4 +1,4 @@
-package tele
+package tele_api
 
 import (
 	"sync"
@@ -12,7 +12,8 @@ type Stat struct { //nolint:maligned
 	Telemetry_Stat
 }
 
-func (self *Stat) reset() {
+// Internal for tele package. Caller must hold self.Mutex.
+func (self *Stat) Locked_Reset() {
 	self.Telemetry_Stat.Reset()
 	self.BillRejected = make(map[uint32]uint32, 16)
 	self.CoinRejected = make(map[uint32]uint32, 16)

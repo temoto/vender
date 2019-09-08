@@ -5,13 +5,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/state"
+	state_new "github.com/temoto/vender/state/new"
 )
 
 func TestAbort(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, "money{scale=100}")
+	ctx, g := state_new.NewTestContext(t, "money{scale=100}")
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{

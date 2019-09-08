@@ -14,8 +14,10 @@ import (
 // - application may start without network available
 // - assume worst network quality: packet loss, reorder, duplicates, corruption
 type Transporter interface {
-	Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand func([]byte) bool, willPayload []byte) error
+	Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback, willPayload []byte) error
 	SendState(payload []byte) bool
 	SendTelemetry(payload []byte) bool
 	SendCommandResponse(topicSuffix string, payload []byte) bool
 }
+
+type CommandCallback func(context.Context, []byte) bool

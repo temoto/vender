@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/temoto/spq"
 	"github.com/temoto/vender/cmd/vender/subcmd"
-	"github.com/temoto/vender/head/tele"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/state"
 )
@@ -24,27 +24,8 @@ func Main(ctx context.Context, config *state.Config) error {
 	}
 	synthConfig.Tele.Enabled = true
 	synthConfig.Tele.PersistPath = spq.OnlyForTesting
+	synthConfig.Tele.LogDebug = true
 	g.MustInit(ctx, synthConfig)
-
-	telesys := &state.GetGlobal(ctx).Tele
-	go func() {
-		stopCh := g.Alive.StopChan()
-		for {
-			select {
-			case <-stopCh:
-				return
-			case cmd := <-telesys.CommandChan():
-				switch cmd.Task.(type) {
-				case *tele.Command_Abort:
-					g.Log.Infof("tele command abort")
-					telesys.CommandReplyErr(&cmd, nil)
-					g.Log.Infof("tele command abort reply sent")
-				case *tele.Command_SetGiftCredit:
-					g.Log.Infof("tele command setgiftcredit")
-				}
-			}
-		}
-	}()
 
 	g.Log.Debugf("tele init complete, running")
 	// for g.Alive.IsRunning() {
@@ -78,7 +59,7 @@ func newExecutor(ctx context.Context) func(string) {
 			g.Log.Errorf("hex.Decode err=%v", err)
 		}
 
-		var tm tele.Telemetry
+		var tm tele_api.Telemetry
 		if err := proto.Unmarshal(b, &tm); err != nil {
 			g.Log.Errorf("proto.Unmarshal err=%v", err)
 		}

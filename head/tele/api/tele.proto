@@ -1,5 +1,15 @@
 syntax = "proto3";
-package tele;
+package tele_api;
+
+message Inventory {
+  repeated StockItem stocks = 1;
+  message StockItem {
+    uint32 code = 1;
+    int32 value = 2;
+    string name = 3;
+    int32 hopper = 4;
+  }
+}
 
 enum State {
   Invalid = 0;
@@ -14,26 +24,18 @@ enum State {
 // "Touching network" is expensive, while 10 or 900 bytes is about same cost.
 message Telemetry {
   int32 vm_id = 1;
-  Error error = 2;
-  Inventory inventory = 3;
-  Money money = 4;
-  Transaction transaction = 5;
-  Stat stat = 6;
+  int64 time = 2;
+  Error error = 3;
+  Inventory inventory = 4;
+  Money cashbox = 5;
+  Transaction transaction = 6;
+  Stat stat = 7;
+  Money money_save = 8;
 
   message Error {
     uint32 code = 1;
     string message = 2;
     uint32 count = 3;
-  }
-
-  message Inventory {
-    repeated StockItem stocks = 1;
-    message StockItem {
-      uint32 code = 1;
-      int32 value = 2;
-      string name = 3;
-      int32 hopper = 4;
-    }
   }
 
   message Money {
@@ -53,8 +55,10 @@ message Telemetry {
   }
 
   message Stat {
+    uint32 activity = 1;
     map<uint32,uint32> bill_rejected = 16;
     map<uint32,uint32> coin_rejected = 17;
+    uint32 coin_slug = 18;
   }
 }
 enum PaymentMethod {
@@ -67,19 +71,26 @@ enum PaymentMethod {
 message Command {
   uint32 id = 1;
   string reply_topic = 2;
+  int64 deadline = 3;
   oneof task {
-    ArgReport report = 3;
-    ArgAbort abort = 4;
-    ArgDispense dispense = 5;
-    ArgSetGiftCredit set_gift_credit = 6;
-    ArgPing ping = 7;
+    ArgReport report = 16;
+    ArgLock lock = 17;
+    ArgExec exec = 18;
+    ArgSetInventory set_inventory = 19;
+    ArgSetConfig set_config = 20;
   }
 
   message ArgReport {}
-  message ArgAbort {}
-  message ArgDispense { uint32 amount = 1; }
-  message ArgSetGiftCredit { uint32 amount = 1; }
-  message ArgPing {}
+  message ArgLock { int32 duration = 1; }
+  message ArgExec {
+    string scenario = 1;
+    bool lock = 2;
+  }
+  message ArgSetInventory { Inventory new = 1; }
+  message ArgSetConfig {
+    string name = 1;
+    bytes new = 2;
+  }
 }
 message Response {
   uint32 command_id = 1;

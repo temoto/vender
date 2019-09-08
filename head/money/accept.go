@@ -9,7 +9,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/money"
-	"github.com/temoto/vender/head/tele"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
@@ -97,7 +97,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			g.Hardware.Input.Emit(input.Event{Source: input.MoneySourceTag, Key: input.MoneyKeyAbort})
 
 		case money.StatusRejected:
-			state.GetGlobal(ctx).Tele.StatModify(func(s *tele.Stat) {
+			state.GetGlobal(ctx).Tele.StatModify(func(s *tele_api.Stat) {
 				s.CoinRejected[uint32(pi.DataNominal)] += uint32(pi.DataCount)
 			})
 

@@ -13,7 +13,7 @@ import (
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
-	"github.com/temoto/vender/head/tele"
+	tele_api "github.com/temoto/vender/head/tele/api"
 )
 
 const (
@@ -73,7 +73,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		self.g.Error(err)
 		return StateBroken
 	}
-	self.g.Tele.State(tele.State_Nominal)
+	self.g.Tele.State(tele_api.State_Nominal)
 	return StateFrontSelect
 }
 
@@ -265,7 +265,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	moneysys := money.GetGlobal(ctx)
 	uiConfig := &self.g.Config.UI
 	selected := &self.FrontResult.Item
-	teletx := tele.Telemetry_Transaction{
+	teletx := tele_api.Telemetry_Transaction{
 		Code:  int32(selected.Code),
 		Price: uint32(selected.Price),
 		// TODO options

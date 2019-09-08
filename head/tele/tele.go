@@ -7,12 +7,11 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	"github.com/temoto/spq"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	tele_config "github.com/temoto/vender/head/tele/config"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
-
-//go:generate protoc --go_out=./ tele.proto
 
 const (
 	defaultStateInterval  = 5 * time.Minute
@@ -31,12 +30,11 @@ type Tele struct { //nolint:maligned
 	log           *log2.Log
 	transport     Transporter
 	q             *spq.Queue
-	stateCh       chan State
+	stateCh       chan tele_api.State
 	stopCh        chan struct{}
 	vmId          int32
-	cmdCh         chan Command
 	stateInterval time.Duration
-	stat          Stat
+	stat          tele_api.Stat
 }
 
 func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config) error {
@@ -50,11 +48,10 @@ func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	}
 
 	self.stopCh = make(chan struct{})
-	self.stateCh = make(chan State)
-	self.cmdCh = make(chan Command, 2)
+	self.stateCh = make(chan tele_api.State)
 	self.vmId = int32(teleConfig.VmId)
 	self.stateInterval = helpers.IntSecondDefault(teleConfig.StateIntervalSec, defaultStateInterval)
-	self.stat.reset()
+	self.stat.Locked_Reset()
 
 	if teleConfig.PersistPath == "" {
 		panic("code error must set teleConfig.PersistPath")
@@ -65,42 +62,18 @@ func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 		return errors.Annotate(err, "tele queue")
 	}
 
-	onCommand := func(payload []byte) bool {
-		c := new(Command)
-		err := proto.Unmarshal(payload, c)
-		if err != nil {
-			self.log.Errorf("tele command parse raw=%x err=%v", payload, err)
-			// TODO reply error
-			return true
-		}
-		self.log.Debugf("tele command raw=%x task=%#v", payload, c.String())
-
-		switch c.Task.(type) {
-		case *Command_Report:
-			// TODO construct Telemetry
-			tm := Telemetry{}
-			if err := self.qpushTelemetry(&tm); err != nil {
-				self.log.Errorf("CRITICAL qpushTelemetry tm=%#v err=%v", tm, err)
-			}
-		case *Command_Ping:
-			self.CommandReplyErr(c, nil)
-		default:
-			self.cmdCh <- *c
-		}
-		return true
-	}
-	willPayload := []byte{byte(State_Disconnected)}
+	willPayload := []byte{byte(tele_api.State_Disconnected)}
 	// test code sets .transport
 	if self.transport == nil { // production path
 		self.transport = &transportMqtt{}
 	}
-	if err := self.transport.Init(ctx, log, teleConfig, onCommand, willPayload); err != nil {
+	if err := self.transport.Init(ctx, log, teleConfig, self.onCommandMessage, willPayload); err != nil {
 		return errors.Annotate(err, "tele transport")
 	}
 
 	go self.qworker()
 	go self.stateWorker()
-	self.stateCh <- State_Boot
+	self.stateCh <- tele_api.State_Boot
 	return nil
 }
 
@@ -118,7 +91,7 @@ func (self *Tele) stateWorker() {
 	for {
 		select {
 		case next := <-self.stateCh:
-			if next != State(b[0]) {
+			if next != tele_api.State(b[0]) {
 				b[0] = byte(next)
 				sent = self.transport.SendState(b[:])
 			}
@@ -192,14 +165,14 @@ func (self *Tele) qhandle(b []byte) (bool, error) {
 
 	switch b[0] {
 	case qCommandResponse:
-		var r Response
+		var r tele_api.Response
 		if err := proto.Unmarshal(b[1:], &r); err != nil {
 			return true, err
 		}
 		return self.qsendResponse(&r), nil
 
 	case qTelemetry:
-		var tm Telemetry
+		var tm tele_api.Telemetry
 		if err := proto.Unmarshal(b[1:], &tm); err != nil {
 			return true, err
 		}
@@ -211,7 +184,7 @@ func (self *Tele) qhandle(b []byte) (bool, error) {
 	}
 }
 
-func (self *Tele) qpushCommandResponse(c *Command, r *Response) error {
+func (self *Tele) qpushCommandResponse(c *tele_api.Command, r *tele_api.Response) error {
 	if c.ReplyTopic == "" {
 		err := errors.Errorf("command with reply_topic=empty")
 		self.Error(err)
@@ -221,15 +194,15 @@ func (self *Tele) qpushCommandResponse(c *Command, r *Response) error {
 	return self.qpushTagProto(qCommandResponse, r)
 }
 
-func (self *Tele) qpushTelemetry(tm *Telemetry) error {
+func (self *Tele) qpushTelemetry(tm *tele_api.Telemetry) error {
 	if tm.VmId == 0 {
 		tm.VmId = self.vmId
 	}
 	self.stat.Lock()
+	defer self.stat.Unlock()
 	tm.Stat = &self.stat.Telemetry_Stat
 	err := self.qpushTagProto(qTelemetry, tm)
-	self.stat.reset()
-	self.stat.Unlock()
+	self.stat.Locked_Reset()
 	return err
 }
 
@@ -245,7 +218,7 @@ func (self *Tele) qpushTagProto(tag byte, pb proto.Message) error {
 	return self.q.Push(buf.Bytes())
 }
 
-func (self *Tele) qsendResponse(r *Response) bool {
+func (self *Tele) qsendResponse(r *tele_api.Response) bool {
 	// do not serialize INTERNAL_topic field
 	wireResponse := *r
 	wireResponse.INTERNALTopic = ""
@@ -257,7 +230,7 @@ func (self *Tele) qsendResponse(r *Response) bool {
 	return self.transport.SendCommandResponse(r.INTERNALTopic, payload)
 }
 
-func (self *Tele) qsendTelemetry(tm *Telemetry) bool {
+func (self *Tele) qsendTelemetry(tm *tele_api.Telemetry) bool {
 	payload, err := proto.Marshal(tm)
 	if err != nil {
 		self.log.Errorf("CRITICAL telemetry Marshal tm=%#v err=%v", tm, err)

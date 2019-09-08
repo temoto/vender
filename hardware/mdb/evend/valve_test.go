@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/state"
+	state_new "github.com/temoto/vender/state/new"
 )
 
 func TestValve(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, `
 engine { inventory {
 	stock "water" { check=false hw_rate = 0.6 min = 500 }
 }}`)
