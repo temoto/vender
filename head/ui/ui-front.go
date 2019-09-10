@@ -16,23 +16,6 @@ import (
 	tele_api "github.com/temoto/vender/head/tele/api"
 )
 
-const (
-	DefaultCream = 4
-	MaxCream     = 6
-	DefaultSugar = 4
-	MaxSugar     = 8
-)
-
-const modTuneTimeout = 3 * time.Second
-
-var ScaleAlpha = []byte{
-	0x94, // empty
-	0x95,
-	0x96,
-	0x97, // full
-	// '0', '1', '2', '3',
-}
-
 type UIMenuResult struct {
 	Item  MenuItem
 	Cream uint8
@@ -131,34 +114,34 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 
 			case input.IsAccept(&e.Input):
 				if len(self.inputBuf) == 0 {
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeEmpty)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuCodeEmpty)
 					goto wait
 				}
 
 				x, err := strconv.ParseUint(string(self.inputBuf), 10, 16)
 				if err != nil {
 					self.inputBuf = self.inputBuf[:0]
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeInvalid)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuCodeInvalid)
 					goto wait
 				}
 				code := uint16(x)
 
 				mitem, ok := self.menu[code]
 				if !ok {
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuCodeInvalid)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuCodeInvalid)
 					goto wait
 				}
 				moneysys := money.GetGlobal(ctx)
 				credit := moneysys.Credit(ctx)
 				self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
 				if mitem.Price > credit {
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuInsufficientCredit)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuInsufficientCredit)
 					goto wait
 				}
 				self.g.Log.Debugf("mitem=%s validate", mitem.String())
 				if err := mitem.D.Validate(); err != nil {
 					self.g.Log.Errorf("ui-front selected=%s Validate err=%v", mitem.String(), err)
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, msgMenuNotAvailable)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuNotAvailable)
 					goto wait
 				}
 
@@ -197,8 +180,8 @@ func (self *UI) frontSelectShow(ctx context.Context, credit currency.Amount) {
 	l1 := config.MsgStateIntro
 	l2 := ""
 	if (credit != 0) || (len(self.inputBuf) > 0) {
-		l1 = msgCredit + credit.FormatCtx(ctx)
-		l2 = fmt.Sprintf(msgInputCode, string(self.inputBuf))
+		l1 = MsgCredit + credit.FormatCtx(ctx)
+		l2 = fmt.Sprintf(MsgInputCode, string(self.inputBuf))
 	}
 	self.display.SetLines(l1, l2)
 }
@@ -245,11 +228,11 @@ func (self *UI) onFrontTuneInput(e input.Event) State {
 	next := StateFrontSelect
 	switch e.Key {
 	case input.EvendKeyCreamLess, input.EvendKeyCreamMore:
-		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", msgCream, self.FrontResult.Cream))
+		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", MsgCream, self.FrontResult.Cream))
 		t2 = formatScale(self.FrontResult.Cream, 0, MaxCream, ScaleAlpha)
 		next = StateFrontTune
 	case input.EvendKeySugarLess, input.EvendKeySugarMore:
-		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", msgSugar, self.FrontResult.Sugar))
+		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", MsgSugar, self.FrontResult.Sugar))
 		t2 = formatScale(self.FrontResult.Sugar, 0, MaxSugar, ScaleAlpha)
 		next = StateFrontTune
 	}
@@ -277,7 +260,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 		self.g.Log.Errorf("ui-front CRITICAL error while return change")
 	}
 	itemCtx := money.SetCurrentPrice(ctx, selected.Price)
-	if tuneCream := scaleTuneRate(self.FrontResult.Cream, MaxCream, DefaultCream); tuneCream != 1 {
+	if tuneCream := ScaleTuneRate(self.FrontResult.Cream, MaxCream, DefaultCream); tuneCream != 1 {
 		const name = "cream"
 		var err error
 		self.g.Log.Errorf("ui-front tuning stock=%s tune=%v", name, tuneCream)
@@ -285,7 +268,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
 		}
 	}
-	if tuneSugar := scaleTuneRate(self.FrontResult.Sugar, MaxSugar, DefaultSugar); tuneSugar != 1 {
+	if tuneSugar := ScaleTuneRate(self.FrontResult.Sugar, MaxSugar, DefaultSugar); tuneSugar != 1 {
 		const name = "sugar"
 		var err error
 		self.g.Log.Errorf("ui-front tuning stock=%s tune=%v", name, tuneSugar)
@@ -293,7 +276,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
 		}
 	}
-	self.display.SetLines(msgMaking1, msgMaking2)
+	self.display.SetLines(MsgMaking1, MsgMaking2)
 
 	err := selected.D.Do(itemCtx)
 	_ = self.g.Inventory.Persist.Store()
@@ -350,7 +333,7 @@ func formatScale(value, min, max uint8, alphabet []byte) []byte {
 	return vicon[:]
 }
 
-func scaleTuneRate(value, max, center uint8) float32 {
+func ScaleTuneRate(value, max, center uint8) float32 {
 	switch {
 	case value == center: // most common path
 		return 1

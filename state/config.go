@@ -12,6 +12,7 @@ import (
 	mdb_config "github.com/temoto/vender/hardware/mdb/config"
 	evend_config "github.com/temoto/vender/hardware/mdb/evend/config"
 	tele_config "github.com/temoto/vender/head/tele/config"
+	ui_config "github.com/temoto/vender/head/ui/config"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
@@ -66,31 +67,7 @@ type Config struct {
 		Root string `hcl:"root"`
 	}
 	Tele tele_config.Config
-
-	UI struct {
-		Front struct {
-			MsgError        string `hcl:"msg_error"`
-			MsgMenuError    string `hcl:"msg_menu_error"`
-			MsgStateBroken  string `hcl:"msg_broken"`
-			MsgStateIntro   string `hcl:"msg_intro"`
-			MsgWait         string `hcl:"msg_wait"`
-			MsgWaterTemp    string `hcl:"msg_water_temp"`
-			ResetTimeoutSec int    `hcl:"reset_sec"`
-		}
-
-		Service struct {
-			Auth struct {
-				Enable    bool     `hcl:"enable"`
-				Passwords []string `hcl:"passwords"`
-			}
-			MsgAuth         string `hcl:"msg_auth"`
-			ResetTimeoutSec int    `hcl:"reset_sec"`
-			Tests           []struct {
-				Name     string `hcl:"name,key"`
-				Scenario string `hcl:"scenario"`
-			} `hcl:"test"`
-		}
-	}
+	UI   ui_config.Config
 
 	_copy_guard sync.Mutex //nolint:unused
 }

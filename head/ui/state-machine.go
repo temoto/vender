@@ -43,8 +43,8 @@ func (self *UI) Loop(ctx context.Context) {
 		}
 		self.exit(ctx, self.State, next)
 		self.State = next
-		if self.testHook != nil {
-			self.testHook(next)
+		if self.XXX_testHook != nil {
+			self.XXX_testHook(next)
 		}
 	}
 }

@@ -9,32 +9,22 @@ import (
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/head/money"
+	ui_config "github.com/temoto/vender/head/ui/config"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
-// TODO move text messages to config
-const (
-	msgError   = "error"
-	msgCream   = "Сливки"
-	msgSugar   = "Сахар"
-	msgCredit  = "Кредит:"
-	msgMaking1 = "спасибо"
-	msgMaking2 = "готовлю"
-
-	msgMenuCodeEmpty          = "нажимайте цифры"
-	msgMenuCodeInvalid        = "проверьте код"
-	msgMenuInsufficientCredit = "добавьте денег"
-	msgMenuNotAvailable       = "сейчас недоступно"
-
-	msgInputCode = "код:%s\x00"
-)
+func GetGlobal(ctx context.Context) *UI {
+	return state.GetGlobal(ctx).XXX_ui.Load().(*UI)
+}
 
 type UI struct { //nolint:maligned
 	State         State
 	FrontMaxPrice currency.Amount
 	FrontResult   UIMenuResult
+	Service       uiService
 
+	config       *ui_config.Config
 	g            *state.Global
 	broken       bool
 	menu         Menu
@@ -44,15 +34,16 @@ type UI struct { //nolint:maligned
 	eventch      chan Event
 	inputch      chan input.Event
 	moneych      chan money.Event
-	testHook     func(State)
 
 	frontResetTimeout time.Duration
 
-	service uiService
+
+	XXX_testHook func(State)
 }
 
 func (self *UI) Init(ctx context.Context) error {
 	self.g = state.GetGlobal(ctx)
+	self.config = &self.g.Config.UI
 	self.State = StateBoot
 
 	self.menu = make(Menu)
@@ -71,11 +62,14 @@ func (self *UI) Init(ctx context.Context) error {
 
 	self.frontResetTimeout = helpers.IntSecondDefault(self.g.Config.UI.Front.ResetTimeoutSec, 0)
 
-	self.service.Init(ctx)
+	self.Service.Init(ctx)
+	self.g.XXX_ui.Store(self) // FIXME import cycle traded for pointer cycle
 	return nil
 }
 
 func (self *UI) wait(timeout time.Duration) Event {
+	tmr := time.NewTimer(timeout)
+	defer tmr.Stop()
 	select {
 	case e := <-self.inputch:
 		self.lastActivity = time.Now()
@@ -90,7 +84,7 @@ func (self *UI) wait(timeout time.Duration) Event {
 
 		// TODO tele command
 
-	case <-time.After(timeout):
+	case <-tmr.C:
 		return Event{Kind: EventTime}
 
 	case <-self.g.Alive.StopChan():

@@ -48,6 +48,7 @@ type Global struct {
 	initMdberOnce   sync.Once
 
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
+	XXX_ui    atomic.Value // *ui.UI crutch to import cycle
 }
 
 const ContextKey = "run/state-global"
