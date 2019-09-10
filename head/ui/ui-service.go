@@ -320,6 +320,9 @@ func (self *UI) serviceWaitInput() (State, input.Event) {
 		self.g.Log.Debugf("serviceWaitInput resetTimeout")
 		return StateServiceEnd, input.Event{}
 
+	case EventLock:
+		return StateLocked, input.Event{}
+
 	case EventStop:
 		self.g.Log.Debugf("serviceWaitInput global stop")
 		return StateServiceEnd, input.Event{}

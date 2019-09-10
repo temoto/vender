@@ -18,6 +18,7 @@ enum State {
   Disconnected = 3;
   Problem = 4;
   Service = 5;
+  Lock = 6;
 }
 
 // Optimising for rare, bulk delivery on cell network.

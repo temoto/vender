@@ -111,6 +111,7 @@ ui {
   front {
     msg_intro  = "TODO_EDIT showed after successful boot"
     msg_broken = "TODO_EDIT showed after critical error"
+    msg_locked = "remotely locked"
     msg_wait   = "please wait"
     reset_sec  = 180
   }

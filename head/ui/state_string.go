@@ -11,24 +11,25 @@ func _() {
 	_ = x[StateInvalid-0]
 	_ = x[StateBoot-1]
 	_ = x[StateBroken-2]
-	_ = x[StateFrontBegin-3]
-	_ = x[StateFrontSelect-4]
-	_ = x[StateFrontTune-5]
-	_ = x[StateFrontAccept-6]
-	_ = x[StateFrontTimeout-7]
-	_ = x[StateFrontEnd-8]
-	_ = x[StateServiceBegin-9]
-	_ = x[StateServiceAuth-10]
-	_ = x[StateServiceMenu-11]
-	_ = x[StateServiceInventory-12]
-	_ = x[StateServiceTest-13]
-	_ = x[StateServiceReboot-14]
-	_ = x[StateServiceEnd-15]
+	_ = x[StateLocked-3]
+	_ = x[StateFrontBegin-4]
+	_ = x[StateFrontSelect-5]
+	_ = x[StateFrontTune-6]
+	_ = x[StateFrontAccept-7]
+	_ = x[StateFrontTimeout-8]
+	_ = x[StateFrontEnd-9]
+	_ = x[StateServiceBegin-10]
+	_ = x[StateServiceAuth-11]
+	_ = x[StateServiceMenu-12]
+	_ = x[StateServiceInventory-13]
+	_ = x[StateServiceTest-14]
+	_ = x[StateServiceReboot-15]
+	_ = x[StateServiceEnd-16]
 }
 
-const _State_name = "InvalidBootBrokenFrontBeginFrontSelectFrontTuneFrontAcceptFrontTimeoutFrontEndServiceBeginServiceAuthServiceMenuServiceInventoryServiceTestServiceRebootServiceEnd"
+const _State_name = "InvalidBootBrokenLockedFrontBeginFrontSelectFrontTuneFrontAcceptFrontTimeoutFrontEndServiceBeginServiceAuthServiceMenuServiceInventoryServiceTestServiceRebootServiceEnd"
 
-var _State_index = [...]uint8{0, 7, 11, 17, 27, 38, 47, 58, 70, 78, 90, 101, 112, 128, 139, 152, 162}
+var _State_index = [...]uint8{0, 7, 11, 17, 23, 33, 44, 53, 64, 76, 84, 96, 107, 118, 134, 145, 158, 168}
 
 func (i State) String() string {
 	if i >= State(len(_State_index)-1) {

@@ -3,10 +3,12 @@ package tele
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	tele_api "github.com/temoto/vender/head/tele/api"
+	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/state"
 )
 
@@ -29,6 +31,9 @@ func (self *Tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
 	case *tele_api.Command_Report:
 		err = self.cmdReport(ctx, cmd)
 
+	case *tele_api.Command_Lock:
+		err = self.cmdLock(ctx, cmd, task.Lock)
+
 	case *tele_api.Command_Exec:
 		err = self.cmdExec(ctx, cmd, task.Exec)
 
@@ -49,6 +54,15 @@ func (self *Tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
 	return err
 }
 
+func (self *Tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgLock) error {
+	if arg.Duration == 0 {
+		ui.GetGlobal(ctx).LockEnd()
+		return nil
+	}
+	ui.GetGlobal(ctx).LockDuration(time.Duration(arg.Duration) * time.Second)
+	return nil
+}
+
 func (self *Tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgExec) error {
 	g := state.GetGlobal(ctx)
 	doer, err := g.Engine.ParseText("tele-exec", arg.Scenario)
@@ -64,7 +78,11 @@ func (self *Tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 
 	// done := make(chan struct{})
 	if arg.Lock {
-		// g.UI.Lock()
+		ui := ui.GetGlobal(ctx)
+		if !ui.LockWait() {
+			return errors.Errorf("ui.LockWait interrupted")
+		}
+		defer ui.LockDecrement()
 	}
 	err = doer.Do(ctx)
 	err = errors.Annotate(err, "do")

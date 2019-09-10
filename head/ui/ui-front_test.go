@@ -96,6 +96,40 @@ ui {
 	}
 	uiTestWait(t, env, steps)
 }
+
+func TestFrontLock(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state_new.NewTestContext(t, `
+engine {
+	menu {
+		item "1" { price=7 scenario = "" }
+	}
+}
+ui {
+	front {
+		msg_intro = "hello,world"
+		msg_locked = "locked,wait"
+		reset_sec = 5
+	}
+}`)
+	mock := mdb.MockFromContext(ctx)
+	defer mock.Close()
+	mock.ExpectMap(map[string]string{"": ""})
+	moneysys := new(money.MoneySystem)
+	err := moneysys.Start(ctx)
+	require.NoError(t, err)
+	env := &tenv{ctx: ctx, g: g}
+	uiTestSetup(t, env, ui.StateFrontBegin, ui.StateFrontAccept)
+	go env.ui.Loop(ctx)
+
+	steps := []step{
+		{expect: env._T("hello,world", ""), inev: ui.Event{Kind: ui.EventTime}},
+		{fun: func() { env.ui.LockWait() }},
+		{expect: env._T("locked,wait", ""), inev: ui.Event{Kind: ui.EventTime}},
+		{fun: func() { env.ui.LockEnd() }},
+		{expect: env._T("hello,world", ""), inev: ui.Event{Kind: ui.EventStop}},
+		{},
 	}
 	uiTestWait(t, env, steps)
 }

@@ -15,8 +15,8 @@ const (
 	EventInput
 	EventMoney
 	EventTime
+	EventLock
 	EventService
-	EventCommand // TODO
 	EventStop
 )
 

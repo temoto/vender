@@ -37,6 +37,9 @@ type UI struct { //nolint:maligned
 
 	frontResetTimeout time.Duration
 
+	locked     int32
+	lockedch   chan struct{}
+	lockedNext State
 
 	XXX_testHook func(State)
 }
@@ -62,6 +65,8 @@ func (self *UI) Init(ctx context.Context) error {
 
 	self.frontResetTimeout = helpers.IntSecondDefault(self.g.Config.UI.Front.ResetTimeoutSec, 0)
 
+	self.lockedch = make(chan struct{}, 1)
+
 	self.Service.Init(ctx)
 	self.g.XXX_ui.Store(self) // FIXME import cycle traded for pointer cycle
 	return nil
@@ -70,6 +75,7 @@ func (self *UI) Init(ctx context.Context) error {
 func (self *UI) wait(timeout time.Duration) Event {
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
+again:
 	select {
 	case e := <-self.inputch:
 		self.lastActivity = time.Now()
@@ -82,7 +88,12 @@ func (self *UI) wait(timeout time.Duration) Event {
 		self.lastActivity = time.Now()
 		return Event{Kind: EventMoney, Money: m}
 
-		// TODO tele command
+	case <-self.lockedch:
+		// chan buffer may produce false positive
+		if !self.Locked() {
+			goto again
+		}
+		return Event{Kind: EventLock}
 
 	case <-tmr.C:
 		return Event{Kind: EventTime}

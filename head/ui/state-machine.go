@@ -18,6 +18,7 @@ const (
 
 	StateBoot   // t=onstart +onstartOk=FrontHello +onstartError+retry=Boot +retryMax=Broken
 	StateBroken // t=tele/input +inputService=ServiceBegin
+	StateLocked // t=tele
 
 	StateFrontBegin   // t=checkVariables +=FrontHello
 	StateFrontSelect  // t=input/money/timeout +inputService=ServiceBegin +input=... +money=... +inputAccept=FrontAccept +timeout=FrontTimeout
@@ -42,6 +43,13 @@ func (self *UI) Loop(ctx context.Context) {
 			self.g.Log.Fatalf("ui state=%s next=invalid", self.State)
 		}
 		self.exit(ctx, self.State, next)
+
+		if self.Locked() && (self.State != StateLocked) && self.checkLockPriority(next) {
+			self.lockedNext = next
+			self.g.Log.Infof("ui lock interrupt")
+			next = StateLocked
+		}
+
 		self.State = next
 		if self.XXX_testHook != nil {
 			self.XXX_testHook(next)
@@ -90,6 +98,21 @@ func (self *UI) enter(ctx context.Context, s State) State {
 			// TODO receive tele command to reboot or change state
 			if e.Kind == EventService {
 				return StateServiceBegin
+			}
+		}
+		return StateInvalid
+
+	case StateLocked:
+		self.display.SetLines(self.g.Config.UI.Front.MsgStateLocked, "")
+		self.g.Tele.State(tele_api.State_Lock)
+		for self.g.Alive.IsRunning() {
+			e := self.wait(lockPoll)
+			// TODO receive tele command to reboot or change state
+			if e.Kind == EventService {
+				return StateServiceBegin
+			}
+			if !self.Locked() {
+				return self.lockedNext
 			}
 		}
 		return StateInvalid

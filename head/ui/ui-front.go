@@ -166,7 +166,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			}
 			return StateFrontTimeout
 
-		case EventStop:
+		case EventLock, EventStop:
 			return StateFrontEnd
 
 		default:
