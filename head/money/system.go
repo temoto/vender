@@ -63,12 +63,12 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 			return errors.Annotatef(err, "curPrice=%s", curPrice.FormatCtx(ctx))
 		},
 	}
-	g.Engine.Register(doCommit.String(), doCommit)
+	g.Engine.Register(doCommit.Name, doCommit)
 	doAbort := engine.Func{
 		Name: "money.abort",
 		F:    self.Abort,
 	}
-	g.Engine.Register(doAbort.String(), doAbort)
+	g.Engine.Register(doAbort.Name, doAbort)
 	doAccept := engine.FuncArg{
 		Name: "money.accept(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
@@ -96,7 +96,7 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 			return nil
 		},
 	}
-	g.Engine.Register(doSetGiftCredit.String(), doSetGiftCredit)
+	g.Engine.Register(doSetGiftCredit.Name, doSetGiftCredit)
 
 	return nil
 }
