@@ -29,6 +29,11 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		Sugar: DefaultSugar,
 	}
 
+	if err := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); err != nil {
+		self.g.Log.Errorf("on_front_begin err=%v", err)
+		return StateBroken
+	}
+
 	// XXX FIXME custom business logic creeped into code TODO move to config
 	if doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot"); doCheckTempHot != nil {
 		err := doCheckTempHot.Validate()
@@ -43,11 +48,6 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 			self.g.Error(err)
 			return StateBroken
 		}
-	}
-
-	if err := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); err != nil {
-		self.g.Log.Errorf("on_front_begin err=%v", err)
-		return StateBroken
 	}
 
 	var err error

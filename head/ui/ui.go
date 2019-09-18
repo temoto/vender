@@ -15,7 +15,15 @@ import (
 )
 
 func GetGlobal(ctx context.Context) *UI {
-	return state.GetGlobal(ctx).XXX_ui.Load().(*UI)
+	g := state.GetGlobal(ctx)
+	for {
+		x := g.XXX_ui.Load()
+		if x != nil {
+			return x.(*UI)
+		}
+		g.Log.Errorf("CRITICAL ui.GetGlobal is not set")
+		time.Sleep(5 * time.Second)
+	}
 }
 
 type UI struct { //nolint:maligned

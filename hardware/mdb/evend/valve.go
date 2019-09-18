@@ -27,7 +27,7 @@ type ErrWaterTemperature struct {
 
 func (e *ErrWaterTemperature) Error() string {
 	diff := e.Current - e.Target
-	return fmt.Sprintf("source=%s current=%d config=%d diff=%d", e.Source, e.Current, e.Target, diff)
+	return fmt.Sprintf("source=%s current=%d target=%d diff=%d", e.Source, e.Current, e.Target, diff)
 }
 
 type DeviceValve struct { //nolint:maligned
@@ -151,7 +151,7 @@ func (self *DeviceValve) newSetTempHot() engine.FuncArg {
 			return errors.Annotate(r.E, tag)
 		}
 		self.tempHotTarget = temp
-		self.dev.Log.Debugf("%s request=%s response=(%d)%s", tag, request.Format(), r.P.Len(), r.P.Format())
+		self.dev.Log.Debugf("%s target=%d request=%s response=(%d)%s", tag, temp, request.Format(), r.P.Len(), r.P.Format())
 		return nil
 	}}
 }
