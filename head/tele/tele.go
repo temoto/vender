@@ -198,6 +198,9 @@ func (self *Tele) qpushTelemetry(tm *tele_api.Telemetry) error {
 	if tm.VmId == 0 {
 		tm.VmId = self.vmId
 	}
+	if tm.Time == 0 {
+		tm.Time = time.Now().UnixNano()
+	}
 	self.stat.Lock()
 	defer self.stat.Unlock()
 	tm.Stat = &self.stat.Telemetry_Stat
