@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/juju/errors"
@@ -118,14 +117,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 					goto wait
 				}
 
-				x, err := strconv.ParseUint(string(self.inputBuf), 10, 16)
-				if err != nil {
-					self.inputBuf = self.inputBuf[:0]
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuCodeInvalid)
-					goto wait
-				}
-				code := uint16(x)
-
+				code := string(self.inputBuf)
 				mitem, ok := self.menu[code]
 				if !ok {
 					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuCodeInvalid)
@@ -249,7 +241,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	uiConfig := &self.g.Config.UI
 	selected := &self.FrontResult.Item
 	teletx := tele_api.Telemetry_Transaction{
-		Code:  int32(selected.Code),
+		Code:  selected.Code,
 		Price: uint32(selected.Price),
 		// TODO options
 		// TODO payment method

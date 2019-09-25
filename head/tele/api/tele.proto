@@ -47,7 +47,7 @@ message Telemetry {
   }
 
   message Transaction {
-    int32 code = 1;
+    string code = 1;
     repeated int32 options = 2;
     uint32 price = 3;
     PaymentMethod payment_method = 4;
