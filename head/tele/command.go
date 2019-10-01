@@ -45,9 +45,15 @@ func (self *Tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
 }
 
 func (self *Tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
-	// TODO construct Telemetry
-	tm := tele_api.Telemetry{}
-	err := self.qpushTelemetry(&tm)
+	tm := &tele_api.Telemetry{}
+	x := self.getInventory()
+	var ok bool
+	if tm.Inventory, ok = x.(*tele_api.Inventory); !ok {
+		err := errors.Errorf("CRITICAL code error invalid type self.getInventory()=%#v", x)
+		self.Error(err)
+		return err
+	}
+	err := self.qpushTelemetry(tm)
 	if err != nil {
 		self.log.Errorf("CRITICAL qpushTelemetry tm=%#v err=%v", tm, err)
 	}

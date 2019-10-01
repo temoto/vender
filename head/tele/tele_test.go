@@ -80,10 +80,11 @@ func TestCommand(t *testing.T) {
 			defer env.tele.Close()
 			vmId := -rand.Int31()
 			conf := tele_config.Config{
-				Enabled:     true,
-				LogDebug:    true,
-				PersistPath: spq.OnlyForTesting,
-				VmId:        int(vmId),
+				Enabled:      true,
+				LogDebug:     true,
+				PersistPath:  spq.OnlyForTesting,
+				VmId:         int(vmId),
+				GetInventory: func() interface{} { return &tele_api.Inventory{} },
 			}
 			log := log2.NewTest(t, log2.LDebug)
 			// log := log2.NewStderr(log2.LDebug) // useful with panics

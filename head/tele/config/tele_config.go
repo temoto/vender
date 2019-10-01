@@ -14,5 +14,6 @@ type Config struct { //nolint:maligned
 	TlsCaFile         string `hcl:"tls_ca_file"`
 	TlsPsk            string `hcl:"tls_psk"` // secret
 
-	PersistPath string `hcl:"-"`
+	PersistPath  string             `hcl:"-"`
+	GetInventory func() interface{} `hcl:"-"`
 }

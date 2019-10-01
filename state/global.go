@@ -76,6 +76,20 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	g.Log.Debugf("config: persist.root=%s", g.Config.Persist.Root)
 
 	// Since tele is remote error reporting mechanism, it must be inited before anything else
+	g.Config.Tele.GetInventory = func() interface{} {
+		pb := &tele_api.Inventory{Stocks: make([]*tele_api.Inventory_StockItem, 0, 16)}
+		g.Inventory.Iter(func(s *inventory.Stock) {
+			if s.Enabled() {
+				si := &tele_api.Inventory_StockItem{
+					// TODO Code: 0,
+					Name:  s.Name,
+					Value: int32(s.Value()),
+				}
+				pb.Stocks = append(pb.Stocks, si)
+			}
+		})
+		return pb
+	}
 	if g.Config.Tele.PersistPath == "" {
 		g.Config.Tele.PersistPath = filepath.Join(g.Config.Persist.Root, "tele")
 	}
