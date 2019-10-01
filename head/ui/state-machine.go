@@ -33,6 +33,7 @@ const (
 	StateServiceInventory
 	StateServiceTest
 	StateServiceReboot
+	StateServiceNetwork
 	StateServiceEnd // ->FrontBegin
 )
 
@@ -150,6 +151,8 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return self.onServiceTest(ctx)
 	case StateServiceReboot:
 		return self.onServiceReboot()
+	case StateServiceNetwork:
+		return self.onServiceNetwork()
 
 	case StateServiceEnd:
 		_ = self.g.Inventory.Persist.Store()

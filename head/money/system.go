@@ -55,6 +55,15 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	}
 	self.coinCredit.SetValid(self.coin.SupportedNominals())
 
+	doConsume := engine.Func{
+		Name: "money.consume!",
+		F: func(ctx context.Context) error {
+			credit := self.Credit(ctx)
+			err := self.WithdrawCommit(ctx, credit)
+			return errors.Annotatef(err, "consume=%s", credit.FormatCtx(ctx))
+		},
+	}
+	g.Engine.Register(doConsume.Name, doConsume)
 	doCommit := engine.Func{
 		Name: "money.commit",
 		F: func(ctx context.Context) error {

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"hash/fnv"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,9 +23,15 @@ const (
 	serviceMenuInventory = "inventory"
 	serviceMenuTest      = "test"
 	serviceMenuReboot    = "reboot"
+	serviceMenuNetwork   = "network"
 )
 
-var /*const*/ serviceMenu = []string{serviceMenuInventory, serviceMenuTest, serviceMenuReboot}
+var /*const*/ serviceMenu = []string{
+	serviceMenuInventory,
+	serviceMenuTest,
+	serviceMenuReboot,
+	serviceMenuNetwork,
+}
 var /*const*/ serviceMenuMax = uint8(len(serviceMenu) - 1)
 
 type uiService struct {
@@ -170,6 +177,8 @@ func (self *UI) onServiceMenu() State {
 			return StateServiceTest
 		case serviceMenuReboot:
 			return StateServiceReboot
+		case serviceMenuNetwork:
+			return StateServiceNetwork
 		default:
 			panic("code error")
 		}
@@ -303,6 +312,23 @@ func (self *UI) onServiceReboot() State {
 		return StateServiceEnd
 	}
 	return StateServiceMenu
+}
+
+func (self *UI) onServiceNetwork() State {
+	addrs, _ := net.InterfaceAddrs()
+	// TODO filter
+	listString := fmt.Sprintf("%v", addrs)
+	self.display.SetLines("network", listString)
+
+	for {
+		next, e := self.serviceWaitInput()
+		if next != StateInvalid {
+			return next
+		}
+		if input.IsReject(&e) {
+			return StateServiceMenu
+		}
+	}
 }
 
 func (self *UI) serviceWaitInput() (State, input.Event) {
