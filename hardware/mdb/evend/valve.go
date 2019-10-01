@@ -50,7 +50,7 @@ type DeviceValve struct { //nolint:maligned
 func (self *DeviceValve) Init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 	valveConfig := &g.Config.Hardware.Evend.Valve
-	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, time.Hour) // big default timeout is fine, depend on valve hardware
+	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, 10*time.Minute) // big default timeout is fine, depend on valve hardware
 	tempValid := helpers.IntMillisecondDefault(valveConfig.TemperatureValidMs, 30*time.Second)
 	self.tempHot.Init(tempValid)
 	self.proto2BusyMask = valvePollBusy
@@ -99,11 +99,11 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	return err
 }
 
-func (self *DeviceValve) UnitToTimeout(unit uint8) time.Duration {
-	const min = 500 * time.Millisecond
-	const perUnit = 50 * time.Millisecond // FIXME
-	return min + time.Duration(unit)*perUnit
-}
+// func (self *DeviceValve) UnitToTimeout(unit uint8) time.Duration {
+// 	const min = 500 * time.Millisecond
+// 	const perUnit = 50 * time.Millisecond // FIXME
+// 	return min + time.Duration(unit)*perUnit
+// }
 
 func (self *DeviceValve) newGetTempHot() engine.Func {
 	const tag = "mdb.evend.valve.get_temp_hot"
@@ -168,12 +168,11 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 			}
 			units := uint8(arg)
 			if units > self.cautionPartUnit {
-				cautionTimeout := self.UnitToTimeout(self.cautionPartUnit)
 				err := self.newCommand(tagPour, strconv.Itoa(int(self.cautionPartUnit)), arg1, self.cautionPartUnit).Do(ctx)
 				if err != nil {
 					return err
 				}
-				err = self.Generic.NewWaitDone(tag, cautionTimeout).Do(ctx)
+				err = self.Generic.NewWaitDone(tag, self.pourTimeout).Do(ctx)
 				if err != nil {
 					_ = abort.Do(ctx) // TODO likely redundant
 					return err
@@ -184,7 +183,7 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 			if err != nil {
 				return err
 			}
-			err = self.Generic.NewWaitDone(tag, self.UnitToTimeout(units)).Do(ctx)
+			err = self.Generic.NewWaitDone(tag, self.pourTimeout).Do(ctx)
 			return err
 		}}
 

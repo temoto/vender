@@ -28,7 +28,7 @@ func (self *DeviceEspresso) Init(ctx context.Context) error {
 		return errors.Annotate(err, "evend.espresso.Init")
 	}
 
-	g.Engine.Register("mdb.evend.espresso_grind", self.NewGrind())
+	g.Engine.Register("mdb.evend.espresso_grind", self.Generic.WithRestart(self.NewGrind()))
 	g.Engine.Register("mdb.evend.espresso_press", self.NewPress())
 	g.Engine.Register("mdb.evend.espresso_dispose", self.Generic.WithRestart(self.NewRelease()))
 	g.Engine.Register("mdb.evend.espresso_heat_on", self.NewHeat(true))
