@@ -3,9 +3,11 @@ package state
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
@@ -150,6 +152,18 @@ func (g *Global) Error(err error, args ...interface{}) {
 		}
 		g.Log.Errorf(errors.ErrorStack(err))
 		g.Tele.Error(err)
+	}
+}
+
+func (g *Global) Fatal(err error, args ...interface{}) {
+	if err != nil {
+		g.Error(err, args...)
+		g.Alive.Stop()
+		select {
+		case <-g.Alive.WaitChan():
+		case <-time.After(5 * time.Second):
+		}
+		os.Exit(1)
 	}
 }
 

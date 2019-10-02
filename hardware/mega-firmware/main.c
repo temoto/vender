@@ -59,7 +59,7 @@ static void soft_reset(void) {
 
 int main(void) {
   cli();
-  wdt_enable(WDTO_30MS);
+  wdt_enable(WDTO_120MS);
   wdt_reset();
   clock_stop();
   timer1_stop();
@@ -69,9 +69,9 @@ int main(void) {
   clock_init();
   master_notify_init();
   led_init();
-  buffer_init((buffer_t * const) & debugb);
-  packet_clear_fast((packet_t * const) & request);
-  packet_clear_fast((packet_t * const) & response);
+  buffer_init((buffer_t *const) & debugb);
+  packet_clear_fast((packet_t *const) & request);
+  packet_clear_fast((packet_t *const) & response);
   mdb_init();
   wdt_reset();
   twi_init_slave(0x78);
@@ -106,7 +106,7 @@ int main(void) {
       if (!response_empty()) {
         response.filled = true;
       }
-      packet_clear_fast((packet_t * const) & request);
+      packet_clear_fast((packet_t *const) & request);
     }
     sei();
     nop();
@@ -187,7 +187,7 @@ static void cmd_reset(void) {
 static void cmd_debug(void) {
   response_begin(RESPONSE_OK);
   response_fn(FIELD_ERRORN, (void *)debugb.data, debugb.length);
-  buffer_clear_fast((buffer_t * const) & debugb);
+  buffer_clear_fast((buffer_t *const) & debugb);
 }
 
 static void cmd_mdb_bus_reset(void) {
