@@ -4,7 +4,7 @@ package mdb_config
 
 type Config struct { //nolint:maligned
 	Bill struct {
-		ScalingFactor uint16 `hcl:"scaling_factor"`
+		ScalingFactor int `hcl:"scaling_factor"`
 	}
 	Coin struct { //nolint:maligned
 		DispenseSmart      bool `hcl:"dispense_smart"`

@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/temoto/alive"
 	"github.com/juju/errors"
+	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
@@ -81,7 +81,7 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	config := g.Config.Hardware.Mdb.Bill
 	self.configScaling = 100
 	if config.ScalingFactor != 0 {
-		self.configScaling = config.ScalingFactor
+		self.configScaling = uint16(config.ScalingFactor)
 	}
 
 	self.DoEscrowAccept = self.newEscrow(true)
@@ -237,7 +237,6 @@ func (self *BillValidator) EscrowAmount() currency.Amount {
 
 func (self *BillValidator) CommandSetup(ctx context.Context) error {
 	const expectLength = 27
-	var scalingFactor uint16
 	var billFactors [TypeCount]uint8
 
 	err := self.dev.DoSetup(ctx)
@@ -251,7 +250,12 @@ func (self *BillValidator) CommandSetup(ctx context.Context) error {
 
 	self.featureLevel = bs[0]
 	currencyCode := bs[1:3]
-	scalingFactor = self.dev.ByteOrder.Uint16(bs[3:5])
+	scalingFactor := self.dev.ByteOrder.Uint16(bs[3:5])
+	decimalPlaces := bs[5]
+	scalingFinal := currency.Nominal(scalingFactor) * currency.Nominal(self.configScaling)
+	for i := decimalPlaces; i > 0 && scalingFinal > 10; i-- {
+		scalingFinal /= 10
+	}
 	stackerCap := self.dev.ByteOrder.Uint16(bs[6:8])
 	billSecurityLevels := self.dev.ByteOrder.Uint16(bs[8:10])
 	self.escrowSupported = bs[10] == 0xff
@@ -263,14 +267,13 @@ func (self *BillValidator) CommandSetup(ctx context.Context) error {
 			break
 		}
 		billFactors[i] = sf
-		self.nominals[i] = currency.Nominal(sf) * currency.Nominal(scalingFactor) * currency.Nominal(self.configScaling)
+		self.nominals[i] = currency.Nominal(sf) * scalingFinal
 	}
 	self.dev.Log.Debugf("Bill Type calc. nominals:  %3v", self.nominals)
 
 	self.dev.Log.Debugf("Bill Validator Feature Level: %d", self.featureLevel)
 	self.dev.Log.Debugf("Country / Currency Code: %x", currencyCode)
-	self.dev.Log.Debugf("Bill Scaling Factor: %d", scalingFactor)
-	// self.dev.Log.Debugf("Decimal Places: %d", bs[5])
+	self.dev.Log.Debugf("Bill Scaling Factor: %d Decimal Places: %d final scaling: %d", scalingFactor, decimalPlaces, scalingFinal)
 	self.dev.Log.Debugf("Stacker Capacity: %d", stackerCap)
 	self.dev.Log.Debugf("Bill Security Levels: %016b", billSecurityLevels)
 	self.dev.Log.Debugf("Escrow/No Escrow: %t", self.escrowSupported)

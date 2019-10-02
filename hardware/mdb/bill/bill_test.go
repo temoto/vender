@@ -21,14 +21,14 @@ const testConfig = "money { scale=100 }"
 const testScalingFactor currency.Nominal = 10
 const devScaling currency.Nominal = 100
 
-func mockInitRs() []mdb.MockR {
+func mockInitRs(scaling currency.Nominal, decimal uint8) []mdb.MockR {
 	return []mdb.MockR{
 		// initer, RESET
 		{"30", ""},
 		// initer, POLL
 		{"33", "0609"},
 		// initer, SETUP
-		{"31", fmt.Sprintf("01181000%02x0000c8001fff01050a32640000000000000000000000", testScalingFactor)},
+		{"31", fmt.Sprintf("011810%04x%02x00c8001fff01050a32640000000000000000000000", scaling, decimal)},
 
 		// initer, EXPANSION IDENTIFICATION
 		// TODO fill real response
@@ -39,12 +39,12 @@ func mockInitRs() []mdb.MockR {
 	}
 }
 
-func testMake(t testing.TB, rs []mdb.MockR) (context.Context, *BillValidator) {
+func testMake(t testing.TB, rs []mdb.MockR, scaling currency.Nominal, decimal uint8) (context.Context, *BillValidator) {
 	ctx, _ := state_new.NewTestContext(t, testConfig)
 
 	mock := mdb.MockFromContext(ctx)
 	go func() {
-		mock.Expect(mockInitRs())
+		mock.Expect(mockInitRs(scaling, decimal))
 		mock.Expect(rs)
 	}()
 
@@ -57,7 +57,7 @@ func testMake(t testing.TB, rs []mdb.MockR) (context.Context, *BillValidator) {
 }
 
 func checkPoll(t *testing.T, input string, expected []_PI) {
-	ctx, bv := testMake(t, []mdb.MockR{{"33", input}})
+	ctx, bv := testMake(t, []mdb.MockR{{"33", input}}, testScalingFactor, 0)
 	defer mdb.MockFromContext(ctx).Close()
 
 	pis := make([]_PI, 0, len(input)/2)
@@ -124,8 +124,32 @@ func TestBillAcceptMax(t *testing.T) {
 	t.Parallel()
 
 	// FIXME explicit enable/disable escrow in config
-	ctx, bv := testMake(t, []mdb.MockR{{"3400070007", ""}})
+	ctx, bv := testMake(t, []mdb.MockR{{"3400070007", ""}}, testScalingFactor, 0)
 	defer mdb.MockFromContext(ctx).Close()
 	err := bv.AcceptMax(10000).Do(ctx)
 	require.NoError(t, err)
+}
+
+func TestBillScaling(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		scaling currency.Nominal
+		decimal uint8
+	}{
+		{"10,0", 10, 0},
+		{"100,1", 100, 1},
+		{"1000,2", 1000, 2},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, bv := testMake(t, nil, c.scaling, c.decimal)
+			defer mdb.MockFromContext(ctx).Close()
+			ns := bv.SupportedNominals()
+			assert.Equal(t, []currency.Nominal{1000, 5000, 10000, 50000, 100000}, ns)
+		})
+	}
 }
