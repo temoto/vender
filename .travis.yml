@@ -15,7 +15,7 @@ language: go
 go: "1.12"
 
 install:
-  - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b $GOPATH/bin v1.16.0
+  - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b $GOPATH/bin v1.19.1
   - ./script/install-protoc $protoc_version
 script:
   - go mod tidy && git diff --exit-code
