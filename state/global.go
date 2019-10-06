@@ -13,44 +13,24 @@ import (
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
-	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/hardware/lcd"
-	"github.com/temoto/vender/hardware/mdb"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
 
 type Global struct {
-	Alive    *alive.Alive
-	Config   *Config
-	Engine   *engine.Engine
-	Hardware struct {
-		HD44780 struct {
-			Device  *lcd.LCD
-			Display atomic.Value // *lcd.TextDisplay
-		}
-		Input *input.Dispatch
-		Mdb   struct {
-			Mdber  *mdb.Mdb
-			Uarter mdb.Uarter
-		}
-		iodin atomic.Value // *iodin.Client
-		mega  atomic.Value // *mega.Client
-	}
+	Alive     *alive.Alive
+	Config    *Config
+	Engine    *engine.Engine
+	Hardware  hardware // hardware.go
 	Inventory *inventory.Inventory
 	Log       *log2.Log
 	Tele      tele_api.Teler
 
-	lk sync.Mutex
-
-	initDisplayOnce sync.Once
-	initInputOnce   sync.Once
-	initMegaOnce    sync.Once
-	initMdberOnce   sync.Once
-
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
 	XXX_ui    atomic.Value // *ui.UI crutch to import cycle
+
+	_copy_guard sync.Mutex //nolint:U1000
 }
 
 const ContextKey = "run/state-global"
@@ -96,50 +76,45 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 		g.Config.Tele.PersistPath = filepath.Join(g.Config.Persist.Root, "tele")
 	}
 	if err := g.Tele.Init(ctx, g.Log, g.Config.Tele); err != nil {
+		g.Tele = tele_api.Noop{}
 		return errors.Annotate(err, "tele init")
 	}
-
-	errs := make([]error, 0)
-
-	// TODO ctx should be enough
-	if err := g.Inventory.Init(ctx, &g.Config.Engine.Inventory, g.Engine); err != nil {
-		errs = append(errs, err)
-	}
-	{
-		err := g.Inventory.Persist.Init("inventory", g.Inventory, g.Config.Persist.Root, g.Config.Engine.Inventory.Persist, g.Log)
-		if err == nil {
-			err = g.Inventory.Persist.Load()
-		}
-		if err != nil {
-			g.Error(err)
-			g.Tele.State(tele_api.State_Problem)
-			errs = append(errs, err)
-		}
-	}
-
-	g.initInput()
 
 	if g.Config.Money.Scale == 0 {
 		g.Config.Money.Scale = 1
 		g.Log.Errorf("config: money.scale is not set")
 	} else if g.Config.Money.Scale < 0 {
-		err := errors.NotValidf("config: money.scale < 0")
-		errs = append(errs, err)
+		return errors.NotValidf("config: money.scale < 0")
 	}
 	g.Config.Money.CreditMax *= g.Config.Money.Scale
 	g.Config.Money.ChangeOverCompensate *= g.Config.Money.Scale
 
-	errs = append(errs, g.initEngine()...)
+	const initTasks = 3
+	wg := sync.WaitGroup{}
+	wg.Add(initTasks)
+	errch := make(chan error, initTasks)
 
-	// TODO engine.try-resolve-all-lazy
+	go wrapErrChan(&wg, errch, g.initInput)
+	go wrapErrChan(&wg, errch, func() error { return g.initInventory(ctx) }) // storage read
+	go wrapErrChan(&wg, errch, g.initEngine)
+	// TODO init money system, load money state from storage
 
+	wg.Wait()
+	close(errch)
+
+	errs := make([]error, 0, initTasks)
+	// TODO engine.try-resolve-all-lazy after all other inits finished
+
+	for e := range errch {
+		errs = append(errs, e)
+	}
 	return helpers.FoldErrors(errs)
 }
 
 func (g *Global) MustInit(ctx context.Context, cfg *Config) {
 	err := g.Init(ctx, cfg)
 	if err != nil {
-		g.Log.Fatal(errors.ErrorStack(err))
+		g.Fatal(err)
 	}
 }
 
@@ -167,7 +142,7 @@ func (g *Global) Fatal(err error, args ...interface{}) {
 	}
 }
 
-func (g *Global) initEngine() []error {
+func (g *Global) initEngine() error {
 	errs := make([]error, 0)
 
 	for _, x := range g.Config.Engine.Aliases {
@@ -193,11 +168,38 @@ func (g *Global) initEngine() []error {
 		g.Engine.Register("menu."+x.Code, x.Doer)
 	}
 
-	return errs
+	return helpers.FoldErrors(errs)
 }
 
-func recoverFatal(f helpers.Fataler) {
-	if x := recover(); x != nil {
-		f.Fatal(x)
+func (g *Global) initInventory(ctx context.Context) error {
+	// TODO ctx should be enough
+	if err := g.Inventory.Init(ctx, &g.Config.Engine.Inventory, g.Engine); err != nil {
+		return err
 	}
+	err := g.Inventory.Persist.Init("inventory", g.Inventory, g.Config.Persist.Root, g.Config.Engine.Inventory.Persist, g.Log)
+	if err == nil {
+		err = g.Inventory.Persist.Load()
+	}
+	return errors.Annotate(err, "initInventory")
+}
+
+func wrapErrChan(wg *sync.WaitGroup, ch chan<- error, fun func() error) {
+	defer wg.Done()
+	if err := fun(); err != nil {
+		ch <- err
+	}
+}
+
+type once struct {
+	sync.Mutex
+	called bool
+	err    error
+}
+
+func (o *once) lockedDo(f func() error) {
+	if o.called {
+		return
+	}
+	o.called = true
+	o.err = f()
 }

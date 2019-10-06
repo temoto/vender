@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/cmd/vender/broken"
 	"github.com/temoto/vender/cmd/vender/engine"
 	"github.com/temoto/vender/cmd/vender/mdb"
 	"github.com/temoto/vender/cmd/vender/subcmd"
@@ -19,6 +20,7 @@ import (
 
 var log = log2.NewStderr(log2.LDebug)
 var modules = []subcmd.Mod{
+	broken.Mod,
 	engine.Mod,
 	mdb.Mod,
 	cmd_tele.Mod,
@@ -46,7 +48,7 @@ func main() {
 	config := state.MustReadConfig(log, state.NewOsFullReader(), configPath)
 
 	log.SetFlags(log2.LInteractiveFlags)
-	ctx, _ := state_new.NewContext(log, new(tele.Tele))
+	ctx, g := state_new.NewContext(log, new(tele.Tele))
 	if subcmd.SdNotify("start") {
 		// under systemd assume systemd journal logging, no timestamp
 		log.SetFlags(log2.LServiceFlags)
@@ -54,6 +56,6 @@ func main() {
 	log.Debugf("starting command %s", mod.Name)
 
 	if err := mod.Main(ctx, config); err != nil {
-		log.Fatal(errors.ErrorStack(err))
+		g.Fatal(err)
 	}
 }

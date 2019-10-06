@@ -13,6 +13,7 @@ import (
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
+	"github.com/temoto/vender/state"
 )
 
 type UIMenuResult struct {
@@ -50,13 +51,36 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	}
 
 	var err error
-	self.FrontMaxPrice, err = self.menu.MaxPrice(self.g.Log)
+	self.FrontMaxPrice, err = menuMaxPrice(ctx, self.menu)
 	if err != nil {
 		self.g.Error(err)
 		return StateBroken
 	}
 	self.g.Tele.State(tele_api.State_Nominal)
 	return StateFrontSelect
+}
+
+func menuMaxPrice(ctx context.Context, m Menu) (currency.Amount, error) {
+	g := state.GetGlobal(ctx)
+	max := currency.Amount(0)
+	empty := true
+	for _, item := range m {
+		valErr := item.D.Validate()
+		if valErr == nil {
+			empty = false
+			if item.Price > max {
+				max = item.Price
+			}
+		} else {
+			// TODO report menu errors once or less often than every ui cycle
+			valErr = errors.Annotate(valErr, item.String())
+			g.Log.Error(valErr)
+		}
+	}
+	if empty {
+		return 0, errors.Errorf("menu len=%d no valid items", len(m))
+	}
+	return max, nil
 }
 
 func (self *UI) onFrontSelect(ctx context.Context) State {
@@ -271,7 +295,9 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	self.display.SetLines(MsgMaking1, MsgMaking2)
 
 	err := selected.D.Do(itemCtx)
-	_ = self.g.Inventory.Persist.Store()
+	if invErr := self.g.Inventory.Persist.Store(); invErr != nil {
+		self.g.Error(errors.Annotate(invErr, "critical inventory persist"))
+	}
 	self.g.Log.Debugf("ui-front selected=%s end err=%v", selected.String(), err)
 	if err == nil { // success path
 		self.g.Tele.Transaction(teletx)

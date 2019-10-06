@@ -17,7 +17,6 @@ var Mod = subcmd.Mod{Name: "vmc", Main: Main}
 func Main(ctx context.Context, config *state.Config) error {
 	g := state.GetGlobal(ctx)
 	g.MustInit(ctx, config)
-	g.Log.Debugf("config=%+v", g.Config)
 
 	mdber, err := g.Mdber()
 	if err != nil {
@@ -33,7 +32,7 @@ func Main(ctx context.Context, config *state.Config) error {
 	display.SetLines("boot", g.Config.UI.Front.MsgWait)
 
 	moneysys := new(money.MoneySystem)
-	if err = moneysys.Start(ctx); err != nil {
+	if err := moneysys.Start(ctx); err != nil {
 		err = errors.Annotate(err, "money system Start()")
 		return err
 	}

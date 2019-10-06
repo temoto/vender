@@ -47,11 +47,13 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	// TODO wait for bill/coin inited by hardware.Enum()
 	// TODO determine if combination of errors is fatal for money subsystem
 	if err := self.bill.Init(ctx); err != nil {
-		self.Log.Errorf("money.Start bill err=%v", errors.ErrorStack(err))
+		err = errors.Annotate(err, "money.Start bill")
+		g.Error(err)
 	}
 	self.billCredit.SetValid(self.bill.SupportedNominals())
 	if err := self.coin.Init(ctx); err != nil {
-		self.Log.Errorf("money.Start coin err=%v", errors.ErrorStack(err))
+		err = errors.Annotate(err, "money.Start coin")
+		g.Error(err)
 	}
 	self.coinCredit.SetValid(self.coin.SupportedNominals())
 

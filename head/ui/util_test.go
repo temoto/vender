@@ -41,7 +41,7 @@ type step struct {
 
 func uiTestSetup(t testing.TB, env *tenv, initState, endState ui.State) {
 	env.display = lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: testDisplayWidth})
-	env.g.Hardware.HD44780.Display.Store(env.display)
+	env.g.Hardware.HD44780.Display = env.display
 	env.ui = &ui.UI{
 		XXX_testHook: func(s ui.State) {
 			t.Logf("testHook %s", s.String())
