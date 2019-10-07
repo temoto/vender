@@ -65,11 +65,11 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 		self.dev.DelayAfterReset = DefaultResetDelay
 	}
 	g := state.GetGlobal(ctx)
-	m, err := g.Mdber()
+	m, err := g.Mdb()
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	self.dev.Init(m.Tx, g.Log, address, name, binary.BigEndian)
+	self.dev.Init(m, address, name, binary.BigEndian)
 
 	// FIXME Enum, remove IO from Init
 	if err = self.dev.DoReset.Do(ctx); err != nil {
@@ -111,13 +111,16 @@ func (self *Generic) CommandErrorCode() (byte, error) {
 	request := mdb.MustPacketFromBytes(bs, true)
 	r := self.dev.Tx(request)
 	if r.E != nil {
+		self.dev.SetErrorCode(0)
 		return 0, errors.Annotate(r.E, tag)
 	}
 	rs := r.P.Bytes()
 	if len(rs) < 1 {
+		self.dev.SetErrorCode(0)
 		err := errors.Errorf("%s request=%s response=%s", tag, request.Format(), r.E)
 		return 0, err
 	}
+	self.dev.SetErrorCode(int32(rs[0]))
 	return rs[0], nil
 }
 
@@ -176,7 +179,7 @@ func (self *Generic) NewWaitReady(tag string) engine.Doer {
 				return false, nil
 			}
 
-			self.dev.SetReady(false)
+			self.dev.SetErrorCode(1)
 			self.dev.Log.Errorf("%s PLEASE REPORT WaitReady value=%02x (%02x&^%02x) -> unexpected", tag, value, bs[0], self.proto2IgnoreMask)
 			return true, self.NewErrPollUnexpected(p)
 		}
@@ -208,7 +211,7 @@ func (self *Generic) NewWaitDone(tag string, timeout time.Duration) engine.Doer 
 
 			// 04 during WaitDone is "oops, device reboot in operation"
 			if value&genericPollMiss != 0 {
-				self.dev.SetReady(false)
+				self.dev.SetState(mdb.DeviceOnline)
 				return true, errors.Errorf("%s POLL=%x ignore=%02x continous connection lost, (TODO decide reset?)", tag, bs, self.proto2IgnoreMask)
 			}
 
@@ -267,14 +270,12 @@ func (self *Generic) proto2PollCommon(tag string, bs []byte) (bool, error) {
 		return true, nil
 	}
 	if value&genericPollProblem != 0 {
-		self.dev.SetReady(false)
 		code, err := self.CommandErrorCode()
 		if err != nil {
 			err = errors.Annotate(err, "CommandErrorCode")
 			err = errors.Annotate(err, tag)
 			return true, err
 		}
-		self.dev.SetErrorCode(int32(code))
 		return true, DeviceErrorCode(code)
 	}
 	return false, nil

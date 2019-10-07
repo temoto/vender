@@ -18,7 +18,9 @@ var (
 	ErrPacketReadonly = errors.New("mdb: packet is readonly")
 
 	PacketEmpty = &Packet{readonly: true}
-	PacketNul1  = &Packet{readonly: true, l: 1}
+	PacketAck   = MustPacketFromHex("00", true)
+	PacketNak   = MustPacketFromHex("ff", true)
+	PacketRet   = MustPacketFromHex("aa", true)
 )
 
 type InvalidChecksum struct {

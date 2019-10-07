@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/temoto/vender/hardware/mdb"
+	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -17,9 +17,9 @@ engine {
 inventory { stock "cup" { } }
 alias "add.cup" { scenario = "mdb.evend.cup_dispense stock.cup.spend1" }
 }`)
-	mock := mdb.MockFromContext(ctx)
+	mock := mdb_client.MockFromContext(ctx)
 	defer mock.Close()
-	go mock.Expect([]mdb.MockR{
+	go mock.Expect([]mdb_client.MockR{
 		{"e0", ""},
 		{"e1", "06000b0100010a06d807362800000701"},
 		{"e3", ""},

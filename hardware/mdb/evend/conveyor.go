@@ -87,10 +87,10 @@ func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 		err := self.Generic.NewWaitDone(tag, timeout).Do(ctx)
 		if err != nil {
 			self.currentPos = -1
-			self.dev.SetReady(false)
+			// TODO check SetReady(false)
 		} else {
 			self.currentPos = int16(position)
-			self.dev.SetReady(true)
+			self.dev.SetReady()
 		}
 		return err
 	}}

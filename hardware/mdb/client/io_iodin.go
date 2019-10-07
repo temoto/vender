@@ -1,4 +1,4 @@
-package mdb
+package mdb_client
 
 import (
 	"sync"

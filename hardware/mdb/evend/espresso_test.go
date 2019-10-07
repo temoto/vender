@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/temoto/vender/hardware/mdb"
+	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -15,9 +15,9 @@ func TestEspresso(t *testing.T) {
 engine { inventory {
 	stock "espresso" { register_add="ignore(?) mdb.evend.espresso_grind" spend_rate=7 }
 }}`)
-	mock := mdb.MockFromContext(ctx)
+	mock := mdb_client.MockFromContext(ctx)
 	defer mock.Close()
-	go mock.Expect([]mdb.MockR{
+	go mock.Expect([]mdb_client.MockR{
 		{"e8", ""},
 		{"e9", "0800010100010e03d7070e0000000201"},
 		{"eb", ""},

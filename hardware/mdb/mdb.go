@@ -1,7 +1,6 @@
 package mdb
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/juju/errors"
@@ -26,69 +25,55 @@ type Uarter interface {
 	Tx(request, response []byte) (int, error)
 }
 
-type Mdb struct {
-	Log *log2.Log
-	io  Uarter
-}
-
-type TxFunc func(request Packet, response *Packet) error
-
 type FeatureNotSupported string
 
 func (self FeatureNotSupported) Error() string { return string(self) }
 
-func checksum(bs []byte) byte {
-	var chk byte
-	for _, b := range bs {
-		chk += b
-	}
-	return chk
+type Bus struct {
+	Error func(error)
+	Log   *log2.Log
+	u     Uarter
 }
 
-func NewMDB(u Uarter, options string, log *log2.Log) (*Mdb, error) {
-	self := &Mdb{
-		Log: log,
-		io:  u,
+func NewBus(u Uarter, log *log2.Log, errfun func(error)) *Bus {
+	return &Bus{
+		Error: errfun,
+		Log:   log,
+		u:     u,
 	}
-	err := self.io.Open(options)
-	if err != nil {
-		return nil, errors.Annotatef(err, "Mdb.NewMDB Uarter=%s Open(%s)", u, options)
-	}
-	return self, nil
 }
 
-func (self *Mdb) BusResetDefault() error {
-	return errors.Trace(self.BusReset(DefaultBusResetKeep, DefaultBusResetSleep))
-}
-func (self *Mdb) BusReset(keep, sleep time.Duration) error {
-	self.Log.Debugf("mdb.BusReset keep=%v sleep=%v", keep, sleep)
-	return errors.Trace(self.io.Break(keep, sleep))
+func (b *Bus) ResetDefault() error {
+	return errors.Trace(b.Reset(DefaultBusResetKeep, DefaultBusResetSleep))
 }
 
-func (self *Mdb) Tx(request Packet, response *Packet) error {
-	if self == nil {
-		panic(fmt.Sprintf("code error mdb=nil request=%x", request.Bytes()))
-	}
+func (b *Bus) Reset(keep, sleep time.Duration) error {
+	b.Log.Debugf("mdb.bus.Reset keep=%v sleep=%v", keep, sleep)
+	return errors.Trace(b.u.Break(keep, sleep))
+}
+
+func (b *Bus) Tx(request Packet, response *Packet) error {
 	if response == nil {
 		panic("code error mdb.Tx() response=nil")
 	}
 	if response.readonly {
 		return ErrPacketReadonly
 	}
-	if request.Len() == 0 {
+	if request.l == 0 {
 		return nil
 	}
 
 	rbs := request.Bytes()
-	n, err := self.io.Tx(rbs, response.b[:])
+	n, err := b.u.Tx(rbs, response.b[:])
 	response.l = n
 
 	if err != nil {
 		return errors.Annotatef(err, "mdb.Tx send=%x recv=%x", request.Bytes(), response.Bytes())
 	}
-	if self.Log.Enabled(log2.LDebug) {
-		self.Log.Debugf("mdb.Tx (%02d) %s -> (%02d) %s",
-			request.l, request.Format(), response.l, response.Format())
+	// explicit level check to save costly .Format()
+	if b.Log.Enabled(log2.LDebug) {
+		b.Log.Debugf("mdb.Tx (%02d) %s -> (%02d) %s",
+			request.Len(), request.Format(), response.Len(), response.Format())
 	}
 	return nil
 }

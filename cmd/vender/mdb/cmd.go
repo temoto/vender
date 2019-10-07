@@ -12,7 +12,6 @@ import (
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers/cli"
-	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state"
 )
 
@@ -21,10 +20,6 @@ const usage = `syntax: commands separated by whitespace
 - reset    MDB bus reset (TX high for 200ms, wait for 500ms)
 - sN       pause N milliseconds
 - @XX...   transmit MDB block from hex XX..., show response
-
-(meta)
-- log=yes  enable debug logging
-- log=no   disable debug logging
 - loop=N   repeat N times all commands on this line
 `
 
@@ -50,9 +45,10 @@ func Main(ctx context.Context, config *state.Config) error {
 	synthConfig.Hardware.IodinPath = config.Hardware.IodinPath // *iodinPath
 	synthConfig.Hardware.Mdb = config.Hardware.Mdb             // *uarterName *devicePath
 	synthConfig.Hardware.Mega = config.Hardware.Mega           // *megaSpi *megaPin
+	synthConfig.Tele.Enabled = false
 	g.MustInit(ctx, synthConfig)
 
-	if _, err := g.Mdber(); err != nil {
+	if _, err := g.Mdb(); err != nil {
 		g.Log.Fatal(err)
 	}
 	defer g.Hardware.Mdb.Uarter.Close()
@@ -65,31 +61,13 @@ func Main(ctx context.Context, config *state.Config) error {
 	return nil
 }
 
-var doLogYes = engine.Func{Name: "log=yes", F: func(ctx context.Context) error {
-	g := state.GetGlobal(ctx)
-	m, err := g.Mdber()
-	if err != nil {
-		return err
-	}
-	m.Log.SetLevel(log2.LDebug)
-	return nil
-}}
-var doLogNo = engine.Func{Name: "log=no", F: func(ctx context.Context) error {
-	g := state.GetGlobal(ctx)
-	m, err := g.Mdber()
-	if err != nil {
-		return err
-	}
-	m.Log.SetLevel(log2.LError)
-	return nil
-}}
 var doBusReset = engine.Func{Name: "reset", F: func(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
-	m, err := g.Mdber()
+	m, err := g.Mdb()
 	if err != nil {
 		return err
 	}
-	return m.BusResetDefault()
+	return m.ResetDefault()
 }}
 
 func newCompleter(ctx context.Context) func(d prompt.Document) []prompt.Suggest {
@@ -124,7 +102,7 @@ func newExecutor(ctx context.Context) func(string) {
 func newTx(request mdb.Packet) engine.Doer {
 	return engine.Func{Name: "mdb:" + request.Format(), F: func(ctx context.Context) error {
 		g := state.GetGlobal(ctx)
-		m, err := g.Mdber()
+		m, err := g.Mdb()
 		if err != nil {
 			return err
 		}
@@ -197,10 +175,6 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 
 func parseCommand(word string) (engine.Doer, error) {
 	switch {
-	case word == "log=yes":
-		return doLogYes, nil
-	case word == "log=no":
-		return doLogNo, nil
 	case word == "reset":
 		return doBusReset, nil
 	case word[0] == 's':

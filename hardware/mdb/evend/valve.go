@@ -123,7 +123,7 @@ func (self *DeviceValve) newGetTempHot() engine.Func {
 
 		temp := int32(bs[0])
 		if temp == 0 {
-			self.dev.SetReady(false)
+			self.dev.SetErrorCode(1)
 			self.DoSetTempHot.Apply(0).Do(ctx)
 			sensorErr := errors.Errorf("%s current=0 sensor problem", tag)
 			if !self.tempHotReported {

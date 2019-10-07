@@ -1,4 +1,4 @@
-package mdb
+package mdb_client
 
 import (
 	"bytes"
@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/juju/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
@@ -84,12 +85,12 @@ func testFileUart(t testing.TB, r io.Reader, w io.Writer) *fileUart {
 	return u
 }
 
-func checkUarterTx(t testing.TB, u Uarter, send string, bw *bytes.Buffer, expectOk string, expectErr error) {
+func checkUarterTx(t testing.TB, u mdb.Uarter, send string, bw *bytes.Buffer, expectOk string, expectErr error) {
 	request, err := hex.DecodeString(send)
 	if err != nil {
 		panic(errors.Errorf("code error send=%s err=%v", send, err))
 	}
-	buf := make([]byte, PacketMaxLength)
+	buf := make([]byte, mdb.PacketMaxLength)
 	n, err := u.Tx(request, buf)
 	buf = buf[:n]
 	if expectErr != nil {
@@ -118,7 +119,7 @@ func TestUarterTx(t *testing.T) {
 		{"empty", "30", "", "bff0000", "", nil},
 		{"complex", "30", "", "b73ffff04 bff0076", "73ff04", nil},
 		{"by 1 byte", "0b", "", "b02 b16 b41 bff b00 b59", "021641", nil},
-		{"invalid chk", "0b", "", "b0bff0001", "", InvalidChecksum{Actual: 0x0b, Received: 0x01}},
+		{"invalid chk", "0b", "", "b0bff0001", "", mdb.InvalidChecksum{Actual: 0x0b, Received: 0x01}},
 		{"data without chk", "0b", "", "b0b", "", io.EOF},
 		{"err mid-read", "0f", "", "b30 d50ms,eIO", "", errors.New("IO")},
 	}
@@ -138,15 +139,17 @@ func TestUarterTx(t *testing.T) {
 }
 
 func BenchmarkFileUartTx(b *testing.B) {
+	var packetNul1 = mdb.MustPacketFromHex("00", true)
+
 	b.ReportAllocs()
 	mr := parseMockReader(strings.Repeat("bff0000 ", b.N))
 	mw := bytes.NewBuffer(nil)
 	u := testFileUart(b, mr, mw)
 	u.Log = nil
-	response := [PacketMaxLength]byte{}
+	response := [mdb.PacketMaxLength]byte{}
 	b.ResetTimer()
 	for i := 1; i <= b.N; i++ {
-		_, err := u.Tx(PacketNul1.Bytes(), response[:])
+		_, err := u.Tx(packetNul1.Bytes(), response[:])
 		if err != nil {
 			b.Fatal(errors.ErrorStack(err))
 		}

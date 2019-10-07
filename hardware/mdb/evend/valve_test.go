@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/temoto/vender/hardware/mdb"
+	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -17,9 +17,9 @@ func TestValve(t *testing.T) {
 engine { inventory {
 	stock "water" { check=false hw_rate = 0.6 min = 500 }
 }}`)
-	mock := mdb.MockFromContext(ctx)
+	mock := mdb_client.MockFromContext(ctx)
 	defer mock.Close()
-	go mock.Expect([]mdb.MockR{
+	go mock.Expect([]mdb_client.MockR{
 		{"c0", ""},
 		{"c1", "011810000a0000c8001fff01050a32640000000000000000000000"},
 

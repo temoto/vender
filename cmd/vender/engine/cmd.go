@@ -110,11 +110,11 @@ func newExecutor(ctx context.Context) func(string) {
 
 var doMdbBusReset = engine.Func{Name: "mdb.bus_reset", F: func(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
-	m, err := g.Mdber()
+	m, err := g.Mdb()
 	if err != nil {
 		return err
 	}
-	return m.BusReset(200*time.Millisecond, 500*time.Millisecond)
+	return m.ResetDefault()
 }}
 
 var doUsage = engine.Func{F: func(ctx context.Context) error {
@@ -126,7 +126,7 @@ var doUsage = engine.Func{F: func(ctx context.Context) error {
 func newTx(request mdb.Packet) engine.Doer {
 	return engine.Func{Name: "mdb:" + request.Format(), F: func(ctx context.Context) error {
 		g := state.GetGlobal(ctx)
-		m, err := g.Mdber()
+		m, err := g.Mdb()
 		if err != nil {
 			return err
 		}

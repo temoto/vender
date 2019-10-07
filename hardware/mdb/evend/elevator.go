@@ -78,10 +78,9 @@ func (self *DeviceElevator) move(ctx context.Context, position uint8) (err error
 	defer func() {
 		if err != nil {
 			self.currentPos = -1
-			self.dev.SetReady(false)
 		} else {
 			self.currentPos = int16(position)
-			self.dev.SetReady(true)
+			self.dev.SetReady()
 		}
 	}()
 

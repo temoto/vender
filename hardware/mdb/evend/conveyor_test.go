@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/temoto/vender/hardware/mdb"
+	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -13,9 +13,9 @@ func TestConveyor(t *testing.T) {
 	t.Parallel()
 
 	ctx, g := state_new.NewTestContext(t, "")
-	mock := mdb.MockFromContext(ctx)
+	mock := mdb_client.MockFromContext(ctx)
 	defer mock.Close()
-	go mock.Expect([]mdb.MockR{
+	go mock.Expect([]mdb_client.MockR{
 		{"d8", ""},
 		{"d9", "011810000a0000c8001fff01050a32640000000000000000000000"},
 

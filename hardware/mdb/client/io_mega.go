@@ -1,10 +1,11 @@
-package mdb
+package mdb_client
 
 import (
 	"sync"
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/mega-client"
 )
 
@@ -17,7 +18,7 @@ type megaUart struct {
 	lk sync.Mutex
 }
 
-func NewMegaUart(client *mega.Client) Uarter {
+func NewMegaUart(client *mega.Client) mdb.Uarter {
 	return &megaUart{c: client}
 }
 func (self *megaUart) Open(_ string) error {
@@ -36,11 +37,11 @@ func responseError(r mega.Mdb_result_t, arg byte) error {
 		return nil
 	case mega.MDB_RESULT_BUSY:
 		// err := errors.NewErr("MDB busy state=%s", mega.Mdb_state_t(p.Fields.MdbError).String())
-		return ErrBusy
+		return mdb.ErrBusy
 	case mega.MDB_RESULT_TIMEOUT:
-		return ErrTimeout
+		return mdb.ErrTimeout
 	case mega.MDB_RESULT_NAK:
-		return ErrNak
+		return mdb.ErrNak
 	default:
 		err := errors.NewErr("mega MDB error result=%s arg=%02x", r.String(), arg)
 		err.SetLocation(2)

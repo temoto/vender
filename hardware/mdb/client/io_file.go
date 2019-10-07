@@ -1,4 +1,4 @@
-package mdb
+package mdb_client
 
 import (
 	"bufio"
@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/log2"
 	"golang.org/x/sys/unix"
 )
@@ -180,10 +181,10 @@ func (self *fileUart) Tx(request, response []byte) (n int, err error) {
 	chkcomp := checksum(response[:n])
 	if chkin != chkcomp {
 		// self.Log.Debugf("mdb.fileUart.Tx InvalidChecksum frompacket=%x actual=%x", chkin, chkcomp)
-		return n, errors.Trace(InvalidChecksum{Received: chkin, Actual: chkcomp})
+		return n, errors.Trace(mdb.InvalidChecksum{Received: chkin, Actual: chkcomp})
 	}
 	if n > 0 {
-		_, err = self.write9(PacketNul1.b[:1], false)
+		_, err = self.write9(mdb.PacketAck.Bytes(), false)
 	}
 	// end critical path
 	return n, errors.Trace(err)
@@ -295,6 +296,14 @@ func (self fdReader) Read(p []byte) (n int, err error) {
 		err = errors.Trace(err)
 	}
 	return n, err
+}
+
+func checksum(bs []byte) byte {
+	var chk byte
+	for _, b := range bs {
+		chk += b
+	}
+	return chk
 }
 
 func ioctl(fd uintptr, op, arg uintptr) (err error) {

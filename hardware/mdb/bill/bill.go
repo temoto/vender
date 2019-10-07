@@ -73,11 +73,11 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	const tag = "mdb.bill.Init"
 
 	g := state.GetGlobal(ctx)
-	m, err := g.Mdber()
+	mdbus, err := g.Mdb()
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	self.dev.Init(m.Tx, g.Log, 0x30, "bill", binary.BigEndian)
+	self.dev.Init(mdbus, 0x30, "bill", binary.BigEndian)
 	config := g.Config.Hardware.Mdb.Bill
 	self.configScaling = 100
 	if config.ScalingFactor != 0 {

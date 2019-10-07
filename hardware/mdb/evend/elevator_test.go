@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/temoto/vender/hardware/mdb"
+	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -12,9 +12,9 @@ func TestElevator(t *testing.T) {
 	t.Parallel()
 
 	ctx, g := state_new.NewTestContext(t, "")
-	mock := mdb.MockFromContext(ctx)
+	mock := mdb_client.MockFromContext(ctx)
 	defer mock.Close()
-	go mock.Expect([]mdb.MockR{
+	go mock.Expect([]mdb_client.MockR{
 		{"d0", ""},
 		{"d1", "04000b0100011805de07020000000a01"},
 

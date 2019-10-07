@@ -137,9 +137,7 @@ func (self *Tele) qworker() {
 					self.log.Errorf("tele qhandle Delete b=%x err=%v", b, err)
 				}
 			} else {
-				// FIXME delete+re-push atomically inside spq
-				self.q.Delete(box)
-				self.q.Push(b)
+				self.q.DeletePush(box)
 			}
 
 		case spq.ErrClosed:

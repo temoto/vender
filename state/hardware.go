@@ -9,6 +9,7 @@ import (
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb"
+	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	"github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/log2"
 )
@@ -20,6 +21,11 @@ type hardware struct {
 		Display *lcd.TextDisplay
 	}
 	Input *input.Dispatch
+	Mdb   struct {
+		once
+		Bus    *mdb.Bus
+		Uarter mdb.Uarter
+	}
 	iodin struct {
 		once
 		client *iodin.Client
@@ -30,11 +36,6 @@ type hardware struct {
 	}
 }
 
-func (g *Global) Mdber() (*mdb.Mdb, error) {
-	var err error
-
-	g.initMdberOnce.Do(func() {
-		defer recoverFatal(g.Log, "Mdber") // fix sync.Once silent panic
 func (g *Global) Iodin() (*iodin.Client, error) {
 	x := &g.Hardware.iodin // short alias
 	x.Lock()
@@ -47,56 +48,54 @@ func (g *Global) Iodin() (*iodin.Client, error) {
 	return x.client, x.err
 }
 
-		// This may only be already set by NewTestContext()
-		// TODO assert it's test runner?
-		if g.Hardware.Mdb.Mdber != nil {
-			return
+func (g *Global) Mdb() (*mdb.Bus, error) {
+	x := &g.Hardware.Mdb // short alias
+	x.Lock()
+	defer x.Unlock()
+	x.lockedDo(func() error {
+		if x.Bus != nil { // state-new testing mode
+			return nil
 		}
 
 		switch g.Config.Hardware.Mdb.UartDriver {
 		case "file":
-			g.Hardware.Mdb.Uarter = mdb.NewFileUart(g.Log)
+			x.Uarter = mdb_client.NewFileUart(g.Log)
+
 		case "mega":
-			var mc *mega.Client
-			mc, err = g.Mega()
-			if mc == nil {
-				return
+			mc, err := g.Mega()
+			if mc == nil && err == nil { // FIXME
+				err = errors.Errorf("code error mega=nil")
 			}
 			if err != nil {
-				err = errors.Annotate(err, "Mdber() driver=mega")
-				return
+				return errors.Annotate(x.err, "Mdber() driver=mega")
 			}
-			g.Hardware.Mdb.Uarter = mdb.NewMegaUart(mc)
+			x.Uarter = mdb_client.NewMegaUart(mc)
+
 		case "iodin":
-			var iodin *iodin.Client
-			iodin, err = g.Iodin()
-			if iodin == nil {
-				return
+			iodin, err := g.Iodin()
+			if iodin == nil && err == nil { // FIXME
+				err = errors.Errorf("code error iodin=nil")
 			}
 			if err != nil {
-				err = errors.Annotate(err, "Mdber() driver=iodin")
-				return
+				return errors.Annotate(err, "Mdber() driver=iodin")
 			}
-			g.Hardware.Mdb.Uarter = mdb.NewIodinUart(iodin)
+			x.Uarter = mdb_client.NewIodinUart(iodin)
+
 		default:
-			err = fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, mega, iodin", g.Config.Hardware.Mdb.UartDriver)
-			return
+			return fmt.Errorf("config: unknown mdb.uart_driver=\"%s\" valid: file, mega, iodin", g.Config.Hardware.Mdb.UartDriver)
 		}
+
 		mdbLog := g.Log.Clone(log2.LInfo)
 		if g.Config.Hardware.Mdb.LogDebug {
 			mdbLog.SetLevel(log2.LDebug)
 		}
-
-		var mdber *mdb.Mdb
-		mdber, err = mdb.NewMDB(g.Hardware.Mdb.Uarter, g.Config.Hardware.Mdb.UartDevice, mdbLog)
-		if err != nil {
-			err = errors.Annotatef(err, "config: mdb=%v", g.Config.Hardware.Mdb)
-			return
+		if err := x.Uarter.Open(g.Config.Hardware.Mdb.UartDevice); err != nil {
+			return errors.Annotatef(err, "config: mdb=%v", g.Config.Hardware.Mdb)
 		}
-		g.Hardware.Mdb.Mdber = mdber
+		x.Bus = mdb.NewBus(x.Uarter, mdbLog, g.Tele.Error)
+		return nil
 	})
-
-	return g.Hardware.Mdb.Mdber, err
+	return x.Bus, x.err
 }
 
 func (g *Global) Mega() (*mega.Client, error) {

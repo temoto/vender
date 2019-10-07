@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/temoto/vender/hardware/mdb"
+	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -12,7 +12,7 @@ func TestRegister(t *testing.T) {
 	t.Parallel()
 
 	ctx, g := state_new.NewTestContext(t, "")
-	mock := mdb.MockFromContext(ctx)
+	mock := mdb_client.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{
 		// relevant
@@ -25,7 +25,7 @@ func TestRegister(t *testing.T) {
 	Enum(ctx, enumIgnore)
 
 	mock.ExpectMap(nil)
-	go mock.Expect([]mdb.MockR{
+	go mock.Expect([]mdb_client.MockR{
 		{"db", ""}, {"da010000", ""}, {"db", ""}, // conveyor calibrate / conveyor_move(0)
 		{"db", ""}, {"da01fa00", ""}, {"db", ""}, // conveyor move to hopper
 		{"43", ""}, {"420a", ""}, {"43", ""}, // hopper run

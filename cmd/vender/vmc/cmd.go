@@ -18,12 +18,12 @@ func Main(ctx context.Context, config *state.Config) error {
 	g := state.GetGlobal(ctx)
 	g.MustInit(ctx, config)
 
-	mdber, err := g.Mdber()
+	mdbus, err := g.Mdb()
 	if err != nil {
 		err = errors.Annotate(err, "mdb init")
 		return err
 	}
-	if err = mdber.BusResetDefault(); err != nil {
+	if err = mdbus.ResetDefault(); err != nil {
 		err = errors.Annotate(err, "mdb bus reset")
 		return err
 	}

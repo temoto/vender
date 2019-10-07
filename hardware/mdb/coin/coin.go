@@ -81,12 +81,12 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	const tag = "mdb.coin.Init"
 
 	g := state.GetGlobal(ctx)
-	m, err := g.Mdber()
+	mdbus, err := g.Mdb()
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	self.dev.Init(m.Tx, g.Log, 0x08, "coin", binary.BigEndian)
-	config := g.Config.Hardware.Mdb.Coin
+	self.dev.Init(mdbus, 0x08, "coin", binary.BigEndian)
+	config := &g.Config.Hardware.Mdb.Coin
 	self.dispenseSmart = config.DispenseSmart
 	self.dispenseTimeout = helpers.IntSecondDefault(config.DispenseTimeoutSec, defaultDispenseTimeout)
 	self.scalingFactor = 1

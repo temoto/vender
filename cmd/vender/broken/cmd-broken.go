@@ -22,14 +22,14 @@ func Main(ctx context.Context, config *state.Config) error {
 
 	subcmd.SdNotify(daemon.SdNotifyReady)
 
-	if mdber, err := g.Mdber(); err != nil || mdber == nil {
+	if mdbus, err := g.Mdb(); err != nil || mdbus == nil {
 		if err == nil {
 			err = errors.Errorf("hardware problem, see logs")
 		}
 		err = errors.Annotate(err, "mdb init")
 		g.Error(err)
 	} else {
-		if err = mdber.BusResetDefault(); err != nil {
+		if err = mdbus.ResetDefault(); err != nil {
 			err = errors.Annotate(err, "mdb bus reset")
 			g.Error(err)
 		}
