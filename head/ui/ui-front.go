@@ -97,7 +97,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 	refresh:
 		// step 1: refresh display
 		credit := moneysys.Credit(ctx)
-		if self.State == StateFrontTune { // XXX onFrontTune
+		if self.State() == StateFrontTune { // XXX onFrontTune
 			goto wait
 		}
 		self.frontSelectShow(ctx, credit)
@@ -105,7 +105,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		// step 2: wait for input/timeout
 	wait:
 		timeout := self.frontResetTimeout
-		if self.State == StateFrontTune {
+		if self.State() == StateFrontTune {
 			timeout = modTuneTimeout
 		}
 		e := self.wait(timeout)
@@ -177,7 +177,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			return StateServiceBegin
 
 		case EventTime:
-			if self.State == StateFrontTune { // XXX onFrontTune
+			if self.State() == StateFrontTune { // XXX onFrontTune
 				return StateFrontSelect // "return to previous mode"
 			}
 			return StateFrontTimeout
@@ -186,7 +186,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			return StateFrontEnd
 
 		default:
-			panic(fmt.Sprintf("code error state=%v unhandled event=%v", self.State, e))
+			panic(fmt.Sprintf("code error state=%v unhandled event=%v", self.State(), e))
 		}
 	}
 }
@@ -317,7 +317,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 }
 
 func (self *UI) onFrontTimeout(ctx context.Context) State {
-	self.g.Log.Debugf("ui state=%s result=%#v", self.State.String(), self.FrontResult)
+	self.g.Log.Debugf("ui state=%s result=%#v", self.State().String(), self.FrontResult)
 	// moneysys := money.GetGlobal(ctx)
 	// moneysys.save
 	return StateFrontEnd

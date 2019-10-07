@@ -20,7 +20,7 @@ func (self *UI) LockWait() bool {
 	}
 	for self.g.Alive.IsRunning() {
 		time.Sleep(lockPoll)
-		if self.State == StateLocked {
+		if self.State() == StateLocked {
 			return true
 		}
 	}
@@ -36,7 +36,7 @@ func (self *UI) LockDecrement() {
 		new = 0
 	}
 	if new == 0 {
-		for self.g.Alive.IsRunning() && (self.State == StateLocked) {
+		for self.g.Alive.IsRunning() && (self.State() == StateLocked) {
 			time.Sleep(lockPoll)
 		}
 	}
@@ -46,7 +46,7 @@ func (self *UI) LockDecrement() {
 func (self *UI) LockEnd() {
 	self.g.Log.Debugf("LockEnd")
 	atomic.StoreInt32(&self.locked, 0)
-	for self.g.Alive.IsRunning() && (self.State == StateLocked) {
+	for self.g.Alive.IsRunning() && (self.State() == StateLocked) {
 		time.Sleep(lockPoll)
 	}
 }

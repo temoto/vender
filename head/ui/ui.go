@@ -27,13 +27,13 @@ func GetGlobal(ctx context.Context) *UI {
 }
 
 type UI struct { //nolint:maligned
-	State         State
 	FrontMaxPrice currency.Amount
 	FrontResult   UIMenuResult
 	Service       uiService
 
 	config       *ui_config.Config
 	g            *state.Global
+	state        State
 	broken       bool
 	menu         Menu
 	display      *lcd.TextDisplay // FIXME
@@ -55,7 +55,7 @@ type UI struct { //nolint:maligned
 func (self *UI) Init(ctx context.Context) error {
 	self.g = state.GetGlobal(ctx)
 	self.config = &self.g.Config.UI
-	self.State = StateBoot
+	self.setState(StateBoot)
 
 	self.menu = make(Menu)
 	if err := self.menu.Init(ctx); err != nil {

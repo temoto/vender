@@ -56,7 +56,7 @@ func uiTestSetup(t testing.TB, env *tenv, initState, endState ui.State) {
 	}
 	err := env.ui.Init(env.ctx)
 	require.NoError(t, err)
-	env.ui.State = initState
+	env.ui.XXX_testSetState(initState)
 	env.displayUpdated = make(chan lcd.State)
 	env.display.SetUpdateChan(env.displayUpdated)
 	env._T = func(l1, l2 string) string {
@@ -112,4 +112,5 @@ func uiTestWait(t testing.TB, env *tenv, steps []step) {
 		t.Logf("display:\n%s", env.display.State().Format(testDisplayWidth))
 		t.Error("ui still running")
 	}
+	env.g.Alive.Wait()
 }

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/juju/errors"
@@ -37,21 +38,27 @@ const (
 	StateServiceEnd // ->FrontBegin
 )
 
-func (self *UI) Loop(ctx context.Context) {
-	for self.g.Alive.IsRunning() {
-		next := self.enter(ctx, self.State)
-		if next == StateInvalid {
-			self.g.Log.Fatalf("ui state=%s next=invalid", self.State)
-		}
-		self.exit(ctx, self.State, next)
+func (self *UI) State() State               { return State(atomic.LoadUint32((*uint32)(&self.state))) }
+func (self *UI) setState(new State)         { atomic.StoreUint32((*uint32)(&self.state), uint32(new)) }
+func (self *UI) XXX_testSetState(new State) { self.setState(new) }
 
-		if self.Locked() && (self.State != StateLocked) && self.checkLockPriority(next) {
+func (self *UI) Loop(ctx context.Context) {
+	self.g.Alive.Add(1)
+	defer self.g.Alive.Done()
+	for self.g.Alive.IsRunning() {
+		next := self.enter(ctx, self.State())
+		if next == StateInvalid {
+			self.g.Log.Fatalf("ui state=%s next=invalid", self.State().String())
+		}
+		self.exit(ctx, self.State(), next)
+
+		if self.Locked() && (self.State() != StateLocked) && self.checkLockPriority(next) {
 			self.lockedNext = next
 			self.g.Log.Infof("ui lock interrupt")
 			next = StateLocked
 		}
 
-		self.State = next
+		self.setState(next)
 		if self.XXX_testHook != nil {
 			self.XXX_testHook(next)
 		}

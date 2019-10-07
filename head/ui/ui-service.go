@@ -117,7 +117,7 @@ func (self *UI) onServiceAuth() State {
 			self.serviceWaitInput()
 			return StateServiceEnd
 		}
-		return self.State
+		return self.State()
 
 	case e.IsZero() || input.IsReject(&e):
 		return StateServiceEnd
