@@ -16,9 +16,17 @@ const (
 
 var (
 	ErrOffline      = fmt.Errorf("offline")
-	ErrStateInvalid = fmt.Errorf("state=invalid")
+	ErrStateInvalid = fmt.Errorf("CRITICAL code error state=invalid")
 	ErrStateError   = fmt.Errorf("state=error")
 )
+
+func (s DeviceState) Ok() bool {
+	switch s {
+	case DeviceOnline, DeviceReady:
+		return true
+	}
+	return false
+}
 
 func (s DeviceState) Online() bool {
 	switch s {

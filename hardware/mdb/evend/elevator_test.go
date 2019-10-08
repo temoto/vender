@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	mdb_client "github.com/temoto/vender/hardware/mdb/client"
+	"github.com/temoto/vender/hardware/mdb"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -12,9 +12,9 @@ func TestElevator(t *testing.T) {
 	t.Parallel()
 
 	ctx, g := state_new.NewTestContext(t, "")
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
-	go mock.Expect([]mdb_client.MockR{
+	go mock.Expect([]mdb.MockR{
 		{"d0", ""},
 		{"d1", "04000b0100011805de07020000000a01"},
 
@@ -53,7 +53,6 @@ func TestElevator(t *testing.T) {
 	})
 
 	d := new(DeviceElevator)
-	d.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
 	require.Nil(t, d.Init(ctx))
 
 	g.Engine.TestDo(t, ctx, "mdb.evend.elevator_move(100)")

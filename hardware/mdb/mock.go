@@ -1,5 +1,6 @@
 // Public API to easy create MDB stubs for test code.
-package mdb_client
+
+package mdb
 
 import (
 	"bytes"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/log2"
 )
 
@@ -85,10 +85,10 @@ func (self *MockUart) txMap(request, response []byte) (int, error) {
 	responseHex, found := self.m[requestHex]
 	if !found {
 		// must not call self.t.Error() here
-		return 0, mdb.ErrTimeout
+		return 0, ErrTimeout
 	}
 	delete(self.m, requestHex)
-	rp := mdb.MustPacketFromHex(responseHex, true)
+	rp := MustPacketFromHex(responseHex, true)
 	n := copy(response, rp.Bytes())
 	return n, nil
 }
@@ -109,7 +109,7 @@ func (self *MockUart) txQueue(request, response []byte) (n int, err error) {
 		self.t.Error(err)
 		return 0, err
 	}
-	expect := mdb.MustPacketFromHex(rr[0], true)
+	expect := MustPacketFromHex(rr[0], true)
 
 	if !bytes.Equal(request, expect.Bytes()) {
 		err = errors.Errorf("mdb-mock: request expected=%x actual=%x", expect.Bytes(), request)
@@ -123,7 +123,7 @@ func (self *MockUart) txQueue(request, response []byte) (n int, err error) {
 	// 	return 0, rr.Rerr
 	// }
 
-	rp := mdb.MustPacketFromHex(rr[1], true)
+	rp := MustPacketFromHex(rr[1], true)
 	n = copy(response, rp.Bytes())
 	return n, err
 }
@@ -163,9 +163,11 @@ func (self *MockUart) ExpectMap(rrs map[string]string) {
 	self.mu.Unlock()
 }
 
-func NewTestMdb(t testing.TB) (*mdb.Bus, *MockUart) {
+func NewMockBus(t testing.TB) (*Bus, *MockUart) {
 	mock := NewMockUart(t)
-	b := mdb.NewBus(mock, log2.NewTest(t, log2.LDebug), func(e error) { t.Log(e) })
+	b := NewBus(mock, log2.NewTest(t, log2.LDebug), func(e error) {
+		t.Logf("bus.Error: %v", e)
+	})
 	return b, mock
 }
 

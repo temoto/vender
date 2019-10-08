@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
-	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/helpers"
 	state_new "github.com/temoto/vender/state/new"
@@ -22,8 +21,8 @@ const testConfig = "money { scale=100 }"
 const testScalingFactor currency.Nominal = 10
 const devScaling currency.Nominal = 100
 
-func mockInitRs(scaling currency.Nominal, decimal uint8) []mdb_client.MockR {
-	return []mdb_client.MockR{
+func mockInitRs(scaling currency.Nominal, decimal uint8) []mdb.MockR {
+	return []mdb.MockR{
 		// initer, RESET
 		{"30", ""},
 		// initer, POLL
@@ -40,17 +39,16 @@ func mockInitRs(scaling currency.Nominal, decimal uint8) []mdb_client.MockR {
 	}
 }
 
-func testMake(t testing.TB, rs []mdb_client.MockR, scaling currency.Nominal, decimal uint8) (context.Context, *BillValidator) {
+func testMake(t testing.TB, rs []mdb.MockR, scaling currency.Nominal, decimal uint8) (context.Context, *BillValidator) {
 	ctx, _ := state_new.NewTestContext(t, testConfig)
 
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	go func() {
 		mock.Expect(mockInitRs(scaling, decimal))
 		mock.Expect(rs)
 	}()
 
 	bv := new(BillValidator)
-	bv.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
 	err := bv.Init(ctx)
 	require.NoError(t, err)
 
@@ -58,8 +56,8 @@ func testMake(t testing.TB, rs []mdb_client.MockR, scaling currency.Nominal, dec
 }
 
 func checkPoll(t *testing.T, input string, expected []_PI) {
-	ctx, bv := testMake(t, []mdb_client.MockR{{"33", input}}, testScalingFactor, 0)
-	defer mdb_client.MockFromContext(ctx).Close()
+	ctx, bv := testMake(t, []mdb.MockR{{"33", input}}, testScalingFactor, 0)
+	defer mdb.MockFromContext(ctx).Close()
 
 	pis := make([]_PI, 0, len(input)/2)
 	r := bv.dev.Tx(bv.dev.PacketPoll)
@@ -77,12 +75,11 @@ func TestBillOffline(t *testing.T) {
 	t.Parallel()
 
 	ctx, _ := state_new.NewTestContext(t, testConfig)
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	mock.ExpectMap(map[string]string{"": ""})
 	defer mock.Close()
 
 	bv := new(BillValidator)
-	bv.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
 	err := bv.Init(ctx)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mdb.bill RESET: offline")
@@ -125,8 +122,8 @@ func TestBillAcceptMax(t *testing.T) {
 	t.Parallel()
 
 	// FIXME explicit enable/disable escrow in config
-	ctx, bv := testMake(t, []mdb_client.MockR{{"3400070007", ""}}, testScalingFactor, 0)
-	defer mdb_client.MockFromContext(ctx).Close()
+	ctx, bv := testMake(t, []mdb.MockR{{"3400070007", ""}}, testScalingFactor, 0)
+	defer mdb.MockFromContext(ctx).Close()
 	err := bv.AcceptMax(10000).Do(ctx)
 	require.NoError(t, err)
 }
@@ -148,7 +145,7 @@ func TestBillScaling(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			ctx, bv := testMake(t, nil, c.scaling, c.decimal)
-			defer mdb_client.MockFromContext(ctx).Close()
+			defer mdb.MockFromContext(ctx).Close()
 			ns := bv.SupportedNominals()
 			assert.Equal(t, []currency.Nominal{1000, 5000, 10000, 50000, 100000}, ns)
 		})

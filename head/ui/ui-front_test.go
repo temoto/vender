@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/input"
-	mdb_client "github.com/temoto/vender/hardware/mdb/client"
+	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/ui"
 	state_new "github.com/temoto/vender/state/new"
@@ -29,7 +29,7 @@ engine {
 ui {
 	front { reset_sec = 5 }
 }`)
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{
 		"": "",
@@ -75,7 +75,7 @@ engine {
 ui {
 	front { reset_sec = 5 }
 }`)
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{"": ""})
 	moneysys := new(money.MoneySystem)
@@ -113,7 +113,7 @@ ui {
 		reset_sec = 5
 	}
 }`)
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{"": ""})
 	moneysys := new(money.MoneySystem)

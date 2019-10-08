@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	mdb_client "github.com/temoto/vender/hardware/mdb/client"
+	"github.com/temoto/vender/hardware/mdb"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -17,9 +17,9 @@ engine {
 inventory { stock "cup" { } }
 alias "add.cup" { scenario = "mdb.evend.cup_dispense stock.cup.spend1" }
 }`)
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
-	go mock.Expect([]mdb_client.MockR{
+	go mock.Expect([]mdb.MockR{
 		{"e0", ""},
 		{"e1", "06000b0100010a06d807362800000701"},
 		{"e3", ""},
@@ -31,11 +31,7 @@ alias "add.cup" { scenario = "mdb.evend.cup_dispense stock.cup.spend1" }
 		{"e3", ""},
 	})
 	d := new(DeviceCup)
-	d.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
-	err := d.Init(ctx)
-	if err != nil {
-		t.Fatalf("Init err=%v", err)
-	}
+	require.NoError(t, d.Init(ctx))
 
 	stock, err := g.Inventory.Get("cup")
 	require.NoError(t, err)

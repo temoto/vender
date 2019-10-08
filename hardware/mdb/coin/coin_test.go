@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
-	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state"
@@ -24,9 +23,9 @@ type _PI = money.PollItem
 const testScalingFactor currency.Nominal = 100
 const testConfig = "money { scale=100 change_over_compensate=10 }"
 
-func mockInitRs() []mdb_client.MockR {
+func mockInitRs() []mdb.MockR {
 	setupResponse := fmt.Sprintf("021643%02x0200170102050a0a1900000000000000000000", testScalingFactor)
-	return []mdb_client.MockR{
+	return []mdb.MockR{
 		// initer, RESET
 		{"08", ""},
 		// initer, POLL
@@ -48,9 +47,9 @@ func mockInitRs() []mdb_client.MockR {
 	}
 }
 
-func mockContext(t testing.TB, rs []mdb_client.MockR) context.Context {
+func mockContext(t testing.TB, rs []mdb.MockR) context.Context {
 	ctx, _ := state_new.NewTestContext(t, testConfig)
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	go func() {
 		mock.Expect(mockInitRs())
 		mock.Expect(rs)
@@ -61,16 +60,15 @@ func mockContext(t testing.TB, rs []mdb_client.MockR) context.Context {
 func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
 	ca := &CoinAcceptor{}
 	ca.dispenseTimeout = 1
-	ca.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
 	err := ca.Init(ctx)
 	require.NoError(t, err)
 	return ca
 }
 
 func checkPoll(t testing.TB, input string, expected []_PI) {
-	ctx := mockContext(t, []mdb_client.MockR{{"0b", input}})
+	ctx := mockContext(t, []mdb.MockR{{"0b", input}})
 	ca := newDevice(t, ctx)
-	defer mdb_client.MockFromContext(ctx).Close()
+	defer mdb.MockFromContext(ctx).Close()
 	// ca.AcceptMax(ctx, 1000)
 	r := ca.dev.Tx(ca.dev.PacketPoll)
 	require.NoError(t, r.E, "POLL")
@@ -86,12 +84,11 @@ func TestCoinOffline(t *testing.T) {
 	t.Parallel()
 
 	ctx, _ := state_new.NewTestContext(t, testConfig)
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	mock.ExpectMap(map[string]string{"": ""})
 	defer mock.Close()
 
 	ca := new(CoinAcceptor)
-	ca.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
 	err := ca.Init(ctx)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mdb.coin RESET: offline")
@@ -103,7 +100,7 @@ func TestCoinNoDiag(t *testing.T) {
 	t.Parallel()
 
 	ctx, _ := state_new.NewTestContext(t, testConfig)
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	mock.ExpectMap(map[string]string{
 		"08": "",                                               // initer, RESET
 		"0b": "0b",                                             // initer, POLL
@@ -114,7 +111,6 @@ func TestCoinNoDiag(t *testing.T) {
 	defer mock.Close()
 
 	ca := new(CoinAcceptor)
-	ca.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
 	err := ca.Init(ctx)
 	require.NoError(t, err)
 	assert.True(t, ca.dev.State().Online())
@@ -153,14 +149,14 @@ func TestCoinPoll(t *testing.T) {
 func TestCoinPayout(t *testing.T) {
 	t.Parallel()
 
-	rs := []mdb_client.MockR{
+	rs := []mdb.MockR{
 		{"0f0207", ""},
 		{"0f04", "00"},
 		{"0f04", ""},
 		{"0f03", "07000000"},
 	}
 	ctx := mockContext(t, rs)
-	defer mdb_client.MockFromContext(ctx).Close()
+	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 
 	dispensed := new(currency.NominalGroup)
@@ -173,8 +169,8 @@ func TestCoinPayout(t *testing.T) {
 func TestCoinAccept(t *testing.T) {
 	t.Parallel()
 
-	ctx := mockContext(t, []mdb_client.MockR{{"0c001fffff", ""}})
-	defer mdb_client.MockFromContext(ctx).Close()
+	ctx := mockContext(t, []mdb.MockR{{"0c001fffff", ""}})
+	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 
 	err := ca.AcceptMax(1000).Do(ctx)
@@ -192,7 +188,7 @@ func TestCoinDispenseSmart(t *testing.T) {
 	// }
 	// cases := []Case{
 	// }
-	rs := []mdb_client.MockR{
+	rs := []mdb.MockR{
 		{"0a", "00000003"},
 		{"0f0201", ""},
 		{"0f04", ""},
@@ -205,7 +201,7 @@ func TestCoinDispenseSmart(t *testing.T) {
 		{"0f03", "0001"},
 	}
 	ctx := mockContext(t, rs)
-	defer mdb_client.MockFromContext(ctx).Close()
+	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 	ca.dispenseSmart = true
 
@@ -240,8 +236,8 @@ func TestCoinDiag(t *testing.T) {
 	}
 }
 func checkDiag(t testing.TB, input string, expected DiagResult) {
-	ctx := mockContext(t, []mdb_client.MockR{{"0f05", input}})
-	defer mdb_client.MockFromContext(ctx).Close()
+	ctx := mockContext(t, []mdb.MockR{{"0f05", input}})
+	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 	dr := new(DiagResult)
 	err := ca.CommandExpansionSendDiagStatus(dr)
@@ -268,9 +264,9 @@ func BenchmarkCoinPoll(b *testing.B) {
 		c := c
 		b.Run(c.name, func(b *testing.B) {
 			b.ReportAllocs()
-			rs := make([]mdb_client.MockR, 0, b.N)
+			rs := make([]mdb.MockR, 0, b.N)
 			for i := 1; i <= b.N; i++ {
-				rs = append(rs, mdb_client.MockR{"0b", c.input})
+				rs = append(rs, mdb.MockR{"0b", c.input})
 			}
 			ctx := mockContext(b, rs)
 
@@ -278,7 +274,7 @@ func BenchmarkCoinPoll(b *testing.B) {
 			g.Log.SetLevel(log2.LError)
 			// g.Hardware.Mdb.Mdber.Log.SetLevel(log2.LError)
 
-			defer mdb_client.MockFromContext(ctx).Close()
+			defer mdb.MockFromContext(ctx).Close()
 			ca := newDevice(b, ctx)
 			parse := ca.pollFun(func(money.PollItem) bool { return false })
 			b.SetBytes(int64(len(c.input) / 2))

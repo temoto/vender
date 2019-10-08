@@ -9,7 +9,7 @@ import (
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
-	mdb_client "github.com/temoto/vender/hardware/mdb/client"
+	"github.com/temoto/vender/hardware/mdb"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state"
@@ -45,12 +45,12 @@ func NewTestContext(t testing.TB, confString string) (context.Context, *state.Gl
 	ctx, g := NewContext(log, tele_api.NewStub())
 	g.MustInit(ctx, state.MustReadConfig(log, fs, "test-inline"))
 
-	mdbus, mdbMock := mdb_client.NewTestMdb(t)
+	mdbus, mdbMock := mdb.NewMockBus(t)
 	g.Hardware.Mdb.Bus = mdbus
 	if _, err := g.Mdb(); err != nil {
 		t.Fatal(errors.Trace(err))
 	}
-	ctx = context.WithValue(ctx, mdb_client.MockContextKey, mdbMock)
+	ctx = context.WithValue(ctx, mdb.MockContextKey, mdbMock)
 
 	return ctx, g
 }

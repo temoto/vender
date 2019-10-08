@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	mdb_client "github.com/temoto/vender/hardware/mdb/client"
+	"github.com/temoto/vender/hardware/mdb"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -12,7 +12,7 @@ func TestAbort(t *testing.T) {
 	t.Parallel()
 
 	ctx, g := state_new.NewTestContext(t, "money{scale=100}")
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{
 		"08":           "",
@@ -30,7 +30,7 @@ func TestAbort(t *testing.T) {
 	mock.ExpectMap(nil)
 
 	ms.dirty += g.Config.ScaleU(11)
-	go mock.Expect([]mdb_client.MockR{
+	go mock.Expect([]mdb.MockR{
 		{"0f020b", ""},
 		{"0f04", "00"},
 		{"0f04", ""},

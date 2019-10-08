@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	mdb_client "github.com/temoto/vender/hardware/mdb/client"
+	"github.com/temoto/vender/hardware/mdb"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -17,9 +17,9 @@ func TestValve(t *testing.T) {
 engine { inventory {
 	stock "water" { check=false hw_rate = 0.6 min = 500 }
 }}`)
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
-	go mock.Expect([]mdb_client.MockR{
+	go mock.Expect([]mdb.MockR{
 		{"c0", ""},
 		{"c1", "011810000a0000c8001fff01050a32640000000000000000000000"},
 
@@ -37,11 +37,7 @@ engine { inventory {
 		{"c51000", ""}, // must disable boiler
 	})
 	d := new(DeviceValve)
-	d.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
-	err := d.Init(ctx)
-	if err != nil {
-		t.Fatalf("Init err=%v", err)
-	}
+	require.NoError(t, d.Init(ctx))
 
 	g.Engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
 	assert.Equal(t, uint8(23), uint8(d.tempHot.Get()))

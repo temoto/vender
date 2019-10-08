@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	mdb_client "github.com/temoto/vender/hardware/mdb/client"
+	"github.com/temoto/vender/hardware/mdb"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -13,9 +13,9 @@ func TestConveyor(t *testing.T) {
 	t.Parallel()
 
 	ctx, g := state_new.NewTestContext(t, "")
-	mock := mdb_client.MockFromContext(ctx)
+	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
-	go mock.Expect([]mdb_client.MockR{
+	go mock.Expect([]mdb.MockR{
 		{"d8", ""},
 		{"d9", "011810000a0000c8001fff01050a32640000000000000000000000"},
 
@@ -43,8 +43,7 @@ func TestConveyor(t *testing.T) {
 		// {"db", "54"}, // oops
 	})
 	d := new(DeviceConveyor)
-	d.dev.XXX_FIXME_SetAllDelays(1) // TODO make small delay default in tests
-	require.Nil(t, d.Init(ctx))
+	require.NoError(t, d.Init(ctx))
 
 	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))
 	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))

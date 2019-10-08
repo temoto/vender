@@ -77,3 +77,7 @@ func (b *Bus) Tx(request Packet, response *Packet) error {
 	}
 	return nil
 }
+
+func IsResponseTimeout(e error) bool {
+	return e != nil && errors.Cause(e) == ErrTimeout
+}
