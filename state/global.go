@@ -63,9 +63,11 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 		g.Inventory.Iter(func(s *inventory.Stock) {
 			if s.Enabled() {
 				si := &tele_api.Inventory_StockItem{
-					// TODO Code: 0,
-					Name:  s.Name,
+					Code:  s.Code,
 					Value: int32(s.Value()),
+				}
+				if g.Config.Engine.Inventory.TeleAddName {
+					si.Name = s.Name
 				}
 				pb.Stocks = append(pb.Stocks, si)
 			}

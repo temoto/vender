@@ -77,7 +77,12 @@ func (self *UI) onServiceBegin(ctx context.Context) State {
 		self.Service.invList = append(self.Service.invList, s)
 	})
 	sort.Slice(self.Service.invList, func(a, b int) bool {
-		return self.Service.invList[a].Name < self.Service.invList[b].Name
+		xa := self.Service.invList[a]
+		xb := self.Service.invList[b]
+		if xa.Code != xb.Code {
+			return xa.Code < xb.Code
+		}
+		return xa.Name < xb.Name
 	})
 	// self.g.Log.Debugf("invlist=%v, invidx=%d", self.Service.invList, self.Service.invIdx)
 

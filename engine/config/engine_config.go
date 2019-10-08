@@ -40,13 +40,15 @@ type MenuItem struct {
 
 func (self *MenuItem) String() string { return fmt.Sprintf("menu.%s %s", self.Code, self.Name) }
 
-type Inventory struct {
-	Persist bool    `hcl:"persist"`
-	Stocks  []Stock `hcl:"stock"`
+type Inventory struct { //nolint:maligned
+	Persist     bool    `hcl:"persist"`
+	Stocks      []Stock `hcl:"stock"`
+	TeleAddName bool    `hcl:"tele_add_name"` // send stock names to telemetry; false to save network usage
 }
 
 type Stock struct { //nolint:maligned
 	Name        string  `hcl:"name,key"`
+	Code        int     `hcl:"code"`
 	Check       bool    `hcl:"check"`
 	Min         float32 `hcl:"min"`
 	HwRate      float32 `hcl:"hw_rate"`
@@ -55,6 +57,6 @@ type Stock struct { //nolint:maligned
 }
 
 func (self *Stock) String() string {
-	return fmt.Sprintf("inventory.%s check=%t hw_rate=%f spend_rate=%f min=%f",
-		self.Name, self.Check, self.HwRate, self.SpendRate, self.Min)
+	return fmt.Sprintf("inventory.%s #%d check=%t hw_rate=%f spend_rate=%f min=%f",
+		self.Name, self.Code, self.Check, self.HwRate, self.SpendRate, self.Min)
 }

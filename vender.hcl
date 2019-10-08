@@ -4,19 +4,34 @@ engine {
   inventory {
     persist = true
 
-    // stock "water" { hw_rate = 0.649999805 } stock "cup" { }
+    // Send stock name to telemetry; false to save network usage
+    tele_add_name = true
+
+    // Stock fields:
+    // - name string, must be non-empty and unique
+    // - code uint32, default=0, duplicates produce warning at boot but allowed
+    // - check bool, default=false, validate stock remainder > `min`
+    // - min float, only makes sense together with check
+    // - hw_rate float, default=1, engine `add.{name}(x)` sends x*hw_rate to hardware device
+    // - spend_rate float, default=1, engine `stock.{name}.spend(x)` (implied by add) subtracts x*spend_rate from remainder
+    // - register_add string, registers `add.{name}(?)` in engine with this scenario, must contain `foo(?)` arg placeholder
+    // stock "water" { hw_rate = 0.649999805 }
+    // stock "cup" { code = 1 }
   }
 
   menu {
     item "1" {
       name     = "example"
       price    = 1
-      scenario = "cup_dispense water_hot(10) put_milk(10) cup_serve"
+      scenario = "cup_dispense add.water_hot(10) add.milk(10) cup_serve"
     }
   }
 
-  // on_start = ["mixer_move_top", "cup_serve", "conveyor_move_cup"]
+  // on_boot = ["mixer_move_top", "cup_serve", "conveyor_move_cup"]
+  // on_broken = []
+  // on_front_begin = []
   // on_menu_error = ["money.abort", "cup_serve"]
+  // on_service_begin = []
 }
 
 hardware {

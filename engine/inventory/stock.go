@@ -16,6 +16,7 @@ import (
 const tuneKeyFormat = "run/inventory-%s-tune"
 
 type Stock struct { //nolint:maligned
+	Code      uint32
 	Name      string
 	enabled   uint32 // atomic
 	check     bool
@@ -45,6 +46,7 @@ func NewStock(c engine_config.Stock, e *engine.Engine) (*Stock, error) {
 
 	s := &Stock{
 		Name:      c.Name,
+		Code:      uint32(c.Code),
 		check:     c.Check,
 		enabled:   1,
 		hwRate:    c.HwRate,

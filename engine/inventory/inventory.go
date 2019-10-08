@@ -29,7 +29,8 @@ func (self *Inventory) Init(ctx context.Context, c *engine_config.Inventory, eng
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	errs := make([]error, 0)
-	self.ss = make(map[string]*Stock, 32)
+	self.ss = make(map[string]*Stock, len(c.Stocks))
+	codes := make(map[uint32]string, len(c.Stocks))
 	for _, stockConfig := range c.Stocks {
 		if _, ok := self.ss[stockConfig.Name]; ok {
 			errs = append(errs, errors.Errorf("stock=%s already registered", stockConfig.Name))
@@ -42,6 +43,11 @@ func (self *Inventory) Init(ctx context.Context, c *engine_config.Inventory, eng
 			continue
 		}
 		self.ss[stock.Name] = stock
+		if first, ok := codes[stock.Code]; !ok {
+			codes[stock.Code] = stock.Name
+		} else {
+			self.log.Errorf("stock=%s duplicate code=%d first=%s", stock.Name, stock.Code, first)
+		}
 	}
 
 	return helpers.FoldErrors(errs)
