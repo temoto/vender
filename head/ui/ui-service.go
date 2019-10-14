@@ -208,8 +208,8 @@ func (self *UI) onServiceInventory() State {
 	}
 	invCurrent := self.Service.invList[self.Service.invIdx]
 	self.display.SetLines(
-		fmt.Sprintf("I%d %s", self.Service.invIdx+1, invCurrent.Name),
-		fmt.Sprintf("%d %s\x00", int32(invCurrent.Value()), string(self.inputBuf)),
+		fmt.Sprintf("I%d %s", invCurrent.Code, invCurrent.Name),
+		fmt.Sprintf("%.1f %s\x00", invCurrent.Value(), string(self.inputBuf)), // TODO configurable decimal point
 	)
 
 	next, e := self.serviceWaitInput()
@@ -226,7 +226,7 @@ func (self *UI) onServiceInventory() State {
 		self.Service.invIdx = (self.Service.invIdx + 1) % invIdxMax
 		self.inputBuf = self.inputBuf[:0]
 
-	case e.IsDigit():
+	case e.Key == input.EvendKeyDot || e.IsDigit():
 		self.inputBuf = append(self.inputBuf, byte(e.Key))
 
 	case input.IsAccept(&e):
@@ -237,11 +237,11 @@ func (self *UI) onServiceInventory() State {
 			return StateServiceInventory
 		}
 
-		x, err := strconv.ParseUint(string(self.inputBuf), 10, 32)
+		x, err := strconv.ParseFloat(string(self.inputBuf), 32)
 		self.inputBuf = self.inputBuf[:0]
 		if err != nil {
 			self.g.Log.Errorf("ui onServiceInventory input=accept inputBuf='%s'", string(self.inputBuf))
-			self.display.SetLines(MsgError, "int-invalid") // FIXME extract message string
+			self.display.SetLines(MsgError, "number-invalid") // FIXME extract message string
 			self.serviceWaitInput()
 			return StateServiceInventory
 		}

@@ -16,7 +16,7 @@ const (
 	EvendKeyCreamMore Key = 'B'
 	EvendKeySugarLess Key = 'C'
 	EvendKeySugarMore Key = 'D'
-	EvendKeyDot       Key = 'E'
+	EvendKeyDot       Key = '.'
 )
 
 type EvendKeyboard struct{ c *mega.Client }

@@ -36,8 +36,8 @@ func TestServiceInventory(t *testing.T) {
 
 	ctx, g := state_new.NewTestContext(t, `
 engine { inventory {
-	stock "cup" { }
-	stock "water" { }
+	stock "cup" { code=3 }
+	stock "water" { code=4 }
 }}`)
 	env := &tenv{ctx: ctx, g: g}
 	g.Config.UI.Service.Auth.Enable = false
@@ -46,16 +46,17 @@ engine { inventory {
 
 	steps := []step{
 		{expect: env._T("Menu", "1 inventory"), inev: env._KeyAccept},
-		{expect: env._T("I1 cup", "0 \x00"), inev: env._Key('3')},
-		{expect: env._T("I1 cup", "0 3\x00"), inev: env._Key('2')},
-		{expect: env._T("I1 cup", "0 32\x00"), inev: env._KeyAccept},
-		{expect: env._T("I1 cup", "32 \x00"), inev: env._KeyNext},
-		{expect: env._T("I2 water", "0 \x00"), inev: env._Key('7')},
-		{expect: env._T("I2 water", "0 7\x00"), inev: env._Key('5')},
-		{expect: env._T("I2 water", "0 75\x00"), inev: env._Key('0')},
-		{expect: env._T("I2 water", "0 750\x00"), inev: env._KeyAccept},
-		{expect: env._T("I2 water", "750 \x00"), inev: env._KeyNext},
-		{expect: env._T("I1 cup", "32 \x00"), inev: env._KeyReject},
+		{expect: env._T("I3 cup", "0.0 \x00"), inev: env._Key('3')},
+		{expect: env._T("I3 cup", "0.0 3\x00"), inev: env._Key('2')},
+		{expect: env._T("I3 cup", "0.0 32\x00"), inev: env._KeyAccept},
+		{expect: env._T("I3 cup", "32.0 \x00"), inev: env._KeyNext},
+		{expect: env._T("I4 water", "0.0 \x00"), inev: env._Key('1')},
+		{expect: env._T("I4 water", "0.0 1\x00"), inev: env._Key('7')},
+		{expect: env._T("I4 water", "0.0 17\x00"), inev: env._Key('.')},
+		{expect: env._T("I4 water", "0.0 17.\x00"), inev: env._Key('5')},
+		{expect: env._T("I4 water", "0.0 17.5\x00"), inev: env._KeyAccept},
+		{expect: env._T("I4 water", "17.5 \x00"), inev: env._KeyNext},
+		{expect: env._T("I3 cup", "32.0 \x00"), inev: env._KeyReject},
 		{expect: env._T("Menu", "1 inventory"), inev: env._KeyReject},
 		{},
 	}
