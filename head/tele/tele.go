@@ -35,7 +35,6 @@ type Tele struct { //nolint:maligned
 	vmId          int32
 	stateInterval time.Duration
 	stat          tele_api.Stat
-	getInventory  func() interface{}
 }
 
 func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config) error {
@@ -53,7 +52,6 @@ func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	self.vmId = int32(teleConfig.VmId)
 	self.stateInterval = helpers.IntSecondDefault(teleConfig.StateIntervalSec, defaultStateInterval)
 	self.stat.Locked_Reset()
-	self.getInventory = teleConfig.GetInventory
 
 	if teleConfig.PersistPath == "" {
 		panic("code error must set teleConfig.PersistPath")

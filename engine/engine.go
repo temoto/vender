@@ -36,6 +36,13 @@ func (self *Engine) Register(action string, d Doer) {
 	self.lk.Unlock()
 }
 
+func (self *Engine) RegisterNewFunc(name string, fun func(context.Context) error) {
+	self.Register(name, Func{
+		Name: name,
+		F:    fun,
+	})
+}
+
 func (self *Engine) RegisterNewSeq(name string, ds ...Doer) {
 	tx := NewSeq(name)
 	for _, d := range ds {

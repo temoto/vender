@@ -95,6 +95,12 @@ func (self *NominalGroup) Iter(f func(nominal Nominal, count uint) error) error 
 	return nil
 }
 
+func (self *NominalGroup) ToMapUint32(m map[uint32]uint32) {
+	for nominal, count := range self.values {
+		m[uint32(nominal)] = uint32(count)
+	}
+}
+
 func (self *NominalGroup) Total() Amount {
 	sum := Amount(0)
 	for nominal, count := range self.values {

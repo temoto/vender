@@ -2,11 +2,13 @@ package inventory
 
 import (
 	"context"
+	"sort"
 	"sync"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	engine_config "github.com/temoto/vender/engine/config"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state/persist"
@@ -18,12 +20,14 @@ var (
 
 type Inventory struct {
 	persist.Persist
-	log *log2.Log
-	mu  sync.RWMutex
-	ss  map[string]*Stock
+	config *engine_config.Inventory
+	log    *log2.Log
+	mu     sync.RWMutex
+	ss     map[string]*Stock
 }
 
 func (self *Inventory) Init(ctx context.Context, c *engine_config.Inventory, engine *engine.Engine) error {
+	self.config = c
 	self.log = log2.ContextValueLogger(ctx)
 
 	self.mu.Lock()
@@ -80,6 +84,37 @@ func (self *Inventory) Iter(fun func(s *Stock)) {
 		fun(stock)
 	}
 	self.mu.Unlock()
+}
+
+func (self *Inventory) Tele() *tele_api.Inventory {
+	pb := &tele_api.Inventory{Stocks: make([]*tele_api.Inventory_StockItem, 0, 16)}
+
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+	for _, s := range self.ss {
+		if s.Enabled() {
+			si := &tele_api.Inventory_StockItem{
+				Code: s.Code,
+				// XXX TODO retype Value to float
+				Value:  int32(s.Value()),
+				Valuef: s.Value(),
+			}
+			if self.config.TeleAddName {
+				si.Name = s.Name
+			}
+			pb.Stocks = append(pb.Stocks, si)
+		}
+	}
+	// Predictable ordering is not really needed, currently used only for testing
+	sort.Slice(pb.Stocks, func(a, b int) bool {
+		xa := pb.Stocks[a]
+		xb := pb.Stocks[b]
+		if xa.Code != xb.Code {
+			return xa.Code < xb.Code
+		}
+		return xa.Name < xb.Name
+	})
+	return pb
 }
 
 func (self *Inventory) WithTuning(ctx context.Context, stockName string, adj float32) (context.Context, error) {

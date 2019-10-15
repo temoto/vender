@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/juju/errors"
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/log2"
 )
 
@@ -63,4 +64,15 @@ func TestParseText(t *testing.T) {
 	if err != nil {
 		t.Errorf("Validate() err=%v", err)
 	}
+}
+
+func TestRegisterNewFunc(t *testing.T) {
+	t.Parallel()
+
+	e := NewEngine(log2.NewTest(t, log2.LDebug))
+	mock := &mockdo{}
+	e.RegisterNewFunc("lights-on", mock.Do)
+	d := e.Resolve("lights-on")
+	require.NoError(t, d.Validate())
+	require.NoError(t, d.Do(context.Background()))
 }

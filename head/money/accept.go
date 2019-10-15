@@ -2,6 +2,7 @@ package money
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/juju/errors"
@@ -58,7 +59,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 		case money.StatusEscrow:
 			if pi.DataCount == 1 {
 				if err := self.bill.DoEscrowAccept.Do(ctx); err != nil {
-					self.Log.Errorf("money.bill escrow accept n=%s err=%v", currency.Amount(pi.DataNominal).FormatCtx(ctx), err)
+					g.Error(errors.Annotatef(err, "money.bill escrow accept n=%s", currency.Amount(pi.DataNominal).FormatCtx(ctx)))
 				}
 			}
 
@@ -67,8 +68,12 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			self.lk.Lock()
 			defer self.lk.Unlock()
 
+			if err := self.billCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
+				g.Error(errors.Annotatef(err, "money.bill cashbox.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
+				break
+			}
 			if err := self.billCredit.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
-				self.Log.Errorf("money.bill credit.Add n=%v c=%d err=%v", pi.DataNominal, pi.DataCount, err)
+				g.Error(errors.Annotatef(err, "money.bill credit.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
 				break
 			}
 			self.Log.Debugf("money.bill credit amount=%s bill=%s total=%s",
@@ -97,14 +102,18 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			g.Hardware.Input.Emit(input.Event{Source: input.MoneySourceTag, Key: input.MoneyKeyAbort})
 
 		case money.StatusRejected:
-			state.GetGlobal(ctx).Tele.StatModify(func(s *tele_api.Stat) {
+			g.Tele.StatModify(func(s *tele_api.Stat) {
 				s.CoinRejected[uint32(pi.DataNominal)] += uint32(pi.DataCount)
 			})
 
 		case money.StatusCredit:
-			err := self.coinCredit.Add(pi.DataNominal, uint(pi.DataCount))
-			if err != nil {
-				self.Log.Errorf("%s credit.Add n=%v c=%d err=%v", tag, pi.DataNominal, pi.DataCount, err)
+			if err := self.billCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
+				g.Error(errors.Annotatef(err, "%s cashbox.Add n=%v c=%d", tag, pi.DataNominal, pi.DataCount))
+				break
+			}
+			if err := self.coinCredit.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
+				g.Error(errors.Annotatef(err, "%s credit.Add n=%v c=%d", tag, pi.DataNominal, pi.DataCount))
+				break
 			}
 			_ = self.coin.DoTubeStatus.Do(ctx)
 			_ = self.coin.CommandExpansionSendDiagStatus(nil)
@@ -113,8 +122,9 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			if out != nil {
 				out <- Event{Created: itemTime, Kind: EventCredit, Amount: pi.Amount()}
 			}
+
 		default:
-			panic("unhandled coin POLL item: " + pi.String())
+			g.Error(fmt.Errorf("CRITICAL code error unhandled coin POLL item=%#v", pi))
 		}
 		return false
 	})

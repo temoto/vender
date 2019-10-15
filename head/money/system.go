@@ -11,6 +11,7 @@ import (
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb/bill"
 	"github.com/temoto/vender/hardware/mdb/coin"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 	"github.com/temoto/vender/state"
@@ -21,13 +22,15 @@ type MoneySystem struct { //nolint:maligned
 	lk    sync.Mutex
 	dirty currency.Amount // uncommited
 
-	bill       bill.BillValidator
-	billCredit currency.NominalGroup
-	billPoll   *alive.Alive
+	bill        bill.BillValidator
+	billCashbox currency.NominalGroup
+	billCredit  currency.NominalGroup
+	billPoll    *alive.Alive
 
-	coin       coin.CoinAcceptor
-	coinCredit currency.NominalGroup
-	coinPoll   *alive.Alive
+	coin        coin.CoinAcceptor
+	coinCashbox currency.NominalGroup
+	coinCredit  currency.NominalGroup
+	coinPoll    *alive.Alive
 
 	giftCredit currency.Amount
 }
@@ -50,36 +53,43 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 		err = errors.Annotate(err, "money.Start bill")
 		g.Error(err)
 	}
+	self.billCashbox.SetValid(self.bill.SupportedNominals())
 	self.billCredit.SetValid(self.bill.SupportedNominals())
 	if err := self.coin.Init(ctx); err != nil {
 		err = errors.Annotate(err, "money.Start coin")
 		g.Error(err)
 	}
+	self.coinCashbox.SetValid(self.coin.SupportedNominals())
 	self.coinCredit.SetValid(self.coin.SupportedNominals())
 
-	doConsume := engine.Func{
-		Name: "money.consume!",
-		F: func(ctx context.Context) error {
+	g.Engine.RegisterNewFunc(
+		"money.cashbox_zero",
+		func(ctx context.Context) error {
+			self.lk.Lock()
+			defer self.lk.Unlock()
+			self.billCashbox.Clear()
+			self.coinCashbox.Clear()
+			return nil
+		},
+	)
+	g.Engine.RegisterNewFunc(
+		"money.consume!",
+		func(ctx context.Context) error {
 			credit := self.Credit(ctx)
 			err := self.WithdrawCommit(ctx, credit)
 			return errors.Annotatef(err, "consume=%s", credit.FormatCtx(ctx))
 		},
-	}
-	g.Engine.Register(doConsume.Name, doConsume)
-	doCommit := engine.Func{
-		Name: "money.commit",
-		F: func(ctx context.Context) error {
+	)
+	g.Engine.RegisterNewFunc(
+		"money.commit",
+		func(ctx context.Context) error {
 			curPrice := GetCurrentPrice(ctx)
 			err := self.WithdrawCommit(ctx, curPrice)
 			return errors.Annotatef(err, "curPrice=%s", curPrice.FormatCtx(ctx))
 		},
-	}
-	g.Engine.Register(doCommit.Name, doCommit)
-	doAbort := engine.Func{
-		Name: "money.abort",
-		F:    self.Abort,
-	}
-	g.Engine.Register(doAbort.Name, doAbort)
+	)
+	g.Engine.RegisterNewFunc("money.abort", self.Abort)
+
 	doAccept := engine.FuncArg{
 		Name: "money.accept(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
@@ -113,24 +123,39 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 }
 
 func (self *MoneySystem) Stop(ctx context.Context) error {
-	self.Log.Debugf("money.Stop")
+	const tag = "money.Stop"
 	errs := make([]error, 0, 8)
 	errs = append(errs, self.Abort(ctx))
-	if self.billPoll != nil {
+	if self.bill.Device.State().Online() {
 		errs = append(errs, self.bill.AcceptMax(0).Do(ctx))
-		self.billPoll.Stop()
 	}
-	if self.coinPoll != nil {
+	if self.coin.Device.State().Online() {
 		errs = append(errs, self.coin.AcceptMax(0).Do(ctx))
-		self.coinPoll.Stop()
 	}
-	if self.billPoll != nil {
-		self.billPoll.Wait()
+	return errors.Annotate(helpers.FoldErrors(errs), tag)
+}
+
+// Stored in one-way cashbox Telemetry_Money
+func (self *MoneySystem) TeleCashbox() *tele_api.Telemetry_Money {
+	pb := &tele_api.Telemetry_Money{
+		Bills: make(map[uint32]uint32, 16),
+		Coins: make(map[uint32]uint32, 16),
 	}
-	if self.coinPoll != nil {
-		self.coinPoll.Wait()
+	self.lk.Lock()
+	defer self.lk.Unlock()
+	self.billCashbox.ToMapUint32(pb.Bills)
+	self.coinCashbox.ToMapUint32(pb.Coins)
+	return pb
+}
+
+// Dispensable Telemetry_Money
+func (self *MoneySystem) TeleChange() *tele_api.Telemetry_Money {
+	pb := &tele_api.Telemetry_Money{
+		// TODO support bill recycler Bills: make(map[uint32]uint32, 16),
+		Coins: make(map[uint32]uint32, 16),
 	}
-	return helpers.FoldErrors(errs)
+	self.coin.Tubes().ToMapUint32(pb.Coins)
+	return pb
 }
 
 const currentPriceKey = "run/current-price"
@@ -138,7 +163,8 @@ const currentPriceKey = "run/current-price"
 func GetCurrentPrice(ctx context.Context) currency.Amount {
 	v := ctx.Value(currentPriceKey)
 	if v == nil {
-		panic("code error ctx[currentPriceKey]=nil")
+		state.GetGlobal(ctx).Error(fmt.Errorf("code/config error money.GetCurrentPrice not set"))
+		return 0
 	}
 	if p, ok := v.(currency.Amount); ok {
 		return p

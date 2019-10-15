@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
+	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/state"
@@ -45,13 +46,12 @@ func (self *Tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
 }
 
 func (self *Tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
-	tm := &tele_api.Telemetry{}
-	x := self.getInventory()
-	var ok bool
-	if tm.Inventory, ok = x.(*tele_api.Inventory); !ok {
-		err := errors.Errorf("CRITICAL code error invalid type self.getInventory()=%#v", x)
-		self.Error(err)
-		return err
+	g := state.GetGlobal(ctx)
+	moneysys := money.GetGlobal(ctx)
+	tm := &tele_api.Telemetry{
+		Inventory:    g.Inventory.Tele(),
+		MoneyCashbox: moneysys.TeleCashbox(),
+		MoneyChange:  moneysys.TeleChange(),
 	}
 	err := self.qpushTelemetry(tm)
 	if err != nil {
