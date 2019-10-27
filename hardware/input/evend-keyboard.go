@@ -16,6 +16,7 @@ const (
 	EvendKeyCreamMore Key = 'B'
 	EvendKeySugarLess Key = 'C'
 	EvendKeySugarMore Key = 'D'
+	evendKeyDotInput  Key = 'E' // evend keyboard sends '.' as 'E'
 	EvendKeyDot       Key = '.'
 )
 
@@ -50,11 +51,16 @@ func (self *EvendKeyboard) Read() (Event, error) {
 		if !ok {
 			return Event{}, io.EOF
 		}
-		up := v16&EvendKeyMaskUp != 0
+		key, up := Key(v16&^EvendKeyMaskUp), v16&EvendKeyMaskUp != 0
+		// key replace table
+		switch key {
+		case evendKeyDotInput:
+			key = EvendKeyDot
+		}
 		if !up {
 			e := Event{
 				Source: EvendKeyboardSourceTag,
-				Key:    Key(v16 &^ EvendKeyMaskUp),
+				Key:    key,
 				Up:     up,
 			}
 			return e, nil
