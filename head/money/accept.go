@@ -107,7 +107,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			})
 
 		case money.StatusCredit:
-			if err := self.billCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
+			if err := self.coinCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
 				g.Error(errors.Annotatef(err, "%s cashbox.Add n=%v c=%d", tag, pi.DataNominal, pi.DataCount))
 				break
 			}
