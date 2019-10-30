@@ -60,13 +60,14 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 	defer mdb.MockFromContext(ctx).Close()
 
 	pis := make([]_PI, 0, len(input)/2)
-	r := bv.dev.Tx(bv.dev.PacketPoll)
-	require.NoError(t, r.E, "POLL")
+	response := mdb.Packet{}
+	err := bv.Device.TxKnown(bv.Device.PacketPoll, &response)
+	require.NoError(t, err, "POLL")
 	poll := bv.pollFun(func(pi money.PollItem) bool {
 		pis = append(pis, pi)
 		return false
 	})
-	_, err := poll(r.P)
+	_, err = poll(response)
 	require.NoError(t, err)
 	assert.Equal(t, expected, pis)
 }
@@ -82,8 +83,8 @@ func TestBillOffline(t *testing.T) {
 	bv := new(BillValidator)
 	err := bv.Init(ctx)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "mdb.bill RESET: offline")
-	assert.Equal(t, errors.Cause(err), mdb.ErrOffline)
+	assert.Contains(t, err.Error(), "mdb.bill is offline")
+	assert.Equal(t, mdb.ErrOffline, errors.Cause(err))
 }
 
 func TestBillPoll(t *testing.T) {

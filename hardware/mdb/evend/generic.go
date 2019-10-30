@@ -65,17 +65,17 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 		self.dev.DelayAfterReset = DefaultResetDelay
 	}
 	g := state.GetGlobal(ctx)
-	m, err := g.Mdb()
+	mdbus, err := g.Mdb()
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	self.dev.Init(m, address, name, binary.BigEndian)
+	self.dev.Init(mdbus, address, name, binary.BigEndian)
 
 	// FIXME Enum, remove IO from Init
-	if err = self.dev.DoReset.Do(ctx); err != nil {
+	if err = self.dev.Reset(); err != nil {
 		return errors.Annotate(err, tag)
 	}
-	err = self.dev.DoSetup(ctx)
+	err = self.dev.TxSetup()
 	return errors.Annotate(err, tag)
 }
 
@@ -96,11 +96,12 @@ func (self *Generic) txAction(args []byte) error {
 	bs[0] = self.dev.Address + 2
 	copy(bs[1:], args)
 	request := mdb.MustPacketFromBytes(bs, true)
-	r := self.dev.Tx(request)
-	if r.E != nil {
-		return r.E
+	response := mdb.Packet{}
+	err := self.dev.TxMaybe(request, &response) // FIXME check everything and change to TxKnown
+	if err != nil {
+		return err
 	}
-	self.dev.Log.Debugf("%s action=%x response=(%d)%s", self.logPrefix, args, r.P.Len(), r.P.Format())
+	self.dev.Log.Debugf("%s action=%x response=(%d)%s", self.logPrefix, args, response.Len(), response.Format())
 	return nil
 }
 
@@ -109,15 +110,16 @@ func (self *Generic) CommandErrorCode() (byte, error) {
 
 	bs := []byte{self.dev.Address + 4, 0x02}
 	request := mdb.MustPacketFromBytes(bs, true)
-	r := self.dev.Tx(request)
-	if r.E != nil {
+	response := mdb.Packet{}
+	err := self.dev.TxKnown(request, &response) // TODO check known
+	if err != nil {
 		self.dev.SetErrorCode(0)
-		return 0, errors.Annotate(r.E, tag)
+		return 0, errors.Annotate(err, tag)
 	}
-	rs := r.P.Bytes()
+	rs := response.Bytes()
 	if len(rs) < 1 {
 		self.dev.SetErrorCode(0)
-		err := errors.Errorf("%s request=%s response=%s", tag, request.Format(), r.E)
+		err = errors.Errorf("%s request=%x response=%x", tag, request.Bytes(), rs)
 		return 0, err
 	}
 	self.dev.SetErrorCode(int32(rs[0]))

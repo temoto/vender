@@ -111,12 +111,13 @@ func (self *DeviceValve) newGetTempHot() engine.Func {
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		bs := []byte{self.dev.Address + 4, 0x11}
 		request := mdb.MustPacketFromBytes(bs, true)
-		r := self.dev.Tx(request)
-		if r.E != nil {
-			return errors.Annotate(r.E, tag)
+		response := mdb.Packet{}
+		err := self.Generic.dev.TxKnown(request, &response)
+		if err != nil {
+			return errors.Annotate(err, tag)
 		}
-		bs = r.P.Bytes()
-		self.dev.Log.Debugf("%s request=%s response=(%d)%s", tag, request.Format(), r.P.Len(), r.P.Format())
+		bs = response.Bytes()
+		self.dev.Log.Debugf("%s request=%s response=(%d)%s", tag, request.Format(), response.Len(), response.Format())
 		if len(bs) != 1 {
 			return errors.NotValidf("%s response=%x", tag, bs)
 		}
@@ -146,12 +147,13 @@ func (self *DeviceValve) newSetTempHot() engine.FuncArg {
 		temp := uint8(arg)
 		bs := []byte{self.dev.Address + 5, 0x10, temp}
 		request := mdb.MustPacketFromBytes(bs, true)
-		r := self.dev.Tx(request)
-		if r.E != nil {
-			return errors.Annotate(r.E, tag)
+		response := mdb.Packet{}
+		err := self.dev.TxCustom(request, &response, mdb.TxOpt{})
+		if err != nil {
+			return errors.Annotatef(err, "%s target=%d request=%x", tag, temp, request.Bytes())
 		}
 		self.tempHotTarget = temp
-		self.dev.Log.Debugf("%s target=%d request=%s response=(%d)%s", tag, temp, request.Format(), r.P.Len(), r.P.Format())
+		self.dev.Log.Debugf("%s target=%d request=%x response=%x", tag, temp, request.Bytes(), response.Bytes())
 		return nil
 	}}
 }

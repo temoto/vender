@@ -7,6 +7,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
@@ -50,17 +51,18 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 		Append(engine.Func{Name: tag + "/assert-busy", F: func(ctx context.Context) error {
 			cupConfig := &state.GetGlobal(ctx).Config.Hardware.Evend.Cup
 			time.Sleep(helpers.IntMillisecondDefault(cupConfig.AssertBusyDelayMs, DefaultCupAssertBusyDelay))
-			r := self.dev.Tx(self.dev.PacketPoll)
-			if r.E != nil {
-				return r.E
+			response := mdb.Packet{}
+			err := self.dev.TxKnown(self.dev.PacketPoll, &response)
+			if err != nil {
+				return err
 			}
-			bs := r.P.Bytes()
+			bs := response.Bytes()
 			if len(bs) != 1 {
-				return self.NewErrPollUnexpected(r.P)
+				return self.NewErrPollUnexpected(response)
 			}
 			if bs[0] != self.proto2BusyMask {
 				self.dev.Log.Errorf("expected BUSY, cup device is broken")
-				return self.NewErrPollUnexpected(r.P)
+				return self.NewErrPollUnexpected(response)
 			}
 			return nil
 		}}).

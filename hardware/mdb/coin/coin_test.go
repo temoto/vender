@@ -70,12 +70,13 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 	ca := newDevice(t, ctx)
 	defer mdb.MockFromContext(ctx).Close()
 	// ca.AcceptMax(ctx, 1000)
-	r := ca.dev.Tx(ca.dev.PacketPoll)
-	require.NoError(t, r.E, "POLL")
-	assert.True(t, ca.dev.State().Online())
+	response := mdb.Packet{}
+	err := ca.Device.TxKnown(ca.Device.PacketPoll, &response)
+	require.NoError(t, err, "POLL")
+	assert.True(t, ca.Device.State().Online())
 	pis := make([]_PI, 0, len(input)/2)
 	poll := ca.pollFun(func(pi money.PollItem) bool { pis = append(pis, pi); return false })
-	_, err := poll(r.P)
+	_, err = poll(response)
 	require.NoError(t, err)
 	assert.Equal(t, expected, pis)
 }
@@ -91,9 +92,9 @@ func TestCoinOffline(t *testing.T) {
 	ca := new(CoinAcceptor)
 	err := ca.Init(ctx)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "mdb.coin RESET: offline")
+	assert.Contains(t, err.Error(), "mdb.coin is offline")
 	assert.Equal(t, errors.Cause(err), mdb.ErrOffline)
-	assert.False(t, ca.dev.State().Online())
+	assert.Equal(t, mdb.DeviceOffline, ca.Device.State())
 }
 
 func TestCoinNoDiag(t *testing.T) {
@@ -113,7 +114,7 @@ func TestCoinNoDiag(t *testing.T) {
 	ca := new(CoinAcceptor)
 	err := ca.Init(ctx)
 	require.NoError(t, err)
-	assert.True(t, ca.dev.State().Online())
+	assert.True(t, ca.Device.State().Online())
 }
 
 func TestCoinPoll(t *testing.T) {
@@ -280,8 +281,11 @@ func BenchmarkCoinPoll(b *testing.B) {
 			b.SetBytes(int64(len(c.input) / 2))
 			b.ResetTimer()
 			for i := 1; i <= b.N; i++ {
-				_, err := parse(ca.dev.Tx(ca.dev.PacketPoll).P)
-				if err != nil {
+				response := mdb.Packet{}
+				if err := ca.Device.TxKnown(ca.Device.PacketPoll, &response); err != nil {
+					b.Fatal(err)
+				}
+				if _, err := parse(response); err != nil {
 					b.Fatal(err)
 				}
 			}

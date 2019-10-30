@@ -21,16 +21,13 @@ func TestDeviceTx(t *testing.T) {
 	})
 
 	d := mdb.Device{}
-	assert.Equal(t, d.State(), mdb.DeviceInvalid)
+	assert.Equal(t, mdb.DeviceInvalid, d.State())
 	d.Init(mdbus, 0x30, "mockdev", binary.BigEndian)
-	assert.Equal(t, d.State(), mdb.DeviceInited)
+	assert.Equal(t, mdb.DeviceInited, d.State())
 
-	require.NoError(t, d.Tx(d.PacketPoll).E)
+	require.NoError(t, d.TxKnown(d.PacketPoll, nil))
 	assert.Equal(t, mdb.DeviceOnline, d.State())
 
-	require.Error(t, mdb.ErrTimeout, d.Tx(d.PacketPoll).E)
-	assert.Equal(t, mdb.DeviceError, d.State())
-
-	require.Error(t, mdb.ErrTimeout, d.Tx(d.PacketPoll).E)
+	require.Error(t, mdb.ErrTimeout, d.TxKnown(d.PacketPoll, nil))
 	assert.Equal(t, mdb.DeviceOffline, d.State())
 }

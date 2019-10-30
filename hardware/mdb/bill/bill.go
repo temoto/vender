@@ -33,7 +33,7 @@ const (
 const DefaultEscrowTimeout = 30 * time.Second
 
 type BillValidator struct { //nolint:maligned
-	dev           mdb.Device
+	mdb.Device
 	pollmu        sync.Mutex // isolate active/idle polling
 	configScaling uint16
 
@@ -77,7 +77,7 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	self.dev.Init(mdbus, 0x30, "bill", binary.BigEndian)
+	self.Device.Init(mdbus, 0x30, "bill", binary.BigEndian)
 	config := g.Config.Hardware.Mdb.Bill
 	self.configScaling = 100
 	if config.ScalingFactor != 0 {
@@ -90,10 +90,10 @@ func (self *BillValidator) Init(ctx context.Context) error {
 	g.Engine.Register(self.DoEscrowAccept.Name, self.DoEscrowAccept)
 	g.Engine.Register(self.DoEscrowReject.Name, self.DoEscrowReject)
 
-	self.dev.DoInit = self.newIniter()
+	self.Device.DoInit = self.newIniter()
 
 	// TODO remove IO from Init()
-	if err = self.dev.DoInit.Do(ctx); err != nil {
+	if err = self.Device.DoInit.Do(ctx); err != nil {
 		return errors.Annotate(err, tag)
 	}
 
@@ -140,20 +140,20 @@ func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func
 		stopch = alive.StopChan()
 	}
 	pd := mdb.PollDelay{}
-	var r mdb.PacketError
 	parse := self.pollFun(fun)
 	var active bool
 	var err error
 	again := true
 	for again {
+		response := mdb.Packet{}
 		self.pollmu.Lock()
-		r = self.dev.Tx(self.dev.PacketPoll)
+		err = self.Device.TxKnown(self.Device.PacketPoll, &response)
 		self.pollmu.Unlock()
-		if r.E == nil {
-			active, err = parse(r.P)
+		if err == nil {
+			active, err = parse(response)
 		}
-		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.dev, active, err != nil, stopch)
-		// self.dev.Log.Debugf("bill.Run r.E=%v perr=%v pactive=%t alive_not_nil=%t alive_running=%t -> again=%t",
+		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.Device, active, err != nil, stopch)
+		// self.Log.Debugf("bill.Run r.E=%v perr=%v pactive=%t alive_not_nil=%t alive_running=%t -> again=%t",
 		// 	r.E, err, active, alive != nil, (alive != nil) && alive.IsRunning(), again)
 		// TODO try pollmu.Unlock() here
 	}
@@ -171,15 +171,12 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 
 			switch pi.Status {
 			case money.StatusInfo:
-				self.dev.Log.Infof("%s/info: %s", tag, pi.String())
+				self.Log.Infof("%s/info: %s", tag, pi.String())
 				// TODO telemetry
-				// state.GetGlobal(ctx)
 			case money.StatusError:
-				self.dev.Log.Errorf("%s/error: %v", tag, pi.Error)
-				// TODO telemetry
+				self.Device.TeleError(errors.Annotate(pi.Error, tag))
 			case money.StatusFatal:
-				self.dev.Log.Errorf("%s/fatal: %v", tag, pi.Error)
-				// TODO telemetry
+				self.Device.TeleError(errors.Annotate(pi.Error, tag))
 			case money.StatusBusy:
 			default:
 				if fun(pi) {
@@ -194,7 +191,7 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 func (self *BillValidator) newIniter() engine.Doer {
 	const tag = "mdb.bill.init"
 	return engine.NewSeq(tag).
-		Append(self.dev.DoReset).
+		Append(self.Device.DoReset).
 		Append(engine.Func{Name: tag + "/poll", F: func(ctx context.Context) error {
 			self.Run(ctx, nil, func(money.PollItem) bool { return false })
 			// POLL until it settles on empty response
@@ -214,16 +211,16 @@ func (self *BillValidator) newIniter() engine.Doer {
 			return nil
 		}}).
 		Append(self.DoStacker).
-		Append(engine.Sleep{Duration: self.dev.DelayNext})
+		Append(engine.Sleep{Duration: self.Device.DelayNext})
 }
 
 func (self *BillValidator) NewBillType(accept, escrow uint16) engine.Doer {
 	buf := [5]byte{0x34}
-	self.dev.ByteOrder.PutUint16(buf[1:], accept)
-	self.dev.ByteOrder.PutUint16(buf[3:], escrow)
+	self.Device.ByteOrder.PutUint16(buf[1:], accept)
+	self.Device.ByteOrder.PutUint16(buf[3:], escrow)
 	request := mdb.MustPacketFromBytes(buf[:], true)
 	return engine.Func0{Name: "mdb.bill.BillType", F: func() error {
-		return self.dev.Tx(request).E
+		return self.Device.TxKnown(request, nil)
 	}}
 }
 
@@ -239,45 +236,44 @@ func (self *BillValidator) CommandSetup(ctx context.Context) error {
 	const expectLength = 27
 	var billFactors [TypeCount]uint8
 
-	err := self.dev.DoSetup(ctx)
-	if err != nil {
-		return err
+	if err := self.Device.TxSetup(); err != nil {
+		return errors.Trace(err)
 	}
-	bs := self.dev.SetupResponse.Bytes()
+	bs := self.Device.SetupResponse.Bytes()
 	if len(bs) < expectLength {
-		return fmt.Errorf("bill validator SETUP response=%s expected %d bytes", self.dev.SetupResponse.Format(), expectLength)
+		return fmt.Errorf("bill validator SETUP response=%s expected %d bytes", self.Device.SetupResponse.Format(), expectLength)
 	}
 
 	self.featureLevel = bs[0]
 	currencyCode := bs[1:3]
-	scalingFactor := self.dev.ByteOrder.Uint16(bs[3:5])
+	scalingFactor := self.Device.ByteOrder.Uint16(bs[3:5])
 	decimalPlaces := bs[5]
 	scalingFinal := currency.Nominal(scalingFactor) * currency.Nominal(self.configScaling)
 	for i := decimalPlaces; i > 0 && scalingFinal > 10; i-- {
 		scalingFinal /= 10
 	}
-	stackerCap := self.dev.ByteOrder.Uint16(bs[6:8])
-	billSecurityLevels := self.dev.ByteOrder.Uint16(bs[8:10])
+	stackerCap := self.Device.ByteOrder.Uint16(bs[6:8])
+	billSecurityLevels := self.Device.ByteOrder.Uint16(bs[8:10])
 	self.escrowSupported = bs[10] == 0xff
 
-	self.dev.Log.Debugf("Bill Type Scaling Factors: %3v", bs[11:])
+	self.Log.Debugf("Bill Type Scaling Factors: %3v", bs[11:])
 	for i, sf := range bs[11:] {
 		if i >= TypeCount {
-			self.dev.Log.Errorf("CRITICAL bill SETUP type factors count=%d > expected=%d", len(bs[11:]), TypeCount)
+			self.Log.Errorf("CRITICAL bill SETUP type factors count=%d > expected=%d", len(bs[11:]), TypeCount)
 			break
 		}
 		billFactors[i] = sf
 		self.nominals[i] = currency.Nominal(sf) * scalingFinal
 	}
-	self.dev.Log.Debugf("Bill Type calc. nominals:  %3v", self.nominals)
+	self.Log.Debugf("Bill Type calc. nominals:  %3v", self.nominals)
 
-	self.dev.Log.Debugf("Bill Validator Feature Level: %d", self.featureLevel)
-	self.dev.Log.Debugf("Country / Currency Code: %x", currencyCode)
-	self.dev.Log.Debugf("Bill Scaling Factor: %d Decimal Places: %d final scaling: %d", scalingFactor, decimalPlaces, scalingFinal)
-	self.dev.Log.Debugf("Stacker Capacity: %d", stackerCap)
-	self.dev.Log.Debugf("Bill Security Levels: %016b", billSecurityLevels)
-	self.dev.Log.Debugf("Escrow/No Escrow: %t", self.escrowSupported)
-	self.dev.Log.Debugf("Bill Type Credit: %x %v", bs[11:], self.nominals)
+	self.Log.Debugf("Bill Validator Feature Level: %d", self.featureLevel)
+	self.Log.Debugf("Country / Currency Code: %x", currencyCode)
+	self.Log.Debugf("Bill Scaling Factor: %d Decimal Places: %d final scaling: %d", scalingFactor, decimalPlaces, scalingFinal)
+	self.Log.Debugf("Stacker Capacity: %d", stackerCap)
+	self.Log.Debugf("Bill Security Levels: %016b", billSecurityLevels)
+	self.Log.Debugf("Escrow/No Escrow: %t", self.escrowSupported)
+	self.Log.Debugf("Bill Type Credit: %x %v", bs[11:], self.nominals)
 	return nil
 }
 
@@ -285,28 +281,28 @@ func (self *BillValidator) CommandExpansionIdentification() error {
 	const tag = "mdb.bill.ExpId"
 	const expectLength = 29
 	request := packetExpIdent
-	r := self.dev.Tx(request)
-	if r.E != nil {
-		return errors.Annotate(r.E, tag)
+	response := mdb.Packet{}
+	if err := self.Device.TxMaybe(request, &response); err != nil {
+		return errors.Annotate(err, tag)
 	}
-	bs := r.P.Bytes()
-	self.dev.Log.Debugf("%s response=%x", tag, bs)
+	bs := response.Bytes()
+	self.Log.Debugf("%s response=%x", tag, bs)
 	if len(bs) < expectLength {
 		return fmt.Errorf("%s response=%x length=%d expected=%d", tag, bs, len(bs), expectLength)
 	}
-	self.dev.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
-	self.dev.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
-	self.dev.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
-	self.dev.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
+	self.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
+	self.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
+	self.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
+	self.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
 	return nil
 }
 
 func (self *BillValidator) CommandFeatureEnable(requested Features) error {
 	f := requested & self.supportedFeatures
 	buf := [6]byte{0x37, 0x01}
-	self.dev.ByteOrder.PutUint32(buf[2:], uint32(f))
+	self.Device.ByteOrder.PutUint32(buf[2:], uint32(f))
 	request := mdb.MustPacketFromBytes(buf[:], true)
-	err := self.dev.Tx(request).E
+	err := self.Device.TxMaybe(request, nil)
 	return errors.Annotate(err, "mdb.bill.FeatureEnable")
 }
 
@@ -317,21 +313,22 @@ func (self *BillValidator) CommandExpansionIdentificationOptions() error {
 	}
 	const expectLength = 33
 	request := packetExpIdentOptions
-	r := self.dev.Tx(request)
-	if r.E != nil {
-		return errors.Annotate(r.E, tag)
+	response := mdb.Packet{}
+	err := self.Device.TxMaybe(request, &response)
+	if err != nil {
+		return errors.Annotate(err, tag)
 	}
-	self.dev.Log.Debugf("%s response=(%d)%s", tag, r.P.Len(), r.P.Format())
-	bs := r.P.Bytes()
+	self.Log.Debugf("%s response=(%d)%s", tag, response.Len(), response.Format())
+	bs := response.Bytes()
 	if len(bs) < expectLength {
-		return fmt.Errorf("%s response=%s expected %d bytes", tag, r.P.Format(), expectLength)
+		return fmt.Errorf("%s response=%s expected %d bytes", tag, response.Format(), expectLength)
 	}
-	self.supportedFeatures = Features(self.dev.ByteOrder.Uint32(bs[29 : 29+4]))
-	self.dev.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
-	self.dev.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
-	self.dev.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
-	self.dev.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
-	self.dev.Log.Debugf("%s Optional Features: %b", tag, self.supportedFeatures)
+	self.supportedFeatures = Features(self.Device.ByteOrder.Uint32(bs[29 : 29+4]))
+	self.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
+	self.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
+	self.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
+	self.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
+	self.Log.Debugf("%s Optional Features: %b", tag, self.supportedFeatures)
 	return nil
 }
 
@@ -355,9 +352,8 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 		self.pollmu.Lock()
 		defer self.pollmu.Unlock()
 
-		r := self.dev.Tx(request)
-		if r.E != nil {
-			return r.E
+		if err := self.Device.TxKnown(request, nil); err != nil {
+			return err
 		}
 
 		// > After an ESCROW command the bill validator should respond to a POLL command
@@ -370,21 +366,21 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 			code := pi.HardwareCode
 			switch code {
 			case StatusValidatorDisabled:
-				self.dev.Log.Errorf("CRITICAL likely code error: escrow request while disabled")
+				self.Log.Errorf("CRITICAL likely code error: escrow request while disabled")
 				result = ErrEscrowImpossible
 				return true
 			case StatusInvalidEscrowRequest:
-				self.dev.Log.Errorf("CRITICAL likely code error: escrow request invalid")
+				self.Log.Errorf("CRITICAL likely code error: escrow request invalid")
 				result = ErrEscrowImpossible
 				return true
 			case StatusRoutingBillStacked, StatusRoutingBillReturned, StatusRoutingBillToRecycler:
-				self.dev.Log.Infof("escrow result code=%02x", code) // TODO string
+				self.Log.Infof("escrow result code=%02x", code) // TODO string
 				return true
 			default:
 				return false
 			}
 		})
-		err := self.dev.NewPollLoop(tag, self.dev.PacketPoll, DefaultEscrowTimeout, fun).Do(ctx)
+		err := self.Device.NewPollLoop(tag, self.Device.PacketPoll, DefaultEscrowTimeout, fun).Do(ctx)
 		if err != nil {
 			return err
 		}
@@ -397,18 +393,19 @@ func (self *BillValidator) newStacker() engine.Func {
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		request := packetStacker
-		r := self.dev.Tx(request)
-		if r.E != nil {
-			return errors.Annotate(r.E, tag)
+		response := mdb.Packet{}
+		err := self.Device.TxKnown(request, &response)
+		if err != nil {
+			return errors.Annotate(err, tag)
 		}
-		rb := r.P.Bytes()
+		rb := response.Bytes()
 		if len(rb) != 2 {
 			return errors.Errorf("%s response length=%d expected=2", tag, len(rb))
 		}
-		x := self.dev.ByteOrder.Uint16(rb)
+		x := self.Device.ByteOrder.Uint16(rb)
 		self.stackerFull = (x & 0x8000) != 0
 		self.stackerCount = uint32(x & 0x7fff)
-		self.dev.Log.Debugf("%s full=%t count=%d", tag, self.stackerFull, self.stackerCount)
+		self.Log.Debugf("%s full=%t count=%d", tag, self.stackerFull, self.stackerCount)
 		return nil
 	}}
 }
@@ -482,26 +479,26 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 			result.Status = money.StatusCredit
 		case StatusRoutingEscrowPosition:
 			if self.EscrowAmount() != 0 {
-				self.dev.Log.Errorf("%s b=%b CRITICAL likely code error, ESCROW POSITION with EscrowAmount not empty", tag, b)
+				self.Log.Errorf("%s b=%b CRITICAL likely code error, ESCROW POSITION with EscrowAmount not empty", tag, b)
 			}
 			self.setEscrowBill(result.DataNominal)
-			// self.dev.Log.Debugf("bill routing ESCROW POSITION")
+			// self.Log.Debugf("bill routing ESCROW POSITION")
 			result.Status = money.StatusEscrow
 			result.DataCount = 1
 		case StatusRoutingBillReturned:
 			if self.EscrowAmount() == 0 {
 				// most likely code error, but also may be rare case of boot up
-				self.dev.Log.Errorf("%s b=%b CRITICAL likely code error, BILL RETURNED with EscrowAmount empty", tag, b)
+				self.Log.Errorf("%s b=%b CRITICAL likely code error, BILL RETURNED with EscrowAmount empty", tag, b)
 			}
 			self.setEscrowBill(0)
-			// self.dev.Log.Debugf("bill routing BILL RETURNED")
+			// self.Log.Debugf("bill routing BILL RETURNED")
 			// TODO make something smarter than Status:Escrow,DataCount:0
 			// maybe Status:Info is enough?
 			result.Status = money.StatusEscrow
 			result.DataCount = 0
 		case StatusRoutingBillToRecycler:
 			self.setEscrowBill(0)
-			// self.dev.Log.Debugf("bill routing BILL TO RECYCLER")
+			// self.Log.Debugf("bill routing BILL TO RECYCLER")
 			result.Status = money.StatusCredit
 		case StatusRoutingDisabledBillRejected:
 			// TODO maybe rejected?
@@ -525,17 +522,17 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 
 	if b&0x5f == b { // Number of attempts to input a bill while validator is disabled.
 		attempts := b & 0x1f
-		self.dev.Log.Debugf("%s b=%b Number of attempts to input a bill while validator is disabled: %d", tag, b, attempts)
+		self.Log.Debugf("%s b=%b Number of attempts to input a bill while validator is disabled: %d", tag, b, attempts)
 		return money.PollItem{HardwareCode: 0x40, Status: money.StatusInfo, Error: ErrAttempts, DataCount: attempts}
 	}
 
 	if b&0x2f == b { // Bill Recycler (Only)
 		err := errors.NotImplementedf("%s b=%b bill recycler", tag, b)
-		self.dev.Log.Errorf(err.Error())
+		self.Log.Errorf(err.Error())
 		return money.PollItem{HardwareCode: b, Status: money.StatusError, Error: err}
 	}
 
 	err := errors.Errorf("%s CRITICAL bill unknown b=%b", tag, b)
-	self.dev.Log.Errorf(err.Error())
+	self.Log.Errorf(err.Error())
 	return money.PollItem{HardwareCode: b, Status: money.StatusFatal, Error: err}
 }

@@ -23,7 +23,7 @@ func (self *CoinAcceptor) NewDispenseSmart(requestAmount currency.Amount, over b
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var err error
 		var successAmount currency.Amount
-		self.dev.Log.Debugf("%s requested=%s", tag, requestAmount.FormatCtx(ctx))
+		self.Device.Log.Debugf("%s requested=%s", tag, requestAmount.FormatCtx(ctx))
 		leftAmount := requestAmount // save original requested amount for logs
 		success.SetValid(self.nominals[:])
 		if leftAmount == 0 {
@@ -46,7 +46,7 @@ func (self *CoinAcceptor) NewDispenseSmart(requestAmount currency.Amount, over b
 		}
 
 		// === Fallback to PAYOUT
-		self.dev.Log.Errorf("%s fallback to PAYOUT left=%s", tag, leftAmount.FormatCtx(ctx))
+		self.Device.Log.Errorf("%s fallback to PAYOUT left=%s", tag, leftAmount.FormatCtx(ctx))
 		err = self.NewPayout(leftAmount, success).Do(ctx)
 		if err != nil {
 			return errors.Annotate(err, tag)
@@ -61,13 +61,13 @@ func (self *CoinAcceptor) NewDispenseSmart(requestAmount currency.Amount, over b
 
 		// === Not enough coins for exact payout
 		if !over {
-			self.dev.Log.Errorf("%s not enough coins for exact payout and over-compensate disabled in request", tag)
+			self.Device.Log.Errorf("%s not enough coins for exact payout and over-compensate disabled in request", tag)
 			return currency.ErrNominalCount
 		}
 		// === Try to give a bit more
 		// TODO telemetry
 		successAmount = success.Total()
-		self.dev.Log.Errorf("%s dispensed=%s < requested=%s debt=%s",
+		self.Device.Log.Errorf("%s dispensed=%s < requested=%s debt=%s",
 			tag, successAmount.FormatCtx(ctx), requestAmount.FormatCtx(ctx), leftAmount.FormatCtx(ctx))
 		config := state.GetGlobal(ctx).Config
 		if leftAmount <= currency.Amount(config.Money.ChangeOverCompensate) {
@@ -93,7 +93,7 @@ func (self *CoinAcceptor) NewDispenseLeastOver(requestAmount currency.Amount, su
 			// Round up `leftAmount` to nearest multiple of `nominal`
 			payoutAmount := leftAmount + namt - 1 - (leftAmount-1)%namt
 
-			self.dev.Log.Debugf("%s request=%s left=%s trying nominal=%s payout=%s",
+			self.Device.Log.Debugf("%s request=%s left=%s trying nominal=%s payout=%s",
 				tag, requestAmount.FormatCtx(ctx), leftAmount.FormatCtx(ctx), namt.FormatCtx(ctx), payoutAmount.FormatCtx(ctx))
 			payed := success.Copy()
 			payed.Clear()
@@ -101,7 +101,7 @@ func (self *CoinAcceptor) NewDispenseLeastOver(requestAmount currency.Amount, su
 			err = self.NewPayout(payoutAmount, payed).Do(ctx)
 			success.AddFrom(payed)
 			payedAmount := payed.Total()
-			// self.dev.Log.Debugf("%s dispense err=%v", tag, err)
+			// self.Device.Log.Debugf("%s dispense err=%v", tag, err)
 			if err != nil {
 				return errors.Annotate(err, tag)
 			}
@@ -123,7 +123,7 @@ func (self *CoinAcceptor) dispenseSmartManual(ctx context.Context, amount curren
 	}
 	tubeCoins := self.Tubes()
 	if tubeCoins.Total() < amount {
-		self.dev.Log.Errorf("%s not enough coins in tubes for amount=%s", tag, amount.FormatCtx(ctx))
+		self.Device.Log.Errorf("%s not enough coins in tubes for amount=%s", tag, amount.FormatCtx(ctx))
 		return nil // TODO more sensible error
 	}
 
@@ -132,7 +132,7 @@ func (self *CoinAcceptor) dispenseSmartManual(ctx context.Context, amount curren
 	// TODO read preferred strategy from config
 	strategy := currency.NewExpendLeastCount()
 	if !strategy.Validate() {
-		self.dev.Log.Errorf("%s config strategy=%v is not available, using fallback", tag, strategy)
+		self.Device.Log.Errorf("%s config strategy=%v is not available, using fallback", tag, strategy)
 		strategy = currency.NewExpendLeastCount()
 		if !strategy.Validate() {
 			panic("code error fallback coin strategy validate")
@@ -143,12 +143,12 @@ func (self *CoinAcceptor) dispenseSmartManual(ctx context.Context, amount curren
 	ng.SetValid(self.nominals[:])
 	if err = tubeCoins.Withdraw(ng, amount, strategy); err != nil {
 		// TODO telemetry
-		self.dev.Log.Errorf("%s failed to calculate NominalGroup for dispense mode", tag)
+		self.Device.Log.Errorf("%s failed to calculate NominalGroup for dispense mode", tag)
 		return nil
 	}
 
 	err = self.dispenseGroup(ctx, ng, success)
-	self.dev.Log.Debugf("%s success=%s", tag, success.String())
+	self.Device.Log.Debugf("%s success=%s", tag, success.String())
 	return errors.Annotate(err, tag)
 }
 
@@ -156,13 +156,13 @@ func (self *CoinAcceptor) dispenseGroup(ctx context.Context, request, success *c
 	const tag = "mdb.coin.dispense-group"
 
 	return request.Iter(func(nominal currency.Nominal, count uint) error {
-		self.dev.Log.Debugf("%s n=%s c=%d", tag, currency.Amount(nominal).FormatCtx(ctx), count)
+		self.Device.Log.Debugf("%s n=%s c=%d", tag, currency.Amount(nominal).FormatCtx(ctx), count)
 		if count == 0 {
 			return nil
 		}
 		err := self.NewDispense(nominal, uint8(count)).Do(ctx)
 		if err != nil {
-			self.dev.Log.Errorf("%s nominal=%s count=%d err=%v", tag, currency.Amount(nominal).FormatCtx(ctx), count, err)
+			self.Device.Log.Errorf("%s nominal=%s count=%d err=%v", tag, currency.Amount(nominal).FormatCtx(ctx), count, err)
 			return errors.Annotate(err, tag)
 		}
 		return success.Add(nominal, count)
@@ -183,7 +183,7 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 		}
 
 		request := mdb.MustPacketFromBytes([]byte{0x0d, (count << 4) + uint8(coinType)}, true)
-		err := self.dev.Tx(request).E
+		err := self.Device.TxMaybe(request, nil) // TODO check known/other
 		return errors.Annotate(err, tag)
 	}
 	pollFun := func(p mdb.Packet) (bool, error) {
@@ -192,7 +192,7 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 			return true, nil
 		}
 		pi, _ := self.parsePollItem(bs[0], 0)
-		// self.dev.Log.Debugf("%s poll=%x parsed=%v", tag, bs, pi)
+		// self.Device.Log.Debugf("%s poll=%x parsed=%v", tag, bs, pi)
 		switch pi.Status {
 		case money.StatusBusy:
 			return false, nil
@@ -224,7 +224,7 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 			return errors.Annotate(err, tag)
 		}
 		totalTimeout := self.dispenseTimeout * time.Duration(count)
-		if err = self.dev.NewPollLoop(tag, self.dev.PacketPoll, totalTimeout, pollFun).Do(ctx); err != nil {
+		if err = self.Device.NewPollLoop(tag, self.Device.PacketPoll, totalTimeout, pollFun).Do(ctx); err != nil {
 			return errors.Annotate(err, tag)
 		}
 
@@ -249,20 +249,21 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 // MDB command PAYOUT (0f02)
 func (self *CoinAcceptor) NewPayout(amount currency.Amount, success *currency.NominalGroup) engine.Doer {
 	const tag = "mdb.coin.payout"
-	self.dev.Log.Debugf("%s sf=%v amount=%s", tag, self.scalingFactor, amount.Format100I())
+	self.Device.Log.Debugf("%s sf=%v amount=%s", tag, self.scalingFactor, amount.Format100I())
 	arg := amount / currency.Amount(self.scalingFactor)
 
 	doPayout := engine.Func{Name: tag + "/command", F: func(ctx context.Context) error {
 		request := mdb.MustPacketFromBytes([]byte{0x0f, 0x02, byte(arg)}, true)
-		err := self.dev.Tx(request).E
+		err := self.Device.TxMaybe(request, nil)
 		return errors.Annotate(err, tag)
 	}}
 	doStatus := engine.Func{Name: tag + "/status", F: func(ctx context.Context) error {
-		r := self.dev.Tx(packetPayoutStatus)
-		if r.E != nil {
-			return errors.Annotate(r.E, tag)
+		response := mdb.Packet{}
+		err := self.Device.TxMaybe(packetPayoutStatus, &response)
+		if err != nil {
+			return errors.Annotate(err, tag)
 		}
-		for i, count := range r.P.Bytes() {
+		for i, count := range response.Bytes() {
 			if count > 0 {
 				nominal := self.nominals[i]
 				if err := success.Add(nominal, uint(count)); err != nil {
@@ -275,7 +276,7 @@ func (self *CoinAcceptor) NewPayout(amount currency.Amount, success *currency.No
 
 	return engine.NewSeq(tag).
 		Append(doPayout).
-		Append(self.dev.NewPollLoop(tag, packetPayoutPoll, self.dispenseTimeout*4, payoutPollFun)).
+		Append(self.Device.NewPollLoop(tag, packetPayoutPoll, self.dispenseTimeout*4, payoutPollFun)).
 		Append(doStatus)
 }
 

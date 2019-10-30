@@ -54,7 +54,8 @@ func (b *Bus) Reset(keep, sleep time.Duration) error {
 
 func (b *Bus) Tx(request Packet, response *Packet) error {
 	if response == nil {
-		panic("code error mdb.Tx() response=nil")
+		response = &Packet{}
+		b.Log.Debugf("mdb.Tx request=%x response=nil -> allocate temporary", request.Bytes())
 	}
 	if response.readonly {
 		return ErrPacketReadonly
@@ -68,7 +69,7 @@ func (b *Bus) Tx(request Packet, response *Packet) error {
 	response.l = n
 
 	if err != nil {
-		return errors.Annotatef(err, "mdb.Tx send=%x recv=%x", request.Bytes(), response.Bytes())
+		return errors.Annotatef(err, "mdb.Tx send=%x recv=%x", rbs, response.Bytes())
 	}
 	// explicit level check to save costly .Format()
 	if b.Log.Enabled(log2.LDebug) {

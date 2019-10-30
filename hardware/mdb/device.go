@@ -25,11 +25,6 @@ const (
 	DefaultIdleThreshold    = 30 * time.Second
 )
 
-type PacketError struct {
-	E error
-	P Packet
-}
-
 type Device struct { //nolint:maligned
 	state   uint32 // atomic
 	errCode int32  // atomic
@@ -105,6 +100,8 @@ func (self *Device) Init(bus *Bus, addr uint8, name string, byteOrder binary.Byt
 	}
 }
 
+func (self *Device) TeleError(e error) { self.bus.Error(e) }
+
 func (self *Device) ValidateErrorCode() error {
 	value := atomic.LoadInt32(&self.errCode)
 	if value == ErrCodeNone {
@@ -121,91 +118,47 @@ func (self *Device) ValidateOnline() error {
 	return errors.Errorf("mdb.%s state=%s offline duration=%v", self.Name, st.String(), atomic_clock.Since(self.LastOff))
 }
 
-// func (self *Device) Probe() error {
-// 	self.cmdLk.Lock()
-// 	defer self.cmdLk.Unlock()
-//
-// 	request := self.PacketReset
-// 	valid := false
-// 	switch st := self.State(); st {
-// 	case DeviceInvalid:
-// 		panic("code error Probe before Init")
-//
-// 	case DeviceInited: // success path at boot
-//
-// 	case DeviceOffline, DeviceError, DeviceReady:
-// 		request = self.PacketPoll
-//
-// 		now := atomic_clock.Now()
-// 		if age := now.Sub(self.LastOk); !valid && age >= 0 && age < self.DelayOffline {
-// 			valid = true
-// 		} else if age := now.Sub(self.LastOff); !valid && age >= 0 && age < self.DelayOffline {
-// 			valid = true
-// 		}
-// 		if valid {
-// 			switch st {
-// 			case DeviceOffline:
-// 				return ErrOffline
-// 			case DeviceReady:
-// 				return nil
-// 			case DeviceError:
-// 				if err := self.ValidateErrorCode(); err != nil {
-// 					return err
-// 				}
-// 				return self.ValidateErrorCode()
-// 			default:
-// 				panic("code error Probe valid=true switch st")
-// 			}
-// 		} else {
-// 			time.Sleep(self.DelayAfterReset)
-// 		}
-// 	}
-//
-// 	r := self.txInternal(request)
-// 	if r.E == nil {
-// 		self.SetState(DeviceOnline)
-// 		return nil
-// 	}
-// 	if IsResponseTimeout(r.E) {
-// 		self.SetState(DeviceOffline)
-// 		return errors.Wrap(r.E, ErrOffline)
-// 	}
-// 	// TODO parse error code
-// 	self.SetState(DeviceError)
-// 	return errors.Annotate(r.E, "probe")
-// }
-
-func (self *Device) Tx(request Packet) (r PacketError) {
-	if err := self.ValidateErrorCode(); err != nil {
-		// self.Log.Errorf("TODO-ERRCODE %v", errors.ErrorStack(errors.Trace(err)))
-		// TODO self.Reset()
-	}
-	return self.tx(request)
-}
-
-func (self *Device) DoSetup(ctx context.Context) error {
+// Command is known to be supported, MDB timeout means remote is offline.
+// RESET if appropriate.
+func (self *Device) TxKnown(request Packet, response *Packet) error {
 	self.cmdLk.Lock()
 	defer self.cmdLk.Unlock()
-	self.SetupResponse = *PacketEmpty
-	r := self.tx(self.PacketSetup)
-	if r.E != nil {
-		return errors.Annotatef(r.E, "mdb.%s SETUP", self.Name)
-	}
-	self.SetupResponse = r.P
-	return nil
+	return self.txKnown(request, response)
+}
+
+// Remote may ignore command with MDB timeout.
+// state=Offline -> RESET
+// state.Ok() required
+func (self *Device) TxMaybe(request Packet, response *Packet) error {
+	self.cmdLk.Lock()
+	defer self.cmdLk.Unlock()
+	st := self.State()
+	err := self.tx(request, response, txOptMaybe)
+	return errors.Annotatef(err, "mdb.%s TxMaybe request=%x state=%s", self.Name, request.Bytes(), st.String())
+}
+
+func (self *Device) TxCustom(request Packet, response *Packet, opt TxOpt) error {
+	self.cmdLk.Lock()
+	defer self.cmdLk.Unlock()
+	return self.tx(request, response, opt)
+}
+
+func (self *Device) TxSetup() error {
+	err := self.TxKnown(self.PacketSetup, &self.SetupResponse)
+	return errors.Annotatef(err, "mdb.%s SETUP", self.Name)
 }
 
 func (self *Device) ErrorCode() int32 { return atomic.LoadInt32(&self.errCode) }
 func (self *Device) SetErrorCode(c int32) {
 	prev := atomic.SwapInt32(&self.errCode, c)
-	if prev != ErrCodeNone {
+	if prev != ErrCodeNone && c != ErrCodeNone {
 		self.Log.Errorf("mdb.%s CRITICAL SetErrorCode overwrite previous=%d", self.Name, prev)
 		// TODO tele
 	}
-	if c != ErrCodeNone {
+	if prev == ErrCodeNone && c != ErrCodeNone {
 		self.SetState(DeviceError)
 		err := fmt.Errorf("mdb.%s errcode=%d", self.Name, c)
-		self.bus.Error(err)
+		self.TeleError(err)
 	}
 }
 
@@ -243,7 +196,7 @@ func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
 		wait = interval - okAge
 		// self.Log.Debugf("keepalive locked okage=%v wait=%v", okAge, wait)
 		if wait <= 0 {
-			self.tx(self.PacketPoll)
+			self.txKnown(self.PacketPoll, new(Packet))
 			wait = interval
 		}
 		self.cmdLk.Unlock()
@@ -256,17 +209,16 @@ type PollFunc func(Packet) (stop bool, err error)
 func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duration, fun PollFunc) engine.Doer {
 	tag += "/poll-loop"
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
-		var r PacketError
 		tbegin := time.Now()
 
 		self.cmdLk.Lock()
 		defer self.cmdLk.Unlock()
 		for {
-			r = self.tx(request)
-			if r.E != nil {
-				return errors.Annotate(r.E, tag)
+			response := Packet{}
+			if err := self.txKnown(request, &response); err != nil {
+				return errors.Annotate(err, tag)
 			}
-			stop, err := fun(r.P)
+			stop, err := fun(response)
 			if err == nil && stop { // success
 				return nil
 			} else if err == nil && !stop { // try again
@@ -304,21 +256,17 @@ func (self *Device) locked_reset() error {
 		time.Sleep(self.DelayOffline - resetAge)
 	}
 
-	// self.Log.Debugf("%s locked_reset begin state=%s", tag, self.State().String())
+	// st := self.State()
+	// self.Log.Debugf("%s locked_reset begin state=%s", tag, st.String())
 	self.LastOff.SetNowIfZero() // consider device offline from now till successful response
 	// self.SetState(DeviceInited)
 	time.Sleep(self.DelayBeforeReset)
-	r := self.txInternal(self.PacketReset)
-	// self.Log.Debugf("%s locked_reset after state=%s r.E=%v r.P=%s", tag, self.State().String(), r.E, r.P.Format())
+	err := self.tx(self.PacketReset, new(Packet), txOptReset)
+	// self.Log.Debugf("%s locked_reset after state=%s r.E=%v r.P=%s", tag, st.String(), r.E, r.P.Format())
 	self.lastReset.SetNow()
 	atomic.StoreInt32(&self.errCode, ErrCodeNone)
-	if r.E != nil {
-		err := r.E
-		if IsResponseTimeout(err) {
-			self.SetState(DeviceOffline)
-			err = errors.Annotatef(err, "%s is offline", tag)
-			self.bus.Error(err)
-		} else {
+	if err != nil {
+		if !IsResponseTimeout(err) {
 			// TODO remove log here when ensured that error is logged in all callers
 			// - Keepalive() ignores err
 			// - Reset() returns err to caller without logging
@@ -332,47 +280,48 @@ func (self *Device) locked_reset() error {
 	return nil
 }
 
-func (self *Device) tx(request Packet) PacketError {
-	var err error
+func (self *Device) txKnown(request Packet, response *Packet) error {
 	st := self.State()
-	self.Log.Debugf("mdb.%s tx request=%x state=%s", self.Name, request.Bytes(), st.String())
-	switch st {
-	case DeviceInvalid:
-		err = ErrStateInvalid // code error, must call Init()
-
-	case DeviceOnline, DeviceReady: // success path
-	case DeviceInited: // success path
-		err = self.locked_reset()
-
-	case DeviceError:
-		// FIXME TODO remove DeviceError state
-		err = self.locked_reset()
-
-	case DeviceOffline:
-		// TODO decide
-		self.Log.Debugf("mdb.%s tx request=%x state=%s offline duration=%v", self.Name, request.Bytes(), st.String(), atomic_clock.Since(self.LastOff))
-		err = self.locked_reset()
-
-	default:
-		panic(fmt.Sprintf("code error mdb.%s request=%x unknown state=%v", self.Name, request.Bytes(), st))
-	}
-	if err != nil {
-		err = errors.Annotatef(err, "mdb.%s request=%x", self.Name, request.Bytes())
-		return PacketError{E: err}
-	}
-
-	return self.txInternal(request)
+	self.Log.Debugf("mdb.%s txKnown request=%x state=%s", self.Name, request.Bytes(), st.String())
+	return self.tx(request, response, txOptKnown)
 }
 
-func (self *Device) txInternal(request Packet) (r PacketError) {
+func (self *Device) tx(request Packet, response *Packet, opt TxOpt) error {
+	var err error
 	st := self.State()
-	if st == DeviceInvalid {
-		r.E = errors.Errorf("mdb.%s state=invalid", self.Name)
-		return
+	switch st {
+	case DeviceInvalid:
+		return errors.Annotatef(ErrStateInvalid, "mdb.%s", self.Name)
+
+	case DeviceInited: // success path
+		if !opt.NoReset {
+			err = self.locked_reset()
+		}
+
+	case DeviceOnline, DeviceReady: // success path
+
+	case DeviceError: // FIXME TODO remove DeviceError state
+		if opt.ResetError && !opt.NoReset {
+			err = self.locked_reset()
+		}
+
+	case DeviceOffline:
+		self.Log.Debugf("mdb.%s tx request=%x state=%s offline duration=%v", self.Name, request.Bytes(), st.String(), atomic_clock.Since(self.LastOff))
+		if opt.ResetOffline && !opt.NoReset {
+			err = self.locked_reset()
+		}
+
+	default:
+		panic(fmt.Sprintf("code error mdb.%s tx request=%x unknown state=%v", self.Name, request.Bytes(), st))
+	}
+	if opt.RequireOK {
+		if st2 := self.State(); !st2.Ok() {
+			err = ErrStateInvalid
+		}
 	}
 
-	r.E = self.bus.Tx(request, &r.P)
-	if r.E == nil {
+	err = self.bus.Tx(request, response)
+	if err == nil {
 		// self.Log.Debugf("mdb.%s since last ok %v", self.Name, atomic_clock.Since(self.LastOk))
 		self.LastOk.SetNow()
 		self.LastOff.Set(0)
@@ -382,16 +331,20 @@ func (self *Device) txInternal(request Packet) (r PacketError) {
 			self.SetState(DeviceOnline)
 		}
 		atomic.StoreInt32(&self.errCode, ErrCodeNone)
-	} else {
-		if st.Ok() {
-			self.SetErrorCode(0)
+	} else if IsResponseTimeout(err) {
+		if opt.TimeoutOffline {
+			self.LastOff.SetNowIfZero()
+			self.SetState(DeviceOffline)
+			err = errors.Wrapf(err, ErrOffline, "mdb.%s is offline", self.Name)
+			if st != DeviceOffline {
+				self.TeleError(err)
+			}
 		}
-		// r.E = errors.Annotatef(r.E, "request=%x", request.Bytes())
-		self.Log.Errorf("mdb.%s txInternal err=%v", self.Name, r.E)
+		// } else { // other error
 	}
-	self.Log.Debugf("mdb.%s txInternal %x -> ok=%t timeout=%t state %s -> %s err=%v",
-		self.Name, request.Bytes(), r.E == nil, IsResponseTimeout(r.E), st.String(), self.State().String(), r.E)
-	return
+	self.Log.Debugf("mdb.%s tx request=%x -> ok=%t timeout=%t state %s -> %s err=%v",
+		self.Name, request.Bytes(), err == nil, IsResponseTimeout(err), st.String(), self.State().String(), err)
+	return err
 }
 
 // "Idle mode" polling, runs forever until receive on `stopch`.
@@ -423,3 +376,27 @@ func (self *PollDelay) Delay(dev *Device, active bool, err bool, stopch <-chan s
 		return true
 	}
 }
+
+type TxOpt struct {
+	TimeoutOffline bool
+	RequireOK      bool
+	NoReset        bool
+	ResetError     bool
+	ResetOffline   bool
+}
+
+var (
+	txOptKnown = TxOpt{
+		TimeoutOffline: true,
+		ResetOffline:   true,
+		ResetError:     true,
+	}
+	txOptMaybe = TxOpt{
+		RequireOK:    true,
+		ResetOffline: true,
+	}
+	txOptReset = TxOpt{
+		TimeoutOffline: true,
+		NoReset:        true,
+	}
+)

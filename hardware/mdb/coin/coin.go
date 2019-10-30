@@ -3,6 +3,7 @@ package coin
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"sync"
 	"time"
 
@@ -42,7 +43,7 @@ const (
 )
 
 type CoinAcceptor struct { //nolint:maligned
-	dev             mdb.Device
+	mdb.Device
 	dispenseSmart   bool
 	dispenseTimeout time.Duration
 	pollmu          sync.Mutex // isolate active/idle polling
@@ -85,20 +86,20 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	self.dev.Init(mdbus, 0x08, "coin", binary.BigEndian)
+	self.Device.Init(mdbus, 0x08, "coin", binary.BigEndian)
 	config := &g.Config.Hardware.Mdb.Coin
 	self.dispenseSmart = config.DispenseSmart
 	self.dispenseTimeout = helpers.IntSecondDefault(config.DispenseTimeoutSec, defaultDispenseTimeout)
 	self.scalingFactor = 1
 
-	self.dev.DoInit = self.newIniter()
-	self.DoTubeStatus = self.NewTubeStatus()
+	self.Device.DoInit = self.newIniter()
+	self.DoTubeStatus = self.newTubeStatus()
 
 	// engine := state.GetGlobal(ctx).Engine
 	// TODO register payout,etc
 
 	// TODO (Enum idea) no IO in Init()
-	err = self.dev.DoInit.Do(ctx)
+	err = self.Device.DoInit.Do(ctx)
 	return errors.Annotate(err, tag)
 }
 
@@ -139,20 +140,20 @@ func (self *CoinAcceptor) Run(ctx context.Context, alive *alive.Alive, fun func(
 		stopch = alive.StopChan()
 	}
 	pd := mdb.PollDelay{}
-	var r mdb.PacketError
 	parse := self.pollFun(fun)
 	var active bool
 	var err error
 	again := true
 	for again {
+		response := mdb.Packet{}
 		self.pollmu.Lock()
-		r = self.dev.Tx(self.dev.PacketPoll)
-		if r.E == nil {
-			active, err = parse(r.P)
+		err = self.Device.TxKnown(self.Device.PacketPoll, &response)
+		if err == nil {
+			active, err = parse(response)
 		}
 		self.pollmu.Unlock()
 
-		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.dev, active, err != nil, stopch)
+		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.Device, active, err != nil, stopch)
 		// TODO try pollmu.Unlock() here
 	}
 }
@@ -179,17 +180,15 @@ func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 			pi, skip = self.parsePollItem(b, b2)
 			switch pi.Status {
 			case money.StatusInfo:
-				self.dev.Log.Infof("%s/info: %s", tag, pi.String())
+				self.Device.Log.Infof("%s/info: %s", tag, pi.String())
 				// TODO telemetry
 			case money.StatusError:
-				self.dev.Log.Errorf("%s/error: %v", tag, pi.String())
-				// TODO telemetry
+				self.Device.TeleError(errors.Annotate(pi.Error, tag))
 			case money.StatusFatal:
-				self.dev.Log.Errorf("%s/fatal: %v", tag, pi.String())
-				// TODO telemetry
+				self.Device.TeleError(errors.Annotate(pi.Error, tag))
 			case money.StatusBusy:
 			case money.StatusWasReset:
-				self.dev.Log.Infof("coin was reset")
+				self.Device.Log.Infof("coin was reset")
 				// TODO telemetry
 			default:
 				fun(pi)
@@ -202,86 +201,83 @@ func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
 func (self *CoinAcceptor) newIniter() engine.Doer {
 	const tag = "mdb.coin.init"
 	return engine.NewSeq(tag).
-		Append(self.dev.DoReset).
+		Append(self.Device.DoReset).
 		Append(engine.Func{Name: tag + "/poll", F: func(ctx context.Context) error {
 			self.Run(ctx, nil, func(money.PollItem) bool { return false })
 			return nil
 		}}).
 		Append(self.newSetuper()).
 		Append(engine.Func0{Name: tag + "/expid-diag", F: func() error {
-			var err error
-			// FIXME Append(IgnoreTimeout(...))
-			// timeout is unfortunately common "response" for unsupported commands
-			if err = self.CommandExpansionIdentification(); err != nil && errors.Cause(err) != mdb.ErrTimeout {
+			if err := self.CommandExpansionIdentification(); err != nil {
 				return err
 			}
-			if err = self.CommandFeatureEnable(FeatureExtendedDiagnostic); err != nil && errors.Cause(err) != mdb.ErrTimeout {
+			if err := self.CommandFeatureEnable(FeatureExtendedDiagnostic); err != nil {
 				return err
 			}
 			diagResult := new(DiagResult)
-			if err = self.CommandExpansionSendDiagStatus(diagResult); err != nil && errors.Cause(err) != mdb.ErrTimeout {
+			if err := self.CommandExpansionSendDiagStatus(diagResult); err != nil {
 				return err
 			}
 			return nil
 		}}).
-		Append(self.NewTubeStatus())
+		Append(self.newTubeStatus())
 }
 
 func (self *CoinAcceptor) newSetuper() engine.Doer {
 	const tag = "mdb.coin.setup"
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		const expectLengthMin = 7
-		err := self.dev.DoSetup(ctx)
-		if err != nil {
+		if err := self.Device.TxSetup(); err != nil {
 			return errors.Annotate(err, tag)
 		}
-		bs := self.dev.SetupResponse.Bytes()
+		bs := self.Device.SetupResponse.Bytes()
 		if len(bs) < expectLengthMin {
 			return errors.Errorf("%s response=%s expected >= %d bytes",
-				tag, self.dev.SetupResponse.Format(), expectLengthMin)
+				tag, self.Device.SetupResponse.Format(), expectLengthMin)
 		}
 		self.featureLevel = bs[0]
 		self.scalingFactor = bs[3]
-		self.typeRouting = self.dev.ByteOrder.Uint16(bs[5 : 5+2])
+		self.typeRouting = self.Device.ByteOrder.Uint16(bs[5 : 5+2])
 		for i, sf := range bs[7 : 7+TypeCount] {
 			if sf == 0 {
 				continue
 			}
 			n := currency.Nominal(sf) * currency.Nominal(self.scalingFactor)
-			self.dev.Log.Debugf("%s [%d] sf=%d nominal=(%d)%s",
+			self.Device.Log.Debugf("%s [%d] sf=%d nominal=(%d)%s",
 				tag, i, sf, n, currency.Amount(n).FormatCtx(ctx))
 			self.nominals[i] = n
 		}
 		self.tubes.SetValid(self.nominals[:])
 
-		self.dev.Log.Debugf("%s Changer Feature Level: %d", tag, self.featureLevel)
-		self.dev.Log.Debugf("%s Country / Currency Code: %x", tag, bs[1:1+2])
-		self.dev.Log.Debugf("%s Coin Scaling Factor: %d", tag, self.scalingFactor)
-		// self.dev.Log.Debugf("%s Decimal Places: %d", tag, bs[4])
-		self.dev.Log.Debugf("%s Coin Type Routing: %b", tag, self.typeRouting)
-		self.dev.Log.Debugf("%s Coin Type Credit: %x %v", tag, bs[7:], self.nominals)
+		self.Device.Log.Debugf("%s Changer Feature Level: %d", tag, self.featureLevel)
+		self.Device.Log.Debugf("%s Country / Currency Code: %x", tag, bs[1:1+2])
+		self.Device.Log.Debugf("%s Coin Scaling Factor: %d", tag, self.scalingFactor)
+		// self.Device.Log.Debugf("%s Decimal Places: %d", tag, bs[4])
+		self.Device.Log.Debugf("%s Coin Type Routing: %b", tag, self.typeRouting)
+		self.Device.Log.Debugf("%s Coin Type Credit: %x %v", tag, bs[7:], self.nominals)
 		return nil
 	}}
 }
 
-func (self *CoinAcceptor) NewTubeStatus() engine.Doer {
+func (self *CoinAcceptor) newTubeStatus() engine.Doer {
 	const tag = "mdb.coin.tubestatus"
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		const expectLengthMin = 2
 
-		r := self.dev.Tx(packetTubeStatus)
-		if r.E != nil {
-			return errors.Annotate(r.E, tag)
+		response := mdb.Packet{}
+		err := self.Device.TxKnown(packetTubeStatus, &response)
+		if err != nil {
+			return errors.Annotate(err, tag)
 		}
-		self.dev.Log.Debugf("%s response=(%d)%s", tag, r.P.Len(), r.P.Format())
-		bs := r.P.Bytes()
+		self.Device.Log.Debugf("%s response=(%d)%s", tag, response.Len(), response.Format())
+		bs := response.Bytes()
 		if len(bs) < expectLengthMin {
 			return errors.Errorf("%s response=%s expected >= %d bytes",
-				tag, r.P.Format(), expectLengthMin)
+				tag, response.Format(), expectLengthMin)
 		}
-		fulls := self.dev.ByteOrder.Uint16(bs[0:2])
+		fulls := self.Device.ByteOrder.Uint16(bs[0:2])
 		counts := bs[2:18]
-		self.dev.Log.Debugf("%s fulls=%b counts=%v", tag, fulls, counts)
+		self.Device.Log.Debugf("%s fulls=%b counts=%v", tag, fulls, counts)
 
 		self.tubesmu.Lock()
 		defer self.tubesmu.Unlock()
@@ -290,8 +286,7 @@ func (self *CoinAcceptor) NewTubeStatus() engine.Doer {
 		for i := uint8(0); i < TypeCount; i++ {
 			full := (fulls & (1 << i)) != 0
 			if full && counts[i] == 0 {
-				// TODO telemetry
-				self.dev.Log.Errorf("%s tube=%d problem (jam/sensor/etc)", tag, i+1)
+				self.Device.TeleError(fmt.Errorf("%s tube=%d problem (jam/sensor/etc)", tag, i+1))
 			} else if counts[i] != 0 {
 				nominal := self.coinTypeNominal(i)
 				if err := self.tubes.Add(nominal, uint(counts[i])); err != nil {
@@ -299,7 +294,7 @@ func (self *CoinAcceptor) NewTubeStatus() engine.Doer {
 				}
 			}
 		}
-		self.dev.Log.Debugf("%s tubes=%s", tag, self.tubes.String())
+		self.Device.Log.Debugf("%s tubes=%s", tag, self.tubes.String())
 		return nil
 	}}
 }
@@ -312,11 +307,11 @@ func (self *CoinAcceptor) Tubes() *currency.NominalGroup {
 
 func (self *CoinAcceptor) NewCoinType(accept, dispense uint16) engine.Doer {
 	buf := [5]byte{0x0c}
-	self.dev.ByteOrder.PutUint16(buf[1:], accept)
-	self.dev.ByteOrder.PutUint16(buf[3:], dispense)
+	self.Device.ByteOrder.PutUint16(buf[1:], accept)
+	self.Device.ByteOrder.PutUint16(buf[3:], dispense)
 	request := mdb.MustPacketFromBytes(buf[:], true)
 	return engine.Func0{Name: "mdb.coin.CoinType", F: func() error {
-		return self.dev.Tx(request).E
+		return self.Device.TxKnown(request, nil)
 	}}
 }
 
@@ -324,21 +319,26 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 	const tag = "mdb.coin.ExpId"
 	const expectLength = 33
 	request := packetExpIdent
-	r := self.dev.Tx(request)
-	if r.E != nil {
-		return errors.Annotate(r.E, tag)
+	response := mdb.Packet{}
+	err := self.Device.TxMaybe(request, &response)
+	if err != nil {
+		if errors.Cause(err) == mdb.ErrTimeout {
+			self.Device.Log.Infof("%s request=%x not supported (timeout)", tag, request.Bytes())
+			return nil
+		}
+		return errors.Annotate(err, tag)
 	}
-	self.dev.Log.Debugf("%s response=(%d)%s", tag, r.P.Len(), r.P.Format())
-	bs := r.P.Bytes()
+	self.Device.Log.Debugf("%s response=(%d)%s", tag, response.Len(), response.Format())
+	bs := response.Bytes()
 	if len(bs) < expectLength {
-		return errors.Errorf("%s response=%s expected %d bytes", tag, r.P.Format(), expectLength)
+		return errors.Errorf("%s response=%s expected %d bytes", tag, response.Format(), expectLength)
 	}
-	self.supportedFeatures = Features(self.dev.ByteOrder.Uint32(bs[29 : 29+4]))
-	self.dev.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
-	self.dev.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
-	self.dev.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
-	self.dev.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
-	self.dev.Log.Debugf("%s Optional Features: %b", tag, self.supportedFeatures)
+	self.supportedFeatures = Features(self.Device.ByteOrder.Uint32(bs[29 : 29+4]))
+	self.Device.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
+	self.Device.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
+	self.Device.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
+	self.Device.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
+	self.Device.Log.Debugf("%s Optional Features: %b", tag, self.supportedFeatures)
 	return nil
 }
 
@@ -349,15 +349,20 @@ func (self *CoinAcceptor) CommandExpansionSendDiagStatus(result *DiagResult) err
 	const tag = "mdb.coin.ExpansionSendDiagStatus"
 
 	if self.supportedFeatures&FeatureExtendedDiagnostic == 0 {
-		self.dev.Log.Debugf("%s feature is not supported", tag)
+		self.Device.Log.Debugf("%s feature is not supported", tag)
 		return nil
 	}
-	r := self.dev.Tx(packetDiagStatus)
-	if r.E != nil {
-		return errors.Annotate(r.E, tag)
+	response := mdb.Packet{}
+	err := self.Device.TxMaybe(packetDiagStatus, &response)
+	if err != nil {
+		if errors.Cause(err) == mdb.ErrTimeout {
+			self.Device.Log.Infof("%s request=%x not supported (timeout)", tag, packetDiagStatus.Bytes())
+			return nil
+		}
+		return errors.Annotate(err, tag)
 	}
-	dr, err := parseDiagResult(r.P.Bytes(), self.dev.ByteOrder)
-	self.dev.Log.Debugf("%s result=%s", tag, dr.Error())
+	dr, err := parseDiagResult(response.Bytes(), self.Device.ByteOrder)
+	self.Device.Log.Debugf("%s result=%s", tag, dr.Error())
 	if result != nil {
 		*result = dr
 	}
@@ -365,17 +370,22 @@ func (self *CoinAcceptor) CommandExpansionSendDiagStatus(result *DiagResult) err
 }
 
 func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
+	const tag = "mdb.coin.FeatureEnable"
 	f := requested & self.supportedFeatures
 	buf := [6]byte{0x0f, 0x01}
-	self.dev.ByteOrder.PutUint32(buf[2:], uint32(f))
+	self.Device.ByteOrder.PutUint32(buf[2:], uint32(f))
 	request := mdb.MustPacketFromBytes(buf[:], true)
-	err := self.dev.Tx(request).E
-	return errors.Annotate(err, "mdb.coin.FeatureEnable")
+	err := self.Device.TxMaybe(request, nil)
+	if errors.Cause(err) == mdb.ErrTimeout {
+		self.Device.Log.Infof("%s request=%x not supported (timeout)", tag, request.Bytes())
+		return nil
+	}
+	return errors.Annotate(err, tag)
 }
 
 func (self *CoinAcceptor) coinTypeNominal(b byte) currency.Nominal {
 	if b >= TypeCount {
-		self.dev.Log.Errorf("invalid coin type: %d", b)
+		self.Device.Log.Errorf("invalid coin type: %d", b)
 		return 0
 	}
 	return self.nominals[b]
@@ -429,7 +439,7 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 
 	if b>>5 == 1 { // Slug count 001xxxxx
 		slugs := b & 0x1f
-		self.dev.Log.Debugf("Number of slugs: %d", slugs)
+		self.Device.Log.Debugf("Number of slugs: %d", slugs)
 		return money.PollItem{Status: money.StatusInfo, Error: ErrSlugs, DataCount: slugs}, false
 	}
 	if b>>6 == 1 { // Coins Deposited
@@ -457,7 +467,7 @@ func (self *CoinAcceptor) parsePollItem(b, b2 byte) (money.PollItem, bool) {
 			// pi.Status = money.StatusFatal
 			panic(errors.Errorf("code error b=%x routing=%b", b, routing))
 		}
-		self.dev.Log.Debugf("deposited coinType=%d routing=%s pi=%s", coinType, routing.String(), pi.String())
+		self.Device.Log.Debugf("deposited coinType=%d routing=%s pi=%s", coinType, routing.String(), pi.String())
 		return pi, true
 	}
 	if b&0x80 != 0 { // Coins Dispensed Manually
