@@ -61,9 +61,11 @@ func (seq *Seq) Force() (Doer, bool) {
 	forcedAny := false
 
 	for i, child := range seq.items {
-		var ok bool
-		result.items[i], ok = ForceLazy(child)
-		forcedAny = forcedAny || ok
+		result.items[i] = child
+		if forced, ok := ForceLazy(child); ok {
+			result.items[i] = forced
+			forcedAny = true
+		}
 	}
 
 	if !forcedAny {

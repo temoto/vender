@@ -49,11 +49,20 @@ func TestArg(t *testing.T) {
 	}
 }
 
+func TestSeqValidateLazy(t *testing.T) {
+	t.Parallel()
+
+	easy := &Lazy{Name: "lazy-ok", r: func(string) Doer { return Func0{Name: "easy", F: noop0} }}
+	never := &Lazy{Name: "lazy-never", r: func(string) Doer { return nil }}
+	seq := NewSeq("seq").Append(easy).Append(never)
+	d, _ := ForceLazy(seq)
+	require.Error(t, d.Validate())
+}
+
 // Few actions in sequence is a common case worth optimizing.
 func BenchmarkSequentialDo(b *testing.B) {
 	mkbench := func(kind string, length int) func(b *testing.B) {
 		return func(b *testing.B) {
-			op := func(ctx context.Context) error { return nil }
 			ctx := context.Background()
 			log := log2.NewTest(b, log2.LError)
 			log.SetFlags(log2.LTestFlags)
@@ -65,13 +74,13 @@ func BenchmarkSequentialDo(b *testing.B) {
 			// 	t := NewTree(fmt.Sprintf("%s-%d", kind, length))
 			// 	tail := &t.Root
 			// 	for i := 1; i <= length; i++ {
-			// 		tail = tail.Append(Func{Name: "stub-action", F: op})
+			// 		tail = tail.Append(Func{Name: "stub-action", F: noopCtx})
 			// 	}
 			// 	tx = t
 			case "seq":
 				s := NewSeq(fmt.Sprintf("%s-%d", kind, length))
 				for i := 1; i <= length; i++ {
-					s.Append(Func{Name: "stub-action", F: op})
+					s.Append(Func{Name: "stub-action", F: noopCtx})
 				}
 				tx = s
 			default:
@@ -93,6 +102,9 @@ func BenchmarkSequentialDo(b *testing.B) {
 	b.Run("seq-3", mkbench("seq", 3))
 	b.Run("seq-5", mkbench("seq", 5))
 }
+
+func noop0() error                  { return nil }
+func noopCtx(context.Context) error { return nil }
 
 type mockdo struct {
 	name   string
