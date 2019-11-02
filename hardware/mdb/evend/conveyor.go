@@ -48,6 +48,13 @@ func (self *DeviceConveyor) Init(ctx context.Context) error {
 	moveSeq := engine.NewSeq("mdb.evend.conveyor_move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
 
+	doShake := engine.FuncArg{
+		Name: "mdb.evend.conveyor.shake",
+		F: func(ctx context.Context, arg engine.Arg) error {
+			return self.shake(ctx, uint8(arg))
+		}}
+	g.Engine.RegisterNewSeq("mdb.evend.conveyor_shake(?)", doCalibrate, doShake)
+
 	if keepaliveInterval > 0 {
 		go self.Generic.dev.Keepalive(keepaliveInterval, g.Alive.StopChan())
 	}
@@ -99,6 +106,27 @@ func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 	seq := engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01, byte(position&0xff), byte(position>>8))).
+		Append(doWaitDone)
+	err := seq.Do(ctx)
+	return errors.Annotate(err, tag)
+}
+
+func (self *DeviceConveyor) shake(ctx context.Context, arg uint8) error {
+	tag := fmt.Sprintf("mdb.evend.conveyor.shake:%d", arg)
+
+	doWaitDone := engine.Func{F: func(ctx context.Context) error {
+		err := self.Generic.NewWaitDone(tag, self.maxTimeout).Do(ctx)
+		if err != nil {
+			self.currentPos = -1
+			// TODO check SetReady(false)
+		}
+		return err
+	}}
+
+	// TODO engine InlineSeq
+	seq := engine.NewSeq(tag).
+		Append(self.Generic.NewWaitReady(tag)).
+		Append(self.Generic.NewAction(tag, 0x03, byte(arg), 0)).
 		Append(doWaitDone)
 	err := seq.Do(ctx)
 	return errors.Annotate(err, tag)

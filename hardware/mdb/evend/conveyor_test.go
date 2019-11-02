@@ -37,6 +37,11 @@ func TestConveyor(t *testing.T) {
 		{"db", "50"},
 		{"db", ""},
 
+		{"db", ""},
+		{"da030400", ""},
+		{"db", "50"},
+		{"db", ""},
+
 		// TODO test + handle it too
 		// {"db", ""},
 		// {"da016707", ""},
@@ -49,4 +54,5 @@ func TestConveyor(t *testing.T) {
 	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))
 	g.Engine.TestDo(t, ctx, "conveyor_move_cup")
 	g.Engine.TestDo(t, ctx, "conveyor_move_elevator")
+	g.Engine.TestDo(t, ctx, "mdb.evend.conveyor_shake(4)")
 }
