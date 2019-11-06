@@ -206,24 +206,17 @@ func parseLine(ctx context.Context, line string) (engine.Doer, error) {
 }
 
 func parseCommand(eng *engine.Engine, word string) (engine.Doer, error) {
-	switch {
-	case strings.HasPrefix(word, "/m"):
+	if strings.HasPrefix(word, "/m") {
 		request, err := mdb.PacketFromHex(word[2:], true)
 		if err != nil {
 			return nil, err
 		}
 		return newTx(request), nil
-	case strings.HasPrefix(word, "/s"):
-		i, err := strconv.ParseUint(word[2:], 10, 32)
-		if err != nil {
-			return nil, errors.Annotatef(err, "word=%s", word)
-		}
-		return engine.Sleep{Duration: time.Duration(i) * time.Millisecond}, nil
-	default:
-		d := eng.Resolve(word)
-		if d == nil {
-			return nil, errors.Errorf("action='%s' is not registered", word)
-		}
-		return d, nil
 	}
+
+	d := eng.MustResolveOrLazy(word)
+	if d == nil {
+		return nil, errors.Errorf("action='%s' is not registered", word)
+	}
+	return d, nil
 }

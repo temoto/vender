@@ -27,6 +27,7 @@ func NewEngine(log *log2.Log) *Engine {
 	self.actions["ignore(?)"] = FuncArg{
 		Name: "ignore(?)",
 		F:    func(context.Context, Arg) error { return nil }}
+	self.actions["sleep(100ms)"] = Sleep{Duration: 100 * time.Millisecond}
 	return self
 }
 
