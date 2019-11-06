@@ -34,6 +34,7 @@ message Telemetry {
   Stat stat = 7;
   Money money_save = 8;
   Money money_change = 9;
+  bool at_service = 16;
 
   message Error {
     uint32 code = 1;
@@ -55,6 +56,7 @@ message Telemetry {
     PaymentMethod payment_method = 4;
     uint32 credit_bills = 5;
     uint32 credit_coins = 6;
+    Inventory spent = 7;
   }
 
   message Stat {
