@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
@@ -145,6 +146,7 @@ func (self *MoneySystem) TeleCashbox() *tele_api.Telemetry_Money {
 	defer self.lk.Unlock()
 	self.billCashbox.ToMapUint32(pb.Bills)
 	self.coinCashbox.ToMapUint32(pb.Coins)
+	self.Log.Debugf("TeleCashbox pb=%s", proto.MarshalTextString(pb))
 	return pb
 }
 
@@ -155,6 +157,7 @@ func (self *MoneySystem) TeleChange() *tele_api.Telemetry_Money {
 		Coins: make(map[uint32]uint32, 16),
 	}
 	self.coin.Tubes().ToMapUint32(pb.Coins)
+	self.Log.Debugf("TeleChange pb=%s", proto.MarshalTextString(pb))
 	return pb
 }
 

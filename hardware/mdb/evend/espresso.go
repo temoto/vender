@@ -40,26 +40,26 @@ func (self *DeviceEspresso) Init(ctx context.Context) error {
 func (self *DeviceEspresso) NewGrind() engine.Doer {
 	const tag = "mdb.evend.espresso.grind"
 	return engine.NewSeq(tag).
-		Append(self.NewWaitReady(tag)).
+		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
 		// TODO expect delay like in cup dispense, ignore immediate error, retry
-		Append(self.NewWaitDone(tag, self.timeout))
+		Append(self.Generic.NewWaitDone(tag, self.timeout))
 }
 
 func (self *DeviceEspresso) NewPress() engine.Doer {
 	const tag = "mdb.evend.espresso.press"
 	return engine.NewSeq(tag).
-		Append(self.NewWaitReady(tag)).
+		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x02)).
-		Append(self.NewWaitDone(tag, self.timeout))
+		Append(self.Generic.NewWaitDone(tag, self.timeout))
 }
 
 func (self *DeviceEspresso) NewRelease() engine.Doer {
 	const tag = "mdb.evend.espresso.release"
 	return engine.NewSeq(tag).
-		Append(self.NewWaitReady(tag)).
+		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03)).
-		Append(self.NewWaitDone(tag, self.timeout))
+		Append(self.Generic.NewWaitDone(tag, self.timeout))
 }
 
 func (self *DeviceEspresso) NewHeat(on bool) engine.Doer {
@@ -69,6 +69,6 @@ func (self *DeviceEspresso) NewHeat(on bool) engine.Doer {
 		arg = 0x06
 	}
 	return engine.NewSeq(tag).
-		Append(self.NewWaitReady(tag)).
+		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, arg))
 }

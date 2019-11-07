@@ -158,7 +158,7 @@ func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func
 		// TODO try pollmu.Unlock() here
 	}
 }
-func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
+func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollRequestFunc {
 	const tag = "mdb.bill.poll"
 
 	return func(p mdb.Packet) (bool, error) {

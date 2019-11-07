@@ -105,21 +105,24 @@ func (self *Generic) txAction(args []byte) error {
 	return nil
 }
 
-func (self *Generic) CommandErrorCode() (byte, error) {
-	tag := self.logPrefix + ".errorcode"
+func (self *Generic) Diagnostic() (byte, error) {
+	tag := self.logPrefix + ".diagnostic"
 
 	bs := []byte{self.dev.Address + 4, 0x02}
 	request := mdb.MustPacketFromBytes(bs, true)
 	response := mdb.Packet{}
-	err := self.dev.TxKnown(request, &response) // TODO check known
+	// Assumptions:
+	// - (Known) all evend devices support diagnostic command +402
+	// - (Locked) it's safe to call CommandErrorCode concurrently with other
+	err := self.dev.Locked_TxKnown(request, &response)
 	if err != nil {
-		self.dev.SetErrorCode(0)
+		self.dev.SetError(err)
 		return 0, errors.Annotate(err, tag)
 	}
 	rs := response.Bytes()
 	if len(rs) < 1 {
-		self.dev.SetErrorCode(0)
 		err = errors.Errorf("%s request=%x response=%x", tag, request.Bytes(), rs)
+		self.dev.SetError(err)
 		return 0, err
 	}
 	self.dev.SetErrorCode(int32(rs[0]))
@@ -272,9 +275,8 @@ func (self *Generic) proto2PollCommon(tag string, bs []byte) (bool, error) {
 		return true, nil
 	}
 	if value&genericPollProblem != 0 {
-		code, err := self.CommandErrorCode()
+		code, err := self.Diagnostic()
 		if err != nil {
-			err = errors.Annotate(err, "CommandErrorCode")
 			err = errors.Annotate(err, tag)
 			return true, err
 		}

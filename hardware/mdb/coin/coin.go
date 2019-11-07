@@ -157,7 +157,7 @@ func (self *CoinAcceptor) Run(ctx context.Context, alive *alive.Alive, fun func(
 		// TODO try pollmu.Unlock() here
 	}
 }
-func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollFunc {
+func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollRequestFunc {
 	const tag = "mdb.coin.poll"
 
 	return func(p mdb.Packet) (bool, error) {

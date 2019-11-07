@@ -126,6 +126,11 @@ func (self *Device) TxKnown(request Packet, response *Packet) error {
 	return self.txKnown(request, response)
 }
 
+// Please make sure it is called under cmdLk or don't use it.
+func (self *Device) Locked_TxKnown(request Packet, response *Packet) error {
+	return self.txKnown(request, response)
+}
+
 // Remote may ignore command with MDB timeout.
 // state=Offline -> RESET
 // state.Ok() required
@@ -148,6 +153,11 @@ func (self *Device) TxSetup() error {
 	return errors.Annotatef(err, "mdb.%s SETUP", self.Name)
 }
 
+func (self *Device) SetError(e error) {
+	self.SetState(DeviceError)
+	self.TeleError(e)
+}
+
 func (self *Device) ErrorCode() int32 { return atomic.LoadInt32(&self.errCode) }
 func (self *Device) SetErrorCode(c int32) {
 	prev := atomic.SwapInt32(&self.errCode, c)
@@ -156,9 +166,7 @@ func (self *Device) SetErrorCode(c int32) {
 		// TODO tele
 	}
 	if prev == ErrCodeNone && c != ErrCodeNone {
-		self.SetState(DeviceError)
-		err := fmt.Errorf("mdb.%s errcode=%d", self.Name, c)
-		self.TeleError(err)
+		self.SetError(fmt.Errorf("mdb.%s errcode=%d", self.Name, c))
 	}
 }
 
@@ -203,10 +211,10 @@ func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
 	}
 }
 
-type PollFunc func(Packet) (stop bool, err error)
+type PollFunc func() (stop bool, err error)
 
-// Send `request` packets until `timeout` or `fun` returns stop=true or error.
-func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duration, fun PollFunc) engine.Doer {
+// Call `fun` until `timeout` or it returns stop=true or error.
+func (self *Device) NewFunLoop(tag string, fun PollFunc, timeout time.Duration) engine.Doer {
 	tag += "/poll-loop"
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		tbegin := time.Now()
@@ -214,11 +222,11 @@ func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duratio
 		self.cmdLk.Lock()
 		defer self.cmdLk.Unlock()
 		for {
-			response := Packet{}
-			if err := self.txKnown(request, &response); err != nil {
+			// self.Log.Debugf("%s timeout=%v elapsed=%v", tag, timeout, time.Since(tbegin))
+			stop, err := fun()
+			if err != nil {
 				return errors.Annotate(err, tag)
 			}
-			stop, err := fun(response)
 			if err == nil && stop { // success
 				return nil
 			} else if err == nil && !stop { // try again
@@ -227,7 +235,9 @@ func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duratio
 				}
 				time.Sleep(self.DelayNext)
 				if time.Since(tbegin) > timeout {
-					return errors.Timeoutf(tag)
+					err := errors.Timeoutf(tag)
+					self.SetError(err)
+					return err
 				}
 				continue
 			}
@@ -235,6 +245,20 @@ func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duratio
 			return errors.Annotate(err, tag)
 		}
 	}}
+}
+
+type PollRequestFunc func(Packet) (stop bool, err error)
+
+// Send `request` packets until `timeout` or `fun` returns stop=true or error.
+func (self *Device) NewPollLoop(tag string, request Packet, timeout time.Duration, fun PollRequestFunc) engine.Doer {
+	iter := func() (bool, error) {
+		response := Packet{}
+		if err := self.txKnown(request, &response); err != nil {
+			return true, errors.Annotate(err, tag)
+		}
+		return fun(response)
+	}
+	return self.NewFunLoop(tag, iter, timeout)
 }
 
 // Used by tests to avoid waiting.
