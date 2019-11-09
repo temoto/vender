@@ -329,9 +329,22 @@ func (self *UI) onServiceReboot() State {
 }
 
 func (self *UI) onServiceNetwork() State {
-	addrs, _ := net.InterfaceAddrs()
-	// TODO filter
-	listString := fmt.Sprintf("%v", addrs)
+	allAddrs, _ := net.InterfaceAddrs()
+	addrs := make([]string, 0, len(allAddrs))
+	// TODO parse ignored networks from config
+addrLoop:
+	for _, addr := range allAddrs {
+		ip, _, err := net.ParseCIDR(addr.String())
+		if err != nil {
+			self.g.Log.Errorf("invalid local addr=%v", addr)
+			continue addrLoop
+		}
+		if ip.IsLoopback() {
+			continue addrLoop
+		}
+		addrs = append(addrs, ip.String())
+	}
+	listString := strings.Join(addrs, " ")
 	self.display.SetLines("network", listString)
 
 	for {
