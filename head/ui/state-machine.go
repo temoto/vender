@@ -15,7 +15,7 @@ import (
 type State uint32
 
 const (
-	StateInvalid State = iota
+	StateDefault State = iota
 
 	StateBoot   // t=onstart +onstartOk=FrontHello +onstartError+retry=Boot +retryMax=Broken
 	StateBroken // t=tele/input +inputService=ServiceBegin
@@ -35,7 +35,9 @@ const (
 	StateServiceTest
 	StateServiceReboot
 	StateServiceNetwork
-	StateServiceEnd // ->FrontBegin
+	StateServiceMoneyLoad
+	StateServiceReport
+	StateServiceEnd // +askReport=ServiceReport ->FrontBegin
 )
 
 func (self *UI) State() State               { return State(atomic.LoadUint32((*uint32)(&self.state))) }
@@ -47,8 +49,8 @@ func (self *UI) Loop(ctx context.Context) {
 	defer self.g.Alive.Done()
 	for self.g.Alive.IsRunning() {
 		next := self.enter(ctx, self.State())
-		if next == StateInvalid {
-			self.g.Log.Fatalf("ui state=%s next=invalid", self.State().String())
+		if next == StateDefault {
+			self.g.Log.Fatalf("ui state=%s next=default", self.State().String())
 		}
 		self.exit(ctx, self.State(), next)
 
@@ -108,7 +110,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 				return StateServiceBegin
 			}
 		}
-		return StateInvalid
+		return StateDefault
 
 	case StateLocked:
 		self.display.SetLines(self.g.Config.UI.Front.MsgStateLocked, "")
@@ -123,7 +125,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 				return self.lockedNext
 			}
 		}
-		return StateInvalid
+		return StateDefault
 
 	case StateFrontBegin:
 		self.inputBuf = self.inputBuf[:0]
@@ -160,20 +162,16 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return self.onServiceReboot()
 	case StateServiceNetwork:
 		return self.onServiceNetwork()
-
+	case StateServiceMoneyLoad:
+		return self.onServiceMoneyLoad(ctx)
+	case StateServiceReport:
+		return self.onServiceReport(ctx)
 	case StateServiceEnd:
-		_ = self.g.Inventory.Persist.Store()
-		self.inputBuf = self.inputBuf[:0]
-		err := self.g.Engine.ExecList(ctx, "on_service_end", self.g.Config.Engine.OnServiceEnd)
-		if err != nil {
-			self.g.Error(err)
-			return StateBroken
-		}
-		return StateFrontBegin
+		return replaceDefault(self.onServiceEnd(ctx), StateFrontBegin)
 
 	default:
 		self.g.Log.Fatalf("unhandled ui state=%s", s.String())
-		return StateInvalid
+		return StateDefault
 	}
 }
 
@@ -183,4 +181,11 @@ func (self *UI) exit(ctx context.Context, current, next State) {
 	if next != StateBroken {
 		self.broken = false
 	}
+}
+
+func replaceDefault(s, def State) State {
+	if s == StateDefault {
+		return def
+	}
+	return s
 }

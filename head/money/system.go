@@ -137,27 +137,28 @@ func (self *MoneySystem) Stop(ctx context.Context) error {
 }
 
 // Stored in one-way cashbox Telemetry_Money
-func (self *MoneySystem) TeleCashbox() *tele_api.Telemetry_Money {
+func (self *MoneySystem) TeleCashbox(ctx context.Context) *tele_api.Telemetry_Money {
 	pb := &tele_api.Telemetry_Money{
-		Bills: make(map[uint32]uint32, 16),
-		Coins: make(map[uint32]uint32, 16),
+		Bills: make(map[uint32]uint32, bill.TypeCount),
+		Coins: make(map[uint32]uint32, coin.TypeCount),
 	}
 	self.lk.Lock()
 	defer self.lk.Unlock()
 	self.billCashbox.ToMapUint32(pb.Bills)
 	self.coinCashbox.ToMapUint32(pb.Coins)
-	self.Log.Debugf("TeleCashbox pb=%s", proto.MarshalTextString(pb))
+	self.Log.Debugf("TeleCashbox pb=%s", proto.CompactTextString(pb))
 	return pb
 }
 
 // Dispensable Telemetry_Money
-func (self *MoneySystem) TeleChange() *tele_api.Telemetry_Money {
+func (self *MoneySystem) TeleChange(ctx context.Context) *tele_api.Telemetry_Money {
 	pb := &tele_api.Telemetry_Money{
-		// TODO support bill recycler Bills: make(map[uint32]uint32, 16),
-		Coins: make(map[uint32]uint32, 16),
+		// TODO support bill recycler Bills: make(map[uint32]uint32, bill.TypeCount),
+		Coins: make(map[uint32]uint32, coin.TypeCount),
 	}
+	self.coin.DoTubeStatus.Do(ctx)
 	self.coin.Tubes().ToMapUint32(pb.Coins)
-	self.Log.Debugf("TeleChange pb=%s", proto.MarshalTextString(pb))
+	self.Log.Debugf("TeleChange pb=%s", proto.CompactTextString(pb))
 	return pb
 }
 

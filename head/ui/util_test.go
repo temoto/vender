@@ -48,8 +48,8 @@ func uiTestSetup(t testing.TB, env *tenv, initState, endState ui.State) {
 			switch s {
 			case endState: // success path
 				env.g.Alive.Stop()
-			case ui.StateInvalid:
-				t.Fatalf("ui switch state=invalid")
+			case ui.StateDefault:
+				t.Fatalf("ui switch state=default")
 				env.g.Alive.Stop()
 			}
 		},

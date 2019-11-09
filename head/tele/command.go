@@ -7,7 +7,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
-	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/state"
@@ -46,18 +45,7 @@ func (self *Tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
 }
 
 func (self *Tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
-	g := state.GetGlobal(ctx)
-	moneysys := money.GetGlobal(ctx)
-	tm := &tele_api.Telemetry{
-		Inventory:    g.Inventory.Tele(),
-		MoneyCashbox: moneysys.TeleCashbox(),
-		MoneyChange:  moneysys.TeleChange(),
-	}
-	err := self.qpushTelemetry(tm)
-	if err != nil {
-		self.log.Errorf("CRITICAL qpushTelemetry tm=%#v err=%v", tm, err)
-	}
-	return err
+	return errors.Annotate(self.Report(ctx, false), "cmdReport")
 }
 
 func (self *Tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgLock) error {

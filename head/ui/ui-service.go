@@ -11,9 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/temoto/alive"
+	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/input"
+	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
@@ -24,6 +27,7 @@ const (
 	serviceMenuTest      = "test"
 	serviceMenuReboot    = "reboot"
 	serviceMenuNetwork   = "network"
+	serviceMenuReport    = "report"
 )
 
 var /*const*/ serviceMenu = []string{
@@ -31,6 +35,7 @@ var /*const*/ serviceMenu = []string{
 	serviceMenuTest,
 	serviceMenuReboot,
 	serviceMenuNetwork,
+	serviceMenuReport,
 }
 var /*const*/ serviceMenuMax = uint8(len(serviceMenu) - 1)
 
@@ -40,11 +45,12 @@ type uiService struct {
 	SecretSalt   []byte
 
 	// state
-	menuIdx  uint8
-	invIdx   uint8
-	invList  []*inventory.Stock
-	testIdx  uint8
-	testList []engine.Doer
+	askReport bool
+	menuIdx   uint8
+	invIdx    uint8
+	invList   []*inventory.Stock
+	testIdx   uint8
+	testList  []engine.Doer
 }
 
 func (self *uiService) Init(ctx context.Context) {
@@ -68,6 +74,7 @@ func (self *uiService) Init(ctx context.Context) {
 func (self *UI) onServiceBegin(ctx context.Context) State {
 	self.inputBuf = self.inputBuf[:0]
 	self.lastActivity = time.Now()
+	self.Service.askReport = false
 	self.Service.menuIdx = 0
 	self.Service.invIdx = 0
 	self.Service.invList = make([]*inventory.Stock, 0, 16)
@@ -110,7 +117,7 @@ func (self *UI) onServiceAuth() State {
 	)
 
 	next, e := self.serviceWaitInput()
-	if next != StateInvalid {
+	if next != StateDefault {
 		return next
 	}
 
@@ -161,7 +168,7 @@ func (self *UI) onServiceMenu() State {
 	)
 
 	next, e := self.serviceWaitInput()
-	if next != StateInvalid {
+	if next != StateDefault {
 		return next
 	}
 
@@ -213,7 +220,7 @@ func (self *UI) onServiceInventory() State {
 	)
 
 	next, e := self.serviceWaitInput()
-	if next != StateInvalid {
+	if next != StateDefault {
 		return next
 	}
 
@@ -248,6 +255,7 @@ func (self *UI) onServiceInventory() State {
 
 		invCurrent := self.Service.invList[self.Service.invIdx]
 		invCurrent.Set(float32(x))
+		self.Service.askReport = true
 
 	case input.IsReject(&e):
 		// backspace semantic
@@ -273,7 +281,7 @@ func (self *UI) onServiceTest(ctx context.Context) State {
 
 wait:
 	next, e := self.serviceWaitInput()
-	if next != StateInvalid {
+	if next != StateDefault {
 		return next
 	}
 
@@ -285,6 +293,7 @@ wait:
 		self.Service.testIdx = (self.Service.testIdx + 1) % testIdxMax
 
 	case input.IsAccept(&e):
+		self.Service.askReport = true
 		self.display.SetLines(line1, "in progress")
 		err := testCurrent.Do(ctx)
 		if err == nil {
@@ -305,7 +314,7 @@ func (self *UI) onServiceReboot() State {
 	self.display.SetLines("for reboot", "press 1") // FIXME extract message string
 
 	next, e := self.serviceWaitInput()
-	if next != StateInvalid {
+	if next != StateDefault {
 		return next
 	}
 
@@ -327,7 +336,7 @@ func (self *UI) onServiceNetwork() State {
 
 	for {
 		next, e := self.serviceWaitInput()
-		if next != StateInvalid {
+		if next != StateDefault {
 			return next
 		}
 		if input.IsReject(&e) {
@@ -336,15 +345,43 @@ func (self *UI) onServiceNetwork() State {
 	}
 }
 
+func (self *UI) onServiceReport(ctx context.Context) State {
+	_ = self.g.Tele.Report(ctx, true)
+	if err := self.g.Engine.ExecList(ctx, "service-report", []string{"money.cashbox_zero"}); err != nil {
+		self.g.Error(err)
+	}
+	return StateDefault
+}
+
+func (self *UI) onServiceEnd(ctx context.Context) State {
+	_ = self.g.Inventory.Persist.Store()
+	self.inputBuf = self.inputBuf[:0]
+
+	if self.Service.askReport {
+		self.display.SetLines("for tele report", "press 1") // FIXME extract message string
+		if e := self.wait(self.Service.resetTimeout); e.Kind == EventInput && e.Input.Key == '1' {
+			self.Service.askReport = false
+			self.onServiceReport(ctx)
+		}
+	}
+
+	err := self.g.Engine.ExecList(ctx, "on_service_end", self.g.Config.Engine.OnServiceEnd)
+	if err != nil {
+		self.g.Error(err)
+		return StateBroken
+	}
+	return StateDefault
+}
+
 func (self *UI) serviceWaitInput() (State, input.Event) {
 	e := self.wait(self.Service.resetTimeout)
 	switch e.Kind {
 	case EventInput:
-		return StateInvalid, e.Input
+		return StateDefault, e.Input
 
 	case EventMoney:
 		self.g.Log.Debugf("serviceWaitInput money event=%v", e.Money)
-		return StateInvalid, input.Event{}
+		return StateDefault, input.Event{}
 
 	case EventTime:
 		// self.g.Log.Infof("inactive=%v", inactive)

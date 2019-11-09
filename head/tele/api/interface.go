@@ -14,6 +14,7 @@ type Teler interface {
 	State(State)
 	Error(error)
 	StatModify(func(*Stat))
+	Report(ctx context.Context, serviceTag bool) error
 	Transaction(Telemetry_Transaction)
 }
 
@@ -22,9 +23,10 @@ type stub struct{}
 func (stub) Init(context.Context, *log2.Log, tele_config.Config) error {
 	return nil
 }
-func (stub) State(State)                       {}
-func (stub) Error(error)                       {}
-func (stub) StatModify(func(*Stat))            {}
-func (stub) Transaction(Telemetry_Transaction) {}
+func (stub) State(State)                                       {}
+func (stub) Error(error)                                       {}
+func (stub) StatModify(func(*Stat))                            {}
+func (stub) Report(ctx context.Context, serviceTag bool) error { return nil }
+func (stub) Transaction(Telemetry_Transaction)                 {}
 
 func NewStub() Teler { return stub{} }

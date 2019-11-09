@@ -68,9 +68,11 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			self.lk.Lock()
 			defer self.lk.Unlock()
 
-			if err := self.billCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
-				g.Error(errors.Annotatef(err, "money.bill cashbox.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
-				break
+			if pi.DataCashbox {
+				if err := self.billCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
+					g.Error(errors.Annotatef(err, "money.bill cashbox.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
+					break
+				}
 			}
 			if err := self.billCredit.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
 				g.Error(errors.Annotatef(err, "money.bill credit.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
@@ -107,9 +109,11 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			})
 
 		case money.StatusCredit:
-			if err := self.coinCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
-				g.Error(errors.Annotatef(err, "%s cashbox.Add n=%v c=%d", tag, pi.DataNominal, pi.DataCount))
-				break
+			if pi.DataCashbox {
+				if err := self.coinCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
+					g.Error(errors.Annotatef(err, "%s cashbox.Add n=%v c=%d", tag, pi.DataNominal, pi.DataCount))
+					break
+				}
 			}
 			if err := self.coinCredit.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
 				g.Error(errors.Annotatef(err, "%s credit.Add n=%v c=%d", tag, pi.DataNominal, pi.DataCount))

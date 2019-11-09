@@ -476,6 +476,7 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 		switch status {
 		case StatusRoutingBillStacked:
 			self.setEscrowBill(0)
+			result.DataCashbox = true
 			result.Status = money.StatusCredit
 		case StatusRoutingEscrowPosition:
 			if self.EscrowAmount() != 0 {
