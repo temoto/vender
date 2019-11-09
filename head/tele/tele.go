@@ -130,12 +130,13 @@ func (self *Tele) qworker() {
 				self.log.Errorf("tele qhandle b=%x err=%v", b, err)
 			}
 			if del {
-				err = self.q.Delete(box)
-				if err != nil {
+				if err = self.q.Delete(box); err != nil {
 					self.log.Errorf("tele qhandle Delete b=%x err=%v", b, err)
 				}
 			} else {
-				self.q.DeletePush(box)
+				if err = self.q.DeletePush(box); err != nil {
+					self.log.Errorf("tele qhandle DeletePush b=%x err=%v", b, err)
+				}
 			}
 
 		case spq.ErrClosed:

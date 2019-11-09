@@ -6,8 +6,8 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/juju/errors"
+	"github.com/stretchr/testify/assert"
 	"github.com/temoto/vender/engine"
 	engine_config "github.com/temoto/vender/engine/config"
 	"github.com/temoto/vender/helpers"

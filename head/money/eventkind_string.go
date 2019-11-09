@@ -11,12 +11,11 @@ func _() {
 	_ = x[EventInvalid-0]
 	_ = x[EventAbort-1]
 	_ = x[EventCredit-2]
-	_ = x[EventPing-3]
 }
 
-const _EventKind_name = "InvalidAbortCreditPing"
+const _EventKind_name = "InvalidAbortCredit"
 
-var _EventKind_index = [...]uint8{0, 7, 12, 18, 22}
+var _EventKind_index = [...]uint8{0, 7, 12, 18}
 
 func (i EventKind) String() string {
 	if i >= EventKind(len(_EventKind_index)-1) {

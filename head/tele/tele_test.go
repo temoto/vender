@@ -47,7 +47,7 @@ func TestCommand(t *testing.T) {
 }}`,
 			cmd: tele_api.Command{
 				Id:         rand.Uint32(),
-				Task:       &tele_api.Command_Report{&tele_api.Command_ArgReport{}},
+				Task:       &tele_api.Command_Report{Report: &tele_api.Command_ArgReport{}},
 				ReplyTopic: "t",
 			},
 			before: func(t testing.TB, env *tenv) {
@@ -76,7 +76,7 @@ func TestCommand(t *testing.T) {
 		{name: "exec",
 			cmd: tele_api.Command{
 				Id:         rand.Uint32(),
-				Task:       &tele_api.Command_Exec{&tele_api.Command_ArgExec{Scenario: "action_stub"}},
+				Task:       &tele_api.Command_Exec{Exec: &tele_api.Command_ArgExec{Scenario: "action_stub"}},
 				ReplyTopic: "t",
 			},
 			before: func(t testing.TB, env *tenv) {

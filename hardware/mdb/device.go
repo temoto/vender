@@ -204,7 +204,7 @@ func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
 		wait = interval - okAge
 		// self.Log.Debugf("keepalive locked okage=%v wait=%v", okAge, wait)
 		if wait <= 0 {
-			self.txKnown(self.PacketPoll, new(Packet))
+			_ = self.txKnown(self.PacketPoll, new(Packet))
 			wait = interval
 		}
 		self.cmdLk.Unlock()
@@ -226,23 +226,20 @@ func (self *Device) NewFunLoop(tag string, fun PollFunc, timeout time.Duration) 
 			stop, err := fun()
 			if err != nil {
 				return errors.Annotate(err, tag)
-			}
-			if err == nil && stop { // success
+			} else if stop { // success
 				return nil
-			} else if err == nil && !stop { // try again
-				if timeout == 0 {
-					return errors.Errorf("tag=%s timeout=0 invalid", tag)
-				}
-				time.Sleep(self.DelayNext)
-				if time.Since(tbegin) > timeout {
-					err := errors.Timeoutf(tag)
-					self.SetError(err)
-					return err
-				}
-				continue
 			}
 
-			return errors.Annotate(err, tag)
+			// err==nil && stop==false -> try again
+			if timeout == 0 {
+				return errors.Errorf("tag=%s timeout=0 invalid", tag)
+			}
+			time.Sleep(self.DelayNext)
+			if time.Since(tbegin) > timeout {
+				err = errors.Timeoutf(tag)
+				self.SetError(err)
+				return err
+			}
 		}
 	}}
 }
@@ -344,7 +341,9 @@ func (self *Device) tx(request Packet, response *Packet, opt TxOpt) error {
 		}
 	}
 
-	err = self.bus.Tx(request, response)
+	if err == nil {
+		err = self.bus.Tx(request, response)
+	}
 	if err == nil {
 		// self.Log.Debugf("mdb.%s since last ok %v", self.Name, atomic_clock.Since(self.LastOk))
 		self.LastOk.SetNow()
@@ -364,7 +363,9 @@ func (self *Device) tx(request Packet, response *Packet, opt TxOpt) error {
 				self.TeleError(err)
 			}
 		}
-		// } else { // other error
+	} else { // other error
+		err = errors.Annotatef(err, "mdb.%s tx request=%x state=%s", self.Name, request.Bytes(), st.String())
+		self.SetError(err)
 	}
 	self.Log.Debugf("mdb.%s tx request=%x -> ok=%t timeout=%t state %s -> %s err=%v",
 		self.Name, request.Bytes(), err == nil, IsResponseTimeout(err), st.String(), self.State().String(), err)

@@ -112,7 +112,6 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		switch e.Kind {
 		case EventInput:
 			if input.IsMoneyAbort(&e.Input) {
-				moneysys := money.GetGlobal(ctx)
 				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
 				return StateFrontEnd
 			}
@@ -141,13 +140,11 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 					goto wait
 				}
 
-				code := string(self.inputBuf)
-				mitem, ok := self.menu[code]
+				mitem, ok := self.menu[string(self.inputBuf)]
 				if !ok {
 					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuCodeInvalid)
 					goto wait
 				}
-				moneysys := money.GetGlobal(ctx)
 				credit := moneysys.Credit(ctx)
 				self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
 				if mitem.Price > credit {

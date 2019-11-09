@@ -156,7 +156,9 @@ func (self *MoneySystem) TeleChange(ctx context.Context) *tele_api.Telemetry_Mon
 		// TODO support bill recycler Bills: make(map[uint32]uint32, bill.TypeCount),
 		Coins: make(map[uint32]uint32, coin.TypeCount),
 	}
-	self.coin.DoTubeStatus.Do(ctx)
+	if err := self.coin.DoTubeStatus.Do(ctx); err != nil {
+		state.GetGlobal(ctx).Error(errors.Annotate(err, "TeleChange"))
+	}
 	self.coin.Tubes().ToMapUint32(pb.Coins)
 	self.Log.Debugf("TeleChange pb=%s", proto.CompactTextString(pb))
 	return pb

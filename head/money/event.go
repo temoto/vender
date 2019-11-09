@@ -14,14 +14,12 @@ const (
 	EventInvalid EventKind = iota
 	EventAbort
 	EventCredit
-	// EventError
-	EventPing
 )
 
 type Event struct {
 	Created time.Time
-	Amount  currency.Amount
 	Err     error
+	Amount  currency.Amount
 	Kind    EventKind
 }
 
