@@ -1,6 +1,7 @@
 engine {
   // alias "cup_dispense" { scenario = "conveyor_move_cup cup_drop" }
-
+  // alias "conveyor_hopper18_position" { scenario = "mdb.evend.conveyor_move(1210)" }
+  
   inventory {
     persist = true
 
@@ -9,7 +10,7 @@ engine {
 
     // Stock fields:
     // - name string, must be non-empty and unique
-    // - code uint32, default=0, duplicates produce warning at boot but allowed
+    // - code uint32, default=0, sorting index in service menu, duplicates produce warning at boot but allowed
     // - check bool, default=false, validate stock remainder > `min`
     // - min float, only makes sense together with check
     // - hw_rate float, default=1, engine `add.{name}(x)` sends x*hw_rate to hardware device
@@ -17,13 +18,25 @@ engine {
     // - register_add string, registers `add.{name}(?)` in engine with this scenario, must contain `foo(?)` arg placeholder
     // stock "water" { hw_rate = 0.649999805 }
     // stock "cup" { code = 1 }
+    
+    // stock "milk" { code = 1 check = true min = 100 register_add = "conveyor_hopper18_position mdb.evend.hopper1_run(?) " spend_rate = 9.7 }
   }
 
   menu {
-    item "1" {
-      name     = "example"
+    item "1" {name = "example1" price = 5 scenario = " get_cup water_hot(150) cup_serve "}
+    item "2" {
+      name     = "example2"
       price    = 1
-      scenario = "cup_dispense add.water_hot(10) add.milk(10) cup_serve"
+      scenario = "get_cup add.water_hot(10) add.milk(10) cup_serve"
+    }
+    item "5" {
+      name  = "example3"
+      price = 23
+      scenario = <<END
+        get_cup
+        add.cream(13)
+        cup_serve
+      END
     }
   }
 
@@ -109,6 +122,7 @@ money {
 }
 
 persist {
+  // database folder
   root = "./"
 }
 
