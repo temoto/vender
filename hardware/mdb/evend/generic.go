@@ -174,8 +174,8 @@ func (self *Generic) NewWaitReady(tag string) engine.Doer {
 
 			// busy during WaitReady is problem (previous action did not finish cleanly)
 			if value == self.proto2BusyMask {
-				self.dev.Log.Errorf("%s PLEASE REPORT WaitReady POLL=%x (busy) unexpected", tag, bs[0])
-				// self.dev.SetReady(false)
+				err := errors.Errorf("%s PLEASE REPORT WaitReady POLL=%x (busy) unexpected", tag, bs[0])
+				self.dev.SetError(err)
 				return false, nil
 			}
 
