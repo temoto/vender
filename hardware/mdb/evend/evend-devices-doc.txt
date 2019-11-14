@@ -18,14 +18,14 @@ After RESET devices enter inactive state for 2s. During this time:
 - physical action (base+2) commands result in either timeout or NAK, depending on firmware
 
 Two types of protocol has been observed:
-- (type1) hoppers, mixer, elevator
+- (type1) hopper multiplexer, mixer, elevator
   During inactive state, action (base+2) commands do not respond (timeout).
   POLL returns empty response (idle or busy) or 2 bytes:
   0D 00 - success
   04 XX - error code XX
   05 0B - previous request was invalid. Does not respond (timeout) to actual invalid request.
   POLL does not indicate distinction between idle and busy state.
-- (type2) valve, conveyor, cup, espresso
+- (type2) hoppers, valve, conveyor, cup, espresso
   During inactive state, action (base+2) commands respond with NAK.
   Invalid request (like garbage) responds with NAK, next POLL sets bit 20.
   Valid request with invalid arguments responds with ACK, next POLL sets bit 20.
@@ -39,7 +39,8 @@ In device sections below, only unique POLL responses are listed.
 
 === Hoppers ===
 
-Protocol type1.
+Individual hopper protocol: type2.
+Multiplexer protocol: type1.
 
 May have separate address per hopper or multiplexer board (каретка) with a single address.
 Base addresses of hopper boards:

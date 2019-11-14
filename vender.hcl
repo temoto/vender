@@ -48,6 +48,45 @@ engine {
 }
 
 hardware {
+  evend {
+    conveyor {
+      keepalive_ms = 0
+      min_speed    = 200
+      position_max = 0
+    }
+
+    cup {
+      assert_busy_delay_ms = 30
+      dispense_timeout_sec = 10
+      ensure_timeout_sec   = 70
+    }
+
+    elevator {
+      keepalive_ms = 0
+      timeout_sec  = 10
+    }
+
+    espresso {
+      timeout_sec = 30
+    }
+
+    hopper {
+      run_timeout_ms = 0
+    }
+
+    mixer {
+      keepalive_ms     = 0
+      move_timeout_sec = 10
+      shake_timeout_ms = 300
+    }
+
+    valve {
+      temperature_hot      = 0
+      temperature_valid_ms = 30
+      pour_timeout_sec     = 600
+      caution_part_ml      = 0
+    }
+  }
   hd44780 {
     codepage = "windows-1251"
     enable   = true
@@ -68,7 +107,6 @@ hardware {
     scroll_delay = 210
     width        = 16
   }
-
   input {
     evend_keyboard {
       enable = true
@@ -81,19 +119,21 @@ hardware {
       device = "/dev/input/event0"
     }
   }
-
   iodin_path = "TODO_EDIT"
-
   mega {
     spi       = ""
     spi_speed = "200kHz"
     pin_chip  = "/dev/gpiochip0"
     pin       = "25"
   }
-
   mdb {
+    bill {
+      scaling_factor = 0
+    }
+
     coin {
-      dispense_smart = false
+      dispense_smart       = false
+      dispense_timeout_sec = 0
     }
 
     // log_debug = true

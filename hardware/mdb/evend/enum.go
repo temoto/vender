@@ -11,7 +11,7 @@ func Enum(ctx context.Context, fun func(d interface{})) {
 	const Nhoppers = 8
 
 	wg := sync.WaitGroup{}
-	wg.Add(6 + Nhoppers)
+	wg.Add(7 + Nhoppers)
 
 	if fun == nil {
 		fun = enumIgnore
@@ -63,6 +63,14 @@ func Enum(ctx context.Context, fun func(d interface{})) {
 
 	go func() {
 		d := new(DeviceMixer)
+		if err := d.Init(ctx); err == nil {
+			fun(d)
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		d := new(DeviceMultiHopper)
 		if err := d.Init(ctx); err == nil {
 			fun(d)
 		}
