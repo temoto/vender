@@ -118,7 +118,7 @@ func (self *CoinAcceptor) dispenseSmartManual(ctx context.Context, amount curren
 	const tag = "mdb.coin.dispense-smart/manual"
 	var err error
 
-	if err = self.DoTubeStatus.Do(ctx); err != nil {
+	if err = self.TubeStatus(); err != nil {
 		return err
 	}
 	tubeCoins := self.Tubes()
@@ -205,7 +205,7 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var err error
 		// TODO  avoid double mutex acquire
-		if err = self.DoTubeStatus.Do(ctx); err != nil {
+		if err = self.TubeStatus(); err != nil {
 			return errors.Annotate(err, tag)
 		}
 		tubesBefore := self.Tubes()
@@ -228,10 +228,10 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 			return errors.Annotate(err, tag)
 		}
 
-		if err = self.DoTubeStatus.Do(ctx); err != nil {
+		if err = self.TubeStatus(); err != nil {
 			return errors.Annotate(err, tag)
 		}
-		_ = self.CommandExpansionSendDiagStatus(nil)
+		_ = self.ExpansionDiagStatus(nil)
 		tubesAfter := self.Tubes()
 		var countAfter uint
 		if countAfter, err = tubesAfter.Get(nominal); err != nil {

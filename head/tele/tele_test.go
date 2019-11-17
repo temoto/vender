@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/spq"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	tele_config "github.com/temoto/vender/head/tele/config"
@@ -51,8 +52,10 @@ func TestCommand(t *testing.T) {
 				ReplyTopic: "t",
 			},
 			before: func(t testing.TB, env *tenv) {
+				require.NoError(t, hardware.Enum(env.ctx))
 				g := state.GetGlobal(env.ctx)
 				moneysys := &money.MoneySystem{}
+				require.NoError(t, moneysys.Start(env.ctx))
 				g.XXX_money.Store(moneysys)
 				s1, err1 := g.Inventory.Get("paper")
 				require.NoError(t, err1)

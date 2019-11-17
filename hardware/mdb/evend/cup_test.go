@@ -16,7 +16,8 @@ func TestCup(t *testing.T) {
 engine {
 inventory { stock "cup" { } }
 alias "add.cup" { scenario = "mdb.evend.cup_dispense stock.cup.spend1" }
-}`)
+}
+hardware { device "mdb.evend.cup" {} }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{
@@ -30,8 +31,7 @@ alias "add.cup" { scenario = "mdb.evend.cup_dispense stock.cup.spend1" }
 		{"e3", "50"},
 		{"e3", ""},
 	})
-	d := new(DeviceCup)
-	require.NoError(t, d.Init(ctx))
+	require.NoError(t, Enum(ctx))
 
 	stock, err := g.Inventory.Get("cup")
 	require.NoError(t, err)

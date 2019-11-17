@@ -19,13 +19,13 @@ type DeviceEspresso struct {
 	timeout time.Duration
 }
 
-func (self *DeviceEspresso) Init(ctx context.Context) error {
+func (self *DeviceEspresso) init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 	espressoConfig := &g.Config.Hardware.Evend.Espresso
 	self.timeout = helpers.IntSecondDefault(espressoConfig.TimeoutSec, DefaultEspressoTimeout)
 	err := self.Generic.Init(ctx, 0xe8, "espresso", proto2)
 	if err != nil {
-		return errors.Annotate(err, "evend.espresso.Init")
+		return errors.Annotate(err, "evend.espresso.init")
 	}
 
 	g.Engine.Register("mdb.evend.espresso_grind", self.Generic.WithRestart(self.NewGrind()))

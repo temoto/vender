@@ -8,6 +8,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	engine_config "github.com/temoto/vender/engine/config"
+	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/state"
@@ -36,6 +37,11 @@ func Main(ctx context.Context, config *state.Config) error {
 		}
 		display.SetLinesBytes(bb[:16], bb[16:])
 		time.Sleep(1 * time.Second)
+	}
+
+	if err := hardware.Enum(ctx); err != nil {
+		err = errors.Annotate(err, "hardware enum")
+		return err
 	}
 
 	moneysys := new(money.MoneySystem)

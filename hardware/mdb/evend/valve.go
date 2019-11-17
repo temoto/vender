@@ -47,7 +47,7 @@ type DeviceValve struct { //nolint:maligned
 	tempHotReported bool
 }
 
-func (self *DeviceValve) Init(ctx context.Context) error {
+func (self *DeviceValve) init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 	valveConfig := &g.Config.Hardware.Evend.Valve
 	self.pourTimeout = helpers.IntSecondDefault(valveConfig.PourTimeoutSec, 10*time.Minute) // big default timeout is fine, depend on valve hardware
@@ -56,7 +56,7 @@ func (self *DeviceValve) Init(ctx context.Context) error {
 	self.proto2BusyMask = valvePollBusy
 	self.proto2IgnoreMask = valvePollNotHot
 	if err := self.Generic.Init(ctx, 0xc0, "valve", proto2); err != nil {
-		return errors.Annotate(err, "evend.valve.Init")
+		return errors.Annotate(err, "evend.valve.init")
 	}
 
 	self.doGetTempHot = self.newGetTempHot()

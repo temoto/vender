@@ -58,7 +58,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 		switch pi.Status {
 		case money.StatusEscrow:
 			if pi.DataCount == 1 {
-				if err := self.bill.DoEscrowAccept.Do(ctx); err != nil {
+				if err := self.bill.EscrowAccept(ctx); err != nil {
 					g.Error(errors.Annotatef(err, "money.bill escrow accept n=%s", currency.Amount(pi.DataNominal).FormatCtx(ctx)))
 				}
 			}
@@ -96,8 +96,8 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 		switch pi.Status {
 		case money.StatusDispensed:
 			self.Log.Debugf("%s manual dispense: %s", tag, pi.String())
-			_ = self.coin.DoTubeStatus.Do(ctx)
-			_ = self.coin.CommandExpansionSendDiagStatus(nil)
+			_ = self.coin.TubeStatus()
+			_ = self.coin.ExpansionDiagStatus(nil)
 
 		case money.StatusReturnRequest:
 			// XXX maybe this should be in coin driver
@@ -119,8 +119,8 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 				g.Error(errors.Annotatef(err, "%s credit.Add n=%v c=%d", tag, pi.DataNominal, pi.DataCount))
 				break
 			}
-			_ = self.coin.DoTubeStatus.Do(ctx)
-			_ = self.coin.CommandExpansionSendDiagStatus(nil)
+			_ = self.coin.TubeStatus()
+			_ = self.coin.ExpansionDiagStatus(nil)
 			self.dirty += pi.Amount()
 			alive.Stop()
 			if out != nil {

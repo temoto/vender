@@ -6,8 +6,10 @@ import (
 
 	"github.com/c-bata/go-prompt"
 	"github.com/golang/protobuf/proto"
+	"github.com/juju/errors"
 	"github.com/temoto/spq"
 	"github.com/temoto/vender/cmd/vender/subcmd"
+	"github.com/temoto/vender/hardware"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/state"
@@ -22,10 +24,16 @@ func Main(ctx context.Context, config *state.Config) error {
 	synthConfig := &state.Config{
 		Tele: config.Tele,
 	}
+	synthConfig.Hardware.XXX_Devices = nil
 	synthConfig.Tele.Enabled = true
 	synthConfig.Tele.PersistPath = spq.OnlyForTesting
 	synthConfig.Tele.LogDebug = true
 	g.MustInit(ctx, synthConfig)
+
+	if err := hardware.Enum(ctx); err != nil {
+		err = errors.Annotate(err, "hardware enum")
+		return err
+	}
 
 	g.Log.Debugf("tele init complete, running")
 	// for g.Alive.IsRunning() {

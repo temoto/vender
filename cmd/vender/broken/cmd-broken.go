@@ -6,6 +6,7 @@ import (
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
+	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/state"
@@ -31,6 +32,10 @@ func Main(ctx context.Context, config *state.Config) error {
 	} else {
 		if err = mdbus.ResetDefault(); err != nil {
 			err = errors.Annotate(err, "mdb bus reset")
+			g.Error(err)
+		}
+		if err = hardware.Enum(ctx); err != nil {
+			err = errors.Annotate(err, "hardware enum")
 			g.Error(err)
 		}
 		moneysys := new(money.MoneySystem)

@@ -80,21 +80,17 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	wg.Add(initTasks)
 	errch := make(chan error, initTasks)
 
-	go wrapErrChan(&wg, errch, g.initInput)
-	go wrapErrChan(&wg, errch, func() error { return g.initInventory(ctx) }) // storage read
-	go wrapErrChan(&wg, errch, g.initEngine)
+	go helpers.WrapErrChan(&wg, errch, g.initInput)
+	go helpers.WrapErrChan(&wg, errch, func() error { return g.initInventory(ctx) }) // storage read
+	go helpers.WrapErrChan(&wg, errch, g.initEngine)
 	// TODO init money system, load money state from storage
 
 	wg.Wait()
 	close(errch)
 
-	errs := make([]error, 0, initTasks)
 	// TODO engine.try-resolve-all-lazy after all other inits finished
 
-	for e := range errch {
-		errs = append(errs, e)
-	}
-	return helpers.FoldErrors(errs)
+	return helpers.FoldErrChan(errch)
 }
 
 func (g *Global) MustInit(ctx context.Context, cfg *Config) {
@@ -167,25 +163,4 @@ func (g *Global) initInventory(ctx context.Context) error {
 		err = g.Inventory.Persist.Load()
 	}
 	return errors.Annotate(err, "initInventory")
-}
-
-func wrapErrChan(wg *sync.WaitGroup, ch chan<- error, fun func() error) {
-	defer wg.Done()
-	if err := fun(); err != nil {
-		ch <- err
-	}
-}
-
-type once struct {
-	sync.Mutex
-	called bool
-	err    error
-}
-
-func (o *once) lockedDo(f func() error) {
-	if o.called {
-		return
-	}
-	o.called = true
-	o.err = f()
 }

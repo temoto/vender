@@ -6,7 +6,7 @@ import (
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
-	"github.com/temoto/vender/hardware/mdb/evend"
+	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/state"
@@ -18,34 +18,29 @@ func Main(ctx context.Context, config *state.Config) error {
 	g := state.GetGlobal(ctx)
 	g.MustInit(ctx, config)
 
-	mdbus, err := g.Mdb()
-	if err != nil {
-		err = errors.Annotate(err, "mdb init")
-		return err
-	}
-	if err = mdbus.ResetDefault(); err != nil {
-		err = errors.Annotate(err, "mdb bus reset")
-		return err
-	}
-
 	display := g.MustDisplay()
 	display.SetLines("boot", g.Config.UI.Front.MsgWait)
 
-	moneysys := new(money.MoneySystem)
-	if err := moneysys.Start(ctx); err != nil {
-		err = errors.Annotate(err, "money system Start()")
-		return err
+	mdbus, err := g.Mdb()
+	if err != nil {
+		return errors.Annotate(err, "mdb init")
+	}
+	if err = mdbus.ResetDefault(); err != nil {
+		return errors.Annotate(err, "mdb bus reset")
 	}
 
-	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
-	// right now Enum does IO implicitly
-	// FIXME hardware.Enum() but money system inits bill/coin devices explicitly
-	evend.Enum(ctx, nil)
+	if err = hardware.Enum(ctx); err != nil {
+		return errors.Annotate(err, "hardware enum")
+	}
+
+	moneysys := new(money.MoneySystem)
+	if err := moneysys.Start(ctx); err != nil {
+		return errors.Annotate(err, "money system Start()")
+	}
 
 	ui := ui.UI{}
 	if err := ui.Init(ctx); err != nil {
-		err = errors.Annotate(err, "ui Init()")
-		return err
+		return errors.Annotate(err, "ui Init()")
 	}
 
 	subcmd.SdNotify(daemon.SdNotifyReady)

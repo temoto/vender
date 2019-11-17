@@ -21,7 +21,8 @@ import (
 type _PI = money.PollItem
 
 const testScalingFactor currency.Nominal = 100
-const testConfig = "money { scale=100 change_over_compensate=10 }"
+const testConfig = `hardware { device "mdb.coin" { required=true } }
+money { scale=100 change_over_compensate=10 }`
 
 func mockInitRs() []mdb.MockR {
 	setupResponse := fmt.Sprintf("021643%02x0200170102050a0a1900000000000000000000", testScalingFactor)
@@ -58,11 +59,12 @@ func mockContext(t testing.TB, rs []mdb.MockR) context.Context {
 }
 
 func newDevice(t testing.TB, ctx context.Context) *CoinAcceptor {
-	ca := &CoinAcceptor{}
-	ca.dispenseTimeout = 1
-	err := ca.Init(ctx)
+	g := state.GetGlobal(ctx)
+	err := Enum(ctx)
 	require.NoError(t, err)
-	return ca
+	dev, err := g.GetDevice(deviceName)
+	require.NoError(t, err)
+	return dev.(*CoinAcceptor)
 }
 
 func checkPoll(t testing.TB, input string, expected []_PI) {
@@ -81,19 +83,31 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 	assert.Equal(t, expected, pis)
 }
 
+func TestCoinDisabled(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state_new.NewTestContext(t, "") // device is not listed in hardware
+	err := Enum(ctx)
+	require.NoError(t, err)
+	_, err = g.GetDevice(deviceName)
+	require.True(t, errors.IsNotFound(err))
+}
+
 func TestCoinOffline(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := state_new.NewTestContext(t, testConfig)
+	ctx, g := state_new.NewTestContext(t, testConfig)
 	mock := mdb.MockFromContext(ctx)
 	mock.ExpectMap(map[string]string{"": ""})
 	defer mock.Close()
 
-	ca := new(CoinAcceptor)
-	err := ca.Init(ctx)
-	require.Error(t, err)
+	err := Enum(ctx)
+	require.Error(t, err, "check config")
 	assert.Contains(t, err.Error(), "mdb.coin is offline")
 	assert.Equal(t, errors.Cause(err), mdb.ErrOffline)
+	dev, err := g.GetDevice(deviceName)
+	require.NoError(t, err)
+	ca := dev.(*CoinAcceptor)
 	assert.Equal(t, mdb.DeviceOffline, ca.Device.State())
 }
 
@@ -111,9 +125,7 @@ func TestCoinNoDiag(t *testing.T) {
 	})
 	defer mock.Close()
 
-	ca := new(CoinAcceptor)
-	err := ca.Init(ctx)
-	require.NoError(t, err)
+	ca := newDevice(t, ctx)
 	assert.True(t, ca.Device.State().Online())
 }
 
@@ -241,8 +253,8 @@ func checkDiag(t testing.TB, input string, expected DiagResult) {
 	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 	dr := new(DiagResult)
-	err := ca.CommandExpansionSendDiagStatus(dr)
-	require.NoError(t, err, "CommandExpansionSendDiagStatus()")
+	err := ca.ExpansionDiagStatus(dr)
+	require.NoError(t, err, "ExpansionDiagStatus()")
 
 	msg := fmt.Sprintf("checkDiag input=%s dr=(%d)%s expect=(%d)%s", input, len(*dr), dr.Error(), len(expected), expected.Error())
 	require.Equal(t, len(expected), len(*dr), msg)

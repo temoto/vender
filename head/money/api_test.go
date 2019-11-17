@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/hardware/mdb"
 	state_new "github.com/temoto/vender/state/new"
 )
@@ -11,7 +12,7 @@ import (
 func TestAbort(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, "money{scale=100}")
+	ctx, g := state_new.NewTestContext(t, `hardware{device "mdb.coin" {}} money{scale=100}`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{
@@ -25,6 +26,7 @@ func TestAbort(t *testing.T) {
 		"":             "",
 	})
 
+	require.NoError(t, hardware.Enum(ctx))
 	ms := MoneySystem{}
 	require.NoError(t, ms.Start(ctx))
 	mock.ExpectMap(nil)

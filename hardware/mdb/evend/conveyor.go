@@ -22,7 +22,7 @@ type DeviceConveyor struct { //nolint:maligned
 	currentPos int16 // estimated
 }
 
-func (self *DeviceConveyor) Init(ctx context.Context) error {
+func (self *DeviceConveyor) init(ctx context.Context) error {
 	self.currentPos = -1
 	g := state.GetGlobal(ctx)
 	devConfig := &g.Config.Hardware.Evend.Conveyor

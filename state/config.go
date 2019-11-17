@@ -24,6 +24,11 @@ type Config struct {
 	XXX_Include []ConfigSource `hcl:"include"`
 
 	Hardware struct {
+		// only used for Unmarshal, do not access
+		XXX_Devices []struct {
+			Name     string `hcl:"name,key"`
+			Required bool   `hcl:"required"`
+		} `hcl:"device"`
 		Evend   evend_config.Config `hcl:"evend"`
 		HD44780 struct {            //nolint:maligned
 			Enable        bool       `hcl:"enable"`

@@ -23,12 +23,12 @@ type MoneySystem struct { //nolint:maligned
 	lk    sync.Mutex
 	dirty currency.Amount // uncommited
 
-	bill        bill.BillValidator
+	bill        bill.Biller
 	billCashbox currency.NominalGroup
 	billCredit  currency.NominalGroup
 	billPoll    *alive.Alive
 
-	coin        coin.CoinAcceptor
+	coin        coin.Coiner
 	coinCashbox currency.NominalGroup
 	coinCredit  currency.NominalGroup
 	coinPoll    *alive.Alive
@@ -48,18 +48,31 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	self.Log = g.Log
 	g.XXX_money.Store(self)
 
-	// TODO wait for bill/coin inited by hardware.Enum()
-	// TODO determine if combination of errors is fatal for money subsystem
-	if err := self.bill.Init(ctx); err != nil {
-		err = errors.Annotate(err, "money.Start bill")
-		g.Error(err)
+	const devNameBill = "mdb.bill"
+	const devNameCoin = "mdb.coin"
+	self.bill = bill.Stub{}
+	self.coin = coin.Stub{}
+	errs := make([]error, 0, 2)
+	if dev, err := g.GetDevice(devNameBill); err == nil {
+		self.bill = dev.(bill.Biller)
+	} else if errors.IsNotFound(err) {
+		self.Log.Debugf("device=%s is not enabled in config", devNameBill)
+	} else {
+		errs = append(errs, errors.Annotatef(err, "device=%s", devNameBill))
 	}
+	if dev, err := g.GetDevice(devNameCoin); err == nil {
+		self.coin = dev.(coin.Coiner)
+	} else if errors.IsNotFound(err) {
+		self.Log.Debugf("device=%s is not enabled in config", devNameCoin)
+	} else {
+		errs = append(errs, errors.Annotatef(err, "device=%s", devNameCoin))
+	}
+	if e := helpers.FoldErrors(errs); e != nil {
+		return e
+	}
+
 	self.billCashbox.SetValid(self.bill.SupportedNominals())
 	self.billCredit.SetValid(self.bill.SupportedNominals())
-	if err := self.coin.Init(ctx); err != nil {
-		err = errors.Annotate(err, "money.Start coin")
-		g.Error(err)
-	}
 	self.coinCashbox.SetValid(self.coin.SupportedNominals())
 	self.coinCredit.SetValid(self.coin.SupportedNominals())
 
@@ -127,12 +140,8 @@ func (self *MoneySystem) Stop(ctx context.Context) error {
 	const tag = "money.Stop"
 	errs := make([]error, 0, 8)
 	errs = append(errs, self.Abort(ctx))
-	if self.bill.Device.State().Online() {
-		errs = append(errs, self.bill.AcceptMax(0).Do(ctx))
-	}
-	if self.coin.Device.State().Online() {
-		errs = append(errs, self.coin.AcceptMax(0).Do(ctx))
-	}
+	errs = append(errs, self.bill.AcceptMax(0).Do(ctx))
+	errs = append(errs, self.coin.AcceptMax(0).Do(ctx))
 	return errors.Annotate(helpers.FoldErrors(errs), tag)
 }
 
@@ -156,7 +165,7 @@ func (self *MoneySystem) TeleChange(ctx context.Context) *tele_api.Telemetry_Mon
 		// TODO support bill recycler Bills: make(map[uint32]uint32, bill.TypeCount),
 		Coins: make(map[uint32]uint32, coin.TypeCount),
 	}
-	if err := self.coin.DoTubeStatus.Do(ctx); err != nil {
+	if err := self.coin.TubeStatus(); err != nil {
 		state.GetGlobal(ctx).Error(errors.Annotate(err, "TeleChange"))
 	}
 	self.coin.Tubes().ToMapUint32(pb.Coins)

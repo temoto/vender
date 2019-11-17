@@ -17,7 +17,7 @@ type DeviceElevator struct {
 	currentPos int16 // estimated
 }
 
-func (self *DeviceElevator) Init(ctx context.Context) error {
+func (self *DeviceElevator) init(ctx context.Context) error {
 	self.currentPos = -1
 	g := state.GetGlobal(ctx)
 	config := &g.Config.Hardware.Evend.Elevator

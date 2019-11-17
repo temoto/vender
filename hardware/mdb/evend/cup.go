@@ -20,11 +20,11 @@ type DeviceCup struct {
 	Generic
 }
 
-func (self *DeviceCup) Init(ctx context.Context) error {
+func (self *DeviceCup) init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 	err := self.Generic.Init(ctx, 0xe0, "cup", proto2)
 	if err != nil {
-		return errors.Annotate(err, "evend.cup.Init")
+		return errors.Annotate(err, "evend.cup.init")
 	}
 
 	doDispense := self.Generic.WithRestart(self.NewDispenseProper())

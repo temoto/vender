@@ -16,7 +16,8 @@ func TestValve(t *testing.T) {
 	ctx, g := state_new.NewTestContext(t, `
 engine { inventory {
 	stock "water" { check=false hw_rate = 0.6 min = 500 }
-}}`)
+}}
+hardware { device "mdb.evend.valve" {} }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{
@@ -36,11 +37,12 @@ engine { inventory {
 		{"c411", "00"}, // when hot temp sensor is broken
 		{"c51000", ""}, // must disable boiler
 	})
-	d := new(DeviceValve)
-	require.NoError(t, d.Init(ctx))
+	require.NoError(t, Enum(ctx))
 
 	g.Engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
-	assert.Equal(t, uint8(23), uint8(d.tempHot.Get()))
+	dev, err := g.GetDevice("mdb.evend.valve")
+	require.NoError(t, err)
+	assert.Equal(t, uint8(23), uint8(dev.(*DeviceValve).tempHot.Get()))
 
 	g.Engine.TestDo(t, ctx, "mdb.evend.valve_set_temp_hot(73)")
 

@@ -58,8 +58,6 @@ type CoinAcceptor struct { //nolint:maligned
 	// dynamic state useful for external code
 	tubesmu sync.Mutex
 	tubes   currency.NominalGroup
-
-	DoTubeStatus engine.Doer
 }
 
 var (
@@ -78,8 +76,8 @@ var (
 	ErrSlugs         = errors.Errorf("Slugs")
 )
 
-func (self *CoinAcceptor) Init(ctx context.Context) error {
-	const tag = "mdb.coin.Init"
+func (self *CoinAcceptor) init(ctx context.Context) error {
+	const tag = deviceName + ".init"
 
 	g := state.GetGlobal(ctx)
 	mdbus, err := g.Mdb()
@@ -93,7 +91,6 @@ func (self *CoinAcceptor) Init(ctx context.Context) error {
 	self.scalingFactor = 1
 
 	self.Device.DoInit = self.newIniter()
-	self.DoTubeStatus = self.newTubeStatus()
 
 	// engine := state.GetGlobal(ctx).Engine
 	// TODO register payout,etc
@@ -158,7 +155,7 @@ func (self *CoinAcceptor) Run(ctx context.Context, alive *alive.Alive, fun func(
 	}
 }
 func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollRequestFunc {
-	const tag = "mdb.coin.poll"
+	const tag = deviceName + ".poll"
 
 	return func(p mdb.Packet) (bool, error) {
 		bs := p.Bytes()
@@ -199,7 +196,7 @@ func (self *CoinAcceptor) pollFun(fun func(money.PollItem) bool) mdb.PollRequest
 }
 
 func (self *CoinAcceptor) newIniter() engine.Doer {
-	const tag = "mdb.coin.init"
+	const tag = deviceName + ".init"
 	return engine.NewSeq(tag).
 		Append(self.Device.DoReset).
 		Append(engine.Func{Name: tag + "/poll", F: func(ctx context.Context) error {
@@ -215,16 +212,16 @@ func (self *CoinAcceptor) newIniter() engine.Doer {
 				return err
 			}
 			diagResult := new(DiagResult)
-			if err := self.CommandExpansionSendDiagStatus(diagResult); err != nil {
+			if err := self.ExpansionDiagStatus(diagResult); err != nil {
 				return err
 			}
 			return nil
 		}}).
-		Append(self.newTubeStatus())
+		Append(engine.Func0{Name: tag + "/tube-status", F: self.TubeStatus})
 }
 
 func (self *CoinAcceptor) newSetuper() engine.Doer {
-	const tag = "mdb.coin.setup"
+	const tag = deviceName + ".setup"
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		const expectLengthMin = 7
 		if err := self.Device.TxSetup(); err != nil {
@@ -259,44 +256,42 @@ func (self *CoinAcceptor) newSetuper() engine.Doer {
 	}}
 }
 
-func (self *CoinAcceptor) newTubeStatus() engine.Doer {
-	const tag = "mdb.coin.tubestatus"
-	return engine.Func{Name: tag, F: func(ctx context.Context) error {
-		const expectLengthMin = 2
+func (self *CoinAcceptor) TubeStatus() error {
+	const tag = deviceName + ".tubestatus"
+	const expectLengthMin = 2
 
-		response := mdb.Packet{}
-		err := self.Device.TxKnown(packetTubeStatus, &response)
-		if err != nil {
-			return errors.Annotate(err, tag)
-		}
-		self.Device.Log.Debugf("%s response=(%d)%s", tag, response.Len(), response.Format())
-		bs := response.Bytes()
-		if len(bs) < expectLengthMin {
-			return errors.Errorf("%s response=%s expected >= %d bytes",
-				tag, response.Format(), expectLengthMin)
-		}
-		fulls := self.Device.ByteOrder.Uint16(bs[0:2])
-		counts := bs[2:18]
-		self.Device.Log.Debugf("%s fulls=%b counts=%v", tag, fulls, counts)
+	response := mdb.Packet{}
+	err := self.Device.TxKnown(packetTubeStatus, &response)
+	if err != nil {
+		return errors.Annotate(err, tag)
+	}
+	self.Device.Log.Debugf("%s response=(%d)%s", tag, response.Len(), response.Format())
+	bs := response.Bytes()
+	if len(bs) < expectLengthMin {
+		return errors.Errorf("%s response=%s expected >= %d bytes",
+			tag, response.Format(), expectLengthMin)
+	}
+	fulls := self.Device.ByteOrder.Uint16(bs[0:2])
+	counts := bs[2:18]
+	self.Device.Log.Debugf("%s fulls=%b counts=%v", tag, fulls, counts)
 
-		self.tubesmu.Lock()
-		defer self.tubesmu.Unlock()
+	self.tubesmu.Lock()
+	defer self.tubesmu.Unlock()
 
-		self.tubes.Clear()
-		for i := uint8(0); i < TypeCount; i++ {
-			full := (fulls & (1 << i)) != 0
-			if full && counts[i] == 0 {
-				self.Device.TeleError(fmt.Errorf("%s tube=%d problem (jam/sensor/etc)", tag, i+1))
-			} else if counts[i] != 0 {
-				nominal := self.coinTypeNominal(i)
-				if err := self.tubes.Add(nominal, uint(counts[i])); err != nil {
-					return err
-				}
+	self.tubes.Clear()
+	for i := uint8(0); i < TypeCount; i++ {
+		full := (fulls & (1 << i)) != 0
+		if full && counts[i] == 0 {
+			self.Device.TeleError(fmt.Errorf("%s tube=%d problem (jam/sensor/etc)", tag, i+1))
+		} else if counts[i] != 0 {
+			nominal := self.coinTypeNominal(i)
+			if err := self.tubes.Add(nominal, uint(counts[i])); err != nil {
+				return err
 			}
 		}
-		self.Device.Log.Debugf("%s tubes=%s", tag, self.tubes.String())
-		return nil
-	}}
+	}
+	self.Device.Log.Debugf("%s tubes=%s", tag, self.tubes.String())
+	return nil
 }
 func (self *CoinAcceptor) Tubes() *currency.NominalGroup {
 	self.tubesmu.Lock()
@@ -310,13 +305,13 @@ func (self *CoinAcceptor) NewCoinType(accept, dispense uint16) engine.Doer {
 	self.Device.ByteOrder.PutUint16(buf[1:], accept)
 	self.Device.ByteOrder.PutUint16(buf[3:], dispense)
 	request := mdb.MustPacketFromBytes(buf[:], true)
-	return engine.Func0{Name: "mdb.coin.CoinType", F: func() error {
+	return engine.Func0{Name: deviceName + ".CoinType", F: func() error {
 		return self.Device.TxKnown(request, nil)
 	}}
 }
 
 func (self *CoinAcceptor) CommandExpansionIdentification() error {
-	const tag = "mdb.coin.ExpId"
+	const tag = deviceName + ".ExpId"
 	const expectLength = 33
 	request := packetExpIdent
 	response := mdb.Packet{}
@@ -345,8 +340,8 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 // CommandExpansionSendDiagStatus returns:
 // - `nil` if command is not supported by device, result is not modified
 // - otherwise returns nil or MDB/parse error, result set to valid DiagResult
-func (self *CoinAcceptor) CommandExpansionSendDiagStatus(result *DiagResult) error {
-	const tag = "mdb.coin.ExpansionSendDiagStatus"
+func (self *CoinAcceptor) ExpansionDiagStatus(result *DiagResult) error {
+	const tag = deviceName + ".ExpansionSendDiagStatus"
 
 	if self.supportedFeatures&FeatureExtendedDiagnostic == 0 {
 		self.Device.Log.Debugf("%s feature is not supported", tag)
@@ -370,7 +365,7 @@ func (self *CoinAcceptor) CommandExpansionSendDiagStatus(result *DiagResult) err
 }
 
 func (self *CoinAcceptor) CommandFeatureEnable(requested Features) error {
-	const tag = "mdb.coin.FeatureEnable"
+	const tag = deviceName + ".FeatureEnable"
 	f := requested & self.supportedFeatures
 	buf := [6]byte{0x0f, 0x01}
 	self.Device.ByteOrder.PutUint32(buf[2:], uint32(f))

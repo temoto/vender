@@ -17,7 +17,7 @@ import (
 
 type _PI = money.PollItem
 
-const testConfig = "money { scale=100 }"
+const testConfig = `hardware { device "mdb.bill" { required=true } } money { scale=100 }`
 const testScalingFactor currency.Nominal = 10
 const devScaling currency.Nominal = 100
 
@@ -40,7 +40,7 @@ func mockInitRs(scaling currency.Nominal, decimal uint8) []mdb.MockR {
 }
 
 func testMake(t testing.TB, rs []mdb.MockR, scaling currency.Nominal, decimal uint8) (context.Context, *BillValidator) {
-	ctx, _ := state_new.NewTestContext(t, testConfig)
+	ctx, g := state_new.NewTestContext(t, testConfig)
 
 	mock := mdb.MockFromContext(ctx)
 	go func() {
@@ -48,11 +48,12 @@ func testMake(t testing.TB, rs []mdb.MockR, scaling currency.Nominal, decimal ui
 		mock.Expect(rs)
 	}()
 
-	bv := new(BillValidator)
-	err := bv.Init(ctx)
+	err := Enum(ctx)
+	require.NoError(t, err)
+	dev, err := g.GetDevice(deviceName)
 	require.NoError(t, err)
 
-	return ctx, bv
+	return ctx, dev.(*BillValidator)
 }
 
 func checkPoll(t *testing.T, input string, expected []_PI) {
@@ -72,6 +73,14 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 	assert.Equal(t, expected, pis)
 }
 
+func TestBillDisabled(t *testing.T) {
+	t.Parallel()
+
+	ctx, _ := state_new.NewTestContext(t, "") // device is not listed in hardware
+	err := Enum(ctx)
+	require.NoError(t, err)
+}
+
 func TestBillOffline(t *testing.T) {
 	t.Parallel()
 
@@ -80,9 +89,8 @@ func TestBillOffline(t *testing.T) {
 	mock.ExpectMap(map[string]string{"": ""})
 	defer mock.Close()
 
-	bv := new(BillValidator)
-	err := bv.Init(ctx)
-	require.Error(t, err)
+	err := Enum(ctx)
+	require.Error(t, err, "check config")
 	assert.Contains(t, err.Error(), "mdb.bill is offline")
 	assert.Equal(t, mdb.ErrOffline, errors.Cause(err))
 }

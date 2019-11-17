@@ -21,7 +21,7 @@ type DeviceMixer struct { //nolint:maligned
 	shakeSpeed   uint8
 }
 
-func (self *DeviceMixer) Init(ctx context.Context) error {
+func (self *DeviceMixer) init(ctx context.Context) error {
 	self.currentPos = -1
 	self.shakeSpeed = DefaultShakeSpeed
 	g := state.GetGlobal(ctx)

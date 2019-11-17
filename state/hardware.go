@@ -2,6 +2,8 @@ package state
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juju/errors"
@@ -11,6 +13,7 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	"github.com/temoto/vender/hardware/mega-client"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
 
@@ -26,6 +29,11 @@ type hardware struct {
 		Bus    *mdb.Bus
 		Uarter mdb.Uarter
 	}
+
+	devices struct {
+		once
+		m map[string]*devWrap
+	}
 	iodin struct {
 		once
 		client *iodin.Client
@@ -36,11 +44,18 @@ type hardware struct {
 	}
 }
 
+type Devicer interface{}
+
+type devWrap struct {
+	sync.RWMutex
+	name     string
+	dev      Devicer
+	required bool
+}
+
 func (g *Global) Iodin() (*iodin.Client, error) {
 	x := &g.Hardware.iodin // short alias
-	x.Lock()
-	defer x.Unlock()
-	x.lockedDo(func() error {
+	_ = x.do(func() error {
 		cfg := &g.Config.Hardware
 		x.client, x.err = iodin.NewClient(cfg.IodinPath)
 		return errors.Annotatef(x.err, "config: iodin_path=%s", cfg.IodinPath)
@@ -50,9 +65,7 @@ func (g *Global) Iodin() (*iodin.Client, error) {
 
 func (g *Global) Mdb() (*mdb.Bus, error) {
 	x := &g.Hardware.Mdb // short alias
-	x.Lock()
-	defer x.Unlock()
-	x.lockedDo(func() error {
+	_ = x.do(func() error {
 		if x.Bus != nil { // state-new testing mode
 			return nil
 		}
@@ -100,9 +113,7 @@ func (g *Global) Mdb() (*mdb.Bus, error) {
 
 func (g *Global) Mega() (*mega.Client, error) {
 	x := &g.Hardware.mega
-	x.Lock()
-	defer x.Unlock()
-	x.lockedDo(func() error {
+	_ = x.do(func() error {
 		devConfig := &g.Config.Hardware.Mega
 		megaConfig := &mega.Config{
 			SpiBus:        devConfig.Spi,
@@ -133,9 +144,7 @@ func (g *Global) MustDisplay() *lcd.TextDisplay {
 
 func (g *Global) Display() (*lcd.TextDisplay, error) {
 	x := &g.Hardware.HD44780
-	x.Lock()
-	defer x.Unlock()
-	x.lockedDo(func() error {
+	_ = x.do(func() error {
 		if x.Display != nil { // state-new testing mode
 			return nil
 		}
@@ -146,8 +155,8 @@ func (g *Global) Display() (*lcd.TextDisplay, error) {
 			return nil
 		}
 
-		dev := new(lcd.LCD)
-		if err := dev.Init(devConfig.PinChip, devConfig.Pinmap, devConfig.Page1); err != nil {
+		devWrap := new(lcd.LCD)
+		if err := devWrap.Init(devConfig.PinChip, devConfig.Pinmap, devConfig.Page1); err != nil {
 			err = errors.Annotatef(err, "lcd.Init config=%#v", devConfig)
 			return err
 		}
@@ -158,8 +167,8 @@ func (g *Global) Display() (*lcd.TextDisplay, error) {
 		if devConfig.ControlCursor {
 			ctrl |= lcd.ControlUnderscore
 		}
-		dev.SetControl(ctrl)
-		x.Device = dev
+		devWrap.SetControl(ctrl)
+		x.Device = devWrap
 
 		displayConfig := &lcd.TextDisplayConfig{
 			Width:       uint32(devConfig.Width),
@@ -171,11 +180,116 @@ func (g *Global) Display() (*lcd.TextDisplay, error) {
 			return errors.Annotatef(err, "lcd.NewTextDisplay config=%#v", displayConfig)
 		}
 		x.Display = disp
-		x.Display.SetDevice(dev)
+		x.Display.SetDevice(devWrap)
 		go x.Display.Run()
 		return nil
 	})
 	return x.Display, x.err
+}
+
+// Reference registered, inited device
+func (g *Global) GetDevice(name string) (Devicer, error) {
+	d, ok, err := g.getDevice(name)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errors.NotFoundf("device=%s", name)
+	}
+
+	d.RLock()
+	defer d.RUnlock()
+	if d.dev == nil {
+		err = errors.Errorf("code error device=%s is not registered", name)
+		g.Fatal(err)
+	}
+
+	return d.dev, nil
+}
+
+// Drivers call RegisterDevice to declare device support.
+// probe is called only for devices enabled in config.
+func (g *Global) RegisterDevice(name string, dev Devicer, probe func() error) error {
+	d, ok, err := g.getDevice(name)
+	g.Log.Debugf("RegisterDevice name=%s ok=%t err=%v", name, ok, err)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// device is not listed in config
+		return nil
+	}
+
+	d.Lock()
+	defer d.Unlock()
+	d.dev = dev
+
+	err = probe()
+	err = errors.Annotatef(err, "probe device=%s required=%t", name, d.required)
+	g.Error(err)
+	// TODO err=offline + Required=false -> return nil
+	if !d.required {
+		return nil
+	}
+	return err
+}
+
+func (g *Global) CheckDevices() error {
+	if err := g.initDevices(); err != nil {
+		return err
+	}
+	x := &g.Hardware.devices
+	x.Lock()
+	defer x.Unlock()
+	errs := make([]error, 0, len(x.m))
+	for _, d := range x.m {
+		d.RLock()
+		ok := d.dev != nil
+		d.RUnlock()
+		if !ok {
+			errs = append(errs, fmt.Errorf("unknown device=%s in config (no driver)", d.name))
+		}
+	}
+	return helpers.FoldErrors(errs)
+}
+
+func (g *Global) getDevice(name string) (*devWrap, bool, error) {
+	if err := g.initDevices(); err != nil {
+		return nil, false, err
+	}
+	g.Hardware.devices.Lock()
+	d, ok := g.Hardware.devices.m[name]
+	g.Hardware.devices.Unlock()
+	return d, ok, nil
+}
+
+func (g *Global) initDevices() error {
+	x := &g.Hardware.devices
+	return x.do(func() error {
+		g.Log.Debugf("initDevices")
+
+		errs := make([]error, 0, len(g.Config.Hardware.XXX_Devices))
+		x.m = make(map[string]*devWrap)
+		for _, d := range g.Config.Hardware.XXX_Devices {
+			if d.Name == "" {
+				errs = append(errs, errors.Errorf("invalid device name=%s", d.Name))
+				continue
+			}
+			if _, ok := x.m[d.Name]; ok {
+				errs = append(errs, errors.Errorf("duplicate device name=%s", d.Name))
+				continue
+			}
+
+			x.m[d.Name] = &devWrap{
+				name:     d.Name,
+				required: d.Required,
+			}
+		}
+
+		err := helpers.FoldErrors(errs)
+		g.Error(err)
+		return err
+	})
 }
 
 func (g *Global) initInput() error {
@@ -226,4 +340,28 @@ func (g *Global) initInputEvendKeyboard() (input.Source, error) {
 		return nil, err
 	}
 	return ekb, nil
+}
+
+type once struct {
+	sync.Mutex
+	called uint32 // atomic bool
+	err    error
+}
+
+func (o *once) done() bool {
+	return atomic.LoadUint32(&o.called) == 1
+}
+
+func (o *once) do(f func() error) error {
+	if o.done() { // fast path
+		return o.err
+	}
+	o.Lock()
+	defer o.Unlock()
+	if o.done() {
+		return o.err
+	}
+	o.err = f()
+	atomic.StoreUint32(&o.called, 1)
+	return o.err
 }

@@ -11,12 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/temoto/alive"
-	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
@@ -27,6 +24,7 @@ const (
 	serviceMenuTest      = "test"
 	serviceMenuReboot    = "reboot"
 	serviceMenuNetwork   = "network"
+	serviceMenuMoneyLoad = "money-load"
 	serviceMenuReport    = "report"
 )
 
@@ -35,11 +33,12 @@ var /*const*/ serviceMenu = []string{
 	serviceMenuTest,
 	serviceMenuReboot,
 	serviceMenuNetwork,
+	// serviceMenuMoneyLoad,
 	serviceMenuReport,
 }
 var /*const*/ serviceMenuMax = uint8(len(serviceMenu) - 1)
 
-type uiService struct {
+type uiService struct { //nolint:maligned
 	// config
 	resetTimeout time.Duration
 	SecretSalt   []byte
@@ -191,6 +190,8 @@ func (self *UI) onServiceMenu() State {
 			return StateServiceReboot
 		case serviceMenuNetwork:
 			return StateServiceNetwork
+		case serviceMenuMoneyLoad:
+			return StateServiceMoneyLoad
 		default:
 			panic("code error")
 		}
@@ -356,6 +357,10 @@ addrLoop:
 			return StateServiceMenu
 		}
 	}
+}
+
+func (self *UI) onServiceMoneyLoad(ctx context.Context) State {
+	return StateDefault
 }
 
 func (self *UI) onServiceReport(ctx context.Context) State {

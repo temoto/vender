@@ -69,8 +69,8 @@ var (
 	ErrEscrowTimeout    = errors.New("ESCROW timeout")
 )
 
-func (self *BillValidator) Init(ctx context.Context) error {
-	const tag = "mdb.bill.Init"
+func (self *BillValidator) init(ctx context.Context) error {
+	const tag = deviceName + ".init"
 
 	g := state.GetGlobal(ctx)
 	mdbus, err := g.Mdb()
@@ -159,7 +159,7 @@ func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func
 	}
 }
 func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollRequestFunc {
-	const tag = "mdb.bill.poll"
+	const tag = deviceName + ".poll"
 
 	return func(p mdb.Packet) (bool, error) {
 		bs := p.Bytes()
@@ -189,7 +189,7 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollReques
 }
 
 func (self *BillValidator) newIniter() engine.Doer {
-	const tag = "mdb.bill.init"
+	const tag = deviceName + ".init"
 	return engine.NewSeq(tag).
 		Append(self.Device.DoReset).
 		Append(engine.Func{Name: tag + "/poll", F: func(ctx context.Context) error {
@@ -219,7 +219,7 @@ func (self *BillValidator) NewBillType(accept, escrow uint16) engine.Doer {
 	self.Device.ByteOrder.PutUint16(buf[1:], accept)
 	self.Device.ByteOrder.PutUint16(buf[3:], escrow)
 	request := mdb.MustPacketFromBytes(buf[:], true)
-	return engine.Func0{Name: "mdb.bill.BillType", F: func() error {
+	return engine.Func0{Name: deviceName + ".BillType", F: func() error {
 		return self.Device.TxKnown(request, nil)
 	}}
 }
@@ -278,7 +278,7 @@ func (self *BillValidator) CommandSetup(ctx context.Context) error {
 }
 
 func (self *BillValidator) CommandExpansionIdentification() error {
-	const tag = "mdb.bill.ExpId"
+	const tag = deviceName + ".ExpId"
 	const expectLength = 29
 	request := packetExpIdent
 	response := mdb.Packet{}
@@ -303,11 +303,11 @@ func (self *BillValidator) CommandFeatureEnable(requested Features) error {
 	self.Device.ByteOrder.PutUint32(buf[2:], uint32(f))
 	request := mdb.MustPacketFromBytes(buf[:], true)
 	err := self.Device.TxMaybe(request, nil)
-	return errors.Annotate(err, "mdb.bill.FeatureEnable")
+	return errors.Annotate(err, deviceName+".FeatureEnable")
 }
 
 func (self *BillValidator) CommandExpansionIdentificationOptions() error {
-	const tag = "mdb.bill.ExpIdOptions"
+	const tag = deviceName + ".ExpIdOptions"
 	if self.featureLevel < 2 {
 		return mdb.FeatureNotSupported(tag + " is level 2+")
 	}
@@ -336,10 +336,10 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 	var tag string
 	var request mdb.Packet
 	if accept {
-		tag = "mdb.bill.escrow-accept"
+		tag = deviceName + ".escrow-accept"
 		request = packetEscrowAccept
 	} else {
-		tag = "mdb.bill.escrow-reject"
+		tag = deviceName + ".escrow-reject"
 		request = packetEscrowReject
 	}
 
@@ -389,7 +389,7 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 }
 
 func (self *BillValidator) newStacker() engine.Func {
-	const tag = "mdb.bill.stacker"
+	const tag = deviceName + ".stacker"
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		request := packetStacker
@@ -437,7 +437,7 @@ const (
 )
 
 func (self *BillValidator) parsePollItem(b byte) money.PollItem {
-	const tag = "mdb.bill.poll-parse"
+	const tag = deviceName + ".poll-parse"
 
 	switch b {
 	case StatusDefectiveMotor:

@@ -10,6 +10,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/engine"
+	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers/cli"
 	"github.com/temoto/vender/state"
@@ -42,6 +43,7 @@ func Main(ctx context.Context, config *state.Config) error {
 	g.MustInit(ctx, config)
 
 	synthConfig := &state.Config{}
+	synthConfig.Hardware.XXX_Devices = nil
 	synthConfig.Hardware.IodinPath = config.Hardware.IodinPath // *iodinPath
 	synthConfig.Hardware.Mdb = config.Hardware.Mdb             // *uarterName *devicePath
 	synthConfig.Hardware.Mega = config.Hardware.Mega           // *megaSpi *megaPin
@@ -55,6 +57,11 @@ func Main(ctx context.Context, config *state.Config) error {
 
 	if err := doBusReset.Do(ctx); err != nil {
 		g.Log.Fatal(err)
+	}
+
+	if err := hardware.Enum(ctx); err != nil {
+		err = errors.Annotate(err, "hardware enum")
+		return err
 	}
 
 	cli.MainLoop(modName, newExecutor(ctx), newCompleter(ctx))

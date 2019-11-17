@@ -1,7 +1,8 @@
 engine {
   // alias "cup_dispense" { scenario = "conveyor_move_cup cup_drop" }
-  // alias "conveyor_hopper18_position" { scenario = "mdb.evend.conveyor_move(1210)" }
-  
+
+  // alias "conveyor_hopper18" { scenario = "mdb.evend.conveyor_move(1210)" }
+
   inventory {
     persist = true
 
@@ -18,25 +19,21 @@ engine {
     // - register_add string, registers `add.{name}(?)` in engine with this scenario, must contain `foo(?)` arg placeholder
     // stock "water" { hw_rate = 0.649999805 }
     // stock "cup" { code = 1 }
-    
-    // stock "milk" { code = 1 check = true min = 100 register_add = "conveyor_hopper18_position mdb.evend.hopper1_run(?) " spend_rate = 9.7 }
+
+    // stock "milk" { code = 1 check = true min = 100 register_add = "conveyor_hopper18 mdb.evend.hopper1_run(?)" spend_rate = 9.7 }
   }
 
   menu {
-    item "1" {name = "example1" price = 5 scenario = " get_cup water_hot(150) cup_serve "}
+    item "1" {
+      name     = "example1"
+      price    = 5
+      scenario = "cup_drop water_hot(150) cup_serve"
+    }
+
     item "2" {
       name     = "example2"
       price    = 1
-      scenario = "get_cup add.water_hot(10) add.milk(10) cup_serve"
-    }
-    item "5" {
-      name  = "example3"
-      price = 23
-      scenario = <<END
-        get_cup
-        add.cream(13)
-        cup_serve
-      END
+      scenario = "cup_drop add.water_hot(10) add.milk(10) cup_serve"
     }
   }
 
@@ -48,6 +45,21 @@ engine {
 }
 
 hardware {
+  // All devices must be listed here to use.
+
+  device "mdb.bill" {
+    // If any required devices are offline, switch to broken state.
+    // required=false will still probe and report errors to telemetry.
+    required = true
+  }
+
+  device "mdb.coin" {
+    required = true
+  }
+
+  // device "mdb.evend.cup" { required = true }
+  // device "mdb.evend.hopper5" { }
+
   evend {
     conveyor {
       keepalive_ms = 0

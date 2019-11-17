@@ -12,8 +12,8 @@ import (
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
+	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/helpers/cli"
@@ -38,8 +38,13 @@ func Main(ctx context.Context, config *state.Config) error {
 	g.Log.Debugf("config=%+v", g.Config)
 
 	if err := doMdbBusReset.Do(ctx); err != nil {
-		g.Log.Fatal(errors.ErrorStack(err))
+		return errors.Annotate(err, "mdb bus reset")
 	}
+
+	if err := hardware.Enum(ctx); err != nil {
+		return errors.Annotate(err, "hardware enum")
+	}
+	g.Log.Debugf("devices init complete")
 
 	g.Engine.Register("mdb.bus_reset", doMdbBusReset)
 	g.Engine.Register("money.commit", engine.Func0{Name: "money.commit", F: func() error {
@@ -64,11 +69,6 @@ func Main(ctx context.Context, config *state.Config) error {
 	if err := ms.Start(ctx); err != nil {
 		g.Log.Error(errors.ErrorStack(err))
 	}
-	// TODO func(dev Devicer) { dev.Init() && dev.Register() }
-	// right now Enum does IO implicitly
-	// FIXME hardware.Enum() but money system inits bill/coin devices explicitly
-	evend.Enum(ctx, nil)
-	g.Log.Debugf("devices init complete")
 
 	cli.MainLoop("vender-engine-cli", newExecutor(ctx), newCompleter(ctx))
 

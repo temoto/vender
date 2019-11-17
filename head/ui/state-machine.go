@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 )
@@ -82,7 +81,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 			self.g.Tele.Error(errors.Annotatef(err, "on_boot try=%d", i))
 			self.g.Log.Error(err)
 			// TODO restart all hardware
-			evend.Enum(ctx, nil)
+			// hardware.Enum(ctx)
 		}
 		if !onStartSuccess {
 			return StateBroken

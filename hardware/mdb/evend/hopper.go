@@ -18,12 +18,12 @@ type DeviceHopper struct {
 	Generic
 }
 
-func (self *DeviceHopper) Init(ctx context.Context, addr uint8, nameSuffix string) error {
+func (self *DeviceHopper) init(ctx context.Context, addr uint8, nameSuffix string) error {
 	g := state.GetGlobal(ctx)
 	name := "hopper" + nameSuffix
 	err := self.Generic.Init(ctx, addr, name, proto2)
 	if err != nil {
-		return errors.Annotatef(err, "evend.%s.Init", name)
+		return errors.Annotatef(err, "evend.%s.init", name)
 	}
 
 	do := newHopperRun(&self.Generic, fmt.Sprintf("mdb.evend.%s.run", name), nil)
@@ -36,13 +36,13 @@ type DeviceMultiHopper struct {
 	Generic
 }
 
-func (self *DeviceMultiHopper) Init(ctx context.Context) error {
+func (self *DeviceMultiHopper) init(ctx context.Context) error {
 	const addr = 0xb8
 	const name = "multihopper"
 	g := state.GetGlobal(ctx)
 	err := self.Generic.Init(ctx, addr, "multihopper", proto1)
 	if err != nil {
-		return errors.Annotatef(err, "evend.%s.Init", name)
+		return errors.Annotatef(err, "evend.%s.init", name)
 	}
 
 	for i := uint8(1); i <= 8; i++ {
