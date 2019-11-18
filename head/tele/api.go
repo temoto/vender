@@ -59,6 +59,7 @@ func (self *Tele) Report(ctx context.Context, serviceTag bool) error {
 		MoneyCashbox: moneysys.TeleCashbox(ctx),
 		MoneyChange:  moneysys.TeleChange(ctx),
 		AtService:    serviceTag,
+		BuildVersion: g.BuildVersion,
 	}
 	err := self.qpushTelemetry(tm)
 	if err != nil {

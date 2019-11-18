@@ -27,6 +27,8 @@ const usage = `syntax: commands separated by whitespace
 
 var log = log2.NewStderr(log2.LInfo)
 
+var BuildVersion string = "unknown" // set by ldflags -X
+
 func main() {
 	cmdline := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	spiPort := cmdline.String("spi", "", "")
@@ -36,7 +38,14 @@ func main() {
 	testmode := cmdline.Bool("testmode", false, "run tests, exit code 0 if pass")
 	rawmode := cmdline.Bool("raw", false, "raw mode skips ioLoop, if unsure do not use")
 	logDebug := cmdline.Bool("log-debug", false, "")
-	cmdline.Parse(os.Args[1:])
+	onlyVersion := cmdline.Bool("version", false, "show version and stop")
+	if err := cmdline.Parse(os.Args[1:]); err != nil {
+		log.Fatal(errors.ErrorStack(errors.Trace(err)))
+	}
+	if *onlyVersion {
+		fmt.Printf("mega-cli %s\n", BuildVersion)
+		return
+	}
 
 	log.SetFlags(log2.LInteractiveFlags)
 	if *logDebug {

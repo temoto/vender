@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/cmd/vender/broken"
 	"github.com/temoto/vender/cmd/vender/engine"
 	"github.com/temoto/vender/cmd/vender/mdb"
 	"github.com/temoto/vender/cmd/vender/subcmd"
@@ -20,35 +23,54 @@ import (
 
 var log = log2.NewStderr(log2.LDebug)
 var modules = []subcmd.Mod{
-	broken.Mod,
+	vmc.BrokenMod,
 	engine.Mod,
 	mdb.Mod,
 	cmd_tele.Mod,
 	ui.Mod,
-	vmc.Mod,
+	vmc.VmcMod,
+	subcmd.Mod{Name: "version", Main: versionMain},
 }
+
+var BuildVersion string = "unknown" // set by ldflags -X
+var reFlagVersion = regexp.MustCompile("-?-?version")
 
 func main() {
 	errors.SetSourceTrimPrefix(os.Getenv("source_trim_prefix"))
 	log.SetFlags(0)
 
-	mod, err := subcmd.Parse(os.Args[1:], modules)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var configPath string
-	// flagset := mod.FlagSet( /*modArgs*/ )
 	flagset := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	flagset.StringVar(&configPath, "config", "vender.hcl", "")
+	flagset.Usage = func() {
+		fmt.Fprint(flagset.Output(), "Usage: [option...] command\n\nOptions:\n")
+		flagset.PrintDefaults()
+		commandNames := make([]string, len(modules))
+		for i, m := range modules {
+			commandNames[i] = m.Name
+		}
+		fmt.Fprintf(flagset.Output(), "Commands: %s\n", strings.Join(commandNames, " "))
+	}
+	configPath := flagset.String("config", "vender.hcl", "")
+	onlyVersion := flagset.Bool("version", false, "")
 	if err := flagset.Parse(os.Args[1:]); err != nil {
 		log.Fatal(err)
 	}
+	if *onlyVersion || (len(os.Args) == 2 && reFlagVersion.MatchString(os.Args[1])) {
+		_ = versionMain(context.Background(), nil)
+		return
+	}
 
-	config := state.MustReadConfig(log, state.NewOsFullReader(), configPath)
+	mod, err := subcmd.Parse(flagset.Arg(0), modules)
+	if err != nil {
+		fmt.Fprintf(flagset.Output(), "command line error: %v\n\n", err)
+		flagset.Usage()
+		os.Exit(1)
+	}
+
+	config := state.MustReadConfig(log, state.NewOsFullReader(), *configPath)
 
 	log.SetFlags(log2.LInteractiveFlags)
 	ctx, g := state_new.NewContext(log, new(tele.Tele))
+	g.BuildVersion = BuildVersion
 	if subcmd.SdNotify("start") {
 		// under systemd assume systemd journal logging, no timestamp
 		log.SetFlags(log2.LServiceFlags)
@@ -58,4 +80,9 @@ func main() {
 	if err := mod.Main(ctx, config); err != nil {
 		g.Fatal(err)
 	}
+}
+
+func versionMain(ctx context.Context, config *state.Config) error {
+	fmt.Printf("vender %s\n", BuildVersion)
+	return nil
 }

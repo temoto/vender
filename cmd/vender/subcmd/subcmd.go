@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/juju/errors"
@@ -19,21 +18,11 @@ type Mod struct {
 	Main func(context.Context, *state.Config) error
 }
 
-func Parse(args []string, modules []Mod) (*Mod, error) {
-	if len(args) == 0 {
-		panic("code error len(args)=0")
+func Parse(command string, modules []Mod) (*Mod, error) {
+	if command == "" {
+		return nil, fmt.Errorf("empty command")
 	}
 
-	names := make([]string, len(modules))
-	for i, m := range modules {
-		names[i] = m.Name
-	}
-	usage := fmt.Sprintf(`usage: %s command [options]
-Available commands: %s`, args[0], strings.Join(names, " "))
-	if len(args) == 1 {
-		return nil, fmt.Errorf(usage)
-	}
-	command := args[1]
 	var found *Mod
 	for i := range modules {
 		m := &modules[i]
@@ -46,7 +35,7 @@ Available commands: %s`, args[0], strings.Join(names, " "))
 		}
 	}
 	if found == nil {
-		return nil, fmt.Errorf("unknown command='%s'\n%s", command, usage)
+		return nil, fmt.Errorf("unknown command='%s'", command)
 	}
 	return found, nil
 }

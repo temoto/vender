@@ -1,16 +1,16 @@
 #!/bin/bash
 set -eu
 base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
-target=./cmd/vender/vender
-gopkg=$(dirname $target)
-name=$(basename $target)
 test_flag=(-race -timeout=11s)
 : ${remote="pi@pipi"}
+cd "$base"
 
 echo "- run tests" >&2
 set -x
 go test "${test_flag[@]}" ./... >/dev/null || go test -v "${test_flag[@]}" ./...
-GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
-rsync -a $base/$target $remote:~/
+
+script/build
+
+rsync -a build/vender $remote:~/vender
 cmd=$1 ; shift
-ssh -t $remote time sudo -n env GODEBUG=gctrace=1 chrt --fifo 99 \~/$name -config=local.hcl "$cmd" "$@"
+ssh -t $remote time sudo -n env GODEBUG=gctrace=1 chrt --fifo 99 \~/vender -config=local.hcl "$cmd" "$@"

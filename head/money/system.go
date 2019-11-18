@@ -7,7 +7,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
-	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb/bill"
@@ -26,12 +25,10 @@ type MoneySystem struct { //nolint:maligned
 	bill        bill.Biller
 	billCashbox currency.NominalGroup
 	billCredit  currency.NominalGroup
-	billPoll    *alive.Alive
 
 	coin        coin.Coiner
 	coinCashbox currency.NominalGroup
 	coinCredit  currency.NominalGroup
-	coinPoll    *alive.Alive
 
 	giftCredit currency.Amount
 }

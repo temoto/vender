@@ -1,15 +1,19 @@
 #!/bin/bash
 set -eu
 base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+source "$base/script/build"
 target=./cmd/mega-cli/mega-cli
 gopkg=$(dirname $target)
 name=$(basename $target)
 test_flag=(-race -timeout=11s)
 : ${remote="pi@pipi"}
+version=$(get_version)
+cd "$base"
 
 echo "- run tests" >&2
 set -x
 go test "${test_flag[@]}" ./... >/dev/null || go test -v "${test_flag[@]}" ./...
-GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target $gopkg
+
+GOARCH=arm GOOS=linux GOARM=6 go build -o $base/$target -ldflags="-X 'main.BuildVersion=$version'" $gopkg
 rsync -a $base/$target $remote:~/
 ssh -t $remote time sudo -n env GODEBUG=gctrace=1 chrt --fifo 99 \~/$name "$@"

@@ -1,4 +1,5 @@
-package broken
+// Main, user facing mode of operation.
+package vmc
 
 import (
 	"context"
@@ -9,17 +10,55 @@ import (
 	"github.com/temoto/vender/hardware"
 	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
+	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/state"
 )
 
-var Mod = subcmd.Mod{Name: "broken", Main: Main}
+var VmcMod = subcmd.Mod{Name: "vmc", Main: VmcMain}
+var BrokenMod = subcmd.Mod{Name: "broken", Main: BrokenMain}
 
-func Main(ctx context.Context, config *state.Config) error {
+func VmcMain(ctx context.Context, config *state.Config) error {
 	g := state.GetGlobal(ctx)
 	g.MustInit(ctx, config)
 
 	display := g.MustDisplay()
-	display.SetLines("boot", g.Config.UI.Front.MsgWait)
+	display.SetLines("boot "+g.BuildVersion, g.Config.UI.Front.MsgWait)
+
+	mdbus, err := g.Mdb()
+	if err != nil {
+		return errors.Annotate(err, "mdb init")
+	}
+	if err = mdbus.ResetDefault(); err != nil {
+		return errors.Annotate(err, "mdb bus reset")
+	}
+
+	if err = hardware.Enum(ctx); err != nil {
+		return errors.Annotate(err, "hardware enum")
+	}
+
+	moneysys := new(money.MoneySystem)
+	if err := moneysys.Start(ctx); err != nil {
+		return errors.Annotate(err, "money system Start()")
+	}
+
+	ui := ui.UI{}
+	if err := ui.Init(ctx); err != nil {
+		return errors.Annotate(err, "ui Init()")
+	}
+
+	subcmd.SdNotify(daemon.SdNotifyReady)
+	g.Log.Debugf("VMC init complete")
+
+	ui.Loop(ctx)
+	return nil
+}
+
+func BrokenMain(ctx context.Context, config *state.Config) error {
+	g := state.GetGlobal(ctx)
+	g.MustInit(ctx, config)
+
+	display := g.MustDisplay()
+	display.SetLines("boot "+g.BuildVersion, g.Config.UI.Front.MsgWait)
 
 	subcmd.SdNotify(daemon.SdNotifyReady)
 

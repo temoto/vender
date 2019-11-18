@@ -1,11 +1,13 @@
 #!/bin/bash
 base="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "$base/script/build"
 : ${build_go:=1}
 set -eu
 
 main() {
 	cd $base
 	rm -f $base/coverage.{info,txt} $base/*.gcda $base/*.gcno
+	echo "build version: $(build_version)"
 
 	if [[ "$build_go" != "0" ]] ; then
 		export GO111MODULE=on
@@ -60,4 +62,4 @@ confirm() {
     return $rc
 }
 
-main
+main "$@"

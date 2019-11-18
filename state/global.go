@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,10 +28,12 @@ type Global struct {
 	Log       *log2.Log
 	Tele      tele_api.Teler
 
+	BuildVersion string
+
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
 	XXX_ui    atomic.Value // *ui.UI crutch to import cycle
 
-	_copy_guard sync.Mutex //nolint:U1000
+	_copy_guard sync.Mutex //lint:ignore U1000 unused
 }
 
 const ContextKey = "run/state-global"
@@ -50,6 +53,8 @@ func GetGlobal(ctx context.Context) *Global {
 func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	g.Config = cfg
 
+	g.Log.Infof("build version=%s", g.BuildVersion)
+
 	if g.Config.Persist.Root == "" {
 		g.Config.Persist.Root = "./tmp-vender-db"
 		g.Log.Errorf("config: persist.root=empty changed=%s", g.Config.Persist.Root)
@@ -64,6 +69,12 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	if err := g.Tele.Init(ctx, g.Log, g.Config.Tele); err != nil {
 		g.Tele = tele_api.Noop{}
 		return errors.Annotate(err, "tele init")
+	}
+
+	if g.BuildVersion == "unknown" {
+		g.Error(fmt.Errorf("build version is not set, please use script/build"))
+	} else if g.Config.Tele.VmId > 0 && strings.HasSuffix(g.BuildVersion, "-dirty") { // vmid<=0 is staging
+		g.Error(fmt.Errorf("running development build with uncommited changes, bad idea for production"))
 	}
 
 	if g.Config.Money.Scale == 0 {
