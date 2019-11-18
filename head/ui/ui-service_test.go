@@ -92,8 +92,7 @@ ui { service {
 func TestServiceReboot(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
-engine {}`)
+	ctx, g := state_new.NewTestContext(t, `engine {}`)
 	env := &tenv{ctx: ctx, g: g}
 	g.Config.UI.Service.Auth.Enable = false
 	uiTestSetup(t, env, ui.StateServiceBegin, ui.StateServiceEnd)
@@ -105,6 +104,27 @@ engine {}`)
 		{expect: env._T("Menu", "3 reboot"), inev: env._KeyAccept},
 		{expect: env._T("for reboot", "press 1"), inev: env._Key('1')},
 		{expect: env._T("reboot", "in progress"), inev: ui.Event{}},
+	}
+	uiTestWait(t, env, steps)
+}
+
+func TestServiceReport(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state_new.NewTestContext(t, `engine {}`)
+	env := &tenv{ctx: ctx, g: g}
+	g.Config.UI.Service.Auth.Enable = false
+	uiTestSetup(t, env, ui.StateServiceBegin, ui.StateServiceEnd)
+	go env.ui.Loop(ctx)
+
+	steps := []step{
+		{expect: env._T("Menu", "1 inventory"), inev: env._KeyNext},
+		{expect: env._T("Menu", "2 test"), inev: env._KeyNext},
+		{expect: env._T("Menu", "3 reboot"), inev: env._KeyNext},
+		{expect: env._T("Menu", "4 network"), inev: env._KeyNext},
+		{expect: env._T("Menu", "5 report"), inev: env._KeyAccept},
+		{expect: env._T("Menu", "5 report"), inev: env._KeyReject},
+		{},
 	}
 	uiTestWait(t, env, steps)
 }

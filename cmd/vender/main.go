@@ -50,7 +50,7 @@ func main() {
 		fmt.Fprintf(flagset.Output(), "Commands: %s\n", strings.Join(commandNames, " "))
 	}
 	configPath := flagset.String("config", "vender.hcl", "")
-	onlyVersion := flagset.Bool("version", false, "")
+	onlyVersion := flagset.Bool("version", false, "print build version and exit")
 	if err := flagset.Parse(os.Args[1:]); err != nil {
 		log.Fatal(err)
 	}

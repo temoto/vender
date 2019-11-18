@@ -192,6 +192,8 @@ func (self *UI) onServiceMenu() State {
 			return StateServiceNetwork
 		case serviceMenuMoneyLoad:
 			return StateServiceMoneyLoad
+		case serviceMenuReport:
+			return StateServiceReport
 		default:
 			panic("code error")
 		}
@@ -368,7 +370,7 @@ func (self *UI) onServiceReport(ctx context.Context) State {
 	if err := self.g.Engine.ExecList(ctx, "service-report", []string{"money.cashbox_zero"}); err != nil {
 		self.g.Error(err)
 	}
-	return StateDefault
+	return StateServiceMenu
 }
 
 func (self *UI) onServiceEnd(ctx context.Context) State {
