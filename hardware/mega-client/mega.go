@@ -238,13 +238,13 @@ func (self *Client) ioLoop() {
 				case RESPONSE_RESET:
 				default:
 					// So far this always has been a symptom of critical protocol error
-					self.Log.Fatalf("%s stray packet %s", modName, bgrecv.ResponseString())
+					self.Log.Errorf("%s stray packet %s", modName, bgrecv.ResponseString())
 				}
 			case ErrResponseEmpty:
 				// XXX TODO FIXME error is still present, it only wastes time, not critical
 				// self.Log.Errorf("%s FIXME tx=no notified=yes read=empty", modName)
 			default:
-				self.Log.Fatalf("%s stray err=%v", modName, err)
+				self.Log.Errorf("%s stray err=%v", modName, err)
 			}
 
 		case <-stopch:
@@ -299,7 +299,7 @@ func (self *Client) ioTx(tx *tx) error {
 
 			default:
 				// shouldn't ever happen
-				self.Log.Fatalf("mega TODO iotx try=%d wait=%v notified=%t read=empty", try, tx.wait, notified)
+				self.Log.Errorf("mega TODO iotx try=%d wait=%v notified=%t read=empty", try, tx.wait, notified)
 			}
 
 		default: // other errors
