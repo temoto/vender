@@ -37,6 +37,9 @@ func (self *Tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
 	case *tele_api.Command_Exec:
 		err = self.cmdExec(ctx, cmd, task.Exec)
 
+	case *tele_api.Command_SetInventory:
+		err = self.cmdSetInventory(ctx, cmd, task.SetInventory)
+
 	default:
 		err = fmt.Errorf("unknown command=%#v", cmd)
 		self.log.Error(err.Error())
@@ -80,5 +83,15 @@ func (self *Tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 	}
 	err = doer.Do(ctx)
 	err = errors.Annotate(err, "do")
+	return err
+}
+
+func (self *Tele) cmdSetInventory(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgSetInventory) error {
+	if arg == nil || arg.New == nil {
+		return errors.Errorf("invalid arg")
+	}
+
+	g := state.GetGlobal(ctx)
+	_, err := g.Inventory.SetTele(arg.New)
 	return err
 }

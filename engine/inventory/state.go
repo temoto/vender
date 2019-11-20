@@ -16,7 +16,7 @@ func (self *Inventory) UnmarshalBinary(b []byte) error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	for _, stockState := range state.Stocks {
-		if stock, ok := self.ss[stockState.Name]; ok {
+		if stock, ok := self.locked_get(0, stockState.Name); ok {
 			if stockState.Enabled {
 				stock.Enable()
 			} else {
@@ -31,8 +31,8 @@ func (self *Inventory) UnmarshalBinary(b []byte) error {
 func (self *Inventory) MarshalBinary() ([]byte, error) {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
-	state := State{Stocks: make([]*State_Stock, 0, len(self.ss))}
-	for _, stock := range self.ss {
+	state := State{Stocks: make([]*State_Stock, 0, len(self.byName))}
+	for _, stock := range self.byName {
 		state.Stocks = append(state.Stocks, &State_Stock{
 			Name:    stock.Name,
 			Enabled: stock.Enabled(),

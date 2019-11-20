@@ -97,6 +97,32 @@ func TestCommand(t *testing.T) {
 				assert.Equal(t, "", r.Error)
 				assert.True(t, env.flag)
 			}},
+		{name: "set-inventory",
+			config: `engine { inventory {
+		tele_add_name = true
+		stock "paper" {}
+		stock "rock" {}
+	}}`,
+			cmd: tele_api.Command{
+				Id: rand.Uint32(),
+				Task: &tele_api.Command_SetInventory{SetInventory: &tele_api.Command_ArgSetInventory{
+					New: &tele_api.Inventory{Stocks: []*tele_api.Inventory_StockItem{
+						&tele_api.Inventory_StockItem{Name: "paper", Valuef: 3.14},
+					}},
+				}},
+				ReplyTopic: "t",
+			},
+			check: func(t testing.TB, env *tenv) {
+				b := <-env.trans.outResponse
+				var r tele_api.Response
+				require.NoError(t, proto.Unmarshal(b, &r))
+				assert.Equal(t, env.cmd.Id, r.CommandId)
+				assert.Equal(t, "", r.Error)
+				g := state.GetGlobal(env.ctx)
+				paperStock, err := g.Inventory.Get("paper")
+				require.NoError(t, err)
+				assert.Equal(t, float32(3.14), paperStock.Value())
+			}},
 	}
 	for _, c := range cases {
 		c := c
