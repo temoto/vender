@@ -167,7 +167,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			}
 
 		case EventMoney:
-			self.g.Log.Errorf("ui-front money event=%v", e.Money)
+			self.g.Log.Debugf("ui-front money event=%v", e.Money)
 			go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.moneych)
 
 		case EventService:
@@ -276,7 +276,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	if tuneCream := ScaleTuneRate(self.FrontResult.Cream, MaxCream, DefaultCream); tuneCream != 1 {
 		const name = "cream"
 		var err error
-		self.g.Log.Errorf("ui-front tuning stock=%s tune=%v", name, tuneCream)
+		self.g.Log.Debugf("ui-front tuning stock=%s tune=%v", name, tuneCream)
 		if itemCtx, err = self.g.Inventory.WithTuning(itemCtx, name, tuneCream); err != nil {
 			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
 		}
@@ -284,7 +284,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	if tuneSugar := ScaleTuneRate(self.FrontResult.Sugar, MaxSugar, DefaultSugar); tuneSugar != 1 {
 		const name = "sugar"
 		var err error
-		self.g.Log.Errorf("ui-front tuning stock=%s tune=%v", name, tuneSugar)
+		self.g.Log.Debugf("ui-front tuning stock=%s tune=%v", name, tuneSugar)
 		if itemCtx, err = self.g.Inventory.WithTuning(itemCtx, name, tuneSugar); err != nil {
 			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
 		}
