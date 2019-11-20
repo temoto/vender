@@ -216,10 +216,10 @@ func TestCoinDispenseSmart(t *testing.T) {
 	ctx := mockContext(t, rs)
 	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
-	ca.dispenseSmart = true
+	ca.giveSmart = true // FIXME set in config
 
 	dispensed := new(currency.NominalGroup)
-	err := ca.NewDispenseSmart(1*currency.Amount(ca.scalingFactor), true, dispensed).Do(ctx)
+	err := ca.NewGive(1*currency.Amount(ca.scalingFactor), true, dispensed).Do(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "2:1,total:2", dispensed.String())
 }

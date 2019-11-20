@@ -26,7 +26,7 @@ type Coiner interface {
 	Run(context.Context, *alive.Alive, func(money.PollItem) bool)
 	ExpansionDiagStatus(*DiagResult) error
 	SupportedNominals() []currency.Nominal
-	NewDispenseSmart(currency.Amount, bool, *currency.NominalGroup) engine.Doer
+	NewGive(currency.Amount, bool, *currency.NominalGroup) engine.Doer
 	TubeStatus() error
 	Tubes() *currency.NominalGroup
 }
@@ -56,8 +56,8 @@ func (Stub) ExpansionDiagStatus(*DiagResult) error {
 
 func (Stub) SupportedNominals() []currency.Nominal { return nil }
 
-func (Stub) NewDispenseSmart(currency.Amount, bool, *currency.NominalGroup) engine.Doer {
-	// return engine.Fail{E: errors.NotSupportedf("coin.Stub.NewDispenseSmart")}
+func (Stub) NewGive(currency.Amount, bool, *currency.NominalGroup) engine.Doer {
+	// return engine.Fail{E: errors.NotSupportedf("coin.Stub.NewGive")}
 	return engine.Nothing{}
 }
 

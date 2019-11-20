@@ -144,7 +144,7 @@ hardware {
     }
 
     coin {
-      dispense_smart       = false
+      give_smart           = false
       dispense_timeout_sec = 0
     }
 

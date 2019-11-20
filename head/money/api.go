@@ -158,7 +158,7 @@ func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amou
 	// TODO bill.recycler-release
 
 	dispensed := new(currency.NominalGroup)
-	err = self.coin.NewDispenseSmart(amount, true, dispensed).Do(ctx)
+	err = self.coin.NewGive(amount, true, dispensed).Do(ctx)
 	// Warning: `dispensedAmount` may be more or less than `amount`
 	dispensedAmount := dispensed.Total()
 	self.Log.Debugf("%s coin total dispensed=%s", tag, dispensedAmount.FormatCtx(ctx))

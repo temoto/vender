@@ -14,11 +14,11 @@ import (
 	"github.com/temoto/vender/state"
 )
 
-// High-level coin dispense command. Handles:
-// - built-in payout or "manual dispense" using expend strategy
+// High-level dispense wrapper. Handles:
+// - built-in payout or dispense-by-coin using expend strategy
 // - give smallest amount >= requested
-func (self *CoinAcceptor) NewDispenseSmart(requestAmount currency.Amount, over bool, success *currency.NominalGroup) engine.Doer {
-	const tag = "mdb.coin.dispense-smart"
+func (self *CoinAcceptor) NewGive(requestAmount currency.Amount, over bool, success *currency.NominalGroup) engine.Doer {
+	const tag = "mdb.coin.give"
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var err error
@@ -30,9 +30,9 @@ func (self *CoinAcceptor) NewDispenseSmart(requestAmount currency.Amount, over b
 			return nil
 		}
 
-		// === Try smart manual dispense
-		if self.dispenseSmart {
-			err = self.dispenseSmartManual(ctx, leftAmount, success)
+		// === Try smart dispense-by-coin
+		if self.giveSmart {
+			err = self.giveSmartManual(ctx, leftAmount, success)
 			if err != nil {
 				return errors.Annotate(err, tag)
 			}
@@ -43,10 +43,10 @@ func (self *CoinAcceptor) NewDispenseSmart(requestAmount currency.Amount, over b
 				panic("code error")
 			}
 			leftAmount = requestAmount - successAmount
+			self.Device.Log.Errorf("%s fallback to PAYOUT left=%s", tag, leftAmount.FormatCtx(ctx))
 		}
 
 		// === Fallback to PAYOUT
-		self.Device.Log.Errorf("%s fallback to PAYOUT left=%s", tag, leftAmount.FormatCtx(ctx))
 		err = self.NewPayout(leftAmount, success).Do(ctx)
 		if err != nil {
 			return errors.Annotate(err, tag)
@@ -71,14 +71,14 @@ func (self *CoinAcceptor) NewDispenseSmart(requestAmount currency.Amount, over b
 			tag, successAmount.FormatCtx(ctx), requestAmount.FormatCtx(ctx), leftAmount.FormatCtx(ctx))
 		config := state.GetGlobal(ctx).Config
 		if leftAmount <= currency.Amount(config.Money.ChangeOverCompensate) {
-			return self.NewDispenseLeastOver(leftAmount, success).Do(ctx)
+			return self.NewGiveLeastOver(leftAmount, success).Do(ctx)
 		}
 		return currency.ErrNominalCount
 	}}
 }
 
-func (self *CoinAcceptor) NewDispenseLeastOver(requestAmount currency.Amount, success *currency.NominalGroup) engine.Doer {
-	const tag = "mdb.coin.dispense-over"
+func (self *CoinAcceptor) NewGiveLeastOver(requestAmount currency.Amount, success *currency.NominalGroup) engine.Doer {
+	const tag = "mdb.coin.give-least-over"
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var err error
@@ -114,8 +114,8 @@ func (self *CoinAcceptor) NewDispenseLeastOver(requestAmount currency.Amount, su
 	}}
 }
 
-func (self *CoinAcceptor) dispenseSmartManual(ctx context.Context, amount currency.Amount, success *currency.NominalGroup) error {
-	const tag = "mdb.coin.dispense-smart/manual"
+func (self *CoinAcceptor) giveSmartManual(ctx context.Context, amount currency.Amount, success *currency.NominalGroup) error {
+	const tag = "mdb.coin.give-smart/manual"
 	var err error
 
 	if err = self.TubeStatus(); err != nil {

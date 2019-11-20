@@ -44,7 +44,7 @@ const (
 
 type CoinAcceptor struct { //nolint:maligned
 	mdb.Device
-	dispenseSmart   bool
+	giveSmart       bool
 	dispenseTimeout time.Duration
 	pollmu          sync.Mutex // isolate active/idle polling
 
@@ -86,7 +86,7 @@ func (self *CoinAcceptor) init(ctx context.Context) error {
 	}
 	self.Device.Init(mdbus, 0x08, "coin", binary.BigEndian)
 	config := &g.Config.Hardware.Mdb.Coin
-	self.dispenseSmart = config.DispenseSmart
+	self.giveSmart = config.GiveSmart || config.XXX_Deprecated_DispenseSmart
 	self.dispenseTimeout = helpers.IntSecondDefault(config.DispenseTimeoutSec, defaultDispenseTimeout)
 	self.scalingFactor = 1
 

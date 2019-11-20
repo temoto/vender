@@ -110,15 +110,16 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	}
 	g.Engine.Register(doAccept.Name, doAccept)
 
-	doDispense := engine.FuncArg{
-		Name: "money.dispense(?)",
+	doGive := engine.FuncArg{
+		Name: "money.give(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
 			dispensed := currency.NominalGroup{}
-			err := self.coin.NewDispenseSmart(g.Config.ScaleU(uint32(arg)), false, &dispensed).Do(ctx)
+			err := self.coin.NewGive(g.Config.ScaleU(uint32(arg)), false, &dispensed).Do(ctx)
 			self.Log.Infof("dispensed=%s", dispensed.String())
 			return err
 		}}
-	g.Engine.Register(doDispense.Name, doDispense)
+	g.Engine.Register(doGive.Name, doGive)
+	g.Engine.Register("money.dispense(?)", doGive) // FIXME remove deprecated
 
 	doSetGiftCredit := engine.FuncArg{
 		Name: "money.set_gift_credit(?)",
