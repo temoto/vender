@@ -33,9 +33,17 @@ func (self *MoneySystem) locked_credit(includeEscrow bool) currency.Amount {
 }
 
 func (self *MoneySystem) Credit(ctx context.Context) currency.Amount {
-	self.lk.Lock()
-	defer self.lk.Unlock()
+	self.lk.RLock()
+	defer self.lk.RUnlock()
 	return self.locked_credit(true)
+}
+
+// TODO replace with WithdrawPrepare() -> []Spending{Cash: ..., Gift: ...}
+func (self *MoneySystem) GetGiftCredit() currency.Amount {
+	self.lk.RLock()
+	c := self.giftCredit
+	self.lk.RUnlock()
+	return c
 }
 
 func (self *MoneySystem) SetGiftCredit(ctx context.Context, value currency.Amount) {

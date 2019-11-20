@@ -262,12 +262,18 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	uiConfig := &self.g.Config.UI
 	selected := &self.FrontResult.Item
 	teletx := tele_api.Telemetry_Transaction{
-		Code:  selected.Code,
-		Price: uint32(selected.Price),
-		// TODO options
-		// TODO payment method
+		Code:    selected.Code,
+		Price:   uint32(selected.Price),
+		Options: []int32{int32(self.FrontResult.Cream), int32(self.FrontResult.Sugar)},
 		// TODO bills, coins
 	}
+
+	if moneysys.GetGiftCredit() == 0 {
+		teletx.PaymentMethod = tele_api.PaymentMethod_Cash
+	} else {
+		teletx.PaymentMethod = tele_api.PaymentMethod_Gift
+	}
+
 	self.g.Log.Debugf("ui-front selected=%s begin", selected.String())
 	if err := moneysys.WithdrawPrepare(ctx, selected.Price); err != nil {
 		self.g.Log.Errorf("ui-front CRITICAL error while return change")

@@ -19,7 +19,7 @@ import (
 
 type MoneySystem struct { //nolint:maligned
 	Log   *log2.Log
-	lk    sync.Mutex
+	lk    sync.RWMutex
 	dirty currency.Amount // uncommited
 
 	bill        bill.Biller
