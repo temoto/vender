@@ -276,6 +276,7 @@ func (self *CoinAcceptor) NewPayout(amount currency.Amount, success *currency.No
 
 	return engine.NewSeq(tag).
 		Append(doPayout).
+		Append(engine.Sleep{Duration: self.Device.DelayNext}).
 		Append(self.Device.NewPollLoop(tag, packetPayoutPoll, self.dispenseTimeout*4, payoutPollFun)).
 		Append(doStatus)
 }
