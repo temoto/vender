@@ -66,10 +66,12 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	if g.Config.Tele.PersistPath == "" {
 		g.Config.Tele.PersistPath = filepath.Join(g.Config.Persist.Root, "tele")
 	}
-	if err := g.Tele.Init(ctx, g.Log, g.Config.Tele); err != nil {
+	// Tele.Init gets g.Log clone before SetErrorFunc, so Tele.Log.Error doesn't recurse on itself
+	if err := g.Tele.Init(ctx, g.Log.Clone(log2.LInfo), g.Config.Tele); err != nil {
 		g.Tele = tele_api.Noop{}
 		return errors.Annotate(err, "tele init")
 	}
+	g.Log.SetErrorFunc(g.Tele.Error)
 
 	if g.BuildVersion == "unknown" {
 		g.Error(fmt.Errorf("build version is not set, please use script/build"))
@@ -118,7 +120,6 @@ func (g *Global) Error(err error, args ...interface{}) {
 			args = args[1:]
 			err = errors.Annotatef(err, msg, args...)
 		}
-		g.Log.Errorf(errors.ErrorStack(err))
 		g.Tele.Error(err)
 	}
 }

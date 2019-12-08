@@ -198,7 +198,7 @@ func newExecutor(client *mega.Client) func(string) {
 				}
 				r, err := client.DoMdbTxSimple(bs)
 				if err != nil {
-					log.Errorf("%s err=%v", err)
+					log.Errorf("%s err=%v", word, err)
 					return
 				}
 				log.Infof("response=%s", r.ResponseString())

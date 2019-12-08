@@ -145,7 +145,9 @@ func (self *Device) TxMaybe(request Packet, response *Packet) error {
 func (self *Device) TxCustom(request Packet, response *Packet, opt TxOpt) error {
 	self.cmdLk.Lock()
 	defer self.cmdLk.Unlock()
-	return self.tx(request, response, opt)
+	st := self.State()
+	err := self.tx(request, response, opt)
+	return errors.Annotatef(err, "mdb.%s TxCustom request=%x state=%s", self.Name, request.Bytes(), st.String())
 }
 
 func (self *Device) TxSetup() error {
@@ -160,13 +162,13 @@ func (self *Device) SetError(e error) {
 
 func (self *Device) ErrorCode() int32 { return atomic.LoadInt32(&self.errCode) }
 func (self *Device) SetErrorCode(c int32) {
+	tag := "mdb." + self.Name
 	prev := atomic.SwapInt32(&self.errCode, c)
 	if prev != ErrCodeNone && c != ErrCodeNone {
-		self.Log.Errorf("mdb.%s CRITICAL SetErrorCode overwrite previous=%d", self.Name, prev)
-		// TODO tele
+		self.Log.Infof("%s PLEASE REPORT SetErrorCode overwrite previous=%d", tag, prev)
 	}
 	if prev == ErrCodeNone && c != ErrCodeNone {
-		self.SetError(fmt.Errorf("mdb.%s errcode=%d", self.Name, c))
+		self.SetError(fmt.Errorf("%s errcode=%d", tag, c))
 	}
 }
 
@@ -184,6 +186,7 @@ func (self *Device) Reset() error {
 
 // Keep particular devices "hot" to reduce useless POLL time.
 func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
+	tag := "mdb." + self.Name
 	wait := interval
 
 	for {
@@ -204,7 +207,10 @@ func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
 		wait = interval - okAge
 		// self.Log.Debugf("keepalive locked okage=%v wait=%v", okAge, wait)
 		if wait <= 0 {
-			_ = self.txKnown(self.PacketPoll, new(Packet))
+			err := self.txKnown(self.PacketPoll, new(Packet))
+			if !IsResponseTimeout(err) {
+				self.Log.Infof("%s Keepalive ignoring err=%v", tag, err)
+			}
 			wait = interval
 		}
 		self.cmdLk.Unlock()
@@ -287,12 +293,6 @@ func (self *Device) locked_reset() error {
 	self.lastReset.SetNow()
 	atomic.StoreInt32(&self.errCode, ErrCodeNone)
 	if err != nil {
-		if !IsResponseTimeout(err) {
-			// TODO remove log here when ensured that error is logged in all callers
-			// - Keepalive() ignores err
-			// - Reset() returns err to caller without logging
-			self.Log.Errorf("%s RESET err=%s", tag, errors.ErrorStack(err))
-		}
 		err = errors.Annotatef(err, "%s RESET", tag)
 		return err
 	}
@@ -359,9 +359,6 @@ func (self *Device) tx(request Packet, response *Packet, opt TxOpt) error {
 			self.LastOff.SetNowIfZero()
 			self.SetState(DeviceOffline)
 			err = errors.Wrapf(err, ErrOffline, "mdb.%s is offline", self.Name)
-			if st != DeviceOffline {
-				self.TeleError(err)
-			}
 		}
 	} else { // other error
 		err = errors.Annotatef(err, "mdb.%s tx request=%x state=%s", self.Name, request.Bytes(), st.String())

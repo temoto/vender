@@ -3,6 +3,7 @@ package tele
 import (
 	"context"
 
+	"github.com/juju/errors"
 	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/state"
@@ -14,7 +15,7 @@ var _ tele_api.Teler = &Tele{} // compile-time interface test
 
 func (self *Tele) CommandReplyErr(c *tele_api.Command, e error) {
 	if !self.enabled {
-		self.log.Errorf(logMsgDisabled)
+		self.log.Infof(logMsgDisabled)
 		return
 	}
 	errText := ""
@@ -27,17 +28,17 @@ func (self *Tele) CommandReplyErr(c *tele_api.Command, e error) {
 	}
 	err := self.qpushCommandResponse(c, &r)
 	if err != nil {
-		self.log.Errorf("CRITICAL command=%#v response=%#v err=%v", c, r, err)
+		self.log.Error(errors.Annotatef(err, "CRITICAL command=%#v response=%#v", c, r))
 	}
 }
 
 func (self *Tele) Error(e error) {
 	if !self.enabled {
-		self.log.Errorf(logMsgDisabled)
+		self.log.Infof(logMsgDisabled)
 		return
 	}
 
-	self.log.Errorf("tele.Error e=%v", e)
+	self.log.Debugf("tele.Error: " + errors.ErrorStack(e))
 	tmerr := tele_api.Telemetry_Error{
 		Message: e.Error(),
 	}
@@ -48,7 +49,7 @@ func (self *Tele) Error(e error) {
 
 func (self *Tele) Report(ctx context.Context, serviceTag bool) error {
 	if !self.enabled {
-		self.log.Errorf(logMsgDisabled)
+		self.log.Infof(logMsgDisabled)
 		return nil
 	}
 
@@ -70,7 +71,7 @@ func (self *Tele) Report(ctx context.Context, serviceTag bool) error {
 
 func (self *Tele) State(s tele_api.State) {
 	if !self.enabled {
-		self.log.Errorf(logMsgDisabled)
+		self.log.Infof(logMsgDisabled)
 		return
 	}
 
@@ -80,7 +81,7 @@ func (self *Tele) State(s tele_api.State) {
 
 func (self *Tele) StatModify(fun func(s *tele_api.Stat)) {
 	if !self.enabled {
-		self.log.Errorf(logMsgDisabled)
+		self.log.Infof(logMsgDisabled)
 		return
 	}
 
@@ -91,7 +92,7 @@ func (self *Tele) StatModify(fun func(s *tele_api.Stat)) {
 
 func (self *Tele) Transaction(tx tele_api.Telemetry_Transaction) {
 	if !self.enabled {
-		self.log.Errorf(logMsgDisabled)
+		self.log.Infof(logMsgDisabled)
 		return
 	}
 	err := self.qpushTelemetry(&tele_api.Telemetry{Transaction: &tx})

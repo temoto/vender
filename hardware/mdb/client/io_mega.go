@@ -99,10 +99,13 @@ func (self *megaUart) Tx(request, response []byte) (int, error) {
 			time.Sleep(DelayErr)
 
 		case mega.ErrCriticalProtocol:
-			self.c.Log.Fatalf("%s CRITICAL request=%x err=%s", tag, request, errors.ErrorStack(err))
+			err = errors.Annotatef(err, "%s CRITICAL request=%x", tag, request)
+			self.c.Log.Fatal(err)
+			return 0, err
 
 		default:
-			self.c.Log.Errorf("%s request=%x err=%s", tag, request, errors.ErrorStack(err))
+			err = errors.Annotatef(err, "%s request=%x", tag, request)
+			self.c.Log.Error(err)
 			return 0, err
 		}
 	}

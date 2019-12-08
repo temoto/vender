@@ -17,6 +17,8 @@ import (
 	"os"
 	"sync/atomic"
 	"testing"
+
+	"github.com/juju/errors"
 )
 
 const ContextKey = "run/log"
@@ -54,10 +56,10 @@ const (
 )
 
 type Log struct {
-	l      *log.Logger
-	level  Level
-	w      io.Writer
-	fatalf Func
+	l       *log.Logger
+	level   Level
+	onError atomic.Value // <ErrorHandler>
+	fatalf  FmtFunc
 }
 
 func NewStderr(level Level) *Log { return NewWriter(os.Stderr, level) }
@@ -68,16 +70,16 @@ func NewWriter(w io.Writer, level Level) *Log {
 	return &Log{
 		l:     log.New(w, "", LStdFlags),
 		level: level,
-		w:     w,
 	}
 }
 
-type Func func(format string, args ...interface{})
-type FuncWriter struct{ Func }
+type ErrorFunc func(error)
+type FmtFunc func(format string, args ...interface{})
+type FmtFuncWriter struct{ FmtFunc }
 
-func NewFunc(f Func, level Level) *Log { return NewWriter(FuncWriter{f}, level) }
-func (self FuncWriter) Write(b []byte) (int, error) {
-	self.Func(string(b))
+func NewFunc(f FmtFunc, level Level) *Log { return NewWriter(FmtFuncWriter{f}, level) }
+func (self FmtFuncWriter) Write(b []byte) (int, error) {
+	self.FmtFunc(string(b))
 	return len(b), nil
 }
 
@@ -91,9 +93,18 @@ func (self *Log) Clone(level Level) *Log {
 	if self == nil {
 		return nil
 	}
-	l := NewWriter(self.w, level)
-	l.SetFlags(self.l.Flags())
-	return l
+	new := NewWriter(self.l.Writer(), level)
+	new.fatalf = self.fatalf
+	new.storeErrorFunc(self.loadErrorFunc())
+	new.SetFlags(self.l.Flags())
+	return new
+}
+
+func (self *Log) SetErrorFunc(f ErrorFunc) {
+	if self == nil {
+		return
+	}
+	self.storeErrorFunc(f)
 }
 
 func (self *Log) SetLevel(l Level) {
@@ -108,6 +119,20 @@ func (self *Log) SetFlags(f int) {
 		return
 	}
 	self.l.SetFlags(f)
+}
+
+func (self *Log) Stdlib() *log.Logger {
+	if self == nil {
+		return nil
+	}
+	return self.l
+}
+
+func (self *Log) SetOutput(w io.Writer) {
+	if self == nil {
+		return
+	}
+	self.l.SetOutput(w)
 }
 
 func (self *Log) SetPrefix(prefix string) {
@@ -139,12 +164,6 @@ func (self *Log) Logf(level Level, format string, args ...interface{}) {
 func (self *Log) Printf(format string, args ...interface{}) { self.Logf(LInfo, format, args...) }
 func (self *Log) Println(args ...interface{})               { self.Log(LInfo, fmt.Sprint(args...)) }
 
-func (self *Log) Error(args ...interface{}) {
-	self.Log(LError, "error: "+fmt.Sprint(args...))
-}
-func (self *Log) Errorf(format string, args ...interface{}) {
-	self.Logf(LError, "error: "+format, args...)
-}
 func (self *Log) Info(args ...interface{}) {
 	self.Log(LInfo, fmt.Sprint(args...))
 }
@@ -156,6 +175,37 @@ func (self *Log) Debug(args ...interface{}) {
 }
 func (self *Log) Debugf(format string, args ...interface{}) {
 	self.Logf(LDebug, "debug: "+format, args...)
+}
+
+func (self *Log) Error(args ...interface{}) {
+	self.Log(LError, "error: "+fmt.Sprint(args...))
+	if self == nil {
+		return
+	}
+	if errfun := self.loadErrorFunc(); errfun != nil {
+		var e error
+		if len(args) >= 1 {
+			e, _ = args[0].(error)
+		}
+		if e != nil {
+			args = args[1:]
+			if len(args) > 0 { // Log.Error(err, arg1) please don't do this
+				rest := fmt.Sprint(args...)
+				e = errors.Annotate(e, rest)
+			}
+			errfun(e)
+		}
+	}
+}
+func (self *Log) Errorf(format string, args ...interface{}) {
+	self.Logf(LError, "error: "+format, args...)
+	if self == nil {
+		return
+	}
+	if errfun := self.loadErrorFunc(); errfun != nil {
+		e := fmt.Errorf(fmt.Sprintf(format, args...))
+		errfun(e)
+	}
 }
 
 func (self *Log) Fatalf(format string, args ...interface{}) {
@@ -174,4 +224,19 @@ func (self *Log) Fatal(args ...interface{}) {
 		self.Logf(LError, "fatal: "+s)
 		os.Exit(1)
 	}
+}
+
+// workaround for atomic.Value with nil
+type wrapErrorFunc struct{ ErrorFunc }
+
+func (self *Log) loadErrorFunc() ErrorFunc {
+	if x := self.onError.Load(); x != nil {
+		return x.(wrapErrorFunc).ErrorFunc
+	} else {
+		return nil
+	}
+}
+
+func (self *Log) storeErrorFunc(new ErrorFunc) {
+	self.onError.Store(wrapErrorFunc{new})
 }

@@ -162,7 +162,8 @@ func (self *CoinAcceptor) dispenseGroup(ctx context.Context, request, success *c
 		}
 		err := self.NewDispense(nominal, uint8(count)).Do(ctx)
 		if err != nil {
-			self.Device.Log.Errorf("%s nominal=%s count=%d err=%v", tag, currency.Amount(nominal).FormatCtx(ctx), count, err)
+			err = errors.Annotatef(err, "%s nominal=%s count=%d", tag, currency.Amount(nominal).FormatCtx(ctx), count)
+			self.Device.Log.Error(err)
 			return errors.Annotate(err, tag)
 		}
 		return success.Add(nominal, count)

@@ -39,7 +39,7 @@ type Tele struct { //nolint:maligned
 
 func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config) error {
 	self.enabled = teleConfig.Enabled
-	self.log = log.Clone(log2.LInfo)
+	self.log = log
 	if teleConfig.LogDebug {
 		self.log.SetLevel(log2.LDebug)
 	}

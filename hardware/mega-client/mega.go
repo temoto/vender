@@ -244,7 +244,7 @@ func (self *Client) ioLoop() {
 				// XXX TODO FIXME error is still present, it only wastes time, not critical
 				// self.Log.Errorf("%s FIXME tx=no notified=yes read=empty", modName)
 			default:
-				self.Log.Errorf("%s stray err=%v", modName, err)
+				self.Log.Error(errors.Annotatef(err, "%s stray error", modName))
 			}
 
 		case <-stopch:
@@ -336,7 +336,7 @@ func (self *Client) notifyLoop() {
 	defer self.alive.Done()
 
 	if value, err := self.hw.notifier.Read(); err != nil {
-		self.Log.Errorf("%s notifyLoop start Read()", modName)
+		self.Log.Error(errors.Annotatef(err, "%s notifyLoop start Read()", modName))
 	} else if value == 1 {
 		self.Log.Debugf("%s notify=high on start", modName)
 		self.notifych <- struct{}{}
@@ -355,7 +355,7 @@ func (self *Client) notifyLoop() {
 		} else if gpio.IsTimeout(err) {
 			continue
 		} else {
-			self.Log.Errorf("%s notifyLoop Wait err=%v", modName, err)
+			self.Log.Error(errors.Annotatef(err, "%s notifyLoop Wait", modName))
 			go self.Close()
 			return
 		}
@@ -478,7 +478,7 @@ func (self *Client) parse(buf []byte, f *Frame) error {
 	err := f.Parse(buf)
 	if err != nil {
 		atomic.AddUint32(&self.stat.Error, 1)
-		self.Log.Errorf("%s Parse buf=%x err=%v", modName, buf, err)
+		self.Log.Error(errors.Annotatef(err, "%s Parse buf=%x", modName, buf))
 		return err
 	}
 	if f.plen == 0 {
@@ -487,7 +487,7 @@ func (self *Client) parse(buf []byte, f *Frame) error {
 	err = f.ParseFields()
 	if err != nil {
 		atomic.AddUint32(&self.stat.Error, 1)
-		self.Log.Errorf("%s ParseFields frame=%x err=%v", modName, f.Bytes(), err)
+		self.Log.Error(errors.Annotatef(err, "%s ParseFields frame=%x", modName, f.Bytes()))
 		return err
 	}
 
@@ -496,8 +496,7 @@ func (self *Client) parse(buf []byte, f *Frame) error {
 		select {
 		case self.TwiChan <- twitem:
 		default:
-			self.Log.Errorf("CRITICAL TwiChan is full")
-			panic("code error mega TwiChan is full")
+			self.Log.Errorf("CRITICAL TWI buffer overflow")
 		}
 	}
 
