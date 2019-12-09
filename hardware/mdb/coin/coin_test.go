@@ -164,8 +164,8 @@ func TestCoinPayout(t *testing.T) {
 
 	rs := []mdb.MockR{
 		{"0f0207", ""},
-		{"0f04", "00"},
-		{"0f04", ""},
+		{"0b", "02"},
+		{"0b", ""},
 		{"0f03", "07000000"},
 	}
 	ctx := mockContext(t, rs)
@@ -190,7 +190,7 @@ func TestCoinAccept(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestCoinDispenseSmart(t *testing.T) {
+func TestCoinGive(t *testing.T) {
 	t.Parallel()
 
 	// type Case struct {
@@ -204,13 +204,13 @@ func TestCoinDispenseSmart(t *testing.T) {
 	rs := []mdb.MockR{
 		{"0a", "00000003"},
 		{"0f0201", ""},
-		{"0f04", ""},
+		{"0b", ""},
 		{"0f03", "00"},
 		{"0f0201", ""},
-		{"0f04", ""},
+		{"0b", ""},
 		{"0f03", "00"},
 		{"0f0202", ""},
-		{"0f04", ""},
+		{"0b", ""},
 		{"0f03", "0001"},
 	}
 	ctx := mockContext(t, rs)

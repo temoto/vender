@@ -274,22 +274,26 @@ func (self *CoinAcceptor) NewPayout(amount currency.Amount, success *currency.No
 		}
 		return nil
 	}}
+	pollFun := func(p mdb.Packet) (bool, error) {
+		bs := p.Bytes()
+		if len(bs) == 0 {
+			return true, nil
+		} else if len(bs) == 1 && bs[0] == 0x02 { // Changer Payout Busy
+			return false, nil
+		}
+		b1 := bs[0]
+		b2 := byte(0)
+		if len(bs) >= 2 {
+			b2 = bs[1]
+		}
+		pi, _ := self.parsePollItem(b1, b2)
+		self.Device.Log.Errorf("PLEASE REPORT PAYOUT POLL response=%x pi=%v", bs, pi)
+		return false, nil
+	}
 
 	return engine.NewSeq(tag).
 		Append(doPayout).
 		Append(engine.Sleep{Duration: self.Device.DelayNext}).
-		Append(self.Device.NewPollLoop(tag, packetPayoutPoll, self.dispenseTimeout*4, payoutPollFun)).
+		Append(self.Device.NewPollLoop(tag, self.Device.PacketPoll, self.dispenseTimeout*4, pollFun)).
 		Append(doStatus)
-}
-
-// 0FH 04H PAYOUT VALUE POLL
-// - [Response is] 1 byte scaled amount of paid out change since [... payout/poll]
-// - An 00H response indicates no coins were paid out since [... payout/poll]
-// - An ACK only indicates that the change payout is finished.
-//   This should be followed by the PAYOUT STATUS command (0FH-03H) to obtain the complete payout data.
-func payoutPollFun(p mdb.Packet) (bool, error) {
-	if p.Len() == 0 {
-		return true, nil
-	}
-	return false, nil
 }

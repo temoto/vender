@@ -34,8 +34,8 @@ func TestAbort(t *testing.T) {
 	ms.dirty += g.Config.ScaleU(11)
 	go mock.Expect([]mdb.MockR{
 		{"0f020b", ""},
-		{"0f04", "00"},
-		{"0f04", ""},
+		{"0b", "02"},
+		{"0b", ""},
 		{"0f03", "0b00"},
 	})
 	require.NoError(t, ms.Abort(ctx))
