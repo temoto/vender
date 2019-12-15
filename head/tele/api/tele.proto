@@ -84,6 +84,7 @@ message Command {
     ArgExec exec = 18;
     ArgSetInventory set_inventory = 19;
     ArgSetConfig set_config = 20;
+    ArgStop stop = 21;
   }
 
   message ArgReport {}
@@ -96,6 +97,9 @@ message Command {
   message ArgSetConfig {
     string name = 1;
     bytes new = 2;
+  }
+  message ArgStop {
+    int32 timeout = 1;
   }
 }
 message Response {

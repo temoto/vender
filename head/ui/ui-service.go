@@ -324,8 +324,7 @@ func (self *UI) onServiceReboot() State {
 	switch {
 	case e.Key == '1':
 		self.display.SetLines("reboot", "in progress") // FIXME extract message string
-		// os.Exit(0)
-		self.g.Alive.Stop()
+		self.g.Stop()
 		return StateServiceEnd
 	}
 	return StateServiceMenu

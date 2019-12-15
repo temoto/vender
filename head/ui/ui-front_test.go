@@ -125,7 +125,7 @@ ui {
 
 	steps := []step{
 		{expect: env._T("hello,world", ""), inev: ui.Event{Kind: ui.EventTime}},
-		{fun: func() { env.ui.LockWait() }},
+		{fun: func() { assert.True(t, env.ui.LockWait()) }},
 		{expect: env._T("locked,wait", ""), inev: ui.Event{Kind: ui.EventTime}},
 		{fun: func() { env.ui.LockEnd() }},
 		{expect: env._T("hello,world", ""), inev: ui.Event{Kind: ui.EventStop}},

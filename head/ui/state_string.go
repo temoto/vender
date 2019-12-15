@@ -28,11 +28,12 @@ func _() {
 	_ = x[StateServiceMoneyLoad-17]
 	_ = x[StateServiceReport-18]
 	_ = x[StateServiceEnd-19]
+	_ = x[StateStop-20]
 }
 
-const _State_name = "DefaultBootBrokenLockedFrontBeginFrontSelectFrontTuneFrontAcceptFrontTimeoutFrontEndServiceBeginServiceAuthServiceMenuServiceInventoryServiceTestServiceRebootServiceNetworkServiceMoneyLoadServiceReportServiceEnd"
+const _State_name = "DefaultBootBrokenLockedFrontBeginFrontSelectFrontTuneFrontAcceptFrontTimeoutFrontEndServiceBeginServiceAuthServiceMenuServiceInventoryServiceTestServiceRebootServiceNetworkServiceMoneyLoadServiceReportServiceEndStop"
 
-var _State_index = [...]uint8{0, 7, 11, 17, 23, 33, 44, 53, 64, 76, 84, 96, 107, 118, 134, 145, 158, 172, 188, 201, 211}
+var _State_index = [...]uint8{0, 7, 11, 17, 23, 33, 44, 53, 64, 76, 84, 96, 107, 118, 134, 145, 158, 172, 188, 201, 211, 215}
 
 func (i State) String() string {
 	if i >= State(len(_State_index)-1) {

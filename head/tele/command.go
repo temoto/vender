@@ -3,12 +3,14 @@ package tele
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/head/ui"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
@@ -21,6 +23,7 @@ func (self *Tele) onCommandMessage(ctx context.Context, payload []byte) bool {
 		return true
 	}
 	self.log.Debugf("tele command raw=%x task=%#v", payload, cmd.String())
+	// TODO store command in persistent queue, send MQTT ack, execute later
 	self.dispatchCommand(ctx, cmd)
 	return true
 }
@@ -40,6 +43,9 @@ func (self *Tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
 	case *tele_api.Command_SetInventory:
 		err = self.cmdSetInventory(ctx, cmd, task.SetInventory)
 
+	case *tele_api.Command_Stop:
+		err = self.cmdStop(ctx, cmd, task.Stop)
+
 	default:
 		err = fmt.Errorf("unknown command=%#v", cmd)
 		self.log.Error(err.Error())
@@ -56,7 +62,7 @@ func (self *Tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_
 		ui.GetGlobal(ctx).LockEnd()
 		return nil
 	}
-	ui.GetGlobal(ctx).LockDuration(time.Duration(arg.Duration) * time.Second)
+	ui.GetGlobal(ctx).LockFunc(func() { time.Sleep(time.Duration(arg.Duration) * time.Second) })
 	return nil
 }
 
@@ -94,4 +100,39 @@ func (self *Tele) cmdSetInventory(ctx context.Context, cmd *tele_api.Command, ar
 	g := state.GetGlobal(ctx)
 	_, err := g.Inventory.SetTele(arg.New)
 	return err
+}
+
+func (self *Tele) cmdStop(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgStop) error {
+	if arg == nil {
+		return errors.Errorf("invalid arg")
+	}
+
+	g := state.GetGlobal(ctx)
+	ui := ui.GetGlobal(ctx)
+	if !ui.LockWait() {
+		return errors.Errorf("ui.LockWait interrupted")
+	}
+
+	go func() {
+		// delay to send transport ack before process exits
+		// TODO store command in persistent queue, send MQTT ack, execute later
+		delay := helpers.IntSecondDefault(g.Config.Tele.FIXME_stopDelaySec, 7*time.Second)
+		g.Log.Debugf("cmdStop arg=%s crutch delay=%v", proto.MarshalTextString(arg), delay)
+		time.Sleep(delay)
+
+		// FIXME race. Should Stop() with lock, but UI state machine needs lock release first.
+		ui.LockDecrement()
+		g.Stop()
+
+		if arg.Timeout > 0 {
+			timeout := time.Duration(arg.Timeout) * time.Second
+			time.AfterFunc(timeout, func() {
+				if !g.StopWait(timeout) {
+					g.Log.Errorf("cmdStop timeout")
+					os.Exit(1)
+				}
+			})
+		}
+	}()
+	return nil
 }

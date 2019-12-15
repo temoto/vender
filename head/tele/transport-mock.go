@@ -20,7 +20,7 @@ type transportMock struct {
 }
 
 func (self *transportMock) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback, willPayload []byte) error {
-	self.onCommand = onCommand // self.t.Logf("mock command=%x", payload)
+	self.onCommand = onCommand
 	if self.networkTimeout == 0 {
 		self.networkTimeout = defaultNetworkTimeout
 	}

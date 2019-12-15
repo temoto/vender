@@ -37,6 +37,8 @@ const (
 	StateServiceMoneyLoad
 	StateServiceReport
 	StateServiceEnd // +askReport=ServiceReport ->FrontBegin
+
+	StateStop
 )
 
 func (self *UI) State() State               { return State(atomic.LoadUint32((*uint32)(&self.state))) }
@@ -46,17 +48,24 @@ func (self *UI) XXX_testSetState(new State) { self.setState(new) }
 func (self *UI) Loop(ctx context.Context) {
 	self.g.Alive.Add(1)
 	defer self.g.Alive.Done()
-	for self.g.Alive.IsRunning() {
-		next := self.enter(ctx, self.State())
+	next := StateDefault
+	for next != StateStop && self.g.Alive.IsRunning() {
+		current := self.State()
+		next = self.enter(ctx, current)
 		if next == StateDefault {
-			self.g.Log.Fatalf("ui state=%s next=default", self.State().String())
+			self.g.Log.Fatalf("ui state=%s next=default", current.String())
 		}
-		self.exit(ctx, self.State(), next)
+		self.exit(ctx, current, next)
 
-		if self.Locked() && (self.State() != StateLocked) && self.checkLockPriority(next) {
-			self.lockedNext = next
+		if self.lock.locked() && (self.State() != StateLocked) && self.checkLockPriority(next) {
+			self.lock.next = next
 			self.g.Log.Infof("ui lock interrupt")
 			next = StateLocked
+		}
+
+		if !self.g.Alive.IsRunning() {
+			self.g.Log.Debugf("ui Loop stopping because g.Alive")
+			next = StateStop
 		}
 
 		self.setState(next)
@@ -64,6 +73,7 @@ func (self *UI) Loop(ctx context.Context) {
 			self.XXX_testHook(next)
 		}
 	}
+	self.g.Log.Debugf("ui loop end")
 }
 
 func (self *UI) enter(ctx context.Context, s State) State {
@@ -120,8 +130,8 @@ func (self *UI) enter(ctx context.Context, s State) State {
 			if e.Kind == EventService {
 				return StateServiceBegin
 			}
-			if !self.Locked() {
-				return self.lockedNext
+			if !self.lock.locked() {
+				return self.lock.next
 			}
 		}
 		return StateDefault
@@ -167,6 +177,9 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return self.onServiceReport(ctx)
 	case StateServiceEnd:
 		return replaceDefault(self.onServiceEnd(ctx), StateFrontBegin)
+
+	case StateStop:
+		return StateStop
 
 	default:
 		self.g.Log.Fatalf("unhandled ui state=%s", s.String())

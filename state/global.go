@@ -127,12 +127,22 @@ func (g *Global) Error(err error, args ...interface{}) {
 func (g *Global) Fatal(err error, args ...interface{}) {
 	if err != nil {
 		g.Error(err, args...)
-		g.Alive.Stop()
-		select {
-		case <-g.Alive.WaitChan():
-		case <-time.After(5 * time.Second):
-		}
+		g.StopWait(5 * time.Second)
 		os.Exit(1)
+	}
+}
+
+func (g *Global) Stop() {
+	g.Alive.Stop()
+}
+
+func (g *Global) StopWait(timeout time.Duration) bool {
+	g.Alive.Stop()
+	select {
+	case <-g.Alive.WaitChan():
+		return true
+	case <-time.After(timeout):
+		return false
 	}
 }
 

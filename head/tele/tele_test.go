@@ -3,6 +3,7 @@ package tele
 import (
 	"context"
 	"testing"
+	"time"
 
 	proto "github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
@@ -10,9 +11,11 @@ import (
 	"github.com/temoto/spq"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware"
+	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	tele_config "github.com/temoto/vender/head/tele/config"
+	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 	state_new "github.com/temoto/vender/state/new"
@@ -36,6 +39,7 @@ func TestCommand(t *testing.T) {
 		name   string
 		config string
 		cmd    tele_api.Command
+		init   func(testing.TB, *tenv)
 		before func(testing.TB, *tenv)
 		check  func(testing.TB, *tenv)
 	}
@@ -123,20 +127,62 @@ func TestCommand(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, float32(3.14), paperStock.Value())
 			}},
+		{name: "stop",
+			config: `engine { menu { item "1" { price=0 scenario="" } } }
+			ui { front { reset_sec=5 } }`,
+			cmd: tele_api.Command{
+				Id:         rand.Uint32(),
+				Task:       &tele_api.Command_Stop{Stop: &tele_api.Command_ArgStop{}},
+				ReplyTopic: "t",
+			},
+			init: func(t testing.TB, env *tenv) {
+				env.trans = &transportMock{
+					t:         t,
+					outBuffer: 20,
+				}
+				env.tele = &Tele{transport: env.trans}
+			},
+			before: func(t testing.TB, env *tenv) {
+				g := state.GetGlobal(env.ctx)
+				g.Config.Tele.FIXME_stopDelaySec = 1
+				g.Hardware.HD44780.Display = lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: 16})
+				ms := money.MoneySystem{}
+				ms.Start(env.ctx)
+				uix := &ui.UI{}
+				uix.XXX_testSetState(ui.StateFrontBegin)
+				require.NoError(t, uix.Init(env.ctx))
+				go uix.Loop(env.ctx)
+			},
+			check: func(t testing.TB, env *tenv) {
+				b := <-env.trans.outResponse
+				var r tele_api.Response
+				require.NoError(t, proto.Unmarshal(b, &r))
+				assert.Equal(t, env.cmd.Id, r.CommandId)
+				assert.Equal(t, "", r.Error)
+				g := state.GetGlobal(env.ctx)
+				// assert g.Stop() is called before test timeout
+				uix := ui.GetGlobal(env.ctx)
+				for uix.State() != ui.StateStop {
+					g.Log.Infof("!!!!!!!! %s", uix.State().String())
+					time.Sleep(140 * time.Millisecond)
+				}
+			}},
 	}
 	for _, c := range cases {
 		c := c
 		t.Run(c.name, func(t *testing.T) {
+			var g *state.Global
 			env := &tenv{
 				config: c.config,
 				cmd:    &c.cmd,
 				trans:  &transportMock{t: t},
 			}
-			var g *state.Global
 			env.tele = &Tele{transport: env.trans}
+			if c.init != nil {
+				c.init(t, env)
+			}
 			env.ctx, g = state_new.NewTestContext(t, env.config)
 			g.Tele = env.tele
-			// g.Log = log2.NewStderr(log2.LDebug) // useful with panics
 			defer env.tele.Close()
 			vmId := -rand.Int31()
 			conf := tele_config.Config{
