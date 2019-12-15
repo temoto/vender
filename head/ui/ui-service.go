@@ -296,7 +296,6 @@ wait:
 		self.Service.testIdx = (self.Service.testIdx + 1) % testIdxMax
 
 	case input.IsAccept(&e):
-		self.Service.askReport = true
 		self.display.SetLines(line1, "in progress")
 		err := testCurrent.Do(ctx)
 		if err == nil {
