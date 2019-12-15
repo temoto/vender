@@ -3,6 +3,7 @@ package state_new
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/juju/errors"
@@ -39,8 +40,12 @@ func NewTestContext(t testing.TB, confString string) (context.Context, *state.Gl
 		"test-inline": confString,
 	})
 
-	log := log2.NewTest(t, log2.LDebug)
-	// log := log2.NewStderr(log2.LDebug) // useful with panics
+	var log *log2.Log
+	if os.Getenv("vender_test_log_stderr") == "1" {
+		log = log2.NewStderr(log2.LDebug) // useful with panics
+	} else {
+		log = log2.NewTest(t, log2.LDebug)
+	}
 	log.SetFlags(log2.LTestFlags)
 	ctx, g := NewContext(log, tele_api.NewStub())
 	g.MustInit(ctx, state.MustReadConfig(log, fs, "test-inline"))

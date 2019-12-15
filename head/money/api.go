@@ -86,9 +86,8 @@ func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Am
 		billEscrowAmount := self.bill.EscrowAmount()
 		if billEscrowAmount != 0 {
 			if err := self.bill.EscrowAccept(ctx); err != nil {
-				err = errors.Annotate(err, tag)
-				self.Log.Errorf("%s CRITICAL escrow release err=%v", tag, err)
-				state.GetGlobal(ctx).Tele.Error(err)
+				err = errors.Annotate(err, tag+"CRITICAL EscrowAccept")
+				self.Log.Error(err)
 			} else {
 				self.dirty += billEscrowAmount
 			}
