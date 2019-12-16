@@ -233,9 +233,14 @@ func (self *Client) ioLoop() {
 			self.Log.Debugf("ioLoop bgrecv=%s", bgrecv.ResponseString())
 			switch err {
 			case nil: // success path
-				switch bgrecv.ResponseKind() {
-				case RESPONSE_TWI_LISTEN:
-				case RESPONSE_RESET:
+				kind := bgrecv.ResponseKind()
+				switch {
+				// already processed in parse()
+				case kind == RESPONSE_TWI_LISTEN || kind == RESPONSE_RESET:
+
+				case kind == RESPONSE_OK && bgrecv.Fields.MdbResult == MDB_RESULT_UART_READ_UNEXPECTED:
+					self.Log.Infof("%s stray UART_READ_UNEXPECTED likely caused by electrical noise, add filter packet=%s", modName, bgrecv.ResponseString())
+
 				default:
 					// So far this always has been a symptom of critical protocol error
 					self.Log.Errorf("%s stray packet %s", modName, bgrecv.ResponseString())

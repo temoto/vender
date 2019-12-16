@@ -5,9 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewCommand(t *testing.T) {
@@ -34,23 +37,50 @@ func TestParse(t *testing.T) {
 	type Case struct {
 		name      string
 		input     string
-		expect    string
 		expectErr string
+		expect    *Frame
 	}
 	cases := []Case{
-		{"input-under-length", "", "", "input length too small not valid"},
-		{"empty-ok", "040000000101010101010101", "", ""},
-		{"long", "04f1aaff000101010101010101", "", "frame=04f1aaff claims length=241 > input-overhead=1 not valid"},
-		{"corrupted", "0401f4f2e7a9c2d9f5b4a62314", "", "frame=0401f4f2e7a9c2d9f5b4a62314 padding=b4a62314 not valid"},
-		{"wrong-padding", "4403019cffffffffffffffffffffff", "01", "frame=4403019cffffffffffffffffffffff padding=ffffffff not valid"},
-		{"invalid-header", "440100b800010101010101010101", "", "frame=440100b8 response=Response_t(0) not valid"},
-		{"ok", "4401012b00010101010101010101", "01", ""},
-		{"reset", "4409020200000101050302f90001010101", "020200000101050302", ""},
-		{"status", "4409010204d40101050302d70001010101", "010204d40101050302", ""},
-		// {"mdb-success-empty", "440701010a010081000101010101010101", "01010a0100", ""},
-		// {"twi-listen", "440c03010306a3a308020031d300010101010101010101", "03010306a3a308020031", ""},
+		{"input-under-length", "", "input length too small not valid", nil},
+		{"empty-ok", "040000000101010101010101", "", newResponse(0)},
+		{"long", "04f1aaff000101010101010101", "frame=04f1aaff claims length=241 > input-overhead=1 not valid", nil},
+		{"corrupted", "0401f4f2e7a9c2d9f5b4a62314", "frame=0401f4f2e7a9c2d9f5b4a62314 padding=b4a62314 not valid", nil},
+		{"wrong-padding", "4403019cffffffffffffffffffffff", "frame=4403019cffffffffffffffffffffff padding=ffffffff not valid", nil},
+		{"invalid-header", "440100b800010101010101010101", "frame=440100b8 response=Response_t(0) not valid", nil},
+		{"ok", "4401012b00010101010101010101", "", newResponse(RESPONSE_OK)},
+		{"reset", "4409020200000101050302f90001010101", "", newResponse(
+			RESPONSE_RESET,
+			tv{FIELD_CLOCK10U, uint32(0)},
+			tv{FIELD_FIRMWARE_VERSION, uint16(0x0105)},
+			tv{FIELD_MCUSR, byte(ResetFlagExternal)},
+		)},
+		{"status", "4409010204d40101050302d70001010101", "", newResponse(
+			RESPONSE_OK,
+			tv{FIELD_CLOCK10U, uint32(12360)},
+			tv{FIELD_FIRMWARE_VERSION, uint16(0x0105)},
+			tv{FIELD_MCUSR, byte(ResetFlagExternal)},
+		)},
+		{"mdb-read-unexpected", "440c01025cf61010ff125cd81100df0001010101", "", newResponse(
+			RESPONSE_OK,
+			tv{FIELD_CLOCK10U, uint32(237980)},
+			tv{FIELD_MDB_RESULT, uint16(0xff<<8) | uint16(MDB_RESULT_UART_READ_UNEXPECTED)},
+			tv{FIELD_MDB_DURATION10U, uint32(237680)},
+			tv{FIELD_MDB_DATA, []byte{}},
+		)},
+		{"mdb-success-empty", "440901025446100100110029000101010101010101", "", newResponse(
+			RESPONSE_OK,
+			tv{FIELD_CLOCK10U, uint32(215740)},
+			tv{FIELD_MDB_RESULT, uint16(MDB_RESULT_SUCCESS)},
+			tv{FIELD_MDB_DATA, []byte{}},
+		)},
+		{"twi-listen", "44080102040521020031ae00010101010101010101", "", newResponse(
+			RESPONSE_OK,
+			tv{FIELD_CLOCK10U, uint32(10290)},
+			tv{FIELD_TWI_DATA, []byte{0x00, 0x31}},
+		)},
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano())).Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })
+	reDebug := regexp.MustCompile(` debug=[[:xdigit:]]*$`)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			input, err := hex.DecodeString(c.input)
@@ -66,10 +96,9 @@ func TestParse(t *testing.T) {
 			if err != nil {
 				errString = err.Error()
 			} else {
-				ps := fmt.Sprintf("%x", f.Payload())
-				if ps != c.expect {
-					t.Errorf("input=%s frame hex expected='%s' actual='%s'", c.input, c.expect, ps)
-				}
+				trimActual := reDebug.ReplaceAllString(f.ResponseString(), "")
+				trimExpect := reDebug.ReplaceAllString(c.expect.ResponseString(), "")
+				assert.Equal(t, trimExpect, trimActual, "input=%s", c.input)
 			}
 			if errString != c.expectErr {
 				t.Errorf("input=%s error expected='%v' actual='%v'", c.input, c.expectErr, err)
@@ -177,4 +206,50 @@ func BenchmarkParse(b *testing.B) {
 		}
 		b.Run(c.name, mkBench(inputBytes))
 	}
+}
+
+type tv struct {
+	tag   Field_t
+	value interface{}
+}
+
+func newResponse(header Response_t, fields ...tv) *Frame {
+	f := &Frame{Version: ProtocolVersion}
+	if header != 0 || len(fields) > 0 {
+		f.Flag |= PROTOCOL_FLAG_PAYLOAD
+		f.plen = 1
+	}
+	f.buf[0] = f.Flag | f.Version
+	f.buf[1] = f.plen
+	f.buf[2] = byte(header)
+	for _, ff := range fields {
+		switch ff.tag {
+		case FIELD_CLOCK10U:
+			f.Fields.Clock10u = ff.value.(uint32)
+		case FIELD_ERROR2:
+			f.Fields.Error2s = ff.value.([]uint16)
+		case FIELD_ERRORN:
+			f.Fields.ErrorNs = ff.value.([][]byte)
+		case FIELD_FIRMWARE_VERSION:
+			f.Fields.FirmwareVersion = ff.value.(uint16)
+		case FIELD_MCUSR:
+			f.Fields.Mcusr = ff.value.(byte)
+		case FIELD_MDB_RESULT:
+			f.Fields.MdbError = byte(ff.value.(uint16) >> 8)
+			f.Fields.MdbResult = Mdb_result_t(ff.value.(uint16) & 0xff)
+		case FIELD_MDB_DATA:
+			b := ff.value.([]byte)
+			f.Fields.MdbLength = uint8(len(b))
+			f.Fields.MdbData = b
+		case FIELD_MDB_DURATION10U:
+			f.Fields.MdbDuration = ff.value.(uint32)
+		case FIELD_TWI_DATA:
+			f.Fields.TwiData = ff.value.([]byte)
+		default:
+			panic(fmt.Sprintf("code error ff.t=%v", ff.tag))
+		}
+		f.Fields.tagOrder[f.Fields.Len] = ff.tag
+		f.Fields.Len++
+	}
+	return f
 }
