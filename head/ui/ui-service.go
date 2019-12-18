@@ -11,11 +11,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/temoto/alive"
+	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/engine/inventory"
 	"github.com/temoto/vender/hardware/input"
+	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/state"
 )
 
@@ -324,7 +328,7 @@ func (self *UI) onServiceReboot() State {
 	case e.Key == '1':
 		self.display.SetLines("reboot", "in progress") // FIXME extract message string
 		self.g.Stop()
-		return StateServiceEnd
+		return StateStop
 	}
 	return StateServiceMenu
 }
@@ -360,7 +364,42 @@ addrLoop:
 }
 
 func (self *UI) onServiceMoneyLoad(ctx context.Context) State {
-	return StateDefault
+	moneysys := money.GetGlobal(ctx)
+
+	self.display.SetLines("money-load", "0")
+	alive := alive.NewAlive()
+	defer func() {
+		alive.Stop() // stop pending AcceptCredit
+		alive.Wait()
+	}()
+
+	self.Service.askReport = true
+	accept := true
+	for {
+		if accept {
+			accept = false
+			go moneysys.AcceptCredit(ctx, currency.MaxAmount, alive.StopChan(), self.eventch)
+		}
+		switch e := self.wait(self.Service.resetTimeout); e.Kind {
+		case types.EventInput:
+			if input.IsReject(&e.Input) {
+				return StateServiceMenu
+			}
+
+		case types.EventMoneyCredit:
+			accept = true
+
+		case types.EventLock:
+			return StateLocked
+
+		case types.EventStop:
+			self.g.Log.Debugf("onServiceMoneyLoad global stop")
+			return StateServiceEnd
+
+		default:
+			panic(fmt.Sprintf("code error onServiceMoneyLoad unhandled event=%#v", e))
+		}
+	}
 }
 
 func (self *UI) onServiceReport(ctx context.Context) State {
@@ -377,7 +416,7 @@ func (self *UI) onServiceEnd(ctx context.Context) State {
 
 	if self.Service.askReport {
 		self.display.SetLines("for tele report", "press 1") // FIXME extract message string
-		if e := self.wait(self.Service.resetTimeout); e.Kind == EventInput && e.Input.Key == '1' {
+		if e := self.wait(self.Service.resetTimeout); e.Kind == types.EventInput && e.Input.Key == '1' {
 			self.Service.askReport = false
 			self.onServiceReport(ctx)
 		}
@@ -391,27 +430,27 @@ func (self *UI) onServiceEnd(ctx context.Context) State {
 	return StateDefault
 }
 
-func (self *UI) serviceWaitInput() (State, input.Event) {
+func (self *UI) serviceWaitInput() (State, types.InputEvent) {
 	e := self.wait(self.Service.resetTimeout)
 	switch e.Kind {
-	case EventInput:
+	case types.EventInput:
 		return StateDefault, e.Input
 
-	case EventMoney:
-		self.g.Log.Debugf("serviceWaitInput money event=%v", e.Money)
-		return StateDefault, input.Event{}
+	case types.EventMoneyCredit:
+		self.g.Log.Debugf("serviceWaitInput event=%s", e.String())
+		return StateDefault, types.InputEvent{}
 
-	case EventTime:
+	case types.EventTime:
 		// self.g.Log.Infof("inactive=%v", inactive)
 		self.g.Log.Debugf("serviceWaitInput resetTimeout")
-		return StateServiceEnd, input.Event{}
+		return StateServiceEnd, types.InputEvent{}
 
-	case EventLock:
-		return StateLocked, input.Event{}
+	case types.EventLock:
+		return StateLocked, types.InputEvent{}
 
-	case EventStop:
+	case types.EventStop:
 		self.g.Log.Debugf("serviceWaitInput global stop")
-		return StateServiceEnd, input.Event{}
+		return StateServiceEnd, types.InputEvent{}
 
 	default:
 		panic(fmt.Sprintf("code error serviceWaitInput unhandled event=%#v", e))

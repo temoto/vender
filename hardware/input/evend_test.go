@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/temoto/vender/hardware/mega-client"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )
 
@@ -27,7 +28,7 @@ func TestEvendKeyboard(t *testing.T) {
 	mega.TwiChan <- 0x31 | 0x80
 
 	e1 := <-inch
-	expect1 := Event{Source: EvendKeyboardSourceTag, Key: '1', Up: false}
+	expect1 := types.InputEvent{Source: EvendKeyboardSourceTag, Key: '1', Up: false}
 	if e1 != expect1 {
 		t.Errorf("input=%#v expect=%#v", e1, expect1)
 	}

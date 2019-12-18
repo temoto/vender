@@ -81,7 +81,7 @@ ui { service {
 		{expect: env._T("Menu", "2 test"), inev: env._KeyAccept},
 		{expect: env._T("T1 first", " "), inev: env._KeyNext},
 		{expect: env._T("T2 second", " "), inev: env._KeyAccept},
-		{expect: env._T("T2 second", "in progress"), inev: ui.Event{}},
+		{expect: env._T("T2 second", "in progress")},
 		{expect: env._T("T2 second", "OK"), inev: env._KeyReject},
 		{expect: env._T("Menu", "2 test"), inev: env._KeyReject},
 		{},
@@ -93,19 +93,27 @@ func TestServiceReboot(t *testing.T) {
 	t.Parallel()
 
 	ctx, g := state_new.NewTestContext(t, `engine {}`)
-	env := &tenv{ctx: ctx, g: g}
+	env := &tenv{ctx: ctx, g: g, uiState: make(chan ui.State, 1)}
 	g.Config.UI.Service.Auth.Enable = false
-	uiTestSetup(t, env, ui.StateServiceBegin, ui.StateServiceEnd)
+	uiTestSetup(t, env, ui.StateServiceBegin, ui.StateStop)
 	go env.ui.Loop(ctx)
 
-	steps := []step{
-		{expect: env._T("Menu", "1 inventory"), inev: env._KeyNext},
-		{expect: env._T("Menu", "2 test"), inev: env._KeyNext},
-		{expect: env._T("Menu", "3 reboot"), inev: env._KeyAccept},
-		{expect: env._T("for reboot", "press 1"), inev: env._Key('1')},
-		{expect: env._T("reboot", "in progress"), inev: ui.Event{}},
-	}
-	uiTestWait(t, env, steps)
+	env.requireState(t, ui.StateServiceAuth)
+	env.requireState(t, ui.StateServiceMenu)
+	env.requireDisplay(t, "Menu", "1 inventory")
+	env.g.Hardware.Input.Emit(env._KeyNext.Input)
+	env.requireState(t, ui.StateServiceMenu)
+	env.requireDisplay(t, "Menu", "2 test")
+	env.g.Hardware.Input.Emit(env._KeyNext.Input)
+	env.requireState(t, ui.StateServiceMenu)
+	env.requireDisplay(t, "Menu", "3 reboot")
+	env.g.Hardware.Input.Emit(env._KeyAccept.Input)
+	env.requireState(t, ui.StateServiceReboot)
+	env.requireDisplay(t, "for reboot", "press 1")
+	env.g.Hardware.Input.Emit(env._Key('1').Input)
+	// can't requireState because g.Stop may have stopped ui.Loop
+	env.requireDisplay(t, "reboot", "in progress")
+	env.g.Alive.Wait()
 }
 
 func TestServiceReport(t *testing.T) {

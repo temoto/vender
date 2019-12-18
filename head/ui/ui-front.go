@@ -13,6 +13,7 @@ import (
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/state"
 )
 
@@ -40,7 +41,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
 			line1 := fmt.Sprintf(self.g.Config.UI.Front.MsgWaterTemp, errtemp.Current)
 			self.display.SetLines(line1, self.g.Config.UI.Front.MsgWait)
-			if e := self.wait(5 * time.Second); e.Kind == EventService {
+			if e := self.wait(5 * time.Second); e.Kind == types.EventService {
 				return StateServiceBegin
 			}
 			return StateFrontEnd
@@ -91,7 +92,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		alive.Stop() // stop pending AcceptCredit
 		alive.Wait()
 	}()
-	go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.moneych)
+	go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.eventch)
 
 	for {
 	refresh:
@@ -110,7 +111,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		}
 		e := self.wait(timeout)
 		switch e.Kind {
-		case EventInput:
+		case types.EventInput:
 			if input.IsMoneyAbort(&e.Input) {
 				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
 				return StateFrontEnd
@@ -166,20 +167,20 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 				return StateFrontSelect
 			}
 
-		case EventMoney:
-			self.g.Log.Debugf("ui-front money event=%v", e.Money)
-			go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.moneych)
+		case types.EventMoneyCredit:
+			self.g.Log.Debugf("ui-front money event=%s", e.String())
+			go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.eventch)
 
-		case EventService:
+		case types.EventService:
 			return StateServiceBegin
 
-		case EventTime:
+		case types.EventTime:
 			if self.State() == StateFrontTune { // XXX onFrontTune
 				return StateFrontSelect // "return to previous mode"
 			}
 			return StateFrontTimeout
 
-		case EventLock, EventStop:
+		case types.EventLock, types.EventStop:
 			return StateFrontEnd
 
 		default:
@@ -204,7 +205,7 @@ func (self *UI) onFrontTune(ctx context.Context) State {
 	return self.onFrontSelect(ctx)
 }
 
-func (self *UI) onFrontTuneInput(e input.Event) State {
+func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 	switch e.Key {
 	case input.EvendKeyCreamLess:
 		if self.FrontResult.Cream > 0 {

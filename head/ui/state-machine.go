@@ -8,6 +8,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/head/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
+	"github.com/temoto/vender/internal/types"
 )
 
 //go:generate stringer -type=State -trimprefix=State
@@ -57,7 +58,7 @@ func (self *UI) Loop(ctx context.Context) {
 		}
 		self.exit(ctx, current, next)
 
-		if self.lock.locked() && (self.State() != StateLocked) && self.checkLockPriority(next) {
+		if current != StateLocked && self.checkInterrupt(next) {
 			self.lock.next = next
 			self.g.Log.Infof("ui lock interrupt")
 			next = StateLocked
@@ -115,7 +116,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		for self.g.Alive.IsRunning() {
 			e := self.wait(time.Second)
 			// TODO receive tele command to reboot or change state
-			if e.Kind == EventService {
+			if e.Kind == types.EventService {
 				return StateServiceBegin
 			}
 		}
@@ -127,7 +128,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		for self.g.Alive.IsRunning() {
 			e := self.wait(lockPoll)
 			// TODO receive tele command to reboot or change state
-			if e.Kind == EventService {
+			if e.Kind == types.EventService {
 				return StateServiceBegin
 			}
 			if !self.lock.locked() {

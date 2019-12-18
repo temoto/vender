@@ -11,9 +11,7 @@ import (
 
 const logMsgDisabled = "tele disabled"
 
-var _ tele_api.Teler = &Tele{} // compile-time interface test
-
-func (self *Tele) CommandReplyErr(c *tele_api.Command, e error) {
+func (self *tele) CommandReplyErr(c *tele_api.Command, e error) {
 	if !self.enabled {
 		self.log.Infof(logMsgDisabled)
 		return
@@ -32,7 +30,7 @@ func (self *Tele) CommandReplyErr(c *tele_api.Command, e error) {
 	}
 }
 
-func (self *Tele) Error(e error) {
+func (self *tele) Error(e error) {
 	if !self.enabled {
 		self.log.Infof(logMsgDisabled)
 		return
@@ -47,7 +45,7 @@ func (self *Tele) Error(e error) {
 	}
 }
 
-func (self *Tele) Report(ctx context.Context, serviceTag bool) error {
+func (self *tele) Report(ctx context.Context, serviceTag bool) error {
 	if !self.enabled {
 		self.log.Infof(logMsgDisabled)
 		return nil
@@ -69,7 +67,7 @@ func (self *Tele) Report(ctx context.Context, serviceTag bool) error {
 	return err
 }
 
-func (self *Tele) State(s tele_api.State) {
+func (self *tele) State(s tele_api.State) {
 	if !self.enabled {
 		self.log.Infof(logMsgDisabled)
 		return
@@ -79,7 +77,7 @@ func (self *Tele) State(s tele_api.State) {
 	self.stateCh <- s
 }
 
-func (self *Tele) StatModify(fun func(s *tele_api.Stat)) {
+func (self *tele) StatModify(fun func(s *tele_api.Stat)) {
 	if !self.enabled {
 		self.log.Infof(logMsgDisabled)
 		return
@@ -90,7 +88,7 @@ func (self *Tele) StatModify(fun func(s *tele_api.Stat)) {
 	self.stat.Unlock()
 }
 
-func (self *Tele) Transaction(tx tele_api.Telemetry_Transaction) {
+func (self *tele) Transaction(tx tele_api.Telemetry_Transaction) {
 	if !self.enabled {
 		self.log.Infof(logMsgDisabled)
 		return

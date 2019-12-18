@@ -3,7 +3,6 @@ package money
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
@@ -12,6 +11,7 @@ import (
 	"github.com/temoto/vender/hardware/money"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/state"
 )
 
@@ -27,7 +27,7 @@ func (self *MoneySystem) SetAcceptMax(ctx context.Context, limit currency.Amount
 	return err
 }
 
-func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amount, stopAccept <-chan struct{}, out chan<- Event) error {
+func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amount, stopAccept <-chan struct{}, out chan<- types.Event) error {
 	const tag = "money.accept-credit"
 
 	g := state.GetGlobal(ctx)
@@ -64,7 +64,6 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			}
 
 		case money.StatusCredit:
-			itemTime := time.Now()
 			self.lk.Lock()
 			defer self.lk.Unlock()
 
@@ -83,13 +82,12 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			self.dirty += pi.Amount()
 			alive.Stop()
 			if out != nil {
-				out <- Event{Created: itemTime, Kind: EventCredit, Amount: pi.Amount()}
+				out <- types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}
 			}
 		}
 		return false
 	})
 	go self.coin.Run(ctx, alive, func(pi money.PollItem) bool {
-		itemTime := time.Now()
 		self.lk.Lock()
 		defer self.lk.Unlock()
 
@@ -101,7 +99,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 
 		case money.StatusReturnRequest:
 			// XXX maybe this should be in coin driver
-			g.Hardware.Input.Emit(input.Event{Source: input.MoneySourceTag, Key: input.MoneyKeyAbort})
+			g.Hardware.Input.Emit(types.InputEvent{Source: input.MoneySourceTag, Key: input.MoneyKeyAbort})
 
 		case money.StatusRejected:
 			g.Tele.StatModify(func(s *tele_api.Stat) {
@@ -124,7 +122,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			self.dirty += pi.Amount()
 			alive.Stop()
 			if out != nil {
-				out <- Event{Created: itemTime, Kind: EventCredit, Amount: pi.Amount()}
+				out <- types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}
 			}
 
 		default:

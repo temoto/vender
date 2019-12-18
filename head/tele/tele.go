@@ -15,7 +15,7 @@ import (
 
 const (
 	defaultStateInterval  = 5 * time.Minute
-	defaultNetworkTimeout = 30 * time.Second
+	DefaultNetworkTimeout = 30 * time.Second
 )
 
 // Tele contract:
@@ -25,7 +25,7 @@ const (
 // - Close() will block until all messages are delivered
 // - Telemetry/Response messages delivered at least once
 // - Status messages may be lost
-type Tele struct { //nolint:maligned
+type tele struct { //nolint:maligned
 	enabled       bool
 	log           *log2.Log
 	transport     Transporter
@@ -37,7 +37,14 @@ type Tele struct { //nolint:maligned
 	stat          tele_api.Stat
 }
 
-func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config) error {
+func New() tele_api.Teler {
+	return &tele{}
+}
+func NewWithTransporter(trans Transporter) tele_api.Teler {
+	return &tele{transport: trans}
+}
+
+func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config) error {
 	self.enabled = teleConfig.Enabled
 	self.log = log
 	if teleConfig.LogDebug {
@@ -77,12 +84,12 @@ func (self *Tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	return nil
 }
 
-func (self *Tele) Close() {
+func (self *tele) Close() {
 	close(self.stopCh)
 	self.q.Close()
 }
 
-func (self *Tele) stateWorker() {
+func (self *tele) stateWorker() {
 	const retryInterval = 17 * time.Second
 	var b [1]byte
 	var sent bool
@@ -116,7 +123,7 @@ const (
 	qTelemetry       byte = 2
 )
 
-func (self *Tele) qworker() {
+func (self *tele) qworker() {
 	for {
 		box, err := self.q.Peek()
 		switch err {
@@ -155,7 +162,7 @@ func (self *Tele) qworker() {
 	}
 }
 
-func (self *Tele) qhandle(b []byte) (bool, error) {
+func (self *tele) qhandle(b []byte) (bool, error) {
 	if len(b) == 0 {
 		self.log.Errorf("tele spq peek=empty")
 		// what else can we do?
@@ -183,7 +190,7 @@ func (self *Tele) qhandle(b []byte) (bool, error) {
 	}
 }
 
-func (self *Tele) qpushCommandResponse(c *tele_api.Command, r *tele_api.Response) error {
+func (self *tele) qpushCommandResponse(c *tele_api.Command, r *tele_api.Response) error {
 	if c.ReplyTopic == "" {
 		err := errors.Errorf("command with reply_topic=empty")
 		self.Error(err)
@@ -193,7 +200,7 @@ func (self *Tele) qpushCommandResponse(c *tele_api.Command, r *tele_api.Response
 	return self.qpushTagProto(qCommandResponse, r)
 }
 
-func (self *Tele) qpushTelemetry(tm *tele_api.Telemetry) error {
+func (self *tele) qpushTelemetry(tm *tele_api.Telemetry) error {
 	if tm.VmId == 0 {
 		tm.VmId = self.vmId
 	}
@@ -208,7 +215,7 @@ func (self *Tele) qpushTelemetry(tm *tele_api.Telemetry) error {
 	return err
 }
 
-func (self *Tele) qpushTagProto(tag byte, pb proto.Message) error {
+func (self *tele) qpushTagProto(tag byte, pb proto.Message) error {
 	buf := proto.NewBuffer(make([]byte, 0, 1024))
 	if err := buf.EncodeVarint(uint64(tag)); err != nil {
 		return err
@@ -220,7 +227,7 @@ func (self *Tele) qpushTagProto(tag byte, pb proto.Message) error {
 	return self.q.Push(buf.Bytes())
 }
 
-func (self *Tele) qsendResponse(r *tele_api.Response) bool {
+func (self *tele) qsendResponse(r *tele_api.Response) bool {
 	// do not serialize INTERNAL_topic field
 	wireResponse := *r
 	wireResponse.INTERNALTopic = ""
@@ -232,7 +239,7 @@ func (self *Tele) qsendResponse(r *tele_api.Response) bool {
 	return self.transport.SendCommandResponse(r.INTERNALTopic, payload)
 }
 
-func (self *Tele) qsendTelemetry(tm *tele_api.Telemetry) bool {
+func (self *tele) qsendTelemetry(tm *tele_api.Telemetry) bool {
 	payload, err := proto.Marshal(tm)
 	if err != nil {
 		self.log.Errorf("CRITICAL telemetry Marshal tm=%#v err=%v", tm, err)

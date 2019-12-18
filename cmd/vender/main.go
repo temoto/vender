@@ -69,7 +69,7 @@ func main() {
 	config := state.MustReadConfig(log, state.NewOsFullReader(), *configPath)
 
 	log.SetFlags(log2.LInteractiveFlags)
-	ctx, g := state_new.NewContext(log, new(tele.Tele))
+	ctx, g := state_new.NewContext(log, tele.New())
 	g.BuildVersion = BuildVersion
 	if subcmd.SdNotify("start") {
 		// under systemd assume systemd journal logging, no timestamp

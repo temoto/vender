@@ -16,22 +16,23 @@ import (
 	"github.com/temoto/vender/engine/inventory"
 	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )
 
 type Global struct {
-	Alive     *alive.Alive
-	Config    *Config
-	Engine    *engine.Engine
-	Hardware  hardware // hardware.go
-	Inventory *inventory.Inventory
-	Log       *log2.Log
-	Tele      tele_api.Teler
-
+	Alive        *alive.Alive
 	BuildVersion string
+	Config       *Config
+	Engine       *engine.Engine
+	Hardware     hardware // hardware.go
+	Inventory    *inventory.Inventory
+	Log          *log2.Log
+	Tele         tele_api.Teler
+	// TODO UI           types.UIer
 
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
-	XXX_ui    atomic.Value // *ui.UI crutch to import cycle
+	XXX_uier  atomic.Value // UIer crutch to import/init cycle
 
 	_copy_guard sync.Mutex //lint:ignore U1000 unused
 }
@@ -132,6 +133,29 @@ func (g *Global) Fatal(err error, args ...interface{}) {
 	}
 }
 
+func (g *Global) ScheduleSync(ctx context.Context, priority tele_api.Priority, fun types.TaskFunc) error {
+	// TODO task := g.Schedule(ctx, priority, fun)
+	// return task.wait()
+
+	g.Alive.Add(1)
+	defer g.Alive.Done()
+
+	switch priority {
+	case tele_api.Priority_Default, tele_api.Priority_Now:
+		return fun(ctx)
+
+	case tele_api.Priority_IdleEngine:
+		// TODO return g.Engine.Schedule(ctx, priority, fun)
+		return fun(ctx)
+
+	case tele_api.Priority_IdleUser:
+		return g.UI().ScheduleSync(ctx, priority, fun)
+
+	default:
+		return errors.Errorf("code error ScheduleSync invalid priority=(%d)%s", priority, priority.String())
+	}
+}
+
 func (g *Global) Stop() {
 	g.Alive.Stop()
 }
@@ -143,6 +167,17 @@ func (g *Global) StopWait(timeout time.Duration) bool {
 		return true
 	case <-time.After(timeout):
 		return false
+	}
+}
+
+func (g *Global) UI() types.UIer {
+	for {
+		x := g.XXX_uier.Load()
+		if x != nil {
+			return x.(types.UIer)
+		}
+		g.Log.Errorf("CRITICAL g.uier is not set")
+		time.Sleep(5 * time.Second)
 	}
 }
 

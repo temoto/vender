@@ -8,32 +8,35 @@ package ui
 import (
 	"sync/atomic"
 	"time"
+
+	tele_api "github.com/temoto/vender/head/tele/api"
 )
 
 const lockPoll = 300 * time.Millisecond
 
 type uiLock struct {
 	ch   chan struct{}
+	pri  uint32
 	sem  int32
 	next State
 }
 
-func (l *uiLock) locked() bool {
-	return atomic.LoadInt32(&l.sem) > 0
-}
-
-func (self *UI) LockFunc(fun func()) bool {
-	if !self.LockWait() {
+func (self *UI) LockFunc(pri tele_api.Priority, fun func()) bool {
+	if !self.LockWait(pri) {
 		return false
 	}
-	defer self.LockDecrement()
+	defer self.LockDecrementWait()
 	fun()
 	return true
 }
 
-func (self *UI) LockWait() bool {
+func (self *UI) LockWait(pri tele_api.Priority) bool {
 	self.g.Log.Debugf("LockWait")
-	atomic.AddInt32(&self.lock.sem, 1)
+	newSem := atomic.AddInt32(&self.lock.sem, 1)
+	oldPri := self.lock.priority()
+	if newSem == 1 || (newSem > 1 && pri != oldPri && pri == tele_api.Priority_Now) {
+		atomic.StoreUint32(&self.lock.pri, uint32(pri))
+	}
 	select {
 	case self.lock.ch <- struct{}{}:
 	default:
@@ -47,8 +50,8 @@ func (self *UI) LockWait() bool {
 	return false
 }
 
-func (self *UI) LockDecrement() {
-	self.g.Log.Debugf("LockDecrement")
+func (self *UI) LockDecrementWait() {
+	self.g.Log.Debugf("LockDecrementWait")
 	new := atomic.AddInt32(&self.lock.sem, -1)
 	if new < 0 {
 		// Support concurrent LockEnd
@@ -71,14 +74,18 @@ func (self *UI) LockEnd() {
 	}
 }
 
-// Avoid interrupting some important states
-// TODO configurable
-func (self *UI) checkLockPriority(s State) bool {
-	if s == StateFrontAccept {
+func (self *UI) checkInterrupt(s State) bool {
+	if !self.lock.locked() {
 		return false
 	}
-	if s >= StateServiceBegin && s <= StateServiceEnd {
-		return false
+
+	interrupt := true
+	if self.lock.priority()&tele_api.Priority_IdleUser != 0 {
+		interrupt = !(s > StateFrontBegin && s < StateFrontEnd) &&
+			!(s >= StateServiceBegin && s <= StateServiceEnd)
 	}
-	return true
+	return interrupt
 }
+
+func (l *uiLock) locked() bool                { return atomic.LoadInt32(&l.sem) > 0 }
+func (l *uiLock) priority() tele_api.Priority { return tele_api.Priority(atomic.LoadUint32(&l.pri)) }

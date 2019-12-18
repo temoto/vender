@@ -1,17 +1,18 @@
-package tele
+package tele_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"github.com/temoto/vender/head/tele"
 	tele_config "github.com/temoto/vender/head/tele/config"
 	"github.com/temoto/vender/log2"
 )
 
 type transportMock struct {
 	t              testing.TB
-	onCommand      CommandCallback
+	onCommand      tele.CommandCallback
 	networkTimeout time.Duration
 	outBuffer      int
 	outTelemetry   chan []byte
@@ -19,10 +20,10 @@ type transportMock struct {
 	outResponse    chan []byte
 }
 
-func (self *transportMock) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback, willPayload []byte) error {
+func (self *transportMock) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand tele.CommandCallback, willPayload []byte) error {
 	self.onCommand = onCommand
 	if self.networkTimeout == 0 {
-		self.networkTimeout = defaultNetworkTimeout
+		self.networkTimeout = tele.DefaultNetworkTimeout
 	}
 	self.outTelemetry = make(chan []byte, self.outBuffer)
 	self.outState = make(chan []byte, self.outBuffer)

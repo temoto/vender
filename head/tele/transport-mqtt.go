@@ -54,7 +54,7 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 	self.topicTelemetry = fmt.Sprintf("%s/w/1t", self.topicPrefix)
 	self.topicCommand = fmt.Sprintf("%s/r/c", self.topicPrefix)
 
-	networkTimeout := helpers.IntSecondDefault(teleConfig.NetworkTimeoutSec, defaultNetworkTimeout)
+	networkTimeout := helpers.IntSecondDefault(teleConfig.NetworkTimeoutSec, DefaultNetworkTimeout)
 	if networkTimeout < 1*time.Second {
 		networkTimeout = 1 * time.Second
 	}

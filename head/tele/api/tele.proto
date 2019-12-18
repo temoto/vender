@@ -12,6 +12,13 @@ message Inventory {
   }
 }
 
+enum Priority {
+  Default = 0;
+  Now = 1;
+  IdleEngine = 2;
+  IdleUser = 4;
+}
+
 enum State {
   Invalid = 0;
   Boot = 1;
@@ -78,6 +85,7 @@ message Command {
   uint32 id = 1;
   string reply_topic = 2;
   int64 deadline = 3;
+  Priority priority = 4;
   oneof task {
     ArgReport report = 16;
     ArgLock lock = 17;
