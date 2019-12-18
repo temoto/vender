@@ -187,3 +187,12 @@ func GetCurrentPrice(ctx context.Context) currency.Amount {
 func SetCurrentPrice(ctx context.Context, p currency.Amount) context.Context {
 	return context.WithValue(ctx, currentPriceKey, p)
 }
+
+func (self *MoneySystem) XXX_InjectCoin(n currency.Nominal) error {
+	self.lk.Lock()
+	defer self.lk.Unlock()
+	self.Log.Debugf("XXX_InjectCoin n=%d", n)
+	self.coinCredit.MustAdd(n, 1)
+	self.dirty += currency.Amount(n)
+	return nil
+}

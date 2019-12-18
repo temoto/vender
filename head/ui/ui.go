@@ -8,23 +8,12 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
-	"github.com/temoto/vender/head/money"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	ui_config "github.com/temoto/vender/head/ui/config"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/state"
 )
-
-func GetGlobal(ctx context.Context) *UI {
-	g := state.GetGlobal(ctx)
-	for {
-		x := g.XXX_ui.Load()
-		if x != nil {
-			return x.(*UI)
-		}
-		g.Log.Errorf("CRITICAL ui.GetGlobal is not set")
-		time.Sleep(5 * time.Second)
-	}
-}
 
 type UI struct { //nolint:maligned
 	FrontMaxPrice currency.Amount
@@ -39,15 +28,16 @@ type UI struct { //nolint:maligned
 	display      *lcd.TextDisplay // FIXME
 	lastActivity time.Time
 	inputBuf     []byte
-	eventch      chan Event
-	inputch      chan input.Event
-	moneych      chan money.Event
+	eventch      chan types.Event
+	inputch      chan types.InputEvent
 	lock         uiLock
 
 	frontResetTimeout time.Duration
 
 	XXX_testHook func(State)
 }
+
+var _ types.UIer = &UI{} // compile-time interface test
 
 func (self *UI) Init(ctx context.Context) error {
 	self.g = state.GetGlobal(ctx)
@@ -62,48 +52,59 @@ func (self *UI) Init(ctx context.Context) error {
 	self.g.Log.Debugf("menu len=%d", len(self.menu))
 
 	self.display = self.g.MustDisplay()
-	self.eventch = make(chan Event)
+	self.eventch = make(chan types.Event)
 	self.inputBuf = make([]byte, 0, 32)
 	self.inputch = self.g.Hardware.Input.SubscribeChan("ui", self.g.Alive.StopChan())
 	// TODO self.g.Hardware.Input.Unsubscribe("ui")
-	self.moneych = make(chan money.Event)
 
 	self.frontResetTimeout = helpers.IntSecondDefault(self.g.Config.UI.Front.ResetTimeoutSec, 0)
 
 	self.lock.ch = make(chan struct{}, 1)
 
 	self.Service.Init(ctx)
-	self.g.XXX_ui.Store(self) // FIXME import cycle traded for pointer cycle
+	self.g.XXX_uier.Store(types.UIer(self)) // FIXME import cycle traded for pointer cycle
 	return nil
 }
 
-func (self *UI) wait(timeout time.Duration) Event {
+func (self *UI) ScheduleSync(ctx context.Context, priority tele_api.Priority, fun types.TaskFunc) error {
+	if !self.LockWait(priority) {
+		return errors.Trace(types.ErrInterrupted)
+	}
+	defer self.LockDecrementWait()
+	return fun(ctx)
+}
+
+func (self *UI) wait(timeout time.Duration) types.Event {
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
 again:
 	select {
-	case e := <-self.inputch:
-		self.lastActivity = time.Now()
-		if e.Source == input.DevInputEventTag && e.Up {
-			return Event{Kind: EventService}
+	case e := <-self.eventch:
+		if e.Kind != types.EventInvalid {
+			self.lastActivity = time.Now()
 		}
-		return Event{Kind: EventInput, Input: e}
+		return e
 
-	case m := <-self.moneych:
-		self.lastActivity = time.Now()
-		return Event{Kind: EventMoney, Money: m}
+	case e := <-self.inputch:
+		if e.Source != "" {
+			self.lastActivity = time.Now()
+		}
+		if e.Source == input.DevInputEventTag && e.Up {
+			return types.Event{Kind: types.EventService}
+		}
+		return types.Event{Kind: types.EventInput, Input: e}
 
 	case <-self.lock.ch:
 		// chan buffer may produce false positive
 		if !self.lock.locked() {
 			goto again
 		}
-		return Event{Kind: EventLock}
+		return types.Event{Kind: types.EventLock}
 
 	case <-tmr.C:
-		return Event{Kind: EventTime}
+		return types.Event{Kind: types.EventTime}
 
 	case <-self.g.Alive.StopChan():
-		return Event{Kind: EventStop}
+		return types.Event{Kind: types.EventStop}
 	}
 }

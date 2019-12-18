@@ -9,12 +9,11 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	tele_api "github.com/temoto/vender/head/tele/api"
-	"github.com/temoto/vender/head/ui"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
 )
 
-func (self *Tele) onCommandMessage(ctx context.Context, payload []byte) bool {
+func (self *tele) onCommandMessage(ctx context.Context, payload []byte) bool {
 	cmd := new(tele_api.Command)
 	err := proto.Unmarshal(payload, cmd)
 	if err != nil {
@@ -28,7 +27,7 @@ func (self *Tele) onCommandMessage(ctx context.Context, payload []byte) bool {
 	return true
 }
 
-func (self *Tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
+func (self *tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
 	var err error
 	switch task := cmd.Task.(type) {
 	case *tele_api.Command_Report:
@@ -53,20 +52,19 @@ func (self *Tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
 	self.CommandReplyErr(cmd, err)
 }
 
-func (self *Tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
+func (self *tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
 	return errors.Annotate(self.Report(ctx, false), "cmdReport")
 }
 
-func (self *Tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgLock) error {
-	if arg.Duration == 0 {
-		ui.GetGlobal(ctx).LockEnd()
+func (self *tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgLock) error {
+	g := state.GetGlobal(ctx)
+	return g.ScheduleSync(ctx, cmd.Priority, func(context.Context) error {
+		time.Sleep(time.Duration(arg.Duration) * time.Second)
 		return nil
-	}
-	ui.GetGlobal(ctx).LockFunc(func() { time.Sleep(time.Duration(arg.Duration) * time.Second) })
-	return nil
+	})
 }
 
-func (self *Tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgExec) error {
+func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgExec) error {
 	g := state.GetGlobal(ctx)
 	doer, err := g.Engine.ParseText("tele-exec", arg.Scenario)
 	if err != nil {
@@ -79,20 +77,12 @@ func (self *Tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 		return err
 	}
 
-	// done := make(chan struct{})
-	if arg.Lock {
-		ui := ui.GetGlobal(ctx)
-		if !ui.LockWait() {
-			return errors.Errorf("ui.LockWait interrupted")
-		}
-		defer ui.LockDecrement()
-	}
-	err = doer.Do(ctx)
-	err = errors.Annotate(err, "do")
+	err = g.ScheduleSync(ctx, cmd.Priority, doer.Do)
+	err = errors.Annotate(err, "schedule")
 	return err
 }
 
-func (self *Tele) cmdSetInventory(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgSetInventory) error {
+func (self *tele) cmdSetInventory(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgSetInventory) error {
 	if arg == nil || arg.New == nil {
 		return errors.Errorf("invalid arg")
 	}
@@ -102,37 +92,33 @@ func (self *Tele) cmdSetInventory(ctx context.Context, cmd *tele_api.Command, ar
 	return err
 }
 
-func (self *Tele) cmdStop(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgStop) error {
+func (self *tele) cmdStop(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgStop) error {
 	if arg == nil {
 		return errors.Errorf("invalid arg")
 	}
 
 	g := state.GetGlobal(ctx)
-	ui := ui.GetGlobal(ctx)
-	if !ui.LockWait() {
-		return errors.Errorf("ui.LockWait interrupted")
-	}
-
+	// go+delay to send transport ack before process exits
+	// TODO store command in persistent queue, send MQTT ack, execute later
 	go func() {
-		// delay to send transport ack before process exits
-		// TODO store command in persistent queue, send MQTT ack, execute later
 		delay := helpers.IntSecondDefault(g.Config.Tele.FIXME_stopDelaySec, 7*time.Second)
 		g.Log.Debugf("cmdStop arg=%s crutch delay=%v", proto.MarshalTextString(arg), delay)
 		time.Sleep(delay)
 
-		// FIXME race. Should Stop() with lock, but UI state machine needs lock release first.
-		ui.LockDecrement()
-		g.Stop()
+		g.ScheduleSync(ctx, cmd.Priority, func(context.Context) error {
+			g.Stop()
 
-		if arg.Timeout > 0 {
-			timeout := time.Duration(arg.Timeout) * time.Second
-			time.AfterFunc(timeout, func() {
-				if !g.StopWait(timeout) {
-					g.Log.Errorf("cmdStop timeout")
-					os.Exit(1)
-				}
-			})
-		}
+			if arg.Timeout > 0 {
+				timeout := time.Duration(arg.Timeout) * time.Second
+				time.AfterFunc(timeout, func() {
+					if !g.StopWait(timeout) {
+						g.Log.Errorf("cmdStop timeout")
+						os.Exit(1)
+					}
+				})
+			}
+			return nil
+		})
 	}()
 	return nil
 }

@@ -7,9 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/head/money"
+	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/head/ui"
+	"github.com/temoto/vender/internal/types"
 	state_new "github.com/temoto/vender/state/new"
 )
 
@@ -29,14 +30,8 @@ engine {
 ui {
 	front { reset_sec = 5 }
 }`)
-	mock := mdb.MockFromContext(ctx)
-	defer mock.Close()
-	mock.ExpectMap(map[string]string{
-		"": "",
-	})
 	moneysys := new(money.MoneySystem)
-	err := moneysys.Start(ctx)
-	require.NoError(t, err)
+	require.NoError(t, moneysys.Start(ctx))
 	env := &tenv{ctx: ctx, g: g}
 	g.Config.UI.Front.MsgStateIntro = "hello tune"
 	uiTestSetup(t, env, ui.StateFrontBegin, ui.StateFrontEnd)
@@ -52,7 +47,7 @@ ui {
 		{expect: env._T(fmt.Sprintf("%s  /3", ui.MsgSugar), "   - \x97\x97\x95\x94\x94\x94 +   "), inev: env._Key(input.EvendKeySugarLess)},
 		{expect: env._T(fmt.Sprintf("%s  /2", ui.MsgSugar), "   - \x97\x96\x94\x94\x94\x94 +   "), inev: env._Key('1')},
 		{expect: env._T(fmt.Sprintf("%s0", ui.MsgCredit), fmt.Sprintf(ui.MsgInputCode, "1")), inev: env._KeyAccept},
-		{expect: env._T(ui.MsgMaking1, ui.MsgMaking2), inev: ui.Event{}},
+		{expect: env._T(ui.MsgMaking1, ui.MsgMaking2), inev: env._Timeout},
 		{},
 	}
 	uiTestWait(t, env, steps)
@@ -75,12 +70,8 @@ engine {
 ui {
 	front { reset_sec = 5 }
 }`)
-	mock := mdb.MockFromContext(ctx)
-	defer mock.Close()
-	mock.ExpectMap(map[string]string{"": ""})
 	moneysys := new(money.MoneySystem)
-	err := moneysys.Start(ctx)
-	require.NoError(t, err)
+	require.NoError(t, moneysys.Start(ctx))
 	env := &tenv{ctx: ctx, g: g}
 	g.Config.UI.Front.MsgStateIntro = "money-abort"
 	uiTestSetup(t, env, ui.StateFrontBegin, ui.StateFrontEnd)
@@ -113,25 +104,63 @@ ui {
 		reset_sec = 5
 	}
 }`)
-	mock := mdb.MockFromContext(ctx)
-	defer mock.Close()
-	mock.ExpectMap(map[string]string{"": ""})
 	moneysys := new(money.MoneySystem)
-	err := moneysys.Start(ctx)
-	require.NoError(t, err)
+	require.NoError(t, moneysys.Start(ctx))
 	env := &tenv{ctx: ctx, g: g}
 	uiTestSetup(t, env, ui.StateFrontBegin, ui.StateFrontAccept)
 	go env.ui.Loop(ctx)
 
 	steps := []step{
-		{expect: env._T("hello,world", ""), inev: ui.Event{Kind: ui.EventTime}},
-		{fun: func() { assert.True(t, env.ui.LockWait()) }},
-		{expect: env._T("locked,wait", ""), inev: ui.Event{Kind: ui.EventTime}},
+		{expect: env._T("hello,world", ""), inev: types.Event{Kind: types.EventTime}},
+		{fun: func() { assert.True(t, env.ui.LockWait(tele_api.Priority_Now)) }},
+		{expect: env._T("locked,wait", ""), inev: types.Event{Kind: types.EventTime}},
 		{fun: func() { env.ui.LockEnd() }},
-		{expect: env._T("hello,world", ""), inev: ui.Event{Kind: ui.EventStop}},
+		{expect: env._T("hello,world", ""), inev: types.Event{Kind: types.EventStop}},
 		{},
 	}
 	uiTestWait(t, env, steps)
+}
+
+func TestFrontPay(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state_new.NewTestContext(t, `
+engine {
+	menu {
+		item "1" { price=7 scenario = "" }
+	}
+}
+money {
+	credit_max = 50
+	scale = 100
+}
+ui {
+	front {
+		msg_intro = "please buy"
+		reset_sec = 5
+	}
+}`)
+	moneysys := new(money.MoneySystem)
+	require.NoError(t, moneysys.Start(ctx))
+	env := &tenv{ctx: ctx, g: g, uiState: make(chan ui.State, 1)}
+	uiTestSetup(t, env, ui.StateFrontBegin, ui.StateFrontEnd)
+	go env.ui.Loop(ctx)
+
+	env.requireState(t, ui.StateFrontSelect)
+	env.requireDisplay(t, "please buy", "")
+	require.NoError(t, moneysys.XXX_InjectCoin(500))
+	env.g.Hardware.Input.Emit(env._Key('1').Input)
+	env.requireDisplay(t, ui.MsgCredit+"5", fmt.Sprintf(ui.MsgInputCode, "1"))
+	env.g.Hardware.Input.Emit(env._KeyAccept.Input)
+	env.requireDisplay(t, "", ui.MsgMenuInsufficientCredit)
+	require.NoError(t, moneysys.XXX_InjectCoin(200))
+	env.g.Hardware.Input.Emit(env._KeyAccept.Input)
+	env.requireState(t, ui.StateFrontAccept)
+	env.requireDisplay(t, ui.MsgMaking1, ui.MsgMaking2)
+	env.requireState(t, ui.StateFrontEnd)
+	if assert.False(t, env.g.Alive.IsRunning(), "ui still running") {
+		env.g.Alive.Wait()
+	}
 }
 
 // This test ensures particular behavior of currently operated coffee machine tuning.

@@ -112,11 +112,7 @@ func (self *MoneySystem) WithdrawCommit(ctx context.Context, amount currency.Amo
 	if self.dirty != amount {
 		self.Log.Errorf("%s CRITICAL amount=%s dirty=%s", tag, amount.FormatCtx(ctx), self.dirty.FormatCtx(ctx))
 	}
-	self.dirty = 0
-	self.billCredit.Clear()
-	self.coinCredit.Clear()
-	self.giftCredit = 0
-
+	self.locked_zero()
 	return nil
 }
 
@@ -179,4 +175,11 @@ func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amou
 		self.dirty -= amount
 	}
 	return err
+}
+
+func (self *MoneySystem) locked_zero() {
+	self.dirty = 0
+	self.billCredit.Clear()
+	self.coinCredit.Clear()
+	self.giftCredit = 0
 }

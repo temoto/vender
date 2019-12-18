@@ -11,6 +11,7 @@ import (
 
 type Teler interface {
 	Init(context.Context, *log2.Log, tele_config.Config) error
+	Close()
 	State(State)
 	Error(error)
 	StatModify(func(*Stat))
@@ -23,6 +24,7 @@ type stub struct{}
 func (stub) Init(context.Context, *log2.Log, tele_config.Config) error {
 	return nil
 }
+func (stub) Close()                                            {}
 func (stub) State(State)                                       {}
 func (stub) Error(error)                                       {}
 func (stub) StatModify(func(*Stat))                            {}

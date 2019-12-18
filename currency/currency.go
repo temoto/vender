@@ -3,6 +3,7 @@ package currency
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 	"strings"
@@ -12,6 +13,8 @@ import (
 
 // Amount is integer counting lowest currency unit, e.g. $1.20 = 120
 type Amount uint32
+
+const MaxAmount = Amount(math.MaxUint32)
 
 func (self Amount) Format100I() string { return fmt.Sprint(float32(self) / 100) }
 func (self Amount) FormatCtx(ctx context.Context) string {
@@ -59,7 +62,7 @@ func (self *NominalGroup) Add(n Nominal, count uint) error {
 	if _, ok := self.values[n]; !ok {
 		return errors.Annotatef(ErrNominalInvalid, "Add(n=%s, c=%d)", Amount(n).Format100I(), count)
 	}
-	self.values[n] += count
+	self.MustAdd(n, count)
 	return nil
 }
 
@@ -70,6 +73,11 @@ func (self *NominalGroup) AddFrom(source *NominalGroup) {
 	for k, v := range source.values {
 		self.values[k] += v
 	}
+}
+
+// MustAdd just adds count ignoring valid nominals.
+func (self *NominalGroup) MustAdd(n Nominal, count uint) {
+	self.values[n] += count
 }
 
 func (self *NominalGroup) Clear() {

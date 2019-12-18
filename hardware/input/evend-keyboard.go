@@ -4,20 +4,21 @@ import (
 	"io"
 
 	"github.com/temoto/vender/hardware/mega-client"
+	"github.com/temoto/vender/internal/types"
 )
 
 const EvendKeyMaskUp = 0x80
 const EvendKeyboardSourceTag = "evend-keyboard"
 
 const (
-	EvendKeyAccept    Key = 13
-	EvendKeyReject    Key = 27
-	EvendKeyCreamLess Key = 'A'
-	EvendKeyCreamMore Key = 'B'
-	EvendKeySugarLess Key = 'C'
-	EvendKeySugarMore Key = 'D'
-	evendKeyDotInput  Key = 'E' // evend keyboard sends '.' as 'E'
-	EvendKeyDot       Key = '.'
+	EvendKeyAccept    types.InputKey = 13
+	EvendKeyReject    types.InputKey = 27
+	EvendKeyCreamLess types.InputKey = 'A'
+	EvendKeyCreamMore types.InputKey = 'B'
+	EvendKeySugarLess types.InputKey = 'C'
+	EvendKeySugarMore types.InputKey = 'D'
+	evendKeyDotInput  types.InputKey = 'E' // evend keyboard sends '.' as 'E'
+	EvendKeyDot       types.InputKey = '.'
 )
 
 type EvendKeyboard struct{ c *mega.Client }
@@ -45,20 +46,20 @@ func (self *EvendKeyboard) Close() error {
 
 func (self *EvendKeyboard) String() string { return EvendKeyboardSourceTag }
 
-func (self *EvendKeyboard) Read() (Event, error) {
+func (self *EvendKeyboard) Read() (types.InputEvent, error) {
 	for {
 		v16, ok := <-self.c.TwiChan
 		if !ok {
-			return Event{}, io.EOF
+			return types.InputEvent{}, io.EOF
 		}
-		key, up := Key(v16&^EvendKeyMaskUp), v16&EvendKeyMaskUp != 0
+		key, up := types.InputKey(v16&^EvendKeyMaskUp), v16&EvendKeyMaskUp != 0
 		// key replace table
 		switch key {
 		case evendKeyDotInput:
 			key = EvendKeyDot
 		}
 		if !up {
-			e := Event{
+			e := types.InputEvent{
 				Source: EvendKeyboardSourceTag,
 				Key:    key,
 				Up:     up,
@@ -68,5 +69,9 @@ func (self *EvendKeyboard) Read() (Event, error) {
 	}
 }
 
-func IsAccept(e *Event) bool { return e.Source == EvendKeyboardSourceTag && e.Key == EvendKeyAccept }
-func IsReject(e *Event) bool { return e.Source == EvendKeyboardSourceTag && e.Key == EvendKeyReject }
+func IsAccept(e *types.InputEvent) bool {
+	return e.Source == EvendKeyboardSourceTag && e.Key == EvendKeyAccept
+}
+func IsReject(e *types.InputEvent) bool {
+	return e.Source == EvendKeyboardSourceTag && e.Key == EvendKeyReject
+}

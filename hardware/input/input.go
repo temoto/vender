@@ -6,21 +6,11 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )
 
-type Key uint16
-
-type Event struct {
-	Source string
-	Key    Key
-	Up     bool
-}
-
-func (e *Event) IsZero() bool  { return e.Key == 0 }
-func (e *Event) IsDigit() bool { return e.Key >= '0' && e.Key <= '9' }
-
-func Drain(ch <-chan Event) {
+func Drain(ch <-chan types.InputEvent) {
 	for {
 		select {
 		case <-ch:
@@ -31,21 +21,21 @@ func Drain(ch <-chan Event) {
 }
 
 type Source interface {
-	Read() (Event, error)
+	Read() (types.InputEvent, error)
 	String() string
 }
 
-type EventFunc func(Event)
+type EventFunc func(types.InputEvent)
 type sub struct {
 	name string
-	ch   chan<- Event
+	ch   chan<- types.InputEvent
 	fun  EventFunc
 	stop <-chan struct{}
 }
 
 type Dispatch struct {
 	Log  *log2.Log
-	bus  chan Event
+	bus  chan types.InputEvent
 	mu   sync.Mutex
 	subs map[string]*sub
 	stop <-chan struct{}
@@ -54,14 +44,14 @@ type Dispatch struct {
 func NewDispatch(log *log2.Log, stop <-chan struct{}) *Dispatch {
 	return &Dispatch{
 		Log:  log,
-		bus:  make(chan Event),
+		bus:  make(chan types.InputEvent),
 		subs: make(map[string]*sub, 16),
 		stop: stop,
 	}
 }
 
-func (self *Dispatch) SubscribeChan(name string, substop <-chan struct{}) chan Event {
-	target := make(chan Event)
+func (self *Dispatch) SubscribeChan(name string, substop <-chan struct{}) chan types.InputEvent {
+	target := make(chan types.InputEvent)
 	sub := &sub{
 		name: name,
 		ch:   target,
@@ -117,7 +107,7 @@ func (self *Dispatch) Run(sources []Source) {
 	}
 }
 
-func (self *Dispatch) Emit(event Event) {
+func (self *Dispatch) Emit(event types.InputEvent) {
 	select {
 	case self.bus <- event:
 		self.Log.Debugf("input emit=%#v", event)
@@ -126,7 +116,7 @@ func (self *Dispatch) Emit(event Event) {
 	}
 }
 
-func (self *Dispatch) subFire(sub *sub, event Event) {
+func (self *Dispatch) subFire(sub *sub, event types.InputEvent) {
 	select {
 	case <-sub.stop:
 		self.subClose(sub)
