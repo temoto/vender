@@ -37,7 +37,7 @@ var /*const*/ serviceMenu = []string{
 	serviceMenuTest,
 	serviceMenuReboot,
 	serviceMenuNetwork,
-	// serviceMenuMoneyLoad,
+	serviceMenuMoneyLoad,
 	serviceMenuReport,
 }
 var /*const*/ serviceMenuMax = uint8(len(serviceMenu) - 1)

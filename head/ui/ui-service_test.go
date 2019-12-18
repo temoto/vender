@@ -130,8 +130,9 @@ func TestServiceReport(t *testing.T) {
 		{expect: env._T("Menu", "2 test"), inev: env._KeyNext},
 		{expect: env._T("Menu", "3 reboot"), inev: env._KeyNext},
 		{expect: env._T("Menu", "4 network"), inev: env._KeyNext},
-		{expect: env._T("Menu", "5 report"), inev: env._KeyAccept},
-		{expect: env._T("Menu", "5 report"), inev: env._KeyReject},
+		{expect: env._T("Menu", "5 money-load"), inev: env._KeyNext},
+		{expect: env._T("Menu", "6 report"), inev: env._KeyAccept},
+		{expect: env._T("Menu", "6 report"), inev: env._KeyReject},
 		{},
 	}
 	uiTestWait(t, env, steps)
