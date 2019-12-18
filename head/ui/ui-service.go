@@ -371,6 +371,9 @@ func (self *UI) onServiceMoneyLoad(ctx context.Context) State {
 	defer func() {
 		alive.Stop() // stop pending AcceptCredit
 		alive.Wait()
+
+		// reset loaded credit
+		_ = moneysys.WithdrawCommit(ctx, moneysys.Credit(ctx))
 	}()
 
 	self.Service.askReport = true
