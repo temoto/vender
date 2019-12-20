@@ -282,7 +282,7 @@ func (self *CoinAcceptor) TubeStatus() error {
 	for i := uint8(0); i < TypeCount; i++ {
 		full := (fulls & (1 << i)) != 0
 		if full && counts[i] == 0 {
-			self.Device.TeleError(fmt.Errorf("%s tube=%d problem (jam/sensor/etc)", tag, i+1))
+			self.Device.TeleError(fmt.Errorf("%s coin=%d problem (jam/sensor/etc)", tag, i+1))
 		} else if counts[i] != 0 {
 			nominal := self.coinTypeNominal(i)
 			if err := self.tubes.Add(nominal, uint(counts[i])); err != nil {
