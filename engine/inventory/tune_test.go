@@ -16,7 +16,7 @@ func TestTuneDrink(t *testing.T) {
 	t.Parallel()
 
 	rand := helpers.RandUnix()
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 engine {
 inventory {
 	stock "sugar" { register_add="sugar.drop(?)" spend_rate=0.98 }

@@ -11,7 +11,7 @@ import (
 func TestElevator(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `hardware { device "mdb.evend.elevator" {} }`)
+	ctx, g := state_new.NewTestContext(t, "", `hardware { device "mdb.evend.elevator" {} }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{

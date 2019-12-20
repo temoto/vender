@@ -26,7 +26,7 @@ const (
 // - Telemetry/Response messages delivered at least once
 // - Status messages may be lost
 type tele struct { //nolint:maligned
-	enabled       bool
+	config        tele_config.Config
 	log           *log2.Log
 	transport     Transporter
 	q             *spq.Queue
@@ -45,29 +45,17 @@ func NewWithTransporter(trans Transporter) tele_api.Teler {
 }
 
 func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config) error {
-	self.enabled = teleConfig.Enabled
+	self.config = teleConfig
 	self.log = log
-	if teleConfig.LogDebug {
+	if self.config.LogDebug {
 		self.log.SetLevel(log2.LDebug)
-	}
-	if !self.enabled {
-		return nil
 	}
 
 	self.stopCh = make(chan struct{})
 	self.stateCh = make(chan tele_api.State)
-	self.vmId = int32(teleConfig.VmId)
-	self.stateInterval = helpers.IntSecondDefault(teleConfig.StateIntervalSec, defaultStateInterval)
+	self.vmId = int32(self.config.VmId)
+	self.stateInterval = helpers.IntSecondDefault(self.config.StateIntervalSec, defaultStateInterval)
 	self.stat.Locked_Reset()
-
-	if teleConfig.PersistPath == "" {
-		panic("code error must set teleConfig.PersistPath")
-	}
-	var err error
-	self.q, err = spq.Open(teleConfig.PersistPath)
-	if err != nil {
-		return errors.Annotate(err, "tele queue")
-	}
 
 	willPayload := []byte{byte(tele_api.State_Disconnected)}
 	// test code sets .transport
@@ -78,6 +66,19 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 		return errors.Annotate(err, "tele transport")
 	}
 
+	if !self.config.Enabled {
+		return nil
+	}
+
+	if self.config.PersistPath == "" {
+		panic("code error must set self.config.PersistPath")
+	}
+	var err error
+	self.q, err = spq.Open(self.config.PersistPath)
+	if err != nil {
+		return errors.Annotate(err, "tele queue")
+	}
+
 	go self.qworker()
 	go self.stateWorker()
 	self.stateCh <- tele_api.State_Boot
@@ -86,7 +87,9 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 
 func (self *tele) Close() {
 	close(self.stopCh)
-	self.q.Close()
+	if self.q != nil {
+		self.q.Close()
+	}
 }
 
 func (self *tele) stateWorker() {

@@ -17,4 +17,5 @@ type Config struct { //nolint:maligned
 	PersistPath        string             `hcl:"-"`
 	GetInventory       func() interface{} `hcl:"-"`
 	FIXME_stopDelaySec int                `hcl:"-"`
+	BuildVersion       string             `hcl:"-"`
 }

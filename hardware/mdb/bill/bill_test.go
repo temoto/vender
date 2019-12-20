@@ -40,7 +40,7 @@ func mockInitRs(scaling currency.Nominal, decimal uint8) []mdb.MockR {
 }
 
 func testMake(t testing.TB, rs []mdb.MockR, scaling currency.Nominal, decimal uint8) (context.Context, *BillValidator) {
-	ctx, g := state_new.NewTestContext(t, testConfig)
+	ctx, g := state_new.NewTestContext(t, "", testConfig)
 
 	mock := mdb.MockFromContext(ctx)
 	go func() {
@@ -76,7 +76,7 @@ func checkPoll(t *testing.T, input string, expected []_PI) {
 func TestBillDisabled(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := state_new.NewTestContext(t, "") // device is not listed in hardware
+	ctx, _ := state_new.NewTestContext(t, "", "") // device is not listed in hardware
 	err := Enum(ctx)
 	require.NoError(t, err)
 }
@@ -84,7 +84,7 @@ func TestBillDisabled(t *testing.T) {
 func TestBillOffline(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := state_new.NewTestContext(t, testConfig)
+	ctx, _ := state_new.NewTestContext(t, "", testConfig)
 	mock := mdb.MockFromContext(ctx)
 	mock.ExpectMap(map[string]string{"": ""})
 	defer mock.Close()

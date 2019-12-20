@@ -33,7 +33,7 @@ func (self *transportMock) Init(ctx context.Context, log *log2.Log, teleConfig t
 
 func (self *transportMock) SendTelemetry(payload []byte) bool {
 	select {
-	case self.outTelemetry <- payload:
+	case self.outTelemetry <- copyBytes(payload):
 		self.t.Logf("mock delivered telemetry=%x", payload)
 	case <-time.After(self.networkTimeout):
 		self.t.Logf("mock network timeout")
@@ -44,7 +44,7 @@ func (self *transportMock) SendTelemetry(payload []byte) bool {
 
 func (self *transportMock) SendState(payload []byte) bool {
 	select {
-	case self.outState <- payload:
+	case self.outState <- copyBytes(payload):
 		self.t.Logf("mock delivered state=%x", payload)
 	case <-time.After(self.networkTimeout):
 		self.t.Logf("mock network timeout")
@@ -55,11 +55,18 @@ func (self *transportMock) SendState(payload []byte) bool {
 
 func (self *transportMock) SendCommandResponse(topicSuffix string, payload []byte) bool {
 	select {
-	case self.outResponse <- payload:
+	case self.outResponse <- copyBytes(payload):
 		self.t.Logf("mock delivered topic=%s response=%x", topicSuffix, payload)
 	case <-time.After(self.networkTimeout):
 		self.t.Logf("mock network timeout")
 		return false
 	}
 	return true
+}
+
+// split send/receive buffer identity for safe concurrent access
+func copyBytes(b []byte) []byte {
+	new := make([]byte, len(b))
+	copy(new, b)
+	return new
 }

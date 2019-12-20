@@ -17,7 +17,7 @@ import (
 func TestFrontTune(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 engine {
 	inventory {
 		stock "cream" { register_add="ignore(?)" }
@@ -58,7 +58,7 @@ ui {
 func TestFrontMoneyAbort(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 engine {
 	inventory {
 		stock "cream" { register_add="ignore(?)" }
@@ -91,7 +91,7 @@ ui {
 func TestFrontLock(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 engine {
 	menu {
 		item "1" { price=7 scenario = "" }
@@ -124,7 +124,7 @@ ui {
 func TestFrontPay(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 engine {
 	menu {
 		item "1" { price=7 scenario = "" }

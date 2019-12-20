@@ -12,7 +12,7 @@ import (
 func TestConveyor(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `hardware { device "mdb.evend.conveyor" {} }`)
+	ctx, g := state_new.NewTestContext(t, "", `hardware { device "mdb.evend.conveyor" {} }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{

@@ -12,7 +12,7 @@ import (
 func TestAbort(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `hardware{device "mdb.coin" {}} money{scale=100}`)
+	ctx, g := state_new.NewTestContext(t, "", `hardware{device "mdb.coin" {}} money{scale=100}`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	mock.ExpectMap(map[string]string{

@@ -13,7 +13,7 @@ import (
 func TestGenericProto2Error(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := state_new.NewTestContext(t, ``)
+	ctx, _ := state_new.NewTestContext(t, "", ``)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{

@@ -12,7 +12,7 @@ import (
 const logMsgDisabled = "tele disabled"
 
 func (self *tele) CommandReplyErr(c *tele_api.Command, e error) {
-	if !self.enabled {
+	if !self.config.Enabled {
 		self.log.Infof(logMsgDisabled)
 		return
 	}
@@ -31,22 +31,23 @@ func (self *tele) CommandReplyErr(c *tele_api.Command, e error) {
 }
 
 func (self *tele) Error(e error) {
-	if !self.enabled {
+	if !self.config.Enabled {
 		self.log.Infof(logMsgDisabled)
 		return
 	}
 
 	self.log.Debugf("tele.Error: " + errors.ErrorStack(e))
-	tmerr := tele_api.Telemetry_Error{
-		Message: e.Error(),
+	tm := &tele_api.Telemetry{
+		Error:        &tele_api.Telemetry_Error{Message: e.Error()},
+		BuildVersion: self.config.BuildVersion,
 	}
-	if err := self.qpushTelemetry(&tele_api.Telemetry{Error: &tmerr}); err != nil {
-		self.log.Errorf("CRITICAL qpushTelemetry telemetry_error=%#v err=%v", tmerr, err)
+	if err := self.qpushTelemetry(tm); err != nil {
+		self.log.Errorf("CRITICAL qpushTelemetry telemetry_error=%#v err=%v", tm.Error, err)
 	}
 }
 
 func (self *tele) Report(ctx context.Context, serviceTag bool) error {
-	if !self.enabled {
+	if !self.config.Enabled {
 		self.log.Infof(logMsgDisabled)
 		return nil
 	}
@@ -68,7 +69,7 @@ func (self *tele) Report(ctx context.Context, serviceTag bool) error {
 }
 
 func (self *tele) State(s tele_api.State) {
-	if !self.enabled {
+	if !self.config.Enabled {
 		self.log.Infof(logMsgDisabled)
 		return
 	}
@@ -78,7 +79,7 @@ func (self *tele) State(s tele_api.State) {
 }
 
 func (self *tele) StatModify(fun func(s *tele_api.Stat)) {
-	if !self.enabled {
+	if !self.config.Enabled {
 		self.log.Infof(logMsgDisabled)
 		return
 	}
@@ -89,7 +90,7 @@ func (self *tele) StatModify(fun func(s *tele_api.Stat)) {
 }
 
 func (self *tele) Transaction(tx tele_api.Telemetry_Transaction) {
-	if !self.enabled {
+	if !self.config.Enabled {
 		self.log.Infof(logMsgDisabled)
 		return
 	}

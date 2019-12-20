@@ -49,7 +49,7 @@ func mockInitRs() []mdb.MockR {
 }
 
 func mockContext(t testing.TB, rs []mdb.MockR) context.Context {
-	ctx, _ := state_new.NewTestContext(t, testConfig)
+	ctx, _ := state_new.NewTestContext(t, "", testConfig)
 	mock := mdb.MockFromContext(ctx)
 	go func() {
 		mock.Expect(mockInitRs())
@@ -86,7 +86,7 @@ func checkPoll(t testing.TB, input string, expected []_PI) {
 func TestCoinDisabled(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, "") // device is not listed in hardware
+	ctx, g := state_new.NewTestContext(t, "", "") // device is not listed in hardware
 	err := Enum(ctx)
 	require.NoError(t, err)
 	_, err = g.GetDevice(deviceName)
@@ -96,7 +96,7 @@ func TestCoinDisabled(t *testing.T) {
 func TestCoinOffline(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, testConfig)
+	ctx, g := state_new.NewTestContext(t, "", testConfig)
 	mock := mdb.MockFromContext(ctx)
 	mock.ExpectMap(map[string]string{"": ""})
 	defer mock.Close()
@@ -114,7 +114,7 @@ func TestCoinOffline(t *testing.T) {
 func TestCoinNoDiag(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := state_new.NewTestContext(t, testConfig)
+	ctx, _ := state_new.NewTestContext(t, "", testConfig)
 	mock := mdb.MockFromContext(ctx)
 	mock.ExpectMap(map[string]string{
 		"08": "",                                               // initer, RESET

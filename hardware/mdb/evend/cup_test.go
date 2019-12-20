@@ -12,7 +12,7 @@ import (
 func TestCup(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 engine {
 inventory { stock "cup" { } }
 alias "add.cup" { scenario = "mdb.evend.cup_dispense stock.cup.spend1" }

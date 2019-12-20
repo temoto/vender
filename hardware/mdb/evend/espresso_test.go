@@ -11,7 +11,7 @@ import (
 func TestEspresso(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 engine { inventory {
 	stock "espresso" { register_add="ignore(?) mdb.evend.espresso_grind" spend_rate=7 }
 }}

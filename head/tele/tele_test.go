@@ -2,7 +2,11 @@ package tele_test
 
 import (
 	"context"
+	"encoding/hex"
+	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
 	proto "github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
@@ -21,30 +25,29 @@ import (
 	state_new "github.com/temoto/vender/state/new"
 )
 
-type tenv struct {
-	config string
-	cmd    *tele_api.Command
-	tele   tele_api.Teler
-	trans  *transportMock
-	ctx    context.Context
-	flag   bool
-	vmid   int32
+type tenv struct { //nolint:maligned
+	version string
+	config  string
+	trans   *transportMock
+	cmd     *tele_api.Command // abstraction leak, local for TestCommand
+
+	cfg  *tele_config.Config
+	ctx  context.Context
+	flag bool
+	tele tele_api.Teler
+	vmid int32
 }
 
 func TestCommand(t *testing.T) {
 	// FIXME ugly `mqtt.CRITICAL/ERROR/WARN/DEBUG` global variables
 	// t.Parallel()
-	rand := helpers.RandUnix()
-
-	type tcase struct {
+	cases := []struct {
 		name   string
 		config string
 		cmd    tele_api.Command
-		init   func(testing.TB, *tenv)
 		before func(testing.TB, *tenv)
 		check  func(testing.TB, *tenv)
-	}
-	cases := []tcase{
+	}{
 		{name: "report",
 			config: `engine { inventory {
 	tele_add_name = true
@@ -136,13 +139,6 @@ func TestCommand(t *testing.T) {
 				Task:       &tele_api.Command_Stop{Stop: &tele_api.Command_ArgStop{}},
 				ReplyTopic: "t",
 			},
-			init: func(t testing.TB, env *tenv) {
-				env.trans = &transportMock{
-					t:         t,
-					outBuffer: 20,
-				}
-				env.tele = tele.NewWithTransporter(env.trans)
-			},
 			before: func(t testing.TB, env *tenv) {
 				g := state.GetGlobal(env.ctx)
 				g.Config.Tele.FIXME_stopDelaySec = 1
@@ -168,29 +164,14 @@ func TestCommand(t *testing.T) {
 	for _, c := range cases {
 		c := c
 		t.Run(c.name, func(t *testing.T) {
-			var g *state.Global
+			rand := helpers.RandUnix()
 			env := &tenv{
 				config: c.config,
-				cmd:    &c.cmd,
-				trans:  &transportMock{t: t},
 				vmid:   -rand.Int31(),
 			}
-			env.tele = tele.NewWithTransporter(env.trans)
-			if c.init != nil {
-				c.init(t, env)
-			}
-			env.ctx, g = state_new.NewTestContext(t, env.config)
-			g.Tele = env.tele
+			testSetup(t, env)
+			env.cmd = &c.cmd
 			defer env.tele.Close()
-			conf := tele_config.Config{
-				Enabled:     true,
-				LogDebug:    true,
-				PersistPath: spq.OnlyForTesting,
-				VmId:        int(env.vmid),
-			}
-			err := env.tele.Init(env.ctx, g.Log, conf)
-			require.NoError(t, err)
-			require.Equal(t, "\x01", string(<-env.trans.outState))
 
 			if c.before != nil {
 				c.before(t, env)
@@ -203,4 +184,141 @@ func TestCommand(t *testing.T) {
 			c.check(t, env)
 		})
 	}
+}
+
+func TestApi(t *testing.T) {
+	cases := []struct {
+		name   string
+		config string
+		setup  func(testing.TB, *tenv)
+		check  func(testing.TB, *tenv)
+	}{
+		{name: "error",
+			config: ``,
+			check: func(t testing.TB, env *tenv) {
+				e := fmt.Errorf("ohi")
+				env.tele.Error(e)
+				b := <-env.trans.outTelemetry
+				var tm tele_api.Telemetry
+				require.NoError(t, proto.Unmarshal(b, &tm))
+				require.NotNil(t, tm.Error)
+				assert.Equal(t, env.vmid, tm.VmId)
+				assert.InDelta(t, time.Now().Unix(), tm.Time/1e9, 10)
+				assert.Equal(t, e.Error(), tm.Error.Message)
+				assert.Equal(t, env.version, tm.BuildVersion)
+			}},
+		{name: "state",
+			config: ``,
+			check: func(t testing.TB, env *tenv) {
+				// check marshaling of all defined states in random order
+				states := make([]tele_api.State, 0, len(tele_api.State_name))
+				for k := range tele_api.State_name {
+					s := tele_api.State(k)
+					states = append(states, s)
+				}
+				// but since we'd only send duplicate state after tele.stateInterval,
+				// ensure first item is not current (boot)
+				if states[0] == tele_api.State_Boot {
+					states[0], states[1] = states[1], states[0]
+				}
+				// consume State_Boot before checking others
+				assert.Equal(t, "01", hex.EncodeToString(<-env.trans.outState))
+				for _, s := range states {
+					env.tele.State(s)
+					assert.Equal(t, fmt.Sprintf("%02x", int32(s)), hex.EncodeToString(<-env.trans.outState))
+				}
+			}},
+		{name: "state-queue",
+			config: ``,
+			check: func(t testing.TB, env *tenv) {
+				env.tele.State(tele_api.State_Nominal)
+				env.tele.State(tele_api.State_Problem)
+				env.tele.State(tele_api.State_Lock)
+				assert.Equal(t, "01", hex.EncodeToString(<-env.trans.outState))
+				assert.Equal(t, "02", hex.EncodeToString(<-env.trans.outState))
+				assert.Equal(t, "04", hex.EncodeToString(<-env.trans.outState))
+				assert.Equal(t, "06", hex.EncodeToString(<-env.trans.outState))
+			}},
+		{name: "report-service", config: ``,
+			check: func(t testing.TB, env *tenv) {
+				g := state.GetGlobal(env.ctx)
+				moneysys := &money.MoneySystem{}
+				require.NoError(t, moneysys.Start(env.ctx))
+				g.XXX_money.Store(moneysys)
+
+				env.tele.Report(env.ctx, true)
+				payload := <-env.trans.outTelemetry
+				var tm tele_api.Telemetry
+				require.NoError(t, proto.Unmarshal(payload, &tm))
+				assert.Nil(t, tm.Error)
+				assert.Equal(t, env.vmid, tm.VmId)
+				assert.True(t, tm.AtService)
+				assert.NotNil(t, tm.Inventory)
+				assert.Equal(t, env.version, tm.BuildVersion)
+			}},
+		{name: "disabled", config: ``,
+			setup: func(t testing.TB, env *tenv) {
+				env.cfg = &tele_config.Config{
+					Enabled:     false,
+					LogDebug:    true,
+					PersistPath: spq.OnlyForTesting,
+				}
+				testSetup(t, env)
+				env.tele.State(tele_api.State_Nominal)
+			}},
+		// TODO Teler.StatModify
+		// TODO Teler.Transaction
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			rand := helpers.RandUnix()
+			env := &tenv{
+				config:  c.config,
+				version: randString(rand, 65),
+				vmid:    -rand.Int31(),
+			}
+			if c.setup == nil {
+				c.setup = testSetup
+			}
+			c.setup(t, env)
+			defer env.tele.Close()
+			if c.check != nil {
+				c.check(t, env)
+			}
+		})
+	}
+}
+
+func randString(r *rand.Rand, maxLength uint) string {
+	// based on testing/quick.Value() case String
+	numChars := r.Intn(int(maxLength))
+	codePoints := make([]rune, numChars)
+	for i := 0; i < numChars; i++ {
+		cp := r.Intn(0x10ffff)  // generate all unicode
+		if r.Int31n(100) < 90 { // but more often than not,
+			cp &= 0xff // prefer ascii for readability
+		}
+		codePoints[i] = rune(cp)
+	}
+	return string(codePoints)
+}
+
+func testSetup(t testing.TB, env *tenv) {
+	if env.trans == nil {
+		env.trans = &transportMock{t: t, outBuffer: 32}
+	}
+	env.tele = tele.NewWithTransporter(env.trans)
+
+	ctx, g := state_new.NewTestContext(t, env.version, env.config)
+	env.ctx = ctx
+	g.Tele = env.tele
+	if env.cfg == nil {
+		env.cfg = &g.Config.Tele
+		env.cfg.Enabled = true
+		env.cfg.LogDebug = true
+		env.cfg.PersistPath = spq.OnlyForTesting
+		env.cfg.VmId = int(env.vmid)
+	}
+	require.NoError(t, env.tele.Init(env.ctx, g.Log, *env.cfg))
 }

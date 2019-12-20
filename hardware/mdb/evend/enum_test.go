@@ -12,7 +12,7 @@ import (
 func TestRegister(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `hardware {
+	ctx, g := state_new.NewTestContext(t, "", `hardware {
 device "mdb.evend.hopper1" {}
 device "mdb.evend.conveyor" {}
 }`)

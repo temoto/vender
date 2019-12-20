@@ -12,7 +12,7 @@ import (
 func TestInventoryTele(t *testing.T) {
 	t.Parallel()
 
-	_, g := state_new.NewTestContext(t, `engine {
+	_, g := state_new.NewTestContext(t, "", `engine {
 inventory {
 	tele_add_name = true
 	stock "drink" { code=7 }

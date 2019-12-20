@@ -14,7 +14,7 @@ import (
 func TestServiceAuth(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, "")
+	ctx, g := state_new.NewTestContext(t, "", "")
 	env := &tenv{ctx: ctx, g: g}
 	g.Config.UI.Service.Auth.Enable = true
 	g.Config.UI.Service.Auth.Passwords = []string{"lemz1g"}
@@ -37,7 +37,7 @@ func TestServiceAuth(t *testing.T) {
 func TestServiceInventory(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 engine { inventory {
 	stock "cup" { code=3 }
 	stock "water" { code=4 }
@@ -69,7 +69,7 @@ engine { inventory {
 func TestServiceTest(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 ui { service {
 	test "first" { scenario="" }
 	test "second" { scenario="" }
@@ -95,7 +95,7 @@ ui { service {
 func TestServiceReboot(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `engine {}`)
+	ctx, g := state_new.NewTestContext(t, "", `engine {}`)
 	env := &tenv{ctx: ctx, g: g, uiState: make(chan ui.State, 1)}
 	g.Config.UI.Service.Auth.Enable = false
 	uiTestSetup(t, env, ui.StateServiceBegin, ui.StateStop)
@@ -122,7 +122,7 @@ func TestServiceReboot(t *testing.T) {
 func TestServiceMoneyLoad(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `engine {} money { credit_max=5000 }`)
+	ctx, g := state_new.NewTestContext(t, "", `engine {} money { credit_max=5000 }`)
 	moneysys := new(money.MoneySystem)
 	require.NoError(t, moneysys.Start(ctx))
 	env := &tenv{ctx: ctx, g: g, uiState: make(chan ui.State, 1)}
@@ -146,7 +146,7 @@ func TestServiceMoneyLoad(t *testing.T) {
 func TestServiceReport(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `engine {}`)
+	ctx, g := state_new.NewTestContext(t, "", `engine {}`)
 	env := &tenv{ctx: ctx, g: g}
 	g.Config.UI.Service.Auth.Enable = false
 	uiTestSetup(t, env, ui.StateServiceBegin, ui.StateServiceEnd)

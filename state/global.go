@@ -64,6 +64,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	g.Log.Debugf("config: persist.root=%s", g.Config.Persist.Root)
 
 	// Since tele is remote error reporting mechanism, it must be inited before anything else
+	g.Config.Tele.BuildVersion = g.BuildVersion
 	if g.Config.Tele.PersistPath == "" {
 		g.Config.Tele.PersistPath = filepath.Join(g.Config.Persist.Root, "tele")
 	}

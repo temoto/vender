@@ -13,7 +13,7 @@ import (
 func TestValve(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, `
+	ctx, g := state_new.NewTestContext(t, "", `
 engine { inventory {
 	stock "water" { check=false hw_rate = 0.6 min = 500 }
 }}
