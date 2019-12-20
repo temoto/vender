@@ -82,7 +82,9 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			self.dirty += pi.Amount()
 			alive.Stop()
 			if out != nil {
-				out <- types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}
+				event := types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}
+				// async channel send to avoid deadlock lk.Lock vs <-out
+				go func() { out <- event }()
 			}
 		}
 		return false
@@ -122,7 +124,9 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			self.dirty += pi.Amount()
 			alive.Stop()
 			if out != nil {
-				out <- types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}
+				event := types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}
+				// async channel send to avoid deadlock lk.Lock vs <-out
+				go func() { out <- event }()
 			}
 
 		default:
