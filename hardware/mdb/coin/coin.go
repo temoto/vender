@@ -279,14 +279,15 @@ func (self *CoinAcceptor) TubeStatus() error {
 	defer self.tubesmu.Unlock()
 
 	self.tubes.Clear()
-	for i := uint8(0); i < TypeCount; i++ {
-		full := (fulls & (1 << i)) != 0
-		if full && counts[i] == 0 {
-			self.Device.TeleError(fmt.Errorf("%s tube=%d problem (jam/sensor/etc)", tag, i+1))
-		} else if counts[i] != 0 {
-			nominal := self.coinTypeNominal(i)
-			if err := self.tubes.Add(nominal, uint(counts[i])); err != nil {
-				return err
+	for coinType := uint8(0); coinType < TypeCount; coinType++ {
+		full := (fulls & (1 << coinType)) != 0
+		nominal := self.coinTypeNominal(coinType)
+		if full && counts[coinType] == 0 {
+			nominalString := currency.Amount(nominal).Format100I() // TODO use FormatCtx(ctx)
+			self.Device.TeleError(fmt.Errorf("%s coinType=%d nominal=%s problem (jam/sensor/etc)", tag, coinType, nominalString))
+		} else if counts[coinType] != 0 {
+			if err := self.tubes.Add(nominal, uint(counts[coinType])); err != nil {
+				return errors.Annotatef(err, "%s tubes.Add coinType=%d", tag, coinType)
 			}
 		}
 	}
