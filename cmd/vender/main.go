@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/engine"
 	"github.com/temoto/vender/cmd/vender/mdb"
 	"github.com/temoto/vender/cmd/vender/subcmd"
@@ -36,7 +35,6 @@ var BuildVersion string = "unknown" // set by ldflags -X
 var reFlagVersion = regexp.MustCompile("-?-?version")
 
 func main() {
-	errors.SetSourceTrimPrefix(os.Getenv("source_trim_prefix"))
 	log.SetFlags(0)
 
 	flagset := flag.NewFlagSet(os.Args[0], flag.ExitOnError)

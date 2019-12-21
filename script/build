@@ -10,7 +10,7 @@ main() {
   local build_flags=(
     -ldflags="-X 'main.BuildVersion=$version'"
     -o "$target"
-    # -trimpath TODO uncomment on Go 1.13+
+    -trimpath
   )
   (
     set -eu
