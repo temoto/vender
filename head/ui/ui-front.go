@@ -40,6 +40,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		err := doCheckTempHot.Validate()
 		if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
 			line1 := fmt.Sprintf(self.g.Config.UI.Front.MsgWaterTemp, errtemp.Current)
+			_ = self.g.Engine.ExecList(ctx, "water-temp", []string{"mdb.evend.cup_light_off"})
 			self.display.SetLines(line1, self.g.Config.UI.Front.MsgWait)
 			if e := self.wait(5 * time.Second); e.Kind == types.EventService {
 				return StateServiceBegin
