@@ -46,9 +46,8 @@ type Generic struct {
 	proto2IgnoreMask byte
 }
 
-func (self *Generic) Init(ctx context.Context, address uint8, name string, proto evendProtocol) error {
+func (self *Generic) Init(ctx context.Context, address uint8, name string, proto evendProtocol) {
 	self.logPrefix = fmt.Sprintf("mdb.evend.%s(%02x)", name, address)
-	tag := self.logPrefix + ".Init"
 
 	if self.proto2BusyMask == 0 {
 		self.proto2BusyMask = genericPollBusy
@@ -65,13 +64,18 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 		self.dev.DelayAfterReset = DefaultResetDelay
 	}
 	g := state.GetGlobal(ctx)
-	mdbus, err := g.Mdb()
+	mdbus, _ := g.Mdb()
+	self.dev.Init(mdbus, address, name, binary.BigEndian)
+}
+
+// FIXME Enum, remove IO from Init
+func (self *Generic) FIXME_initIO(ctx context.Context) error {
+	tag := self.logPrefix + ".initIO"
+	g := state.GetGlobal(ctx)
+	_, err := g.Mdb()
 	if err != nil {
 		return errors.Annotate(err, tag)
 	}
-	self.dev.Init(mdbus, address, name, binary.BigEndian)
-
-	// FIXME Enum, remove IO from Init
 	if err = self.dev.Reset(); err != nil {
 		return errors.Annotate(err, tag)
 	}

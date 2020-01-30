@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
@@ -29,7 +30,7 @@ func (self *DeviceMixer) init(ctx context.Context) error {
 	keepaliveInterval := helpers.IntMillisecondDefault(config.KeepaliveMs, 0)
 	self.moveTimeout = helpers.IntSecondDefault(config.MoveTimeoutSec, 10*time.Second)
 	self.shakeTimeout = helpers.IntMillisecondDefault(config.ShakeTimeoutMs, 300*time.Millisecond)
-	err := self.Generic.Init(ctx, 0xc8, "mixer", proto1)
+	self.Generic.Init(ctx, 0xc8, "mixer", proto1)
 
 	doCalibrate := engine.Func{Name: "mdb.evend.mixer_calibrate", F: self.calibrate}
 	doMove := engine.FuncArg{Name: "mdb.evend.mixer_move", F: func(ctx context.Context, arg engine.Arg) error {
@@ -53,11 +54,11 @@ func (self *DeviceMixer) init(ctx context.Context) error {
 			return nil
 		}})
 
+	err := self.Generic.FIXME_initIO(ctx)
 	if keepaliveInterval > 0 {
 		go self.Generic.dev.Keepalive(keepaliveInterval, g.Alive.StopChan())
 	}
-
-	return err
+	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
 }
 
 // 1step = 100ms

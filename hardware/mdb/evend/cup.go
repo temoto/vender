@@ -21,19 +21,17 @@ type DeviceCup struct {
 }
 
 func (self *DeviceCup) init(ctx context.Context) error {
-	g := state.GetGlobal(ctx)
-	err := self.Generic.Init(ctx, 0xe0, "cup", proto2)
-	if err != nil {
-		return errors.Annotate(err, "evend.cup.init")
-	}
+	self.Generic.Init(ctx, 0xe0, "cup", proto2)
 
+	g := state.GetGlobal(ctx)
 	doDispense := self.Generic.WithRestart(self.NewDispenseProper())
 	g.Engine.Register("mdb.evend.cup_dispense", doDispense)
 	g.Engine.Register("mdb.evend.cup_light_on", self.NewLight(true))
 	g.Engine.Register("mdb.evend.cup_light_off", self.NewLight(false))
 	g.Engine.Register("mdb.evend.cup_ensure", self.NewEnsure())
 
-	return nil
+	err := self.Generic.FIXME_initIO(ctx)
+	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
 }
 
 func (self *DeviceCup) NewDispenseProper() engine.Doer {

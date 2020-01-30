@@ -19,17 +19,15 @@ type DeviceHopper struct {
 }
 
 func (self *DeviceHopper) init(ctx context.Context, addr uint8, nameSuffix string) error {
-	g := state.GetGlobal(ctx)
 	name := "hopper" + nameSuffix
-	err := self.Generic.Init(ctx, addr, name, proto2)
-	if err != nil {
-		return errors.Annotatef(err, "evend.%s.init", name)
-	}
+	g := state.GetGlobal(ctx)
+	self.Generic.Init(ctx, addr, name, proto2)
 
 	do := newHopperRun(&self.Generic, fmt.Sprintf("mdb.evend.%s.run", name), nil)
 	g.Engine.Register(fmt.Sprintf("mdb.evend.%s_run(?)", name), do)
 
-	return nil
+	err := self.Generic.FIXME_initIO(ctx)
+	return errors.Annotatef(err, "evend.%s.init", name)
 }
 
 type DeviceMultiHopper struct {
@@ -40,10 +38,7 @@ func (self *DeviceMultiHopper) init(ctx context.Context) error {
 	const addr = 0xb8
 	const name = "multihopper"
 	g := state.GetGlobal(ctx)
-	err := self.Generic.Init(ctx, addr, "multihopper", proto1)
-	if err != nil {
-		return errors.Annotatef(err, "evend.%s.init", name)
-	}
+	self.Generic.Init(ctx, addr, "multihopper", proto1)
 
 	for i := uint8(1); i <= 8; i++ {
 		do := newHopperRun(
@@ -54,7 +49,8 @@ func (self *DeviceMultiHopper) init(ctx context.Context) error {
 		g.Engine.Register(fmt.Sprintf("mdb.evend.%s%d_run(?)", name, i), do)
 	}
 
-	return nil
+	err := self.Generic.FIXME_initIO(ctx)
+	return errors.Annotatef(err, "evend.%s.init", name)
 }
 
 func newHopperRun(gen *Generic, tag string, argsPrefix []byte) engine.FuncArg {

@@ -37,7 +37,7 @@ func (self *DeviceConveyor) init(ctx context.Context) error {
 	}
 	g.Log.Debugf("mdb.evend.conveyor minSpeed=%d maxTimeout=%v keepalive=%v", self.minSpeed, self.maxTimeout, keepaliveInterval)
 	self.dev.DelayNext = 245 * time.Millisecond // empirically found lower total WaitReady
-	err := self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
+	self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
 
 	doCalibrate := engine.Func{Name: "mdb.evend.conveyor.calibrate", F: self.calibrate}
 	doMove := engine.FuncArg{
@@ -55,11 +55,11 @@ func (self *DeviceConveyor) init(ctx context.Context) error {
 		}}
 	g.Engine.RegisterNewSeq("mdb.evend.conveyor_shake(?)", doCalibrate, doShake)
 
+	err := self.Generic.FIXME_initIO(ctx)
 	if keepaliveInterval > 0 {
 		go self.Generic.dev.Keepalive(keepaliveInterval, g.Alive.StopChan())
 	}
-
-	return err
+	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
 }
 
 func (self *DeviceConveyor) calibrate(ctx context.Context) error {

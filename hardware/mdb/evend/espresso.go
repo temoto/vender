@@ -23,10 +23,7 @@ func (self *DeviceEspresso) init(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 	espressoConfig := &g.Config.Hardware.Evend.Espresso
 	self.timeout = helpers.IntSecondDefault(espressoConfig.TimeoutSec, DefaultEspressoTimeout)
-	err := self.Generic.Init(ctx, 0xe8, "espresso", proto2)
-	if err != nil {
-		return errors.Annotate(err, "evend.espresso.init")
-	}
+	self.Generic.Init(ctx, 0xe8, "espresso", proto2)
 
 	g.Engine.Register("mdb.evend.espresso_grind", self.Generic.WithRestart(self.NewGrind()))
 	g.Engine.Register("mdb.evend.espresso_press", self.NewPress())
@@ -34,7 +31,8 @@ func (self *DeviceEspresso) init(ctx context.Context) error {
 	g.Engine.Register("mdb.evend.espresso_heat_on", self.NewHeat(true))
 	g.Engine.Register("mdb.evend.espresso_heat_off", self.NewHeat(false))
 
-	return nil
+	err := self.Generic.FIXME_initIO(ctx)
+	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
 }
 
 func (self *DeviceEspresso) NewGrind() engine.Doer {

@@ -55,9 +55,7 @@ func (self *DeviceValve) init(ctx context.Context) error {
 	self.tempHot.Init(tempValid)
 	self.proto2BusyMask = valvePollBusy
 	self.proto2IgnoreMask = valvePollNotHot
-	if err := self.Generic.Init(ctx, 0xc0, "valve", proto2); err != nil {
-		return errors.Annotate(err, "evend.valve.init")
-	}
+	self.Generic.Init(ctx, 0xc0, "valve", proto2)
 
 	self.doGetTempHot = self.newGetTempHot()
 	self.doCheckTempHot = engine.Func0{F: func() error { return nil }, V: self.newCheckTempHotValidate(ctx)}
@@ -96,7 +94,8 @@ func (self *DeviceValve) init(ctx context.Context) error {
 	g.Engine.Register("mdb.evend.valve_pump_start", self.NewPump(true))
 	g.Engine.Register("mdb.evend.valve_pump_stop", self.NewPump(false))
 
-	return err
+	err = self.Generic.FIXME_initIO(ctx)
+	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
 }
 
 // func (self *DeviceValve) UnitToTimeout(unit uint8) time.Duration {

@@ -25,7 +25,8 @@ func TestGenericProto2Error(t *testing.T) {
 		{"4402", "ff"}, // error code ff
 	})
 	dev := &Generic{}
-	require.NoError(t, dev.Init(ctx, 0x40, "abstract", proto2))
+	dev.Init(ctx, 0x40, "abstract", proto2)
+	require.NoError(t, dev.FIXME_initIO(ctx))
 	const tag = "action"
 	d := engine.NewSeq(tag).
 		Append(dev.NewWaitReady(tag)).

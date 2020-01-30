@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/state"
@@ -23,7 +24,7 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 	config := &g.Config.Hardware.Evend.Elevator
 	keepaliveInterval := helpers.IntMillisecondDefault(config.KeepaliveMs, 0)
 	self.timeout = helpers.IntSecondDefault(config.TimeoutSec, 10*time.Second)
-	err := self.Generic.Init(ctx, 0xd0, "elevator", proto1)
+	self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
 	doCalibrate := engine.Func{
 		Name: "mdb.evend.elevator.calibrate",
@@ -53,11 +54,11 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 	moveSeq := engine.NewSeq("mdb.evend.elevator_move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
 
+	err := self.Generic.FIXME_initIO(ctx)
 	if keepaliveInterval > 0 {
 		go self.Generic.dev.Keepalive(keepaliveInterval, g.Alive.StopChan())
 	}
-
-	return err
+	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
 }
 
 func (self *DeviceElevator) calibrate(ctx context.Context) error {
