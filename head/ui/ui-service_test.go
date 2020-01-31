@@ -34,6 +34,33 @@ func TestServiceAuth(t *testing.T) {
 	uiTestWait(t, env, steps)
 }
 
+func TestServiceMenu(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state_new.NewTestContext(t, "", `
+ui { service {
+	test "first" { scenario="" }
+}}`)
+	env := &tenv{ctx: ctx, g: g}
+	g.Config.UI.Service.Auth.Enable = false
+	uiTestSetup(t, env, ui.StateServiceBegin, ui.StateServiceEnd)
+	go env.ui.Loop(ctx)
+
+	steps := []step{
+		{expect: env._T("Menu", "1 inventory"), inev: env._KeyNext},
+		{expect: env._T("Menu", "2 test"), inev: env._KeyNext},
+		{expect: env._T("Menu", "3 reboot"), inev: env._KeyPrev},
+		{expect: env._T("Menu", "2 test"), inev: env._KeyNext},
+		{expect: env._T("Menu", "3 reboot"), inev: env._KeyNext},
+		{expect: env._T("Menu", "4 network"), inev: env._KeyNext},
+		{expect: env._T("Menu", "5 money-load"), inev: env._KeyNext},
+		{expect: env._T("Menu", "6 report"), inev: env._KeyNext},
+		{expect: env._T("Menu", "1 inventory"), inev: env._KeyReject},
+		{},
+	}
+	uiTestWait(t, env, steps)
+}
+
 func TestServiceInventory(t *testing.T) {
 	t.Parallel()
 

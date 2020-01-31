@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/engine"
@@ -177,13 +178,14 @@ func (self *UI) onServiceMenu() State {
 
 	switch {
 	case e.Key == input.EvendKeyCreamLess:
-		self.Service.menuIdx = (self.Service.menuIdx + serviceMenuMax - 1) % (serviceMenuMax + 1)
+		self.Service.menuIdx = addWrap(self.Service.menuIdx, serviceMenuMax+1, -1)
 	case e.Key == input.EvendKeyCreamMore:
-		self.Service.menuIdx = (self.Service.menuIdx + 1) % (serviceMenuMax + 1)
+		self.Service.menuIdx = addWrap(self.Service.menuIdx, serviceMenuMax+1, +1)
 
 	case input.IsAccept(&e):
 		if int(self.Service.menuIdx) >= len(serviceMenu) {
-			panic("code error service menuIdx out of range")
+			self.g.Fatal(errors.Errorf("code error service menuIdx out of range"))
+			return StateBroken
 		}
 		switch serviceMenu[self.Service.menuIdx] {
 		case serviceMenuInventory:
@@ -234,10 +236,10 @@ func (self *UI) onServiceInventory() State {
 	invIdxMax := uint8(len(self.Service.invList))
 	switch {
 	case e.Key == input.EvendKeyCreamLess:
-		self.Service.invIdx = (self.Service.invIdx + invIdxMax - 1) % invIdxMax
+		self.Service.invIdx = addWrap(self.Service.invIdx, invIdxMax, -1)
 		self.inputBuf = self.inputBuf[:0]
 	case e.Key == input.EvendKeyCreamMore:
-		self.Service.invIdx = (self.Service.invIdx + 1) % invIdxMax
+		self.Service.invIdx = addWrap(self.Service.invIdx, invIdxMax, +1)
 		self.inputBuf = self.inputBuf[:0]
 
 	case e.Key == input.EvendKeyDot || e.IsDigit():
@@ -295,9 +297,9 @@ wait:
 	testIdxMax := uint8(len(self.Service.testList))
 	switch {
 	case e.Key == input.EvendKeyCreamLess:
-		self.Service.testIdx = (self.Service.testIdx + testIdxMax - 1) % testIdxMax
+		self.Service.testIdx = addWrap(self.Service.testIdx, testIdxMax, -1)
 	case e.Key == input.EvendKeyCreamMore:
-		self.Service.testIdx = (self.Service.testIdx + 1) % testIdxMax
+		self.Service.testIdx = addWrap(self.Service.testIdx, testIdxMax, +1)
 
 	case input.IsAccept(&e):
 		self.display.SetLines(line1, "in progress")
@@ -477,4 +479,8 @@ func VisualHash(input, salt []byte) string {
 	binary := h.Sum(buf[:0])
 	b64 := base64.RawStdEncoding.EncodeToString(binary)
 	return strings.ToLower(b64)
+}
+
+func addWrap(current, max uint8, delta int8) uint8 {
+	return uint8((int32(current) + int32(max) + int32(delta)) % int32(max))
 }
