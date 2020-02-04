@@ -8,22 +8,27 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/engine"
 	engine_config "github.com/temoto/vender/engine/config"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
 
+type _CS = engine_config.Stock
+
 func TestStockErrors(t *testing.T) {
 	t.Parallel()
 
 	rand := helpers.RandUnix()
-	try := func(c engine_config.Stock) string {
+	try := func(t testing.TB, c engine_config.Stock) string {
 		ctx := context.Background()
 		log := log2.NewTest(t, log2.LDebug)
 		e := engine.NewEngine(log)
 		e.Register("fail", engine.Func0{F: func() error { return errors.New("expected error") }})
+		require.NoError(t, e.RegisterParse("subseq(?)", "unknown(?)"))
 		s, err := NewStock(c, e)
+		defer t.Logf("try/err=%v", err)
 		if err != nil {
 			return err.Error()
 		}
@@ -45,11 +50,26 @@ func TestStockErrors(t *testing.T) {
 		return ""
 	}
 
-	assert.Equal(t, "stock name=(empty) is invalid", try(engine_config.Stock{}))
-	assert.Contains(t, try(engine_config.Stock{Name: "a", RegisterAdd: "foo"}), "no arg placeholders in add.a")
-	assert.Equal(t, ErrStockLow.Error(), try(engine_config.Stock{Name: "b", Check: true, SpendRate: 100, RegisterAdd: "ignore(?)"}))
-	assert.Contains(t, try(engine_config.Stock{Name: "d", RegisterAdd: "ignore(?) foobar"}), "foobar not resolved")
-	assert.Contains(t, try(engine_config.Stock{Name: "e", RegisterAdd: "ignore(?) fail"}), "expected error")
+	cases := []struct {
+		name  string
+		conf  _CS
+		check func(t testing.TB, errString string)
+	}{
+		{"empty", _CS{}, func(t testing.TB, s string) { assert.Equal(t, "stock=(empty) is invalid", s) }},
+		{"unknown-no-arg", _CS{Name: "a", RegisterAdd: "foo"}, func(t testing.TB, s string) { assert.Contains(t, s, "action=foo not resolved") }},
+		{"unknown(?)", _CS{Name: "a", RegisterAdd: "unknown(?)"}, func(t testing.TB, s string) { assert.Contains(t, s, "action=unknown(?) not resolved") }},
+		{"subseq-unknown(?)", _CS{Name: "a", RegisterAdd: "subseq(?)"}, func(t testing.TB, s string) { assert.Contains(t, s, "unknown(?) not resolved") }},
+		{"ignore", _CS{Name: "b", Check: true, SpendRate: 100, RegisterAdd: "ignore(?)"}, func(t testing.TB, s string) { assert.Equal(t, ErrStockLow.Error(), s) }},
+		{"ignore+unknown", _CS{Name: "d", RegisterAdd: "ignore(?) foobar"}, func(t testing.TB, s string) { assert.Contains(t, s, "foobar not resolved") }},
+		{"fail", _CS{Name: "e", RegisterAdd: "ignore(?) fail"}, func(t testing.TB, s string) { assert.Contains(t, s, "expected error") }},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			t.Logf("%#v", &c.conf)
+			c.check(t, try(t, c.conf))
+		})
+	}
 }
 
 func TestSpendValue(t *testing.T) {

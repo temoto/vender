@@ -9,6 +9,8 @@ import (
 	"github.com/temoto/vender/log2"
 )
 
+const FmtErrContext = "`%s`" // errors.Annotatef(err, FmtErrContext, doer.String())
+
 type Doer interface {
 	Validate() error
 	Do(context.Context) error

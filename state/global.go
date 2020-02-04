@@ -130,6 +130,7 @@ func (g *Global) Fatal(err error, args ...interface{}) {
 	if err != nil {
 		g.Error(err, args...)
 		g.StopWait(5 * time.Second)
+		g.Log.Fatal(err)
 		os.Exit(1)
 	}
 }

@@ -31,7 +31,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	}
 
 	if err := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); err != nil {
-		self.g.Log.Errorf("on_front_begin err=%v", err)
+		self.g.Error(err)
 		return StateBroken
 	}
 

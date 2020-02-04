@@ -209,14 +209,11 @@ func parseCommand(eng *engine.Engine, word string) (engine.Doer, error) {
 	if strings.HasPrefix(word, "/m") {
 		request, err := mdb.PacketFromHex(word[2:], true)
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, engine.FmtErrContext, word)
 		}
 		return newTx(request), nil
 	}
 
-	d := eng.MustResolveOrLazy(word)
-	if d == nil {
-		return nil, errors.Errorf("action='%s' is not registered", word)
-	}
-	return d, nil
+	d, err := eng.ResolveOrLazy(word)
+	return d, errors.Annotatef(err, engine.FmtErrContext, word)
 }

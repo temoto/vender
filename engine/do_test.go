@@ -12,9 +12,6 @@ import (
 	"github.com/temoto/vender/log2"
 )
 
-// compile-time test interface is implemented
-var _ = ArgApplier(new(FuncArg))
-
 func TestArg(t *testing.T) {
 	t.Parallel()
 
@@ -23,6 +20,14 @@ func TestArg(t *testing.T) {
 		*result = param + 1
 		return nil
 	}
+	failOnceFlag := false
+	failOnce := FuncArg{F: func(ctx context.Context, param Arg) error {
+		if failOnceFlag {
+			return worker(ctx, param)
+		}
+		failOnceFlag = true
+		return fmt.Errorf("this error is expected once")
+	}}
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
@@ -32,31 +37,31 @@ func TestArg(t *testing.T) {
 		func() Doer { return action },
 		func() Doer { return NewSeq("seq").Append(action) },
 		func() Doer { return NewSeq("seq-nest").Append(NewSeq("inner").Append(action)) },
+		func() Doer {
+			return &RestartError{
+				Doer:  NewSeq("with-restart").Append(NewSeq("inner").Append(failOnce)),
+				Check: func(e error) bool { return e != nil },
+				Reset: Nothing{},
+			}
+		},
 		// tx := NewTree("complex_tree")
 		// tx.Root.Append(Nothing{"prepare"}).Append(action).Append(Nothing{"cleanup"})
 	}
 	for _, c := range cases {
 		d := c()
 		t.Run(d.String(), func(t *testing.T) {
+			t.Logf("d=%s %#v", d.String(), d)
 			arg := Arg(42)
-			applied := ArgApply(d, arg)
-			require.Nil(t, applied.Validate())
+			new, applied, err := ArgApply(d, arg)
+			require.NoError(t, err)
+			require.NoError(t, new.Validate())
+			assert.True(t, applied)
 			var result Arg
 			outctx := context.WithValue(ctx, "result", &result)
-			require.Nil(t, applied.Do(outctx), d.String())
+			require.NoError(t, new.Do(outctx), d.String())
 			assert.Equal(t, arg+1, result)
 		})
 	}
-}
-
-func TestSeqValidateLazy(t *testing.T) {
-	t.Parallel()
-
-	easy := &Lazy{Name: "lazy-ok", r: func(string) Doer { return Func0{Name: "easy", F: noop0} }}
-	never := &Lazy{Name: "lazy-never", r: func(string) Doer { return nil }}
-	seq := NewSeq("seq").Append(easy).Append(never)
-	d, _ := ForceLazy(seq)
-	require.Error(t, d.Validate())
 }
 
 // Few actions in sequence is a common case worth optimizing.

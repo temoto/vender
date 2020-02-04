@@ -7,32 +7,35 @@ import (
 	"github.com/temoto/vender/helpers"
 )
 
+const seqBuffer uint = 8
+
 // Sequence executor. Specialized version of Tree for performance.
 // Error in one action aborts whole group.
 // Build graph with NewSeq().Append()
 type Seq struct {
 	name  string
-	_b    [8]Doer
+	_b    [seqBuffer]Doer
 	items []Doer
 }
 
 func NewSeq(name string) *Seq {
-	self := &Seq{name: name}
-	self.items = self._b[:0]
-	return self
+	seq := &Seq{name: name}
+	seq.items = seq._b[:0]
+	return seq
 }
 
-func (self *Seq) Append(d Doer) *Seq {
-	self.items = append(self.items, d)
-	return self
+func (seq *Seq) Append(d Doer) *Seq {
+	seq.items = append(seq.items, d)
+	return seq
 }
 
-func (self *Seq) Validate() error {
-	errs := make([]error, 0, len(self.items))
+func (seq *Seq) Validate() error {
+	errs := make([]error, 0, len(seq.items))
 
-	for _, d := range self.items {
+	for _, d := range seq.items {
+		// log.Printf("Seq.Validate d=%#v", d)
 		if err := d.Validate(); err != nil {
-			err = errors.Annotatef(err, "node=%s validate", d.String())
+			err = errors.Annotatef(err, "seq=%s node=%s validate", seq.String(), d.String())
 			errs = append(errs, err)
 		}
 	}
@@ -40,15 +43,31 @@ func (self *Seq) Validate() error {
 	return helpers.FoldErrors(errs)
 }
 
-func (self *Seq) Do(ctx context.Context) error {
-	for _, d := range self.items {
-		if err := d.Do(ctx); err != nil {
+func (seq *Seq) Do(ctx context.Context) error {
+	for _, d := range seq.items {
+		err := d.Do(ctx)
+		// log.Printf("seq.Do seq=%s elem=%s err=%v", seq.String(), d.String(), err)
+		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (self *Seq) String() string {
-	return self.name
+func (seq *Seq) String() string {
+	return seq.name
+}
+
+func (seq *Seq) cloneEmpty() *Seq {
+	new := NewSeq(seq.name)
+	if n := len(seq.items); n > cap(new.items) {
+		new.items = make([]Doer, 0, len(seq.items))
+	}
+	return new
+}
+
+func (seq *Seq) setItems(ds []Doer) {
+	var zeroBuffer [seqBuffer]Doer
+	copy(seq._b[:], zeroBuffer[:])
+	seq.items = ds
 }

@@ -53,7 +53,7 @@ menu {
 	require.NoError(t, err)
 
 	menuDo := g.Config.Engine.Menu.Items[0].Doer
-	// TODO make sure tuning survives transformations like ForceLazy
+	// TODO make sure tuning survives transformations like Force
 	require.NotNil(t, menuDo)
 	require.NoError(t, menuDo.Validate())
 	require.NoError(t, menuDo.Do(ctx))

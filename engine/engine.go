@@ -13,6 +13,13 @@ import (
 	"github.com/temoto/vender/log2"
 )
 
+type ErrNotResolved struct{ msg string }
+
+func NewErrNotResolved(action string) ErrNotResolved {
+	return ErrNotResolved{msg: fmt.Sprintf("action=%s not resolved", action)}
+}
+func (e ErrNotResolved) Error() string { return e.msg }
+
 type Engine struct {
 	Log     *log2.Log
 	lk      sync.RWMutex
@@ -62,36 +69,60 @@ func (self *Engine) RegisterParse(name, scenario string) error {
 	return nil
 }
 
-var reActionArg = regexp.MustCompile(`^(.+)\((\d+)\)$`)
+var reActionArg = regexp.MustCompile(`^(.+)\((\d+|\?)\)$`)
 
-func (self *Engine) resolve(action string) Doer {
-	// self.Log.Debugf(action)
+func (self *Engine) resolve(action string) (Doer, error) {
+	// self.Log.Debugf("engine.resolve action=%s", action)
 	self.lk.RLock()
 	defer self.lk.RUnlock()
 	d, ok := self.actions[action]
 	if ok {
-		return d
+		// self.Log.Debugf("engine.resolve action=%s resolved d=%v", action, d)
+		return d, nil
 	}
 
 	match := reActionArg.FindStringSubmatch(action)
 	if match == nil {
-		return nil
+		// self.Log.Debugf("engine.resolve action=%s match=nil", action)
+		return nil, NewErrNotResolved(action)
 	}
 
 	normalized := match[1] + "(?)"
+	argString := match[2]
 	d, ok = self.actions[normalized]
+	// self.Log.Debugf("engine.resolve action=%s match=%v normalized=%s ok=%t", action, match, normalized, ok)
 	if !ok {
-		self.Log.Errorf("resolve action=%s normalized=%s not found", action, normalized)
-		return nil
+		self.Log.Debugf("resolve action=%s normalized=%s not found", action, normalized)
+		err := NewErrNotResolved(normalized)
+		err.msg = fmt.Sprintf(FmtErrContext, action) + err.msg
+		return nil, err
 	}
-	argn, _ := strconv.Atoi(match[2])
-	return ArgApply(d, Arg(argn))
+	if argString != "?" {
+		argn, err := strconv.Atoi(argString)
+		if err != nil {
+			self.Log.Debugf("resolve action=%s err=%s", action, err)
+			return nil, errors.Annotatef(err, FmtErrContext, action)
+		}
+		var applied bool
+		d, applied, err = ArgApply(d, Arg(argn))
+		if err != nil {
+			self.Log.Debugf("resolve action=%s err=%s", action, err)
+			return nil, errors.Annotatef(err, FmtErrContext, action)
+		}
+		if !applied {
+			self.Log.Debugf("resolve action=%s arg=%v not applied", action, argString)
+			err = ErrArgNotApplied
+			return nil, errors.Annotatef(err, FmtErrContext, action)
+		}
+	}
+	return d, nil
 }
 
 func (self *Engine) Resolve(action string) Doer {
-	d := self.resolve(action)
-	if d == nil {
-		self.Log.Errorf("engine.Resolve action=%s not found", action)
+	d, err := self.resolve(action)
+	if err != nil {
+		self.Log.Errorf("engine.Resolve action=%s err=%v", action, err)
+		return Fail{E: err}
 	}
 	return d
 }
@@ -113,6 +144,7 @@ func (self *Engine) ResolveOrLazy(action string) (Doer, error) {
 	defer self.lk.RUnlock()
 	d, ok := self.actions[action]
 	if ok {
+		// self.Log.Debugf("engine.ResolveOrLazy %s -> ok %#v", action, d)
 		return d, nil
 	}
 
@@ -124,14 +156,8 @@ func (self *Engine) ResolveOrLazy(action string) (Doer, error) {
 		return Sleep{duration}, nil
 	}
 
+	// self.Log.Debugf("engine.ResolveOrLazy %s -> lazy %#v", action, d)
 	return &Lazy{Name: action, r: self.resolve}, nil
-}
-func (self *Engine) MustResolveOrLazy(action string) Doer {
-	d, err := self.ResolveOrLazy(action)
-	if err != nil {
-		return Fail{E: err}
-	}
-	return d
 }
 
 var reNotSpace = regexp.MustCompile(`\S+`)
@@ -168,5 +194,24 @@ func (self *Engine) ExecList(ctx context.Context, tag string, list []string) err
 			errs = append(errs, err)
 		}
 	}
-	return helpers.FoldErrors(errs)
+	return errors.Annotate(helpers.FoldErrors(errs), tag)
+}
+
+// Test `error` or `Doer` against ErrNotResolved
+func IsNotResolved(x interface{}) bool {
+	if x == nil {
+		return false
+	}
+	e, _ := x.(error)
+	if e == nil {
+		if f, ok := x.(Fail); ok {
+			e = f.E
+		}
+	}
+	if e == nil {
+		return false
+	}
+	e = errors.Cause(e)
+	_, ok := e.(ErrNotResolved)
+	return ok
 }

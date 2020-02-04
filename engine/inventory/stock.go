@@ -31,13 +31,13 @@ type Stock struct { //nolint:maligned
 
 func NewStock(c engine_config.Stock, e *engine.Engine) (*Stock, error) {
 	if c.Name == "" {
-		return nil, errors.Errorf("stock name=(empty) is invalid")
+		return nil, errors.Errorf("stock=(empty) is invalid")
 	}
 	if c.HwRate == 0 {
 		c.HwRate = 1
 	}
 	if c.SpendRate < 0 {
-		return nil, errors.Errorf("stock name=%s invalid spend_rate=%f", c.Name, c.SpendRate)
+		return nil, errors.Errorf("stock=%s invalid spend_rate=%f", c.Name, c.SpendRate)
 	}
 	if c.SpendRate == 0 {
 		c.SpendRate = 1
@@ -69,10 +69,16 @@ func NewStock(c engine_config.Stock, e *engine.Engine) (*Stock, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "stock=%s register_add", s.Name)
 		}
-		if doAddArg, ok := doAdd.(engine.ArgApplier); !ok {
-			return nil, errors.Annotatef(err, "stock=%s register_add=%s must contain placeholder", s.Name, c.RegisterAdd)
-		} else {
-			e.Register(addName, s.Wrap(doAddArg))
+		_, ok, err := engine.ArgApply(doAdd, 0)
+		switch {
+		case err == nil && !ok:
+			return nil, errors.Errorf("stock=%s register_add=%s no free argument", s.Name, c.RegisterAdd)
+
+		case (err == nil && ok) || engine.IsNotResolved(err): // success path
+			e.Register(addName, s.Wrap(doAdd))
+
+		case err != nil:
+			return nil, errors.Annotatef(err, "stock=%s register_add=%s", s.Name, c.RegisterAdd)
 		}
 	}
 	e.Register(doSpend1.Name, doSpend1)
@@ -93,12 +99,8 @@ func (s *Stock) String() string {
 	return fmt.Sprintf("source(name=%s value=%f)", s.Name, s.Value())
 }
 
-func (s *Stock) Wrap(a engine.ArgApplier) engine.Doer {
-	d := &custom{
-		stock:  s,
-		before: a,
-	}
-	return d
+func (s *Stock) Wrap(d engine.Doer) engine.Doer {
+	return &custom{stock: s, before: d}
 }
 
 func (s *Stock) TranslateHw(arg engine.Arg) float32    { return translate(int32(arg), s.hwRate) }
@@ -125,23 +127,18 @@ func (s *Stock) spendValue(v float32) {
 
 type custom struct {
 	stock  *Stock
-	before engine.ArgApplier
+	before engine.Doer
 	after  engine.Doer
 	arg    engine.Arg
 	spend  float32
 }
 
-func (c *custom) Applied() bool { return c.after != nil }
-func (c *custom) Apply(arg engine.Arg) engine.Doer {
-	hwArg := engine.Arg(c.stock.TranslateHw(arg))
-	applied := &custom{
-		stock:  c.stock,
-		before: c.before,
-		after:  c.before.Apply(hwArg),
-		arg:    arg,
-		spend:  c.stock.TranslateSpend(arg),
+func (c *custom) Apply(arg engine.Arg) (engine.Doer, bool, error) {
+	if c.after != nil {
+		err := engine.ErrArgOverwrite
+		return nil, false, errors.Annotatef(err, engine.FmtErrContext, c.stock.String())
 	}
-	return applied
+	return c.apply(arg)
 }
 
 func (c *custom) Validate() error {
@@ -163,7 +160,12 @@ func (c *custom) Validate() error {
 func (c *custom) Do(ctx context.Context) error {
 	if tunedCtx, tuneRate, ok := takeTuneRate(ctx, c.stock.tuneKey); ok {
 		tunedArg := engine.Arg(math.Round(float64(c.arg) * float64(tuneRate)))
-		return c.Apply(tunedArg).Do(tunedCtx)
+		d, _, err := c.apply(tunedArg)
+		// log.Printf("stock=%s before=%#v arg=%v tuneRate=%v tunedArg=%v d=%v err=%v", c.stock.String(), c.before, c.arg, tuneRate, tunedArg, d, err)
+		if err != nil {
+			return errors.Annotatef(err, "stock=%s tunedArg=%v", c.stock.Name, tunedArg)
+		}
+		return d.Do(tunedCtx)
 	}
 
 	// log.Printf("stock=%s value=%f arg=%v spending=%f", c.stock.Name, c.stock.Value(), c.arg, c.spend)
@@ -185,6 +187,26 @@ func (c *custom) Do(ctx context.Context) error {
 
 func (c *custom) String() string {
 	return fmt.Sprintf("stock.%s(%d)", c.stock.Name, c.arg)
+}
+
+func (c *custom) apply(arg engine.Arg) (engine.Doer, bool, error) {
+	hwArg := engine.Arg(c.stock.TranslateHw(arg))
+	after, applied, err := engine.ArgApply(c.before, hwArg)
+	if err != nil {
+		return nil, false, errors.Annotatef(err, engine.FmtErrContext, c.stock.String())
+	}
+	if !applied {
+		err = engine.ErrArgNotApplied
+		return nil, false, errors.Annotatef(err, engine.FmtErrContext, c.stock.String())
+	}
+	new := &custom{
+		stock:  c.stock,
+		before: c.before,
+		after:  after,
+		arg:    arg,
+		spend:  c.stock.TranslateSpend(arg),
+	}
+	return new, true, nil
 }
 
 func takeTuneRate(ctx context.Context, key string) (context.Context, float32, bool) {
