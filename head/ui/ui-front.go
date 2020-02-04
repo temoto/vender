@@ -8,6 +8,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
+	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb/evend"
@@ -36,7 +37,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	}
 
 	// XXX FIXME custom business logic creeped into code TODO move to config
-	if doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot"); doCheckTempHot != nil {
+	if doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot"); doCheckTempHot != nil && !engine.IsNotResolved(doCheckTempHot) {
 		err := doCheckTempHot.Validate()
 		if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
 			line1 := fmt.Sprintf(self.g.Config.UI.Front.MsgWaterTemp, errtemp.Current)
