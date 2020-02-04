@@ -76,7 +76,7 @@ func menuMaxPrice(ctx context.Context, m Menu) (currency.Amount, error) {
 		} else {
 			// TODO report menu errors once or less often than every ui cycle
 			valErr = errors.Annotate(valErr, item.String())
-			g.Log.Error(valErr)
+			g.Log.Debug(valErr)
 		}
 	}
 	if empty {
