@@ -108,7 +108,6 @@ func BenchmarkSequentialDo(b *testing.B) {
 	b.Run("seq-5", mkbench("seq", 5))
 }
 
-func noop0() error                  { return nil }
 func noopCtx(context.Context) error { return nil }
 
 type mockdo struct {

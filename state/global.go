@@ -34,7 +34,7 @@ type Global struct {
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
 	XXX_uier  atomic.Value // UIer crutch to import/init cycle
 
-	_copy_guard sync.Mutex //lint:ignore U1000 unused
+	_copy_guard sync.Mutex //nolint:unused
 }
 
 const ContextKey = "run/state-global"

@@ -20,9 +20,9 @@ const (
 )
 
 type Event struct {
-	Kind   EventKind
 	Input  InputEvent
 	Amount currency.Amount
+	Kind   EventKind
 }
 
 func (e *Event) String() string {

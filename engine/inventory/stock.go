@@ -26,7 +26,7 @@ type Stock struct { //nolint:maligned
 	value     atomic_float.F32
 	tuneKey   string
 
-	_copy_guard sync.Mutex //lint:ignore U1000 unused
+	_copy_guard sync.Mutex //nolint:unused
 }
 
 func NewStock(c engine_config.Stock, e *engine.Engine) (*Stock, error) {
