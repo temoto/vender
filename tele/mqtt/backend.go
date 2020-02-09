@@ -144,7 +144,7 @@ func (b *backend) Receive() (packet.Generic, error) {
 		return nil, ErrClosing
 	}
 	pkt, err := conn.Receive()
-	b.log.Debugf("mqtt recv addr=%s id=%s pkt=%s err=%v", addrString(conn.RemoteAddr()), b.id, packetString(pkt), err)
+	b.log.Debugf("mqtt recv addr=%s id=%s pkt=%s err=%v", addrString(conn.RemoteAddr()), b.id, PacketString(pkt), err)
 	switch err {
 	case nil:
 		return pkt, nil
@@ -168,7 +168,7 @@ func (b *backend) Send(pkt packet.Generic) error {
 	if conn == nil {
 		return ErrClosing
 	}
-	b.log.Debugf("mqtt send id=%s pkt=%s", b.id, packetString(pkt))
+	b.log.Debugf("mqtt send id=%s pkt=%s", b.id, PacketString(pkt))
 	if err := b.conn.Send(pkt, false); err != nil {
 		if !b.alive.IsRunning() && isClosedConn(err) {
 			// conn.Close was used to interrupt blocking Send/Receive

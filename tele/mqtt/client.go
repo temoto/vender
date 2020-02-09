@@ -336,7 +336,7 @@ func (c *Client) reader() {
 			_ = c.disconnect(err)
 			return
 		}
-		c.Log.Debugf("mqtt received=%s", packetString(pkt))
+		c.Log.Debugf("mqtt received=%s", PacketString(pkt))
 
 		// call handlers for packet types and ignore other packets
 		switch typedPkt := pkt.(type) {
@@ -413,7 +413,7 @@ func (c *Client) send(pkt packet.Generic) error {
 		return err
 	}
 
-	c.Log.Debugf("mqtt sent=%s", packetString(pkt))
+	c.Log.Debugf("mqtt sent=%s", PacketString(pkt))
 	return nil
 }
 

@@ -126,6 +126,34 @@ func TestServer(t *testing.T) {
 			assert.Equal(env.t, msgout.Topic, pktPublish.Message.Topic)
 			assert.Equal(env.t, msgout.Payload, pktPublish.Message.Payload)
 			<-sent
+			connDisconnect(env, conn)
+		}},
+		{name: "explicit-and-forced-sub-deliver-once", setup: func(env *tenv) {
+			env.sopt = &mqtt.ServerOptions{
+				ForceSubs: []packet.Subscription{
+					{Topic: "%c/r/#", QOS: packet.QOSAtLeastOnce},
+				},
+			}
+			testServerDefaultSetup(env)
+		}, check: func(env *tenv) {
+			conn := connDial(env)
+			id := fmt.Sprintf("cli%d", env.rand.Int31())
+			connConnect(env, conn, id, nil)
+			connSubscribe(env, conn, []packet.Subscription{{Topic: "#", QOS: packet.QOSAtLeastOnce}})
+
+			topic := fmt.Sprintf("%s/r/yodawg", id)
+			msgout := packet.Message{Topic: topic, Payload: []byte("todo_random")}
+			sent := make(chan struct{})
+			go func() {
+				assert.NoError(t, env.s.Publish(env.ctx, &msgout))
+				close(sent)
+			}()
+			pktPublish := connReceive(env, conn).(*packet.Publish)
+			assert.Equal(env.t, msgout.Topic, pktPublish.Message.Topic)
+			assert.Equal(env.t, msgout.Payload, pktPublish.Message.Payload)
+			connPuback(env, conn, pktPublish.ID)
+			<-sent
+			connDisconnect(env, conn)
 		}},
 	}
 	for _, c := range cases {
@@ -187,7 +215,7 @@ func testServerDefaultSetup(env *tenv) {
 	sopt := mqtt.ServerOptions{
 		OnAuth: authFromMap(map[string]string{"testuser": "testsecret"}),
 		OnPublish: func(ctx context.Context, msg *packet.Message, ack *future.Future) error {
-			env.log.Infof("OnPublish msg=%s", msg.String())
+			env.log.Infof("OnPublish msg=%s", mqtt.MessageString(msg))
 			return env.s.Publish(ctx, msg)
 		},
 	}
@@ -225,7 +253,7 @@ func connConnect(env *tenv, c transport.Conn, id string, will *packet.Message) {
 	pktConnect.Password = "testsecret"
 	pktConnect.Will = will
 	require.NoError(env.t, c.Send(pktConnect, false))
-	env.log.Infof("testClient sent %s", pktConnect.String())
+	env.log.Infof("testClient sent %s", mqtt.PacketString(pktConnect))
 	pktConnack := connReceive(env, c).(*packet.Connack)
 	assert.False(env.t, pktConnack.SessionPresent)
 	assert.Equal(env.t, packet.ConnectionAccepted, pktConnack.ReturnCode)
@@ -236,7 +264,7 @@ func connPublish(env *tenv, c transport.Conn, msg packet.Message) {
 	pktPublish.ID = packet.ID(env.rand.Uint32() % (1 << 16))
 	pktPublish.Message = msg
 	require.NoError(env.t, c.Send(pktPublish, false))
-	env.log.Infof("testClient sent %s", pktPublish.String())
+	env.log.Infof("testClient sent %s", mqtt.PacketString(pktPublish))
 	switch msg.QOS {
 	case packet.QOSAtMostOnce:
 		return
@@ -255,7 +283,7 @@ func connReceive(env *tenv, c transport.Conn) packet.Generic {
 	if pkt == nil {
 		env.log.Infof("testClient recv pkt=nil err=%v", err)
 	} else {
-		env.log.Infof("testClient recv pkt=%s err=%v", pkt.String(), err)
+		env.log.Infof("testClient recv pkt=%s err=%v", mqtt.PacketString(pkt), err)
 	}
 	require.NoError(env.t, err)
 	return pkt
@@ -266,7 +294,7 @@ func connSubscribe(env *tenv, c transport.Conn, subs []packet.Subscription) {
 	pktSubscribe.ID = packet.ID(env.rand.Uint32() % (1 << 16))
 	pktSubscribe.Subscriptions = subs
 	require.NoError(env.t, c.Send(pktSubscribe, false))
-	env.log.Infof("testClient sent %s", pktSubscribe.String())
+	env.log.Infof("testClient sent %s", mqtt.PacketString(pktSubscribe))
 	pktSuback := connReceive(env, c).(*packet.Suback)
 	expect := make([]packet.QOS, 0, len(subs))
 	for _, sub := range subs {
@@ -279,13 +307,13 @@ func connPuback(env *tenv, c transport.Conn, id packet.ID) {
 	pkt := packet.NewPuback()
 	pkt.ID = id
 	require.NoError(env.t, c.Send(pkt, false))
-	env.log.Infof("testClient sent %s", pkt.String())
+	env.log.Infof("testClient sent %s", mqtt.PacketString(pkt))
 }
 
 func connDisconnect(env *tenv, c transport.Conn) {
 	pkt := packet.NewDisconnect()
 	require.NoError(env.t, c.Send(pkt, false))
-	env.log.Infof("testClient sent %s", pkt.String())
+	env.log.Infof("testClient sent %s", mqtt.PacketString(pkt))
 }
 
 func authFromMap(m map[string]string) mqtt.AuthFunc {

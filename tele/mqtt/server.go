@@ -164,7 +164,7 @@ func (s *Server) NextID() packet.ID {
 }
 
 func (s *Server) Publish(ctx context.Context, msg *packet.Message) error {
-	s.log.Debugf("Server.Publish msg=%s", messageString(msg))
+	s.log.Debugf("Server.Publish msg=%s", MessageString(msg))
 	id := s.NextID()
 
 	if msg.Retain {
@@ -177,8 +177,13 @@ func (s *Server) Publish(ctx context.Context, msg *packet.Message) error {
 
 	var _a [8]*subscription
 	subs := _a[:0]
+	uniq := make(map[string]struct{}) // deduplicate subscriptions
 	for _, x := range s.subs.Match(msg.Topic) {
-		subs = append(subs, x.(*subscription))
+		xsub := x.(*subscription)
+		if _, ok := uniq[xsub.client]; !ok {
+			uniq[xsub.client] = struct{}{}
+			subs = append(subs, xsub)
+		}
 	}
 	n := len(subs)
 	s.log.Debugf("Server.Publish len(subs)=%d", n)
