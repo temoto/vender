@@ -1,0 +1,118 @@
+syntax = "proto3";
+package tele;
+
+message Inventory {
+  repeated StockItem stocks = 1;
+  message StockItem {
+    uint32 code = 1;
+    int32 value = 2;
+    string name = 3;
+    int32 hopper = 4;
+    float valuef = 5;
+  }
+}
+
+enum Priority {
+  Default = 0;
+  Now = 1;
+  IdleEngine = 2;
+  IdleUser = 4;
+}
+
+enum State {
+  Invalid = 0;
+  Boot = 1;
+  Nominal = 2;
+  Disconnected = 3;
+  Problem = 4;
+  Service = 5;
+  Lock = 6;
+}
+
+// Optimising for rare, bulk delivery on cell network.
+// "Touching network" is expensive, while 10 or 900 bytes is about same cost.
+message Telemetry {
+  int32 vm_id = 1;
+  int64 time = 2;
+  Error error = 3;
+  Inventory inventory = 4;
+  Money money_cashbox = 5;
+  Transaction transaction = 6;
+  Stat stat = 7;
+  Money money_save = 8;
+  Money money_change = 9;
+  bool at_service = 16;
+  string build_version = 17;
+
+  message Error {
+    uint32 code = 1;
+    string message = 2;
+    uint32 count = 3;
+  }
+
+  message Money {
+    uint32 total_bills = 1;
+    uint32 total_coins = 2;
+    map<uint32,uint32> bills = 3;
+    map<uint32,uint32> coins = 4;
+  }
+
+  message Transaction {
+    string code = 1;
+    repeated int32 options = 2;
+    uint32 price = 3;
+    PaymentMethod payment_method = 4;
+    uint32 credit_bills = 5;
+    uint32 credit_coins = 6;
+    Inventory spent = 7;
+  }
+
+  message Stat {
+    uint32 activity = 1;
+    map<uint32,uint32> bill_rejected = 16;
+    map<uint32,uint32> coin_rejected = 17;
+    uint32 coin_slug = 18;
+  }
+}
+enum PaymentMethod {
+  Nothing = 0;
+  Cash = 1;
+  Cashless = 2;
+  Gift = 3;
+}
+
+message Command {
+  uint32 id = 1;
+  string reply_topic = 2;
+  int64 deadline = 3;
+  Priority priority = 4;
+  oneof task {
+    ArgReport report = 16;
+    ArgLock lock = 17;
+    ArgExec exec = 18;
+    ArgSetInventory set_inventory = 19;
+    ArgSetConfig set_config = 20;
+    ArgStop stop = 21;
+  }
+
+  message ArgReport {}
+  message ArgLock { int32 duration = 1; }
+  message ArgExec {
+    string scenario = 1;
+    bool lock = 2;
+  }
+  message ArgSetInventory { Inventory new = 1; }
+  message ArgSetConfig {
+    string name = 1;
+    bytes new = 2;
+  }
+  message ArgStop {
+    int32 timeout = 1;
+  }
+}
+message Response {
+  uint32 command_id = 1;
+  string error = 2;
+  string data = 3;
+  string INTERNAL_topic = 2048; // convenience
+}

@@ -7,11 +7,11 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
-	engine_config "github.com/temoto/vender/engine/config"
 	"github.com/temoto/vender/hardware"
-	"github.com/temoto/vender/head/money"
-	"github.com/temoto/vender/head/ui"
-	"github.com/temoto/vender/state"
+	engine_config "github.com/temoto/vender/internal/engine/config"
+	"github.com/temoto/vender/internal/money"
+	"github.com/temoto/vender/internal/state"
+	"github.com/temoto/vender/internal/ui"
 )
 
 var Mod = subcmd.Mod{Name: "ui", Main: Main}

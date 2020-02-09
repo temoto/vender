@@ -3,6 +3,7 @@ module github.com/temoto/vender
 go 1.13
 
 require (
+	github.com/256dpi/gomqtt v0.14.1
 	github.com/c-bata/go-prompt v0.2.3
 	github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
 	github.com/eclipse/paho.mqtt.golang v1.2.0
@@ -18,12 +19,12 @@ require (
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/temoto/alive v1.1.0
+	github.com/temoto/alive/v2 v2.0.0
 	github.com/temoto/extremofile v0.5.0
 	github.com/temoto/gpio-cdev-go v0.12.1-0.20191005112838-85f703f8e92e
 	github.com/temoto/inputevent-go v1.0.0
 	github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 	github.com/temoto/spq v0.10.0
-	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
-	golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223
+	golang.org/x/sys v0.0.0-20190412213103-97732733099d
 	periph.io/x/periph v3.4.0+incompatible
 )

@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
-	state_new "github.com/temoto/vender/state/new"
+	"github.com/temoto/vender/internal/engine"
+	state_new "github.com/temoto/vender/internal/state/new"
 )
 
 func TestGenericProto2Error(t *testing.T) {

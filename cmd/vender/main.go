@@ -8,22 +8,22 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/temoto/vender/cmd/vender/engine"
+	cmd_engine "github.com/temoto/vender/cmd/vender/engine"
 	"github.com/temoto/vender/cmd/vender/mdb"
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	cmd_tele "github.com/temoto/vender/cmd/vender/tele"
 	"github.com/temoto/vender/cmd/vender/ui"
 	"github.com/temoto/vender/cmd/vender/vmc"
-	"github.com/temoto/vender/head/tele"
+	"github.com/temoto/vender/internal/state"
+	state_new "github.com/temoto/vender/internal/state/new"
+	"github.com/temoto/vender/internal/tele"
 	"github.com/temoto/vender/log2"
-	"github.com/temoto/vender/state"
-	state_new "github.com/temoto/vender/state/new"
 )
 
 var log = log2.NewStderr(log2.LDebug)
 var modules = []subcmd.Mod{
 	vmc.BrokenMod,
-	engine.Mod,
+	cmd_engine.Mod,
 	mdb.Mod,
 	cmd_tele.Mod,
 	ui.Mod,

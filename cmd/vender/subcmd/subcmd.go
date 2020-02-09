@@ -10,7 +10,7 @@ import (
 
 	"github.com/coreos/go-systemd/daemon"
 	"github.com/juju/errors"
-	"github.com/temoto/vender/state"
+	"github.com/temoto/vender/internal/state"
 )
 
 type Mod struct {

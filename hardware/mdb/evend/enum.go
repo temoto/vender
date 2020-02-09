@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/temoto/vender/helpers"
-	"github.com/temoto/vender/state"
+	"github.com/temoto/vender/internal/state"
 )
 
 // Register devices

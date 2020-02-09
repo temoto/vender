@@ -8,7 +8,7 @@ import (
 	"github.com/temoto/vender/hardware/mdb/coin"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/helpers"
-	"github.com/temoto/vender/state"
+	"github.com/temoto/vender/internal/state"
 )
 
 func Enum(ctx context.Context) error {

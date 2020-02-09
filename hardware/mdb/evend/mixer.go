@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/helpers"
-	"github.com/temoto/vender/state"
+	"github.com/temoto/vender/internal/engine"
+	"github.com/temoto/vender/internal/state"
 )
 
 const DefaultShakeSpeed uint8 = 100

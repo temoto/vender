@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/mdb"
-	"github.com/temoto/vender/state"
+	"github.com/temoto/vender/internal/engine"
+	"github.com/temoto/vender/internal/state"
 )
 
 // Mostly affects POLL response, see doc.

@@ -5,9 +5,9 @@ import (
 
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
-	"github.com/temoto/vender/engine"
 	"github.com/temoto/vender/hardware/money"
-	"github.com/temoto/vender/state"
+	"github.com/temoto/vender/internal/engine"
+	"github.com/temoto/vender/internal/state"
 )
 
 const deviceName = "mdb.bill"

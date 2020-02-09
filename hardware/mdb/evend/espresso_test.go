@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/mdb"
-	state_new "github.com/temoto/vender/state/new"
+	state_new "github.com/temoto/vender/internal/state/new"
 )
 
 func TestEspresso(t *testing.T) {

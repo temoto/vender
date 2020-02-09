@@ -8,10 +8,10 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/hardware"
-	"github.com/temoto/vender/head/money"
-	tele_api "github.com/temoto/vender/head/tele/api"
-	"github.com/temoto/vender/head/ui"
-	"github.com/temoto/vender/state"
+	"github.com/temoto/vender/internal/money"
+	"github.com/temoto/vender/internal/state"
+	"github.com/temoto/vender/internal/ui"
+	tele_api "github.com/temoto/vender/tele"
 )
 
 var VmcMod = subcmd.Mod{Name: "vmc", Main: VmcMain}

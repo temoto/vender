@@ -10,9 +10,9 @@ import (
 	"github.com/temoto/spq"
 	"github.com/temoto/vender/cmd/vender/subcmd"
 	"github.com/temoto/vender/hardware"
-	tele_api "github.com/temoto/vender/head/tele/api"
 	"github.com/temoto/vender/helpers/cli"
-	"github.com/temoto/vender/state"
+	"github.com/temoto/vender/internal/state"
+	tele_api "github.com/temoto/vender/tele"
 )
 
 const modName = "tele"

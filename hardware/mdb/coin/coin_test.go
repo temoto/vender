@@ -13,9 +13,9 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
+	"github.com/temoto/vender/internal/state"
+	state_new "github.com/temoto/vender/internal/state/new"
 	"github.com/temoto/vender/log2"
-	"github.com/temoto/vender/state"
-	state_new "github.com/temoto/vender/state/new"
 )
 
 type _PI = money.PollItem
