@@ -39,8 +39,8 @@ type tenv struct { //nolint:maligned
 }
 
 func TestCommand(t *testing.T) {
-	// FIXME ugly `mqtt.CRITICAL/ERROR/WARN/DEBUG` global variables
-	// t.Parallel()
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		config string
@@ -164,6 +164,7 @@ func TestCommand(t *testing.T) {
 	for _, c := range cases {
 		c := c
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			rand := helpers.RandUnix()
 			env := &tenv{
 				config: c.config,
