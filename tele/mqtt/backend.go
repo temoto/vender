@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/256dpi/gomqtt/client/future"
@@ -36,6 +37,7 @@ type backend struct {
 	acks     *future.Store
 	conn     transport.Conn
 	connmu   sync.RWMutex
+	disco    uint32
 	ctx      context.Context
 	err      helpers.AtomicError
 	id       string
@@ -223,16 +225,18 @@ func (b *backend) getConn() transport.Conn {
 	return c
 }
 
-func (b *backend) getWill() (m *packet.Message) {
+func (b *backend) getWill() (m *packet.Message, clean bool) {
 	b.willmu.Lock()
 	if b.will != nil {
 		m = b.will.Copy()
 	}
 	b.willmu.Unlock()
-	return m
+	clean = atomic.LoadUint32(&b.disco) == 1
+	return m, clean
 }
 
-func (b *backend) clearWill() {
+func (b *backend) onDisconnect() {
+	atomic.StoreUint32(&b.disco, 1)
 	b.willmu.Lock()
 	b.will = nil
 	b.willmu.Unlock()

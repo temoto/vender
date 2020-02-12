@@ -36,11 +36,13 @@ var (
 type ServerOptions struct {
 	Log       *log2.Log
 	ForceSubs []packet.Subscription
-	OnAuth    AuthFunc
+	OnClose   CloseFunc // valid client connection lost
+	OnConnect ConnectFunc
 	OnPublish MessageFunc
 }
 
-type AuthFunc = func(context.Context, string, string, *BackendOptions, packet.Generic) (bool, error)
+type CloseFunc = func(clientID string, clean bool, e error)
+type ConnectFunc = func(context.Context, *BackendOptions, *packet.Connect) (bool, error)
 type MessageFunc = func(context.Context, *packet.Message, *future.Future) error
 
 // Server.subs is prefix tree of pattern -> []{client, qos}
@@ -63,7 +65,8 @@ type Server struct { //nolint:maligned
 	listens   map[string]*transport.NetServer
 	log       *log2.Log
 	nextid    uint32 // atomic packet.ID
-	onAuth    AuthFunc
+	onClose   CloseFunc
+	onConnect ConnectFunc
 	onPublish MessageFunc
 	retain    *topic.Tree // *packet.Message
 	subs      *topic.Tree // *subscription
@@ -81,10 +84,11 @@ func NewServer(opt ServerOptions) *Server {
 	s.backends.m = make(map[string]*backend)
 	s.forceSubs = opt.ForceSubs
 	s.log = opt.Log
-	s.onAuth = defaultAuthDenyAll
-	if opt.OnAuth != nil {
-		s.onAuth = opt.OnAuth
+	s.onConnect = defaultAuthDenyAll
+	if opt.OnConnect != nil {
+		s.onConnect = opt.OnConnect
 	}
+	s.onClose = opt.OnClose
 	s.onPublish = opt.OnPublish
 	return s
 }
@@ -283,7 +287,8 @@ func (s *Server) acceptLoop(ns *transport.NetServer, opt *BackendOptions) {
 func (s *Server) onAccept(ctx context.Context, conn transport.Conn, opt *BackendOptions) (*backend, error) {
 	var pkt packet.Generic
 	var err error
-	defer errors.DeferredAnnotatef(&err, "addr=%s", addrString(conn.RemoteAddr()))
+	addr := addrString(conn.RemoteAddr())
+	defer errors.DeferredAnnotatef(&err, "addr=%s", addr)
 	// Receive first packet without backend
 	pkt, err = conn.Receive()
 	if err != nil {
@@ -309,7 +314,7 @@ func (s *Server) onAccept(ctx context.Context, conn transport.Conn, opt *Backend
 		return nil, errors.Trace(err)
 	}
 
-	ok, err = s.onAuth(ctx, pktConnect.ClientID, pktConnect.Username, opt, pktConnect)
+	ok, err = s.onConnect(ctx, opt, pktConnect)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -319,6 +324,12 @@ func (s *Server) onAccept(ctx context.Context, conn transport.Conn, opt *Backend
 		err = broker.ErrNotAuthorized
 		return nil, errors.Trace(err)
 	}
+	willString := "-"
+	if pktConnect.Will != nil {
+		willString = pktConnect.Will.String()
+	}
+	s.log.Debugf("mqtt CONNECT addr=%s client=%s username=%s keepalive=%d will=%s",
+		addr, pktConnect.ClientID, pktConnect.Username, pktConnect.KeepAlive, willString)
 
 	connack.ReturnCode = packet.ConnectionAccepted
 	requestedKeepAlive := time.Duration(pktConnect.KeepAlive) * time.Second
@@ -335,8 +346,8 @@ func (s *Server) onAccept(ctx context.Context, conn transport.Conn, opt *Backend
 	return b, nil
 }
 
-func defaultAuthDenyAll(ctx context.Context, id, username string, opt *BackendOptions, pkt packet.Generic) (bool, error) {
-	return false, fmt.Errorf("default auth callback is deny-all, please supply ServerOptions.OnAuth")
+func defaultAuthDenyAll(ctx context.Context, opt *BackendOptions, pkt *packet.Connect) (bool, error) {
+	return false, fmt.Errorf("default connect callback is deny-all, please supply ServerOptions.OnConnect")
 }
 
 func (s *Server) onSubscribe(b *backend, pkt *packet.Subscribe) error {
@@ -362,8 +373,8 @@ func (s *Server) processConn(conn transport.Conn, opt *BackendOptions) {
 	conn.SetReadLimit(opt.ReadLimit)
 	conn.SetReadTimeout(opt.NetworkTimeout)
 	b, err := s.onAccept(s.ctx, conn, opt)
-	s.log.Debugf("mqtt new conn addr=%s onAccept err=%v", addrNew, err)
 	if err != nil {
+		s.log.Infof("mqtt onAccept addr=%s err=%v", addrNew, err)
 		_ = conn.Close()
 		return
 	}
@@ -404,9 +415,8 @@ func (s *Server) processConn(conn transport.Conn, opt *BackendOptions) {
 	b.alive.WaitTasks()
 
 	// mandatory cleanup on backend closed
-	err = b.die(ErrClosing)
-	clean := err == nil || err == ErrClosing
-	will := b.getWill()
+	closeErr := b.die(ErrClosing)
+	will, clean := b.getWill()
 	helpers.WithLock(&s.backends, func() {
 		if ex := s.backends.m[b.id]; b == ex {
 			s.log.Debugf("mqtt id=%s clean=%t will=%v", b.id, clean, will)
@@ -420,6 +430,9 @@ func (s *Server) processConn(conn transport.Conn, opt *BackendOptions) {
 	})
 	if !clean && will != nil {
 		_ = s.Publish(s.ctx, will)
+	}
+	if s.onClose != nil {
+		s.onClose(b.id, clean, closeErr)
 	}
 }
 
@@ -484,8 +497,7 @@ typeSwitch:
 		err = fmt.Errorf("qos2 not supported")
 
 	case *packet.Disconnect:
-		b.clearWill()
-		// err := b.onDisconnect(pt)
+		b.onDisconnect()
 		_ = b.die(nil)
 		b.alive.Wait()
 		return

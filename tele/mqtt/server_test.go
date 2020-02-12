@@ -28,6 +28,8 @@ type tenv struct {
 	s    *mqtt.Server
 	addr string
 	rand *rand.Rand
+	clid string
+	data interface{}
 }
 
 func TestServer(t *testing.T) {
@@ -89,7 +91,7 @@ func TestServer(t *testing.T) {
 			assert.Equal(env.t, will.Payload, pktPublish.Message.Payload)
 			require.Equal(env.t, packet.QOSAtMostOnce, pktPublish.Message.QOS)
 		}},
-		{name: "disconnect-clean", check: func(env *tenv) {
+		{name: "will-not-sent-after-disconnect", check: func(env *tenv) {
 			conn := connDial(env)
 			connConnect(env, conn, "", nil)
 			connSubscribe(env, conn, []packet.Subscription{{Topic: "#", QOS: packet.QOSAtMostOnce}})
@@ -155,6 +157,40 @@ func TestServer(t *testing.T) {
 			<-sent
 			connDisconnect(env, conn)
 		}},
+		{name: "onclose-clean", setup: func(env *tenv) {
+			env.clid = fmt.Sprintf("cli%d", env.rand.Int31())
+			env.sopt = &mqtt.ServerOptions{
+				OnClose: func(clientid string, clean bool, e error) {
+					env.data = assert.Equal(env.t, env.clid, clientid) && assert.True(env.t, clean)
+				},
+			}
+			testServerDefaultSetup(env)
+		}, check: func(env *tenv) {
+			conn := connDial(env)
+			connConnect(env, conn, env.clid, nil)
+			connDisconnect(env, conn)
+			_, err := conn.Receive() // synchronization
+			require.Error(env.t, err)
+			assert.NoError(env.t, env.s.Close()) // synchronization
+			called, _ := env.data.(bool)
+			assert.True(env.t, called, "onclose was not called")
+		}},
+		{name: "onclose-abrupt", setup: func(env *tenv) {
+			env.clid = fmt.Sprintf("cli%d", env.rand.Int31())
+			env.sopt = &mqtt.ServerOptions{
+				OnClose: func(clientid string, clean bool, e error) {
+					env.data = assert.Equal(env.t, env.clid, clientid) && assert.False(env.t, clean)
+				},
+			}
+			testServerDefaultSetup(env)
+		}, check: func(env *tenv) {
+			conn := connDial(env)
+			connConnect(env, conn, env.clid, nil)
+			require.NoError(env.t, conn.Close())
+			assert.NoError(env.t, env.s.Close()) // synchronization
+			called, _ := env.data.(bool)
+			assert.True(env.t, called, "onclose was not called")
+		}},
 	}
 	for _, c := range cases {
 		c := c
@@ -213,7 +249,7 @@ func newTestServer(env *tenv, opt mqtt.ServerOptions, lopts []*mqtt.BackendOptio
 
 func testServerDefaultSetup(env *tenv) {
 	sopt := mqtt.ServerOptions{
-		OnAuth: authFromMap(map[string]string{"testuser": "testsecret"}),
+		OnConnect: authFromMap(map[string]string{"testuser": "testsecret"}),
 		OnPublish: func(ctx context.Context, msg *packet.Message, ack *future.Future) error {
 			env.log.Infof("OnPublish msg=%s", mqtt.MessageString(msg))
 			return env.s.Publish(ctx, msg)
@@ -222,7 +258,10 @@ func testServerDefaultSetup(env *tenv) {
 	if env.sopt != nil && env.sopt.ForceSubs != nil {
 		sopt.ForceSubs = env.sopt.ForceSubs
 	}
-	// if env.sopt!=nil&&env.sopt.OnAuth!=nil{ sopt.OnAuth=env.sopt.OnAuth }
+	if env.sopt != nil && env.sopt.OnClose != nil {
+		sopt.OnClose = env.sopt.OnClose
+	}
+	// if env.sopt!=nil&&env.sopt.OnConnect!=nil{ sopt.OnConnect=env.sopt.OnConnect }
 	// if env.sopt!=nil&&env.sopt.OnPublish!=nil{ sopt.OnPublish=env.sopt.OnPublish }
 	lopts := []*mqtt.BackendOptions{
 		{
@@ -316,21 +355,11 @@ func connDisconnect(env *tenv, c transport.Conn) {
 	env.log.Infof("testClient sent %s", mqtt.PacketString(pkt))
 }
 
-func authFromMap(m map[string]string) mqtt.AuthFunc {
-	return func(ctx context.Context, id string, username string, opt *mqtt.BackendOptions, pkt packet.Generic) (bool, error) {
-		switch p := pkt.(type) {
-		case *packet.Connect:
-			if secret, ok := m[p.Username]; ok {
-				return p.Password == secret, nil
-			}
-			return false, nil
-
-		default:
-			if id == "" {
-				return false, fmt.Errorf("code error OnAuth pkt!=CONNECT but client=(empty)")
-			}
-			_, ok := m[username]
-			return ok, nil
+func authFromMap(m map[string]string) mqtt.ConnectFunc {
+	return func(ctx context.Context, opt *mqtt.BackendOptions, pkt *packet.Connect) (bool, error) {
+		if secret, ok := m[pkt.Username]; ok {
+			return pkt.Password == secret, nil
 		}
+		return false, nil
 	}
 }

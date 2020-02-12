@@ -19,7 +19,7 @@ import (
 
 // Vender telemetry specific MQTT client.
 // - Init() returns with result of first connect
-// - Subscribe once on connect
+// - Subscribe once on each (re)connect
 // - Reconnect forever
 // - QOS 0,1
 // - No in-flight storage (except Publish call stack)
