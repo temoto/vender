@@ -6,24 +6,21 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"time"
 
-	// TODO try github.com/goiiot/libmqtt
-	// TODO try github.com/256dpi/gomqtt
-
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/256dpi/gomqtt/packet"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 	tele_config "github.com/temoto/vender/tele/config"
+	"github.com/temoto/vender/tele/mqtt"
 )
 
 type transportMqtt struct {
-	log       *log2.Log
-	onCommand func([]byte) bool
-	m         mqtt.Client
-	mopt      *mqtt.ClientOptions
-	stopCh    chan struct{}
+	log    *log2.Log
+	m      *mqtt.Client
+	stopCh chan struct{}
 
 	topicPrefix    string
 	topicState     string
@@ -31,24 +28,13 @@ type transportMqtt struct {
 	topicCommand   string
 }
 
-func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback, willPayload []byte) error {
-	mqttLog := self.log.Clone(log2.LDebug)
-	// TODO wrap with level filter and prefix "tele.mqtt critical/error/warn/debug"
-	mqtt.CRITICAL = mqttLog
-	mqtt.ERROR = mqttLog
-	mqtt.WARN = mqttLog
+func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback) error {
+	mqttLog := self.log.Clone(log2.LInfo)
 	if teleConfig.MqttLogDebug {
-		mqtt.DEBUG = mqttLog
+		mqttLog.SetLevel(log2.LDebug)
 	}
 
 	mqttClientId := fmt.Sprintf("vm%d", teleConfig.VmId)
-	credFun := func() (string, string) {
-		return mqttClientId, teleConfig.MqttPassword
-	}
-
-	self.onCommand = func(payload []byte) bool {
-		return onCommand(ctx, payload)
-	}
 	self.topicPrefix = mqttClientId // coincidence
 	self.topicState = fmt.Sprintf("%s/w/1s", self.topicPrefix)
 	self.topicTelemetry = fmt.Sprintf("%s/w/1t", self.topicPrefix)
@@ -58,11 +44,9 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 	if networkTimeout < 1*time.Second {
 		networkTimeout = 1 * time.Second
 	}
-	connectTimeout := networkTimeout * 3
-	keepaliveTimeout := helpers.IntSecondDefault(teleConfig.KeepaliveSec, networkTimeout/2)
 
-	defaultHandler := func(_ mqtt.Client, msg mqtt.Message) {
-		self.log.Errorf("unexpected mqtt message: %v", msg)
+	if _, err := url.ParseRequestURI(teleConfig.MqttBroker); err != nil {
+		return errors.Annotatef(err, "tele server=%s", teleConfig.MqttBroker)
 	}
 
 	tlsconf := new(tls.Config)
@@ -70,117 +54,68 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 		tlsconf.RootCAs = x509.NewCertPool()
 		cabytes, err := ioutil.ReadFile(teleConfig.TlsCaFile)
 		if err != nil {
-			panic(err)
+			return errors.Annotatef(err, "TLS")
 		}
 		tlsconf.RootCAs.AppendCertsFromPEM(cabytes)
 	}
 	if teleConfig.TlsPsk != "" {
 		copy(tlsconf.SessionTicketKey[:], helpers.MustHex(teleConfig.TlsPsk))
 	}
-	self.mopt = mqtt.NewClientOptions().
-		AddBroker(teleConfig.MqttBroker).
-		SetAutoReconnect(true).
-		SetBinaryWill(self.topicState, willPayload, 1, true).
-		SetCleanSession(false).
-		SetClientID(mqttClientId).
-		SetConnectTimeout(connectTimeout).
-		SetCredentialsProvider(credFun).
-		SetDefaultPublishHandler(defaultHandler).
-		SetKeepAlive(keepaliveTimeout).
-		SetMaxReconnectInterval(connectTimeout).
-		SetMessageChannelDepth(1).
-		SetOrderMatters(false).
-		SetPingTimeout(networkTimeout).
-		SetTLSConfig(tlsconf).
-		SetWriteTimeout(networkTimeout)
-	self.m = mqtt.NewClient(self.mopt)
 
-	go self.online()
-	return nil
+	self.m = &mqtt.Client{Log: mqttLog}
+	self.m.Config.BrokerURL = teleConfig.MqttBroker
+	self.m.Config.TLS = tlsconf
+	self.m.Config.KeepaliveSec = uint16(teleConfig.KeepaliveSec)
+	self.m.Config.NetworkTimeout = networkTimeout
+	self.m.Config.ClientID = mqttClientId
+	self.m.Config.Username = mqttClientId
+	self.m.Config.Password = teleConfig.MqttPassword
+	self.m.Config.ReconnectDelay = networkTimeout * 2
+	self.m.Config.OnMessage = func(msg *packet.Message) error {
+		if msg.Topic != self.topicCommand {
+			self.log.Errorf("tele: MQTT received message in unexpected topic=%s payload=%x", msg.Topic, msg.Payload)
+			return nil
+		}
+		// TODO save command to spq, return nil, then try to execute
+		_ = onCommand(ctx, msg.Payload)
+		return nil
+	}
+
+	err := self.m.Init(nil)
+	return errors.Annotatef(err, "tele init")
 }
 
 func (self *transportMqtt) Close() {
 	close(self.stopCh)
-	for self.m.IsConnected() {
-		time.Sleep(1 * time.Second)
-	}
+	self.m.Close()
 }
 
 func (self *transportMqtt) SendState(payload []byte) bool {
 	self.log.Infof("transport sendstate payload=%x", payload)
-	t := self.m.Publish(self.topicState, 1, true, payload)
-	err := self.tokenWait(t, "publish state")
-	self.log.Infof("transport sendstate err=%v", err)
+	msg := &packet.Message{Topic: self.topicState, Payload: payload, QOS: packet.QOSAtLeastOnce, Retain: true}
+	err := self.m.Publish(context.Background(), msg)
+	if err != nil {
+		self.log.Errorf("tele: MQTT %s", err.Error())
+	}
 	return err == nil
 }
 
 func (self *transportMqtt) SendTelemetry(payload []byte) bool {
-	t := self.m.Publish(self.topicTelemetry, 1, true, payload)
-	err := self.tokenWait(t, "publish telemetry")
+	msg := &packet.Message{Topic: self.topicTelemetry, Payload: payload, QOS: packet.QOSAtLeastOnce, Retain: true}
+	err := self.m.Publish(context.Background(), msg)
+	if err != nil {
+		self.log.Errorf("tele: MQTT %s", err.Error())
+	}
 	return err == nil
 }
 
 func (self *transportMqtt) SendCommandResponse(topicSuffix string, payload []byte) bool {
 	topic := fmt.Sprintf("%s/%s", self.topicPrefix, topicSuffix)
 	self.log.Debugf("mqtt publish command response to topic=%s", topic)
-	t := self.m.Publish(topic, 1, false, payload)
-	err := self.tokenWait(t, "publish command response")
+	msg := &packet.Message{Topic: self.topicTelemetry, Payload: payload, QOS: packet.QOSAtLeastOnce, Retain: false}
+	err := self.m.Publish(context.Background(), msg)
+	if err != nil {
+		self.log.Errorf("tele: MQTT %s", err.Error())
+	}
 	return err == nil
-}
-
-func (self *transportMqtt) online() {
-	if self.m.IsConnected() {
-		return
-	}
-
-	for self.isRunning() {
-		self.log.Debugf("tele connect before")
-		t := self.m.Connect()
-		if self.tokenWait(t, "connect") == nil {
-			break // success path
-		}
-		self.log.Debugf("tele connect after")
-		time.Sleep(1 * time.Second)
-	}
-
-	for self.isRunning() {
-		self.log.Debugf("tele sub-command before")
-		t := self.m.Subscribe(self.topicCommand, 1, self.mqttSubCommand)
-		if self.tokenWait(t, "subscribe:"+self.topicCommand) == nil {
-			break // success path
-		}
-		self.log.Debugf("tele sub-command after")
-		time.Sleep(1 * time.Second)
-	}
-}
-
-func (self *transportMqtt) isRunning() bool {
-	select {
-	case <-self.stopCh:
-		self.m.Disconnect(uint(self.mopt.PingTimeout / time.Millisecond))
-		return false
-	default:
-		return true
-	}
-}
-
-func (self *transportMqtt) mqttSubCommand(_ mqtt.Client, msg mqtt.Message) {
-	payload := msg.Payload()
-	if self.onCommand(payload) {
-		msg.Ack()
-	}
-}
-
-func (self *transportMqtt) tokenWait(t mqtt.Token, tag string) error {
-	if !t.Wait() {
-		err := errors.Errorf("%s timeout", tag)
-		self.log.Errorf("tele: MQTT %s", err.Error())
-		return err
-	}
-	if err := t.Error(); err != nil {
-		err = errors.Annotate(err, tag)
-		self.log.Errorf("tele: MQTT %s", err.Error())
-		return err
-	}
-	return nil
 }

@@ -18,7 +18,7 @@ import (
 )
 
 // Vender telemetry specific MQTT client.
-// - Init() returns with result of first connect
+// - Init(connectErrChan) returns configuration errors, puts first connect error into chan
 // - Subscribe once on each (re)connect
 // - Reconnect forever
 // - QOS 0,1
@@ -83,7 +83,7 @@ const (
 	publishAck
 )
 
-func (c *Client) Init() error {
+func (c *Client) Init(connectErrChan chan<- error) error {
 	c.alive = alive.NewAlive()
 
 	if c.Config.OnMessage == nil {
@@ -126,9 +126,8 @@ func (c *Client) Init() error {
 	c.flowSubscribe.ch = make(chan *packet.Suback)
 	c.flowSubscribe.state = 0
 
-	ech := make(chan error)
-	go c.worker(ech)
-	return <-ech
+	go c.worker(connectErrChan)
+	return nil
 }
 
 func (c *Client) Close() error {
@@ -445,7 +444,7 @@ func (c *Client) subscribe(subs []packet.Subscription) error {
 }
 
 func (c *Client) worker(initChan chan<- error) {
-	first := true
+	first := initChan != nil
 	for c.alive.IsRunning() {
 		err := c.connect()
 		if err != nil {
