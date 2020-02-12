@@ -57,12 +57,11 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	self.stateInterval = helpers.IntSecondDefault(self.config.StateIntervalSec, defaultStateInterval)
 	self.stat.Locked_Reset()
 
-	willPayload := []byte{byte(tele_api.State_Disconnected)}
 	// test code sets .transport
 	if self.transport == nil { // production path
 		self.transport = &transportMqtt{}
 	}
-	if err := self.transport.Init(ctx, log, teleConfig, self.onCommandMessage, willPayload); err != nil {
+	if err := self.transport.Init(ctx, log, teleConfig, self.onCommandMessage); err != nil {
 		return errors.Annotate(err, "tele transport")
 	}
 
