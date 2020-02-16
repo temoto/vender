@@ -65,9 +65,9 @@ func (self *Device) Init(bus *Bus, addr uint8, name string, byteOrder binary.Byt
 	self.bus = bus
 	self.Name = name
 	self.errCode = ErrCodeNone
-	self.LastOk = atomic_clock.New(0)
+	self.LastOk = atomic_clock.New()
 	self.LastOff = atomic_clock.Now()
-	self.lastReset = atomic_clock.New(0)
+	self.lastReset = atomic_clock.New()
 
 	if self.DelayAfterReset == 0 {
 		self.DelayAfterReset = DefaultDelayAfterReset

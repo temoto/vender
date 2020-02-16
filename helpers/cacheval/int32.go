@@ -19,14 +19,13 @@ type Int32 struct {
 
 // Not thread-safe. `valid` duration cannot be changed later.
 func (c *Int32) Init(valid time.Duration) {
-	c.updated = atomic_clock.New(0)
+	c.updated = atomic_clock.New()
 	c.valid = valid
 }
 
-func (c *Int32) get(now int64) (int32, bool) {
+func (c *Int32) get() (int32, bool) {
 	v := atomic.LoadInt32(&c.value)
-	clock := atomic_clock.New(now)
-	age := clock.Sub(c.updated)
+	age := atomic_clock.Since(c.updated)
 	return v, age >= 0 && age <= c.valid
 }
 
@@ -34,7 +33,7 @@ func (c *Int32) get(now int64) (int32, bool) {
 func (c *Int32) Get() int32 { return atomic.LoadInt32(&c.value) }
 
 // Returns current value and true if it's fresh. Costs current timestamp lookup.
-func (c *Int32) GetFresh() (int32, bool) { return c.get(atomic_clock.Source()) }
+func (c *Int32) GetFresh() (int32, bool) { return c.get() }
 
 // Always returns fresh value.
 // If value is stale, runs `f()`.
@@ -43,8 +42,7 @@ func (c *Int32) GetFresh() (int32, bool) { return c.get(atomic_clock.Source()) }
 // May return value from concurrent `GetOrUpdate` or `Set`.
 // Costs current timestamp lookup.
 func (c *Int32) GetOrUpdate(f func()) int32 {
-	now := atomic_clock.Source()
-	v, ok := c.get(now)
+	v, ok := c.get()
 	if !ok {
 		f()
 		v = atomic.LoadInt32(&c.value)

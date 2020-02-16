@@ -1,5 +1,5 @@
-// Package atomic_clock is convenient API around atomic int64 system clock.
-// Use for time accounting. Do not use where time zone matters.
+// Package atomic_clock is convenient API around atomic int64 monotonic clock.
+// Use for time accounting. Do not use where actual time value matters.
 package atomic_clock
 
 import (
@@ -7,13 +7,15 @@ import (
 	"time"
 )
 
+var epoch = time.Now()
+
 type Clock struct{ v int64 }
 
-func source() int64 { return time.Now().UnixNano() }
+func New() *Clock { return &Clock{v: 0} }
+func Now() *Clock { return &Clock{v: source()} }
 
-func (c *Clock) get() int64         { return atomic.LoadInt64(&c.v) }
-func (c *Clock) set(new int64)      { atomic.StoreInt64(&c.v, new) }
-func (c *Clock) cas(old, new int64) { atomic.CompareAndSwapInt64(&c.v, old, new) }
+func Since(begin *Clock) time.Duration { return time.Duration(source() - begin.get()) }
+func Source() int64                    { return source() }
 
 func (c *Clock) IsZero() bool { return c.get() == 0 }
 
@@ -24,11 +26,8 @@ func (c *Clock) SetNowIfZero()       { c.cas(0, source()) }
 
 func (c *Clock) Sub(begin *Clock) time.Duration { return time.Duration(c.get() - begin.get()) }
 
-func (c *Clock) Unix() int64     { return c.get() / int64(time.Second) }
-func (c *Clock) UnixNano() int64 { return c.get() }
+func source() int64 { return int64(time.Since(epoch)) }
 
-func New(v int64) *Clock { return &Clock{v: v} }
-func Now() *Clock        { return New(source()) }
-
-func Since(begin *Clock) time.Duration { return time.Duration(source() - begin.get()) }
-func Source() int64                    { return source() }
+func (c *Clock) get() int64         { return atomic.LoadInt64(&c.v) }
+func (c *Clock) set(new int64)      { atomic.StoreInt64(&c.v, new) }
+func (c *Clock) cas(old, new int64) { atomic.CompareAndSwapInt64(&c.v, old, new) }
