@@ -1,3 +1,8 @@
+debug {
+  // pprof server allows to peek into running process
+  pprof_listen = "127.0.0.1:6060"
+}
+
 engine {
   // alias "cup_dispense" { scenario = "conveyor_move_cup cup_drop" }
 

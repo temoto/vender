@@ -10,6 +10,7 @@
 *.so
 *.test
 .DS_Store
+.env
 /.tags*
 /.vagrant
 /build

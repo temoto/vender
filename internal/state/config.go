@@ -23,6 +23,10 @@ type Config struct {
 	// only used for Unmarshal, do not access
 	XXX_Include []ConfigSource `hcl:"include"`
 
+	Debug struct {
+		PprofListen string `hcl:"pprof_listen"`
+	}
+
 	Hardware struct {
 		// only used for Unmarshal, do not access
 		XXX_Devices []struct {
