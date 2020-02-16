@@ -1,0 +1,60 @@
+#!/bin/bash
+set -eu
+
+main() {
+  if ! git diff --quiet --exit-code ; then
+    echo "warning: working dir is dirty" >&2
+    git status --short
+    echo >&2
+  fi
+
+  local last=$(last_version)
+  local changelog=$(git log "$last".. --format='%s')
+  if [[ -z "$changelog" ]] ; then
+    echo "no new commits since last tag $last" >&2
+    return 1
+  fi
+
+  local next=$(next_version "$last")
+  git tag -s -m "$changelog" "$next"
+  git tag -l -n100 "$next"
+  if confirm "git push? [Yn] " ; then
+    git push
+  fi
+}
+
+last_version() {
+  git tag -l --sort=-v:refname 'v0.*' |head -n1
+}
+
+next_version() {
+  # v0.200216.3
+  local last="$1"
+
+  # v0.200216.
+  local today="v0.$(date +%y%m%d)."
+
+  local n=0
+  if [[ "${last:0:10}" == "$today" ]] ; then
+    n="$(( ${last:10}+1 ))"
+  fi
+  echo "${today}${n}"
+}
+
+confirm() {
+  local reply
+  local prompt="$1"
+  read -r -n1 -p "$prompt" -t31 reply >&2
+  echo "" >&2
+  local rc=0
+  local default_y=" \[Yn\] $"
+  if [[ -z "$reply" ]] && [[ "$prompt" =~ $default_y ]] ; then
+      reply="y"
+  fi
+  [[ "$reply" != "y" ]] && rc=1
+  return $rc
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]] ; then
+  main "$@"
+fi
