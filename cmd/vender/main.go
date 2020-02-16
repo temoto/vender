@@ -4,10 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
+	_ "net/http/pprof" //#nosec G108
 	"os"
 	"regexp"
 	"strings"
 
+	"github.com/juju/errors"
 	cmd_engine "github.com/temoto/vender/cmd/vender/engine"
 	"github.com/temoto/vender/cmd/vender/mdb"
 	"github.com/temoto/vender/cmd/vender/subcmd"
@@ -73,12 +77,32 @@ func main() {
 		// under systemd assume systemd journal logging, no timestamp
 		log.SetFlags(log2.LServiceFlags)
 	}
-	log.Debugf("starting command %s", mod.Name)
+	g.Error(pprofStart(g, config.Debug.PprofListen))
 
+	log.Debugf("starting command %s", mod.Name)
 	if err := mod.Main(ctx, config); err != nil {
 		g.Fatal(err)
 	}
 }
+
+func pprofStart(g *state.Global, addr string) error {
+	if addr == "" {
+		return nil
+	}
+
+	srv := &http.Server{Addr: addr, Handler: nil} // TODO specific pprof handler
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return errors.Annotate(err, "pprof")
+	}
+	g.Log.Debugf("pprof http://%s/debug/pprof/", ln.Addr().String())
+	go pprofServe(g, srv, ln)
+	return nil
+
+}
+
+// not inline only for clear goroutine source in panic trace
+func pprofServe(g *state.Global, srv *http.Server, ln net.Listener) { g.Error(srv.Serve(ln)) }
 
 func versionMain(ctx context.Context, config *state.Config) error {
 	fmt.Printf("vender %s\n", BuildVersion)
