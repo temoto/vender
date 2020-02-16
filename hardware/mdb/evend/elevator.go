@@ -14,45 +14,35 @@ import (
 type DeviceElevator struct {
 	Generic
 
-	timeout    time.Duration
-	currentPos int16 // estimated
+	timeout time.Duration
+	cal0    bool
+	cal100  bool
 }
 
 func (self *DeviceElevator) init(ctx context.Context) error {
-	self.currentPos = -1
 	g := state.GetGlobal(ctx)
 	config := &g.Config.Hardware.Evend.Elevator
 	keepaliveInterval := helpers.IntMillisecondDefault(config.KeepaliveMs, 0)
 	self.timeout = helpers.IntSecondDefault(config.TimeoutSec, 10*time.Second)
 	self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
-	doCalibrate := engine.Func{
-		Name: "mdb.evend.elevator.calibrate",
-		F:    self.calibrate,
-	}
 	doMove := engine.FuncArg{
 		Name: "mdb.evend.elevator.move",
-		F: func(ctx context.Context, arg engine.Arg) error {
-			return self.move(ctx, uint8(arg))
-		},
+		F:    self.moveProper,
 		V: func() error {
-			if self.currentPos == -1 {
-				return nil
-			}
 			// FIXME Generic offline -> calibrated=false
 			if err := self.Generic.dev.ValidateOnline(); err != nil {
-				self.currentPos = -1
+				self.calReset()
 				return err
 			}
 			if err := self.Generic.dev.ValidateErrorCode(); err != nil {
-				self.currentPos = -1
+				self.calReset()
 				return err
 			}
 			return nil
 		},
 	}
-	moveSeq := engine.NewSeq("mdb.evend.elevator_move(?)").Append(doCalibrate).Append(doMove)
-	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
+	g.Engine.Register("mdb.evend.elevator_move(?)", self.Generic.WithRestart(doMove))
 
 	err := self.Generic.FIXME_initIO(ctx)
 	if keepaliveInterval > 0 {
@@ -61,27 +51,53 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
 }
 
+func (self *DeviceElevator) calibrated() bool { return self.cal0 && self.cal100 }
+func (self *DeviceElevator) calReset()        { self.cal0 = false; self.cal100 = false }
 func (self *DeviceElevator) calibrate(ctx context.Context) error {
-	// self.dev.Log.Debugf("mdb.evend.elevator calibrate ready=%t current=%d", self.dev.Ready(), self.currentPos)
-	if self.currentPos != -1 {
-		return nil
+	const tag = "evend.elevator.calibrate"
+	self.dev.Log.Debugf("mdb.evend.elevator calibrate ready=%t cal0=%t cal100=%t", self.dev.Ready(), self.cal0, self.cal100)
+	if !self.cal0 {
+		if err := self.moveRaw(ctx, 0); err != nil {
+			return errors.Annotate(err, tag)
+		}
 	}
-	err := self.move(ctx, 0)
-	// if err == nil {
-	// 	self.dev.Log.Debugf("mdb.evend.elevator calibrate success")
-	// }
-	return err
+	if !self.cal100 {
+		if err := self.moveRaw(ctx, 100); err != nil {
+			return errors.Annotate(err, tag)
+		}
+	}
+	return nil
 }
 
-func (self *DeviceElevator) move(ctx context.Context, position uint8) (err error) {
-	tag := fmt.Sprintf("mdb.evend.elevator.move:%d", position)
-	// self.dev.Log.Debugf("mdb.evend.elevator calibrate ready=%t current=%d", self.dev.Ready(), self.currentPos)
+func (self *DeviceElevator) moveProper(ctx context.Context, arg engine.Arg) (err error) {
+	position := uint8(arg)
+
+	if !(position == 0 || position == 100) {
+		if err = self.calibrate(ctx); err != nil {
+			return
+		}
+	}
+
+	err = self.moveRaw(ctx, arg)
+	return
+}
+
+func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err error) {
+	position := uint8(arg)
+	tag := fmt.Sprintf("mdb.evend.elevator.moveRaw:%d", position)
 	defer func() {
 		if err != nil {
-			self.currentPos = -1
+			self.calReset()
 		} else {
-			self.currentPos = int16(position)
-			self.dev.SetReady()
+			switch position {
+			case 0:
+				self.cal0 = true
+			case 100:
+				self.cal100 = true
+			}
+			if self.calibrated() {
+				self.dev.SetReady()
+			}
 		}
 	}()
 

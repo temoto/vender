@@ -18,14 +18,14 @@ func TestElevator(t *testing.T) {
 		{"d0", ""},
 		{"d1", "04000b0100011805de07020000000a01"},
 
-		// calibrate ok
-		{"d3", ""},
-		{"d2030000", ""},
-		{"d3", "0d00"},
-
 		// move(100) ok
 		{"d3", ""},
 		{"d2036400", ""},
+		{"d3", "0d00"},
+
+		// move(50) requires cal0, ok
+		{"d3", ""},
+		{"d2030000", ""},
 		{"d3", "0d00"},
 
 		// move(50) error before
@@ -33,6 +33,9 @@ func TestElevator(t *testing.T) {
 		{"d0", ""},       // reset
 		{"d3", ""},       // calibrate/wait-ready
 		{"d2030000", ""}, // calibrate/move
+		{"d3", "0d00"},   // calibrate/wait-done
+		{"d3", ""},       // calibrate/wait-ready
+		{"d2036400", ""}, // calibrate/move
 		{"d3", "0d00"},   // calibrate/wait-done
 		{"d3", ""},       // continue normal
 		{"d2033200", ""},
@@ -46,6 +49,9 @@ func TestElevator(t *testing.T) {
 		{"d0", ""},       // reset
 		{"d3", ""},       // calibrate/wait-ready
 		{"d2030000", ""}, // calibrate/move
+		{"d3", "0d00"},   // calibrate/wait-done
+		{"d3", ""},       // calibrate/wait-ready
+		{"d2036400", ""}, // calibrate/move
 		{"d3", "0d00"},   // calibrate/wait-done
 		{"d3", ""},       // continue normal
 		{"d2034600", ""},
