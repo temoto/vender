@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/256dpi/gomqtt/client/future"
+	"github.com/256dpi/gomqtt/packet"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,19 +25,26 @@ import (
 	"github.com/temoto/vender/internal/ui"
 	tele_api "github.com/temoto/vender/tele"
 	tele_config "github.com/temoto/vender/tele/config"
+	"github.com/temoto/vender/tele/mqtt"
 )
 
 type tenv struct { //nolint:maligned
 	version string
 	config  string
-	trans   *transportMock
 	cmd     *tele_api.Command // abstraction leak, local for TestCommand
 
 	cfg  *tele_config.Config
 	ctx  context.Context
+	g    *state.Global
 	flag bool
-	tele tele_api.Teler
+	tele tele_api.Clienter
 	vmid int32
+
+	mqttMonitor     *mqtt.Client
+	mqttMonResponse chan []byte
+	mqttMonState    chan []byte
+	mqttMonTele     chan []byte
+	mqttServer      *mqtt.Server
 }
 
 func TestCommand(t *testing.T) {
@@ -50,8 +59,8 @@ func TestCommand(t *testing.T) {
 	}{
 		{name: "report",
 			config: `engine { inventory {
-	tele_add_name = true
-	stock "paper" {}
+  tele_add_name = true
+  stock "paper" {}
   stock "rock" {}
 }}`,
 			cmd: tele_api.Command{
@@ -73,7 +82,7 @@ func TestCommand(t *testing.T) {
 				s2.Set(42)
 			},
 			check: func(t testing.TB, env *tenv) {
-				payload := <-env.trans.outTelemetry
+				payload := <-env.mqttMonTele
 				var tm tele_api.Telemetry
 				require.NoError(t, proto.Unmarshal(payload, &tm))
 				assert.Nil(t, tm.Error)
@@ -98,7 +107,7 @@ func TestCommand(t *testing.T) {
 				}})
 			},
 			check: func(t testing.TB, env *tenv) {
-				b := <-env.trans.outResponse
+				b := <-env.mqttMonResponse
 				var r tele_api.Response
 				require.NoError(t, proto.Unmarshal(b, &r))
 				assert.Equal(t, env.cmd.Id, r.CommandId)
@@ -121,7 +130,7 @@ func TestCommand(t *testing.T) {
 				ReplyTopic: "t",
 			},
 			check: func(t testing.TB, env *tenv) {
-				b := <-env.trans.outResponse
+				b := <-env.mqttMonResponse
 				var r tele_api.Response
 				require.NoError(t, proto.Unmarshal(b, &r))
 				assert.Equal(t, env.cmd.Id, r.CommandId)
@@ -151,7 +160,7 @@ func TestCommand(t *testing.T) {
 				go uix.Loop(env.ctx)
 			},
 			check: func(t testing.TB, env *tenv) {
-				b := <-env.trans.outResponse
+				b := <-env.mqttMonResponse
 				var r tele_api.Response
 				require.NoError(t, proto.Unmarshal(b, &r))
 				assert.Equal(t, env.cmd.Id, r.CommandId)
@@ -180,7 +189,9 @@ func TestCommand(t *testing.T) {
 
 			b, err := proto.Marshal(&c.cmd)
 			require.NoError(t, err)
-			require.True(t, env.trans.onCommand(env.ctx, b))
+			topicCommand := fmt.Sprintf("vm%d/r/c", env.vmid)
+			msg := &packet.Message{Topic: topicCommand, QOS: packet.QOSAtLeastOnce, Payload: b}
+			require.NoError(t, env.mqttMonitor.Publish(context.Background(), msg))
 
 			c.check(t, env)
 		})
@@ -199,7 +210,7 @@ func TestApi(t *testing.T) {
 			check: func(t testing.TB, env *tenv) {
 				e := fmt.Errorf("ohi")
 				env.tele.Error(e)
-				b := <-env.trans.outTelemetry
+				b := <-env.mqttMonTele
 				var tm tele_api.Telemetry
 				require.NoError(t, proto.Unmarshal(b, &tm))
 				require.NotNil(t, tm.Error)
@@ -223,10 +234,10 @@ func TestApi(t *testing.T) {
 					states[0], states[1] = states[1], states[0]
 				}
 				// consume State_Boot before checking others
-				assert.Equal(t, "01", hex.EncodeToString(<-env.trans.outState))
+				assert.Equal(t, "01", hex.EncodeToString(<-env.mqttMonState))
 				for _, s := range states {
 					env.tele.State(s)
-					assert.Equal(t, fmt.Sprintf("%02x", int32(s)), hex.EncodeToString(<-env.trans.outState))
+					assert.Equal(t, fmt.Sprintf("%02x", int32(s)), hex.EncodeToString(<-env.mqttMonState))
 				}
 			}},
 		{name: "state-queue",
@@ -235,10 +246,10 @@ func TestApi(t *testing.T) {
 				env.tele.State(tele_api.State_Nominal)
 				env.tele.State(tele_api.State_Problem)
 				env.tele.State(tele_api.State_Lock)
-				assert.Equal(t, "01", hex.EncodeToString(<-env.trans.outState))
-				assert.Equal(t, "02", hex.EncodeToString(<-env.trans.outState))
-				assert.Equal(t, "04", hex.EncodeToString(<-env.trans.outState))
-				assert.Equal(t, "06", hex.EncodeToString(<-env.trans.outState))
+				assert.Equal(t, "01", hex.EncodeToString(<-env.mqttMonState))
+				assert.Equal(t, "02", hex.EncodeToString(<-env.mqttMonState))
+				assert.Equal(t, "04", hex.EncodeToString(<-env.mqttMonState))
+				assert.Equal(t, "06", hex.EncodeToString(<-env.mqttMonState))
 			}},
 		{name: "report-service", config: ``,
 			check: func(t testing.TB, env *tenv) {
@@ -247,8 +258,8 @@ func TestApi(t *testing.T) {
 				require.NoError(t, moneysys.Start(env.ctx))
 				g.XXX_money.Store(moneysys)
 
-				env.tele.Report(env.ctx, true)
-				payload := <-env.trans.outTelemetry
+				assert.NoError(t, env.tele.Report(env.ctx, true))
+				payload := <-env.mqttMonTele
 				var tm tele_api.Telemetry
 				require.NoError(t, proto.Unmarshal(payload, &tm))
 				assert.Nil(t, tm.Error)
@@ -306,20 +317,63 @@ func randString(r *rand.Rand, maxLength uint) string {
 }
 
 func testSetup(t testing.TB, env *tenv) {
-	if env.trans == nil {
-		env.trans = &transportMock{t: t, outBuffer: 32}
-	}
-	env.tele = tele.NewWithTransporter(env.trans)
+	env.tele = tele.New()
+	env.ctx, env.g = state_new.NewTestContext(t, env.version, env.config)
 
-	ctx, g := state_new.NewTestContext(t, env.version, env.config)
-	env.ctx = ctx
-	g.Tele = env.tele
+	serverOnPublish := func(ctx context.Context, m *packet.Message, ack *future.Future) error {
+		return nil
+	}
+	env.mqttServer = mqtt.NewServer(mqtt.ServerOptions{
+		Log:       env.g.Log,
+		OnPublish: serverOnPublish,
+	})
+	lopts := []*mqtt.BackendOptions{&mqtt.BackendOptions{
+		URL:            "tcp://127.0.0.1:",
+		NetworkTimeout: time.Second,
+	}}
+	require.NoError(t, env.mqttServer.Listen(env.ctx, lopts))
+
+	addr := env.mqttServer.Addrs()[0]
+	brokerURL := fmt.Sprintf("tcp://%s", addr)
+	topicState := tele.TopicState(env.vmid)
+	topicTelemetry := tele.TopicTelemetry(env.vmid)
+	topicResponse := tele.TopicResponse(env.vmid, "t")
+	env.mqttMonResponse = make(chan []byte, 32)
+	env.mqttMonState = make(chan []byte, 32)
+	env.mqttMonTele = make(chan []byte, 32)
+	var err error
+	monitorOnMessage := func(m *packet.Message) error {
+		switch {
+		case m.Topic == topicState:
+			env.mqttMonState <- m.Payload
+		case m.Topic == topicTelemetry:
+			env.mqttMonTele <- m.Payload
+		case m.Topic == topicResponse:
+			env.mqttMonResponse <- m.Payload
+		default:
+			t.Errorf("monitor observed unexpected MQTT message=%s", m.String())
+		}
+		return nil
+	}
+	env.mqttMonitor, err = mqtt.NewClient(mqtt.ClientOptions{
+		BrokerURL:      brokerURL,
+		ClientID:       "mon",
+		Log:            env.g.Log,
+		NetworkTimeout: 5 * time.Second,
+		OnMessage:      monitorOnMessage,
+		Subscriptions:  []packet.Subscription{{Topic: "#", QOS: 0}},
+	})
+	require.NoError(t, err)
+
+	env.g.Tele = env.tele
 	if env.cfg == nil {
-		env.cfg = &g.Config.Tele
+		env.cfg = &env.g.Config.Tele
+		env.cfg.MqttBroker = brokerURL
 		env.cfg.Enabled = true
 		env.cfg.LogDebug = true
+		env.cfg.MqttLogDebug = true
 		env.cfg.PersistPath = spq.OnlyForTesting
 		env.cfg.VmId = int(env.vmid)
 	}
-	require.NoError(t, env.tele.Init(env.ctx, g.Log, *env.cfg))
+	require.NoError(t, env.tele.Init(env.ctx, env.g.Log, *env.cfg))
 }

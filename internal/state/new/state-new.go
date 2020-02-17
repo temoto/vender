@@ -16,7 +16,7 @@ import (
 	tele_api "github.com/temoto/vender/tele"
 )
 
-func NewContext(log *log2.Log, teler tele_api.Teler) (context.Context, *state.Global) {
+func NewContext(log *log2.Log, teler tele_api.Clienter) (context.Context, *state.Global) {
 	if log == nil {
 		panic("code error NewContext() log=nil")
 	}
@@ -47,7 +47,7 @@ func NewTestContext(t testing.TB, buildVersion string, confString string) (conte
 		log = log2.NewTest(t, log2.LDebug)
 	}
 	log.SetFlags(log2.LTestFlags)
-	ctx, g := NewContext(log, tele_api.NewStub())
+	ctx, g := NewContext(log, tele_api.NewClientStub())
 	g.BuildVersion = buildVersion
 	g.MustInit(ctx, state.MustReadConfig(log, fs, "test-inline"))
 

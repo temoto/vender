@@ -29,7 +29,7 @@ const defaultReadLimit = 1 << 20
 
 var (
 	ErrSameClient    = fmt.Errorf("clientid overtake")
-	ErrClosing       = fmt.Errorf("server is closing")
+	ErrServerClosing = fmt.Errorf("server is closing")
 	ErrNoSubscribers = fmt.Errorf("no subscribers")
 )
 
@@ -118,7 +118,7 @@ func (s *Server) Close() error {
 	helpers.WithLock(s.backends.RLocker(), func() {
 		for _, b := range s.backends.m {
 			switch err := b.die(nil); err {
-			case nil, ErrClosing, io.EOF:
+			case nil, ErrServerClosing, io.EOF:
 
 			default:
 				errs = append(errs, err)
@@ -333,10 +333,7 @@ func (s *Server) onAccept(ctx context.Context, conn transport.Conn, opt *Backend
 
 	connack.ReturnCode = packet.ConnectionAccepted
 	requestedKeepAlive := time.Duration(pktConnect.KeepAlive) * time.Second
-	if requestedKeepAlive == 0 || requestedKeepAlive > opt.NetworkTimeout {
-		requestedKeepAlive = opt.NetworkTimeout
-	}
-	conn.SetReadTimeout(requestedKeepAlive + time.Duration(requestedKeepAlive/2)*time.Second)
+	conn.SetReadTimeout(requestedKeepAlive + requestedKeepAlive/2 + opt.NetworkTimeout)
 	err = conn.Send(connack, false)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -398,7 +395,7 @@ func (s *Server) processConn(conn transport.Conn, opt *BackendOptions) {
 		var pkt packet.Generic
 		pkt, err = b.Receive()
 		if !b.alive.IsRunning() || !s.alive.IsRunning() {
-			_ = b.die(ErrClosing)
+			_ = b.die(ErrServerClosing)
 			break
 		}
 		if err != nil {
@@ -415,7 +412,7 @@ func (s *Server) processConn(conn transport.Conn, opt *BackendOptions) {
 	b.alive.WaitTasks()
 
 	// mandatory cleanup on backend closed
-	closeErr := b.die(ErrClosing)
+	closeErr := b.die(ErrServerClosing)
 	will, clean := b.getWill()
 	helpers.WithLock(&s.backends, func() {
 		if ex := s.backends.m[b.id]; b == ex {
@@ -537,11 +534,4 @@ func (s *Server) subscribe(b *backend, subs []packet.Subscription, pktSubAck *pa
 			}()
 		}
 	}
-}
-
-func addrString(a net.Addr) string {
-	if a == nil {
-		return ""
-	}
-	return a.String()
 }

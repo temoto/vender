@@ -18,6 +18,8 @@ var (
 	errInvalidArg = fmt.Errorf("invalid arg")
 )
 
+type CommandCallback = func(context.Context, []byte) bool
+
 func (self *tele) onCommandMessage(ctx context.Context, payload []byte) bool {
 	cmd := new(tele_api.Command)
 	err := proto.Unmarshal(payload, cmd)

@@ -164,7 +164,7 @@ engine { inventory {
 				Engine:    engine.NewEngine(log),
 				Inventory: new(inventory.Inventory),
 				Log:       log,
-				Tele:      tele_api.NewStub(),
+				Tele:      tele_api.NewClientStub(),
 			}
 			ctx := context.Background()
 			ctx = context.WithValue(ctx, log2.ContextKey, log)
