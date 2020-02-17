@@ -11,6 +11,7 @@ import (
 	"github.com/temoto/vender/log2"
 	tele_api "github.com/temoto/vender/tele"
 	tele_config "github.com/temoto/vender/tele/config"
+	"github.com/temoto/vender/tele/mqtt"
 )
 
 const (
@@ -28,25 +29,28 @@ const (
 type tele struct { //nolint:maligned
 	config        tele_config.Config
 	log           *log2.Log
-	transport     Transporter
 	q             *spq.Queue
 	stateCh       chan tele_api.State
 	stopCh        chan struct{}
 	vmId          int32
 	stateInterval time.Duration
 	stat          tele_api.Stat
+
+	// MQTT section
+
+	mqtt           *mqtt.Client
+	topicState     string
+	topicTelemetry string
+	topicCommand   string
 }
 
 func New() tele_api.Teler {
 	return &tele{}
 }
-func NewWithTransporter(trans Transporter) tele_api.Teler {
-	return &tele{transport: trans}
-}
 
 func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config) error {
 	self.config = teleConfig
-	self.log = log
+	self.log = log.Clone(log2.LInfo)
 	if self.config.LogDebug {
 		self.log.SetLevel(log2.LDebug)
 	}
@@ -57,11 +61,7 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	self.stateInterval = helpers.IntSecondDefault(self.config.StateIntervalSec, defaultStateInterval)
 	self.stat.Locked_Reset()
 
-	// test code sets .transport
-	if self.transport == nil { // production path
-		self.transport = &transportMqtt{}
-	}
-	if err := self.transport.Init(ctx, log, teleConfig, self.onCommandMessage); err != nil {
+	if err := self.mqttInit(ctx, self.onCommandMessage); err != nil {
 		return errors.Annotate(err, "tele transport")
 	}
 
@@ -89,6 +89,7 @@ func (self *tele) Close() {
 	if self.q != nil {
 		self.q.Close()
 	}
+	_ = self.mqtt.Close()
 }
 
 func (self *tele) stateWorker() {
@@ -102,15 +103,15 @@ func (self *tele) stateWorker() {
 		case next := <-self.stateCh:
 			if next != tele_api.State(b[0]) {
 				b[0] = byte(next)
-				sent = self.transport.SendState(b[:])
+				sent = self.sendState(b[:])
 			}
 
 		case <-tmrRegular.C:
-			sent = self.transport.SendState(b[:])
+			sent = self.sendState(b[:])
 
 		case <-tmrRetry.C:
 			if !sent {
-				sent = self.transport.SendState(b[:])
+				sent = self.sendState(b[:])
 			}
 
 		case <-self.stopCh:
@@ -238,7 +239,7 @@ func (self *tele) qsendResponse(r *tele_api.Response) bool {
 		self.log.Errorf("CRITICAL response Marshal r=%#v err=%v", r, err)
 		return true // retry will not help
 	}
-	return self.transport.SendCommandResponse(r.INTERNALTopic, payload)
+	return self.sendCommandResponse(r.INTERNALTopic, payload)
 }
 
 func (self *tele) qsendTelemetry(tm *tele_api.Telemetry) bool {
@@ -248,5 +249,5 @@ func (self *tele) qsendTelemetry(tm *tele_api.Telemetry) bool {
 		return true // retry will not help
 	}
 	// self.log.Debugf("SendTelemetry %x", payload)
-	return self.transport.SendTelemetry(payload)
+	return self.sendTelemetry(payload)
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -77,7 +76,7 @@ func (b *backend) Options() BackendOptions { return *b.opt }
 func (b *backend) ExpectAck(ctx context.Context, id packet.ID) *future.Future {
 	f := future.New()
 	if !b.alive.Add(1) {
-		f.Cancel(ErrClosing)
+		f.Cancel(ErrServerClosing)
 		return f
 	}
 	go func() {
@@ -103,7 +102,7 @@ func (b *backend) ExpectAck(ctx context.Context, id packet.ID) *future.Future {
 // TODO qos1 ack-timeout retry
 func (b *backend) Publish(ctx context.Context, id packet.ID, msg *packet.Message) error {
 	if !b.alive.Add(1) {
-		return ErrClosing
+		return ErrServerClosing
 	}
 	defer b.alive.Done()
 
@@ -143,7 +142,7 @@ func (b *backend) Publish(ctx context.Context, id packet.ID, msg *packet.Message
 func (b *backend) Receive() (packet.Generic, error) {
 	conn := b.getConn()
 	if conn == nil {
-		return nil, ErrClosing
+		return nil, ErrServerClosing
 	}
 	pkt, err := conn.Receive()
 	b.log.Debugf("mqtt recv addr=%s id=%s pkt=%s err=%v", addrString(conn.RemoteAddr()), b.id, PacketString(pkt), err)
@@ -158,7 +157,7 @@ func (b *backend) Receive() (packet.Generic, error) {
 	default:
 		if !b.alive.IsRunning() && isClosedConn(err) {
 			// conn.Close was used to interrupt blocking Send/Receive
-			return nil, ErrClosing
+			return nil, ErrServerClosing
 		}
 		_ = b.die(err)
 		return nil, err
@@ -168,13 +167,13 @@ func (b *backend) Receive() (packet.Generic, error) {
 func (b *backend) Send(pkt packet.Generic) error {
 	conn := b.getConn()
 	if conn == nil {
-		return ErrClosing
+		return ErrServerClosing
 	}
 	b.log.Debugf("mqtt send id=%s pkt=%s", b.id, PacketString(pkt))
 	if err := b.conn.Send(pkt, false); err != nil {
 		if !b.alive.IsRunning() && isClosedConn(err) {
 			// conn.Close was used to interrupt blocking Send/Receive
-			return ErrClosing
+			return ErrServerClosing
 		}
 		err = errors.Annotatef(err, "clientid=%s", b.id)
 		return b.die(err)
@@ -240,8 +239,4 @@ func (b *backend) onDisconnect() {
 	b.willmu.Lock()
 	b.will = nil
 	b.willmu.Unlock()
-}
-
-func isClosedConn(e error) bool {
-	return e != nil && strings.HasSuffix(e.Error(), "use of closed network connection")
 }
