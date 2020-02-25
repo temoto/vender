@@ -16,6 +16,7 @@ require (
 	github.com/mattn/go-tty v0.0.0-20181127064339-e4f871175a2f // indirect
 	github.com/paulrosania/go-charset v0.0.0-20151028000031-621bb39fcc83
 	github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942 // indirect
+	github.com/skip2/go-qrcode v0.0.0-20191027152451-9434209cb086
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/temoto/alive v1.1.0

@@ -8,6 +8,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/iodin/client/go-iodin"
+	"github.com/temoto/vender/hardware/display"
 	"github.com/temoto/vender/hardware/hd44780"
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/mdb"
@@ -19,6 +20,10 @@ import (
 )
 
 type hardware struct {
+	Display struct {
+		once
+		d *display.Display
+	}
 	HD44780 struct {
 		once
 		Device  *hd44780.LCD
@@ -52,6 +57,23 @@ type devWrap struct {
 	name     string
 	dev      Devicer
 	required bool
+}
+
+func (g *Global) Display() (*display.Display, error) {
+	x := &g.Hardware.Display // short alias
+	_ = x.do(func() error {
+		cfg := &g.Config.Hardware.Display
+		switch {
+		case cfg.Framebuffer != "":
+			x.d, x.err = display.NewFb(cfg.Framebuffer)
+			return x.err
+
+		default:
+			// return fmt.Errorf("config: no display device (try framebuffer)")
+			return nil
+		}
+	})
+	return x.d, x.err
 }
 
 func (g *Global) Iodin() (*iodin.Client, error) {

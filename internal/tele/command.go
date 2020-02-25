@@ -8,9 +8,14 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
+	"github.com/skip2/go-qrcode"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/state"
 	tele_api "github.com/temoto/vender/tele"
+)
+
+var (
+	errInvalidArg = fmt.Errorf("invalid arg")
 )
 
 func (self *tele) onCommandMessage(ctx context.Context, payload []byte) bool {
@@ -22,34 +27,44 @@ func (self *tele) onCommandMessage(ctx context.Context, payload []byte) bool {
 		return true
 	}
 	self.log.Debugf("tele command raw=%x task=%#v", payload, cmd.String())
-	// TODO store command in persistent queue, send MQTT ack, execute later
-	self.dispatchCommand(ctx, cmd)
+
+	now := time.Now().UnixNano()
+	if cmd.Deadline != 0 && now > cmd.Deadline {
+		self.CommandReplyErr(cmd, fmt.Errorf("deadline"))
+	} else {
+		// TODO store command in persistent queue, acknowledge now, execute later
+		err = self.dispatchCommand(ctx, cmd)
+		self.CommandReplyErr(cmd, err)
+	}
+
 	return true
 }
 
-func (self *tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) {
-	var err error
+func (self *tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) error {
 	switch task := cmd.Task.(type) {
 	case *tele_api.Command_Report:
-		err = self.cmdReport(ctx, cmd)
+		return self.cmdReport(ctx, cmd)
 
 	case *tele_api.Command_Lock:
-		err = self.cmdLock(ctx, cmd, task.Lock)
+		return self.cmdLock(ctx, cmd, task.Lock)
 
 	case *tele_api.Command_Exec:
-		err = self.cmdExec(ctx, cmd, task.Exec)
+		return self.cmdExec(ctx, cmd, task.Exec)
 
 	case *tele_api.Command_SetInventory:
-		err = self.cmdSetInventory(ctx, cmd, task.SetInventory)
+		return self.cmdSetInventory(ctx, cmd, task.SetInventory)
 
 	case *tele_api.Command_Stop:
-		err = self.cmdStop(ctx, cmd, task.Stop)
+		return self.cmdStop(ctx, cmd, task.Stop)
+
+	case *tele_api.Command_Show_QR:
+		return self.cmdShowQR(ctx, cmd, task.Show_QR)
 
 	default:
-		err = fmt.Errorf("unknown command=%#v", cmd)
-		self.log.Error(err.Error())
+		err := fmt.Errorf("unknown command=%#v", cmd)
+		self.log.Error(err)
+		return err
 	}
-	self.CommandReplyErr(cmd, err)
 }
 
 func (self *tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
@@ -84,7 +99,7 @@ func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 
 func (self *tele) cmdSetInventory(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgSetInventory) error {
 	if arg == nil || arg.New == nil {
-		return errors.Errorf("invalid arg")
+		return errInvalidArg
 	}
 
 	g := state.GetGlobal(ctx)
@@ -94,7 +109,7 @@ func (self *tele) cmdSetInventory(ctx context.Context, cmd *tele_api.Command, ar
 
 func (self *tele) cmdStop(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgStop) error {
 	if arg == nil {
-		return errors.Errorf("invalid arg")
+		return errInvalidArg
 	}
 
 	g := state.GetGlobal(ctx)
@@ -121,4 +136,19 @@ func (self *tele) cmdStop(ctx context.Context, cmd *tele_api.Command, arg *tele_
 		})
 	}()
 	return nil
+}
+
+func (self *tele) cmdShowQR(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgShowQR) error {
+	if arg == nil {
+		return errInvalidArg
+	}
+
+	g := state.GetGlobal(ctx)
+	display, err := g.Display()
+	if err != nil {
+		return errors.Annotate(err, "display")
+	}
+	// TODO display.Layout(arg.Layout)
+	// TODO border,redundancy from layout/config
+	return display.QR(arg.QrText, true, qrcode.High)
 }

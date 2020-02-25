@@ -53,8 +53,8 @@ message Telemetry {
   message Money {
     uint32 total_bills = 1;
     uint32 total_coins = 2;
-    map<uint32,uint32> bills = 3;
-    map<uint32,uint32> coins = 4;
+    map<uint32, uint32> bills = 3;
+    map<uint32, uint32> coins = 4;
   }
 
   message Transaction {
@@ -69,8 +69,8 @@ message Telemetry {
 
   message Stat {
     uint32 activity = 1;
-    map<uint32,uint32> bill_rejected = 16;
-    map<uint32,uint32> coin_rejected = 17;
+    map<uint32, uint32> bill_rejected = 16;
+    map<uint32, uint32> coin_rejected = 17;
     uint32 coin_slug = 18;
   }
 }
@@ -93,6 +93,7 @@ message Command {
     ArgSetInventory set_inventory = 19;
     ArgSetConfig set_config = 20;
     ArgStop stop = 21;
+    ArgShowQR show_QR = 22;
   }
 
   message ArgReport {}
@@ -106,8 +107,10 @@ message Command {
     string name = 1;
     bytes new = 2;
   }
-  message ArgStop {
-    int32 timeout = 1;
+  message ArgStop { int32 timeout = 1; }
+  message ArgShowQR {
+    string layout = 1;
+    string qr_text = 2;
   }
 }
 message Response {

@@ -34,7 +34,10 @@ type Config struct {
 			Required bool   `hcl:"required"`
 		} `hcl:"device"`
 		Evend   evend_config.Config `hcl:"evend"`
-		HD44780 struct {            //nolint:maligned
+		Display struct {
+			Framebuffer string `hcl:"framebuffer"`
+		}
+		HD44780 struct { //nolint:maligned
 			Enable        bool           `hcl:"enable"`
 			Codepage      string         `hcl:"codepage"`
 			PinChip       string         `hcl:"pin_chip"`

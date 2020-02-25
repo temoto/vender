@@ -90,11 +90,12 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	g.Config.Money.CreditMax *= g.Config.Money.Scale
 	g.Config.Money.ChangeOverCompensate *= g.Config.Money.Scale
 
-	const initTasks = 3
+	const initTasks = 4
 	wg := sync.WaitGroup{}
 	wg.Add(initTasks)
 	errch := make(chan error, initTasks)
 
+	go helpers.WrapErrChan(&wg, errch, g.initDisplay)
 	go helpers.WrapErrChan(&wg, errch, g.initInput)
 	go helpers.WrapErrChan(&wg, errch, func() error { return g.initInventory(ctx) }) // storage read
 	go helpers.WrapErrChan(&wg, errch, g.initEngine)
@@ -181,6 +182,14 @@ func (g *Global) UI() types.UIer {
 		g.Log.Errorf("CRITICAL g.uier is not set")
 		time.Sleep(5 * time.Second)
 	}
+}
+
+func (g *Global) initDisplay() error {
+	d, err := g.Display()
+	if d != nil {
+		d.Clear()
+	}
+	return err
 }
 
 func (g *Global) initEngine() error {
