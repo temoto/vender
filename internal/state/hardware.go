@@ -8,11 +8,12 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/iodin/client/go-iodin"
+	"github.com/temoto/vender/hardware/hd44780"
 	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb"
 	mdb_client "github.com/temoto/vender/hardware/mdb/client"
 	"github.com/temoto/vender/hardware/mega-client"
+	"github.com/temoto/vender/hardware/text_display"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 )
@@ -20,8 +21,8 @@ import (
 type hardware struct {
 	HD44780 struct {
 		once
-		Device  *lcd.LCD
-		Display *lcd.TextDisplay
+		Device  *hd44780.LCD
+		Display *text_display.TextDisplay
 	}
 	Input *input.Dispatch
 	Mdb   struct {
@@ -131,18 +132,18 @@ func (g *Global) Mega() (*mega.Client, error) {
 	return x.client, x.err
 }
 
-func (g *Global) MustDisplay() *lcd.TextDisplay {
-	d, err := g.Display()
+func (g *Global) MustTextDisplay() *text_display.TextDisplay {
+	d, err := g.TextDisplay()
 	if err != nil {
 		g.Log.Fatal(err)
 	}
 	if d == nil {
-		g.Log.Fatal("display is not available")
+		g.Log.Fatal("text display is not available")
 	}
 	return d
 }
 
-func (g *Global) Display() (*lcd.TextDisplay, error) {
+func (g *Global) TextDisplay() (*text_display.TextDisplay, error) {
 	x := &g.Hardware.HD44780
 	_ = x.do(func() error {
 		if x.Display != nil { // state-new testing mode
@@ -151,33 +152,33 @@ func (g *Global) Display() (*lcd.TextDisplay, error) {
 
 		devConfig := &g.Config.Hardware.HD44780
 		if !devConfig.Enable {
-			g.Log.Infof("display hardware disabled")
+			g.Log.Infof("text display hd44780 is disabled")
 			return nil
 		}
 
-		devWrap := new(lcd.LCD)
+		devWrap := new(hd44780.LCD)
 		if err := devWrap.Init(devConfig.PinChip, devConfig.Pinmap, devConfig.Page1); err != nil {
-			err = errors.Annotatef(err, "lcd.Init config=%#v", devConfig)
+			err = errors.Annotatef(err, "hd44780.Init config=%#v", devConfig)
 			return err
 		}
-		ctrl := lcd.ControlOn
+		ctrl := hd44780.ControlOn
 		if devConfig.ControlBlink {
-			ctrl |= lcd.ControlBlink
+			ctrl |= hd44780.ControlBlink
 		}
 		if devConfig.ControlCursor {
-			ctrl |= lcd.ControlUnderscore
+			ctrl |= hd44780.ControlUnderscore
 		}
 		devWrap.SetControl(ctrl)
 		x.Device = devWrap
 
-		displayConfig := &lcd.TextDisplayConfig{
+		displayConfig := &text_display.TextDisplayConfig{
 			Width:       uint32(devConfig.Width),
 			Codepage:    devConfig.Codepage,
 			ScrollDelay: time.Duration(devConfig.ScrollDelay) * time.Millisecond,
 		}
-		disp, err := lcd.NewTextDisplay(displayConfig)
+		disp, err := text_display.NewTextDisplay(displayConfig)
 		if err != nil {
-			return errors.Annotatef(err, "lcd.NewTextDisplay config=%#v", displayConfig)
+			return errors.Annotatef(err, "NewTextDisplay config=%#v", displayConfig)
 		}
 		x.Display = disp
 		x.Display.SetDevice(devWrap)

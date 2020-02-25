@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/spq"
 	"github.com/temoto/vender/hardware"
-	"github.com/temoto/vender/hardware/lcd"
+	"github.com/temoto/vender/hardware/text_display"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/money"
@@ -142,7 +142,7 @@ func TestCommand(t *testing.T) {
 			before: func(t testing.TB, env *tenv) {
 				g := state.GetGlobal(env.ctx)
 				g.Config.Tele.FIXME_stopDelaySec = 1
-				g.Hardware.HD44780.Display = lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: 16})
+				g.Hardware.HD44780.Display = text_display.NewMockTextDisplay(&text_display.TextDisplayConfig{Width: 16})
 				ms := money.MoneySystem{}
 				require.NoError(t, ms.Start(env.ctx))
 				uix := &ui.UI{}

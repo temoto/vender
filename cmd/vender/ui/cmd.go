@@ -27,7 +27,7 @@ func Main(ctx context.Context, config *state.Config) error {
 	g.Log.Debugf("config=%+v", g.Config)
 
 	g.Log.Debugf("Init display")
-	display := g.MustDisplay()
+	display := g.MustTextDisplay()
 
 	// helper to display all CLCD characters
 	var bb [32]byte

@@ -9,8 +9,8 @@ import (
 	"github.com/temoto/alive"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/hardware/lcd"
 	"github.com/temoto/vender/hardware/mdb/evend"
+	"github.com/temoto/vender/hardware/text_display"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
@@ -252,7 +252,7 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 		t2 = formatScale(self.FrontResult.Sugar, 0, MaxSugar, ScaleAlpha)
 		next = StateFrontTune
 	}
-	t2 = append(append(append(make([]byte, 0, lcd.MaxWidth), '-', ' '), t2...), ' ', '+')
+	t2 = append(append(append(make([]byte, 0, text_display.MaxWidth), '-', ' '), t2...), ' ', '+')
 	self.display.SetLinesBytes(
 		self.display.JustCenter(t1),
 		self.display.JustCenter(t2),

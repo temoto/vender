@@ -1,4 +1,4 @@
-package lcd
+package text_display
 
 import (
 	"bytes"
@@ -12,9 +12,6 @@ import (
 	_ "github.com/paulrosania/go-charset/data"
 	"github.com/temoto/alive"
 )
-
-// TODO extract this generic text display code
-// away from hardware HD44780/MT-16 driver
 
 const MaxWidth = 40
 
@@ -77,7 +74,7 @@ func (self *TextDisplay) SetCodepage(cp string) error {
 	self.tr.Store(tr)
 	return nil
 }
-func (self *TextDisplay) SetDevice(dev *LCD) {
+func (self *TextDisplay) SetDevice(dev Devicer) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 

@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/hardware/lcd"
+	"github.com/temoto/vender/hardware/text_display"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/internal/ui"
@@ -21,8 +21,8 @@ type tenv struct {
 	g   *state.Global
 	ui  *ui.UI
 
-	display        *lcd.TextDisplay
-	displayUpdated chan lcd.State
+	display        *text_display.TextDisplay
+	displayUpdated chan text_display.State
 	uiState        chan ui.State
 	_T             func(l1, l2 string) string
 	_Key           func(types.InputKey) types.Event
@@ -42,7 +42,7 @@ type step struct {
 }
 
 func uiTestSetup(t testing.TB, env *tenv, initState, endState ui.State) {
-	env.display = lcd.NewMockTextDisplay(&lcd.TextDisplayConfig{Width: testDisplayWidth})
+	env.display = text_display.NewMockTextDisplay(&text_display.TextDisplayConfig{Width: testDisplayWidth})
 	env.g.Hardware.HD44780.Display = env.display
 	env.ui = &ui.UI{
 		XXX_testHook: func(s ui.State) {
@@ -66,12 +66,12 @@ func uiTestSetup(t testing.TB, env *tenv, initState, endState ui.State) {
 	err := env.ui.Init(env.ctx)
 	require.NoError(t, err)
 	env.ui.XXX_testSetState(initState)
-	env.displayUpdated = make(chan lcd.State)
+	env.displayUpdated = make(chan text_display.State)
 	env.display.SetUpdateChan(env.displayUpdated)
 	env._T = func(l1, l2 string) string {
 		return fmt.Sprintf("%s\n%s",
-			lcd.PadSpace(env.display.Translate(l1), testDisplayWidth),
-			lcd.PadSpace(env.display.Translate(l2), testDisplayWidth),
+			text_display.PadSpace(env.display.Translate(l1), testDisplayWidth),
+			text_display.PadSpace(env.display.Translate(l2), testDisplayWidth),
 		)
 	}
 	env._Key = func(k types.InputKey) types.Event {

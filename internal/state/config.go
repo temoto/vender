@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/hcl"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
-	"github.com/temoto/vender/hardware/lcd"
+	"github.com/temoto/vender/hardware/hd44780"
 	mdb_config "github.com/temoto/vender/hardware/mdb/config"
 	evend_config "github.com/temoto/vender/hardware/mdb/evend/config"
 	"github.com/temoto/vender/helpers"
@@ -35,15 +35,15 @@ type Config struct {
 		} `hcl:"device"`
 		Evend   evend_config.Config `hcl:"evend"`
 		HD44780 struct {            //nolint:maligned
-			Enable        bool       `hcl:"enable"`
-			Codepage      string     `hcl:"codepage"`
-			PinChip       string     `hcl:"pin_chip"`
-			Pinmap        lcd.PinMap `hcl:"pinmap"`
-			Page1         bool       `hcl:"page1"`
-			Width         int        `hcl:"width"`
-			ControlBlink  bool       `hcl:"blink"`
-			ControlCursor bool       `hcl:"cursor"`
-			ScrollDelay   int        `hcl:"scroll_delay"`
+			Enable        bool           `hcl:"enable"`
+			Codepage      string         `hcl:"codepage"`
+			PinChip       string         `hcl:"pin_chip"`
+			Pinmap        hd44780.PinMap `hcl:"pinmap"`
+			Page1         bool           `hcl:"page1"`
+			Width         int            `hcl:"width"`
+			ControlBlink  bool           `hcl:"blink"`
+			ControlCursor bool           `hcl:"cursor"`
+			ScrollDelay   int            `hcl:"scroll_delay"`
 		}
 		IodinPath string `hcl:"iodin_path"`
 		Input     struct {

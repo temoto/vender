@@ -1,6 +1,4 @@
-package lcd
-
-import "sync/atomic"
+package text_display
 
 func NewMockTextDisplay(opt *TextDisplayConfig) *TextDisplay {
 	dev := new(MockDevicer)
@@ -19,14 +17,14 @@ type MockDevicer struct {
 
 func (self *MockDevicer) Clear() {}
 
-func (self *MockDevicer) Control() Control {
-	return Control(atomic.LoadUint32(&self.c))
-}
+// func (self *MockDevicer) Control() Control {
+// 	return Control(atomic.LoadUint32(&self.c))
+// }
 
 func (self *MockDevicer) CursorYX(y, x uint8) bool { return true }
 
-func (self *MockDevicer) SetControl(c Control) Control {
-	return Control(atomic.SwapUint32(&self.c, uint32(c)))
-}
+// func (self *MockDevicer) SetControl(c Control) Control {
+// 	return Control(atomic.SwapUint32(&self.c, uint32(c)))
+// }
 
 func (self *MockDevicer) Write(b []byte) {}

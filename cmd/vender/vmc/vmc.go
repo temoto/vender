@@ -21,7 +21,7 @@ func VmcMain(ctx context.Context, config *state.Config) error {
 	g := state.GetGlobal(ctx)
 	g.MustInit(ctx, config)
 
-	display := g.MustDisplay()
+	display := g.MustTextDisplay()
 	display.SetLines("boot "+g.BuildVersion, g.Config.UI.Front.MsgWait)
 
 	mdbus, err := g.Mdb()
@@ -57,7 +57,7 @@ func BrokenMain(ctx context.Context, config *state.Config) error {
 	g := state.GetGlobal(ctx)
 	g.MustInit(ctx, config)
 
-	display := g.MustDisplay()
+	display := g.MustTextDisplay()
 	display.SetLines("boot "+g.BuildVersion, g.Config.UI.Front.MsgWait)
 
 	subcmd.SdNotify(daemon.SdNotifyReady)

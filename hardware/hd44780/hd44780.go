@@ -1,4 +1,4 @@
-package lcd
+package hd44780
 
 import (
 	"strconv"

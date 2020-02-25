@@ -1,4 +1,4 @@
-package lcd
+package text_display
 
 import (
 	"strings"

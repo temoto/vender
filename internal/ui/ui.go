@@ -7,7 +7,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
-	"github.com/temoto/vender/hardware/lcd"
+	"github.com/temoto/vender/hardware/text_display"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
@@ -25,7 +25,7 @@ type UI struct { //nolint:maligned
 	state        State
 	broken       bool
 	menu         Menu
-	display      *lcd.TextDisplay // FIXME
+	display      *text_display.TextDisplay // FIXME
 	lastActivity time.Time
 	inputBuf     []byte
 	eventch      chan types.Event
@@ -51,7 +51,7 @@ func (self *UI) Init(ctx context.Context) error {
 	}
 	self.g.Log.Debugf("menu len=%d", len(self.menu))
 
-	self.display = self.g.MustDisplay()
+	self.display = self.g.MustTextDisplay()
 	self.eventch = make(chan types.Event)
 	self.inputBuf = make([]byte, 0, 32)
 	self.inputch = self.g.Hardware.Input.SubscribeChan("ui", self.g.Alive.StopChan())
