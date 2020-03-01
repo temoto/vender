@@ -148,6 +148,9 @@ func (self *tele) cmdShowQR(ctx context.Context, cmd *tele_api.Command, arg *tel
 	if err != nil {
 		return errors.Annotate(err, "display")
 	}
+	if display == nil {
+		return fmt.Errorf("display is not configured")
+	}
 	// TODO display.Layout(arg.Layout)
 	// TODO border,redundancy from layout/config
 	return display.QR(arg.QrText, true, qrcode.High)
