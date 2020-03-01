@@ -10,7 +10,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/paulrosania/go-charset/charset"
 	_ "github.com/paulrosania/go-charset/data"
-	"github.com/temoto/alive"
+	"github.com/temoto/alive/v2"
 )
 
 const MaxWidth = 40

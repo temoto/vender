@@ -81,8 +81,6 @@ github.com/stretchr/testify v1.4.0 h1:2E4SXV/wtOkTonXsotYi4li6zVWxYlZuYNCXe9XRJy
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/syndtr/goleveldb v1.0.0 h1:fBdIW9lB4Iz0n9khmH8w27SJ3QEJ7+IgjPEwGSZiFdE=
 github.com/syndtr/goleveldb v1.0.0/go.mod h1:ZVVdQEZoIme9iO1Ch2Jdy24qqXrMMOU6lpPAyBWyWuQ=
-github.com/temoto/alive v1.1.0 h1:0g3gV4WwoebCUnBpt8RmB10nKXUYoUWR9lzbpxVcCUA=
-github.com/temoto/alive v1.1.0/go.mod h1:s19nS19zLsjSlTv44kDgq8OoQavtzwwVZP5gOK9Ph68=
 github.com/temoto/alive/v2 v2.0.0 h1:fg4GedQVXGYacFqnVGTVCKlAlbOlg5aKQPUaz+6AzQQ=
 github.com/temoto/alive/v2 v2.0.0/go.mod h1:N7hD09ZMHIjxIvDi4yy6Ey7YjQQmfFplxP+9G+pJcPo=
 github.com/temoto/extremofile v0.5.0 h1:eadF+qMsK8krR2GqemEdUcSttfCnkzs6LcE85G3BQZw=

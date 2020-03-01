@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
-	"github.com/temoto/alive"
+	"github.com/temoto/alive/v2"
 	"github.com/temoto/vender/internal/types"
 	tele_api "github.com/temoto/vender/tele"
 )

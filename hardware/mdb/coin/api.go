@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/juju/errors"
-	"github.com/temoto/alive"
+	"github.com/temoto/alive/v2"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/internal/engine"

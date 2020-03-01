@@ -19,7 +19,6 @@ require (
 	github.com/skip2/go-qrcode v0.0.0-20191027152451-9434209cb086
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.4.0
-	github.com/temoto/alive v1.1.0
 	github.com/temoto/alive/v2 v2.0.0
 	github.com/temoto/extremofile v0.5.0
 	github.com/temoto/gpio-cdev-go v0.12.1-0.20191005112838-85f703f8e92e
