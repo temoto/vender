@@ -44,7 +44,7 @@ type tele struct { //nolint:maligned
 	topicCommand   string
 }
 
-func New() tele_api.Teler {
+func New() tele_api.Clienter {
 	return &tele{}
 }
 

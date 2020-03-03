@@ -133,7 +133,7 @@ func (c *Client) Publish(ctx context.Context, msg *packet.Message) error {
 	// TODO loop try lock flowPublish with IsReady() && !ctx.Done && pubfu=nil
 	f, err := c.publishBegin(ctx, msg)
 	if err != nil {
-		return err
+		return errors.Annotate(err, "publishBegin")
 	}
 
 	switch err = f.Wait(c.opt.NetworkTimeout); err {
@@ -141,12 +141,12 @@ func (c *Client) Publish(ctx context.Context, msg *packet.Message) error {
 		return nil
 
 	case future.ErrCanceled:
-		return c.flowPublish.fu.Result().(error)
+		return f.Result().(error)
 
 	case future.ErrTimeout:
 		// TODO resend with DUP
 		err = errors.Timeoutf("Publish ack")
-		c.flowPublish.fu.Cancel(err)
+		f.Cancel(err)
 		return c.disconnect(err)
 
 	default:
@@ -226,14 +226,16 @@ func (c *Client) disconnect(err error) error {
 
 // Retry on err client.ErrClientNotConnected or future.ErrTimeout
 func (c *Client) publishBegin(ctx context.Context, msg *packet.Message) (*future.Future, error) {
+	c.opt.Log.Debugf("publishBegin start %s", msg.Topic)
+	defer c.opt.Log.Debugf("publishBegin end %s", msg.Topic)
 	if err := c.WaitReady(ctx); err != nil {
-		return nil, err
+		return nil, errors.Annotate(err, "WaitReady")
 	}
 	c.flowPublish.Lock()
 	defer c.flowPublish.Unlock()
 	if fprev := c.flowPublish.fu; fprev != nil {
 		if err := fprev.Wait(1); err == future.ErrTimeout {
-			return nil, err
+			return nil, errors.Annotate(err, "concurrent publish")
 		}
 	}
 
@@ -248,12 +250,14 @@ func (c *Client) publishBegin(ctx context.Context, msg *packet.Message) (*future
 		return nil, errors.Annotate(err, "send PUBLISH")
 	}
 
-	c.flowPublish.fu = future.New()
-	c.flowPublish.id = publish.ID
+	f := future.New()
 	if msg.QOS == packet.QOSAtMostOnce {
-		c.flowPublish.fu.Complete(nil)
+		f.Complete(nil)
+	} else {
+		c.flowPublish.fu = f
+		c.flowPublish.id = publish.ID
 	}
-	return c.flowPublish.fu, nil
+	return f, nil
 }
 
 func (c *Client) nextID() packet.ID {
@@ -312,6 +316,7 @@ func (c *Client) onPuback(id packet.ID) {
 		return
 	}
 	c.flowPublish.fu.Complete(id)
+	c.flowPublish.fu = nil
 }
 
 func (c *Client) send(pkt packet.Generic) error {

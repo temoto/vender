@@ -201,8 +201,7 @@ func (b *backend) RemoteAddr() net.Addr {
 }
 
 func (b *backend) die(e error) error {
-	err, found := b.err.StoreOnce(e)
-	if found {
+	if err, found := b.err.StoreOnce(e); found {
 		return err
 	}
 	b.log.Debugf("mqtt die id=%s e=%v", b.id, e)
@@ -214,7 +213,7 @@ func (b *backend) die(e error) error {
 			b.conn = nil
 		}
 	})
-	return err
+	return e
 }
 
 func (b *backend) getConn() transport.Conn {

@@ -37,7 +37,7 @@ type tenv struct { //nolint:maligned
 	ctx  context.Context
 	g    *state.Global
 	flag bool
-	tele tele_api.Teler
+	tele tele_api.Clienter
 	vmid int32
 
 	mqttMonitor     *mqtt.Client

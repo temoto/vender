@@ -28,7 +28,7 @@ type Global struct {
 	Hardware     hardware // hardware.go
 	Inventory    *inventory.Inventory
 	Log          *log2.Log
-	Tele         tele_api.Teler
+	Tele         tele_api.Clienter
 	// TODO UI           types.UIer
 
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
@@ -70,7 +70,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	}
 	// Tele.Init gets g.Log clone before SetErrorFunc, so Tele.Log.Error doesn't recurse on itself
 	if err := g.Tele.Init(ctx, g.Log.Clone(log2.LInfo), g.Config.Tele); err != nil {
-		g.Tele = tele_api.Noop{}
+		g.Tele = tele_api.NewClientStub()
 		return errors.Annotate(err, "tele init")
 	}
 	g.Log.SetErrorFunc(g.Tele.Error)

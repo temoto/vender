@@ -84,7 +84,8 @@ func (self *tele) sendState(payload []byte) bool {
 	msg := &packet.Message{Topic: self.topicState, Payload: payload, QOS: packet.QOSAtLeastOnce, Retain: true}
 	err := self.mqtt.Publish(context.Background(), msg)
 	if err != nil {
-		self.log.Errorf("tele: MQTT %s", err.Error())
+		err = errors.Annotate(err, "tele: sendState mqtt.Publish")
+		self.log.Error(err)
 	}
 	return err == nil
 }
@@ -94,7 +95,8 @@ func (self *tele) sendTelemetry(payload []byte) bool {
 	if err == nil {
 		msg := &packet.Message{Topic: self.topicTelemetry, Payload: payload, QOS: packet.QOSAtLeastOnce, Retain: true}
 		if err = self.mqtt.Publish(context.Background(), msg); err != nil {
-			self.log.Errorf("tele: MQTT %s", err.Error())
+			err = errors.Annotate(err, "tele: sendTelemetry mqtt.Publish")
+			self.log.Error(err)
 		}
 	}
 	return err == nil
@@ -107,7 +109,8 @@ func (self *tele) sendCommandResponse(topicSuffix string, payload []byte) bool {
 		self.log.Debugf("mqtt publish command response to topic=%s", topic)
 		msg := &packet.Message{Topic: topic, Payload: payload, QOS: packet.QOSAtLeastOnce, Retain: false}
 		if err = self.mqtt.Publish(context.Background(), msg); err != nil {
-			self.log.Errorf("tele: MQTT %s", err.Error())
+			err = errors.Annotate(err, "tele: sendCommandResponse mqtt.Publish")
+			self.log.Error(err)
 		}
 	}
 	return err == nil
