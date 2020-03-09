@@ -20,22 +20,38 @@ var (
 	ErrChangeRetainOverflow = errors.New("ReturnChange(retain>total)")
 )
 
-func (self *MoneySystem) locked_credit(includeEscrow bool) currency.Amount {
+type creditFlag uint16
+
+const (
+	creditInvalid = creditFlag(0)
+	creditCash    = creditFlag(1 << iota)
+	creditEscrow
+	creditGift
+	creditAll = creditCash | creditEscrow | creditGift
+)
+
+func (cf creditFlag) Contains(sub creditFlag) bool { return cf&sub != 0 }
+
+func (self *MoneySystem) locked_credit(flag creditFlag) currency.Amount {
 	result := currency.Amount(0)
-	if includeEscrow {
+	if flag.Contains(creditEscrow) {
 		result += self.bill.EscrowAmount()
 	}
-	result += self.dirty
-	// result += self.billCredit.Total()
-	// result += self.coinCredit.Total()
-	result += self.giftCredit
+	if flag.Contains(creditCash) {
+		result += self.dirty
+		// result += self.billCredit.Total()
+		// result += self.coinCredit.Total()
+	}
+	if flag.Contains(creditGift) {
+		result += self.giftCredit
+	}
 	return result
 }
 
 func (self *MoneySystem) Credit(ctx context.Context) currency.Amount {
 	self.lk.RLock()
 	defer self.lk.RUnlock()
-	return self.locked_credit(true)
+	return self.locked_credit(creditAll)
 }
 
 // TODO replace with WithdrawPrepare() -> []Spending{Cash: ..., Gift: ...}
@@ -66,12 +82,16 @@ func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Am
 	defer self.lk.Unlock()
 
 	self.Log.Debugf("%s amount=%s", tag, amount.FormatCtx(ctx))
-	includeEscrow := true // TODO configurable
-	available := self.locked_credit(includeEscrow)
+	available := self.locked_credit(creditAll)
 	if available < amount {
 		return ErrNeedMoreMoney
 	}
-	change := available - amount
+
+	change := currency.Amount(0)
+	// Don't give change from gift money.
+	if cash := self.locked_credit(creditCash | creditEscrow); cash > amount {
+		change = cash - amount
+	}
 
 	go func() {
 		self.lk.Lock()
@@ -123,10 +143,10 @@ func (self *MoneySystem) Abort(ctx context.Context) error {
 	self.lk.Lock()
 	defer self.lk.Unlock()
 
-	total := self.locked_credit(true)
-	self.Log.Debugf("%s credit=%s", tag, total.FormatCtx(ctx))
+	cash := self.locked_credit(creditCash | creditEscrow)
+	self.Log.Debugf("%s cash=%s", tag, cash.FormatCtx(ctx))
 
-	if err := self.locked_payout(ctx, total); err != nil {
+	if err := self.locked_payout(ctx, cash); err != nil {
 		err = errors.Annotate(err, tag)
 		state.GetGlobal(ctx).Tele.Error(err)
 		return err

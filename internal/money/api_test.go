@@ -1,7 +1,9 @@
 package money
 
 import (
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/temoto/vender/hardware"
@@ -44,4 +46,27 @@ func TestAbort(t *testing.T) {
 		"0c0000ffff": "",
 	})
 	require.NoError(t, ms.Stop(ctx))
+}
+
+func TestWithdrawGift(t *testing.T) {
+	t.Parallel()
+
+	ctx, g := state_new.NewTestContext(t, "", `money{scale=100}`)
+
+	require.NoError(t, hardware.Enum(ctx))
+	ms := MoneySystem{}
+	require.NoError(t, ms.Start(ctx))
+
+	gift := g.Config.ScaleU((rand.Uint32() % 100) + 3)
+	price := gift - g.Config.ScaleU(2)
+	ms.SetGiftCredit(ctx, gift)
+	require.NoError(t, ms.WithdrawPrepare(ctx, price))
+
+	// FIXME wait for change payout end
+	time.Sleep(200 * time.Millisecond)
+
+	ms.lk.RLock()
+	t.Logf("dirty=%s", ms.dirty.FormatCtx(ctx))
+	t.Logf("gift=%s", ms.giftCredit.FormatCtx(ctx))
+	ms.lk.RUnlock()
 }

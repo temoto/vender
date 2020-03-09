@@ -36,7 +36,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 	limit := maxConfig
 
 	self.lk.Lock()
-	available := self.locked_credit(true)
+	available := self.locked_credit(creditCash | creditEscrow)
 	self.lk.Unlock()
 	if available != 0 && limit >= available {
 		limit -= available
@@ -77,8 +77,10 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 				g.Error(errors.Annotatef(err, "money.bill credit.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
 				break
 			}
-			self.Log.Debugf("money.bill credit amount=%s bill=%s total=%s",
-				pi.Amount().FormatCtx(ctx), self.billCredit.Total().FormatCtx(ctx), self.locked_credit(true).FormatCtx(ctx))
+			self.Log.Debugf("money.bill credit amount=%s bill=%s cash=%s total=%s",
+				pi.Amount().FormatCtx(ctx), self.billCredit.Total().FormatCtx(ctx),
+				self.locked_credit(creditCash|creditEscrow).FormatCtx(ctx),
+				self.locked_credit(creditAll).FormatCtx(ctx))
 			self.dirty += pi.Amount()
 			alive.Stop()
 			if out != nil {
