@@ -38,8 +38,6 @@ func TestClientNominal(t *testing.T) {
 		p3, err := conn.Receive(ctx)
 		require.NoError(t, err)
 		log.Printf("server: receive p=%s err=%v", p3, err)
-		p3ack := telenet.NewPacketAck(p3)
-		require.NoError(t, conn.Send(ctx, &p3ack))
 
 		t.Logf("server: stat=%s", conn.Stat())
 	})
@@ -48,8 +46,8 @@ func TestClientNominal(t *testing.T) {
 	t.Logf("client: stream=%s", cliopt.StreamURL)
 	cli, err := telenet.NewClient(cliopt)
 	require.NoError(t, err)
-	assert.NoError(t, cli.Tx(context.Background(), &tele.Packet{State: tele.State_Boot}))
-	assert.NoError(t, cli.Tx(context.Background(), &tele.Packet{Telemetry: &tele.Telemetry{Error: &tele.Telemetry_Error{Message: "something bad happened"}}}))
+	assert.NoError(t, cli.Send(context.Background(), &tele.Packet{State: tele.State_Boot}))
+	assert.NoError(t, cli.Send(context.Background(), &tele.Packet{Telemetry: &tele.Telemetry{Error: &tele.Telemetry_Error{Message: "something bad happened"}}}))
 	cli.Close()
 	t.Logf("client: stat=%s", cli.Stat())
 }
@@ -62,6 +60,7 @@ func TestClientKeepalive(t *testing.T) {
 	log := log2.NewStderr(log2.LDebug) // useful with panics
 	log.SetFlags(log2.Lmicroseconds | log2.Lshortfile)
 	servopt := telenet.ConnOptions{
+		GetSecret:      func(string, *tele.Frame) ([]byte, error) { return []byte("secret123"), nil },
 		Log:            log,
 		NetworkTimeout: time.Second,
 		ReadLimit:      telenet.DefaultReadLimit,
@@ -84,8 +83,6 @@ func TestClientKeepalive(t *testing.T) {
 			} else {
 				assert.True(t, p.Ping)
 			}
-			pack := telenet.NewPacketAck(p)
-			require.NoError(t, conn.Send(ctx, &pack))
 		}
 
 		t.Logf("server: stat=%s", conn.Stat())
@@ -96,9 +93,9 @@ func TestClientKeepalive(t *testing.T) {
 	t.Logf("client: stream=%s", cliopt.StreamURL)
 	cli, err := telenet.NewClient(cliopt)
 	require.NoError(t, err)
-	assert.NoError(t, cli.Tx(context.Background(), &tele.Packet{State: tele.State_Boot}))
+	assert.NoError(t, cli.Send(context.Background(), &tele.Packet{State: tele.State_Boot}))
 	time.Sleep(1500 * time.Millisecond)
-	assert.NoError(t, cli.Tx(context.Background(), &tele.Packet{State: tele.State_Nominal}))
+	assert.NoError(t, cli.Send(context.Background(), &tele.Packet{State: tele.State_Nominal}))
 	cli.Close()
 	t.Logf("client: stat=%s", cli.Stat())
 }
@@ -112,11 +109,13 @@ func testClientOptions(log *log2.Log, stream string) *telenet.ClientOptions {
 	opt.Log = log.Clone(log2.LDebug)
 	opt.Log.SetPrefix("client: ")
 	opt.NetworkTimeout = time.Second
-	opt.GetSecret = func(_ string) []byte { return []byte("password") }
-	opt.OnPacket = func(from string, p *tele.Packet) error {
+	opt.GetSecret = func(string, *tele.Frame) ([]byte, error) { return []byte("password"), nil }
+	opt.OnPacket = func(conn telenet.Conn, p *tele.Packet) error {
+		from, _ := conn.ID()
 		log.Printf("client: onpacket from=%s p=%s", from, p)
 		return nil
 	}
+	opt.ReadLimit = telenet.DefaultReadLimit
 	return opt
 }
 
@@ -125,16 +124,9 @@ func testConnExpectHello(t testing.TB, ctx context.Context, conn telenet.Conn, a
 	require.NoError(t, err)
 	t.Logf("server: receive p=%s err=%v", p, err)
 	assert.True(t, p.Hello)
-	assert.False(t, p.Ack)
 	timestamp := time.Now().UnixNano()
 	assert.InDelta(t, timestamp, p.Time, float64(5*time.Second))
-
 	conn.SetID(p.AuthId, tele.VMID(p.VmId))
-
-	if ack {
-		pack := telenet.NewPacketAck(p)
-		require.NoError(t, conn.Send(ctx, &pack))
-	}
 	return p
 }
 
@@ -143,11 +135,6 @@ func testConnExpectState(t testing.TB, ctx context.Context, conn telenet.Conn, e
 	require.NoError(t, err)
 	t.Logf("server: receive p=%s err=%v", p, err)
 	assert.Equal(t, expect, p.State)
-
-	if ack {
-		pack := telenet.NewPacketAck(p)
-		require.NoError(t, conn.Send(ctx, &pack))
-	}
 	return p
 }
 

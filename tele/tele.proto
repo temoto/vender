@@ -1,6 +1,14 @@
 syntax = "proto3";
 package tele;
 
+message Frame {
+  uint64 sid = 1;
+  uint32 seq = 2;
+  uint32 sack = 3;
+  uint32 acks = 4;
+  Packet packet = 5;
+}
+
 message Inventory {
   repeated StockItem stocks = 1;
   message StockItem {
@@ -32,11 +40,8 @@ enum State {
 // Optimising for rare, bulk delivery on cell network.
 // "Touching network" is expensive, while 10 or 900 bytes is about same cost.
 message Packet {
-  uint32 seq = 1;
-  bool ack = 2;
-  int32 vm_id = 3;
-  int64 time = 4;
-  uint64 auth1 = 5;
+  int64 time = 1;
+  int32 vm_id = 2;
 
   bool ping = 10;
   State state = 11;
@@ -49,6 +54,7 @@ message Packet {
   uint32 keepalive_ms = 33;
   string build_version = 34;
   string auth_id = 35;
+  uint32 session_id = 36;
 
   string error = 43;
 }

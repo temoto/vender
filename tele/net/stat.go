@@ -60,6 +60,9 @@ func (c *Counters) Add(c2 *Counters) {
 }
 
 func (c *Counters) Register(p *tele.Packet) {
+	if p == nil { // ack-only frame
+		return
+	}
 	size := int64(proto.Size(p))
 	c.Total.Count.Add(1)
 	c.Total.Size.Add(size)

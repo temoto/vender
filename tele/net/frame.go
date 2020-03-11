@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"math"
 
 	"github.com/golang/protobuf/proto"
@@ -12,80 +13,111 @@ import (
 )
 
 var (
-	ErrFrameInvalid             = fmt.Errorf("frame is invalid")
-	ErrFrameLargeNotImplemented = fmt.Errorf("large frame support is not implemented yet")
+	ErrFrameInvalid     = fmt.Errorf("frame is invalid")
+	ErrFrameLenOverflow = fmt.Errorf("frame is too large")
 )
 
-// Frame wraps Packet with header: magic number and length
+// Frame wraps Packet with header
 const (
-	FrameV2MagicSmall = uint16(0x7602)
-	FrameV2MagicLarge = uint16(0x5602)
+	FrameV2Magic      = uint16(0x7602)
+	FrameV2HeaderSize = 2 /*magic*/ + 2 /*length*/ + 1 /*flag*/
 
-	FrameV2HeaderSizeSmall = 2 + 2 // uint16 magic + uint16 length
-	FrameV2HeaderSizeLarge = 2 + 4 // uint16 magic + uint32 length
+	FrameV2FlagHmac = byte(0x01)
 )
 
-func FrameDecode(b []byte, max uint32) (magic uint16, frameLen uint32, err error) {
-	if len(b) == 0 {
-		return 0, 0, io.EOF
+func FrameMarshal(f *tele.Frame, secret []byte) ([]byte, error) {
+	flen := FrameV2HeaderSize
+	withHmac := false
+	if f.Packet != nil && (f.Packet.Hello || f.Packet.AuthId != "") {
+		withHmac = true
+		flen += 8
 	}
-	if len(b) < FrameV2HeaderSizeSmall {
-		return 0, 0, io.ErrUnexpectedEOF
+	flen += proto.Size(f)
+	if flen >= math.MaxUint16 {
+		return nil, ErrFrameLenOverflow
 	}
-	magic = binary.BigEndian.Uint16(b)
-	switch magic {
-	case FrameV2MagicSmall:
-		frameLen = uint32(binary.BigEndian.Uint16(b[2:]))
-
-	case FrameV2MagicLarge:
-		frameLen = binary.BigEndian.Uint32(b[2:])
-
-	default:
-		return 0, 0, ErrFrameInvalid
-	}
-	if frameLen > max {
-		return magic, frameLen, errors.Errorf("frameLen=%d exceeds max=%d", frameLen, max)
-	}
-	return magic, frameLen, nil
-}
-
-func FrameMarshal(p *tele.Packet) ([]byte, error) {
-	plen := proto.Size(p)
-	if plen >= math.MaxUint16 {
-		return nil, ErrFrameLargeNotImplemented
-	}
-	b := make([]byte, FrameV2HeaderSizeSmall, FrameV2HeaderSizeLarge+plen)
+	b := make([]byte, FrameV2HeaderSize, flen)
 	pbuf := proto.NewBuffer(b)
-	err := pbuf.Marshal(p)
-	if err != nil {
+	if err := pbuf.Marshal(f); err != nil {
 		return nil, err
 	}
 	b = pbuf.Bytes()
-	// log.Printf("FrameMarshal plen=%d b=(%d)%x", plen, len(b), b)
-	binary.BigEndian.PutUint16(b, FrameV2MagicSmall)
-	binary.BigEndian.PutUint16(b[2:], uint16(plen))
+	binary.BigEndian.PutUint16(b[0:], FrameV2Magic)
+	binary.BigEndian.PutUint16(b[2:], uint16(flen))
+	log.Printf("Frame.Marshal beforeHM b=(%d/%d)%x", len(b), cap(b), b)
+	if withHmac {
+		b[4] |= FrameV2FlagHmac
+		hmac, err := Auth1(b, secret)
+		if err != nil {
+			return nil, errors.Annotate(err, "auth1")
+		}
+		var hmacbs [8]byte
+		binary.BigEndian.PutUint64(hmacbs[:], hmac)
+		b = append(b, hmacbs[:]...)
+	}
+	log.Printf("Frame.Marshal frame=%s b=(%d/%d)%x", f, len(b), cap(b), b)
 	return b, nil
 }
 
-func NewPacketHello(seq uint32, timestamp int64, authid string, vmid tele.VMID, secret []byte) (tele.Packet, error) {
-	p := tele.Packet{
-		Seq:    seq,
+func FrameUnmarshal(b []byte, frame *tele.Frame, getSecret func(*tele.Frame) ([]byte, error)) error {
+	if len(b) < FrameV2HeaderSize {
+		return errors.Annotate(io.ErrUnexpectedEOF, "header")
+	}
+	if magic := binary.BigEndian.Uint16(b[0:]); magic != FrameV2Magic {
+		return ErrFrameInvalid
+	}
+	frameLen := binary.BigEndian.Uint16(b[2:])
+	if frameLen < FrameV2HeaderSize {
+		return errors.Errorf("frameLen=%d invalid", frameLen)
+	}
+	flag := b[4]
+
+	authLen := 0
+	pbuf := b[FrameV2HeaderSize:]
+	// log.Printf("decoder# pbuf=(%d)%x", len(pbuf), pbuf)
+	if flag&FrameV2FlagHmac != 0 {
+		if getSecret == nil {
+			return errors.Errorf("code error getSecret is not set")
+		}
+		if authLen = len(b) - 8; authLen <= 0 {
+			return errors.Errorf("missing hmac")
+		}
+		pbuf = b[FrameV2HeaderSize:authLen]
+	}
+	// log.Printf("decoder: pbuf=(%d)%x", len(pbuf), pbuf)
+	if err := proto.Unmarshal(pbuf, frame); err != nil {
+		// log.Printf("decoder: frame=%s err=%v", frame, err)
+		return errors.Annotate(err, "unmarshal")
+	}
+	if flag&FrameV2FlagHmac != 0 {
+		declared := binary.BigEndian.Uint64(b[authLen:])
+		secret, err := getSecret(frame)
+		if err != nil {
+			return errors.Annotate(err, "getsecret")
+		}
+		actual, err := Auth1(b[:authLen], secret)
+		// log.Printf("decoder: auth=(%d)%x declared=%016x actual=%016x", authLen, b[:authLen], declared, actual)
+		if err != nil {
+			return errors.Annotate(err, "actual hmac")
+		} else if declared != actual {
+			return errors.Errorf("invalid hmac")
+		}
+	}
+	return nil
+}
+
+func NewPacketHello(timestamp int64, authid string, vmid tele.VMID) tele.Packet {
+	return tele.Packet{
 		AuthId: authid,
 		VmId:   int32(vmid),
 		Time:   timestamp,
 		Hello:  true,
 	}
-	var err error
-	p.Auth1, err = Auth1(&p, secret)
-	if err != nil {
-		return tele.Packet{}, errors.Annotate(err, "auth1")
-	}
-	return p, nil
 }
 
-func NewPacketAck(origin *tele.Packet) tele.Packet {
-	return tele.Packet{
-		Seq: origin.Seq,
-		Ack: true,
+func NewFrame(seq uint16, p *tele.Packet) *tele.Frame {
+	return &tele.Frame{
+		Seq:    uint32(seq),
+		Packet: p,
 	}
 }

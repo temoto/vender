@@ -55,7 +55,8 @@ func testPairStream(t testing.TB, servopt *telenet.ServerOptions, lopt *telenet.
 	}
 	cliopt.Log = servopt.Log
 	if cliopt.OnPacket == nil {
-		cliopt.OnPacket = func(from string, p *tele.Packet) error {
+		cliopt.OnPacket = func(conn telenet.Conn, p *tele.Packet) error {
+			from, _ := conn.ID()
 			cliopt.Log.Printf("client: onpacket from=%s p=%s", from, p)
 			return nil
 		}

@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 
 	"github.com/temoto/vender/helpers"
-	"github.com/temoto/vender/helpers/atomic_clock"
 	"github.com/temoto/vender/tele"
 )
 
@@ -26,43 +25,37 @@ func parseURI(s string) (scheme, hostport string, err error) {
 	return u.Scheme, u.Host, nil
 }
 
-func nextSeq(addr *uint32) uint32 {
-	seq := atomic.AddUint32(addr, 1)
-	if atomic.CompareAndSwapUint32(addr, 0, 1) {
-		return 1
-	}
-	return seq
-}
-
-type tx struct {
+type delivery struct {
 	ctx    context.Context
-	f      *helpers.Future
-	p      tele.Packet
+	p      *tele.Packet
+	fu     *helpers.Future
 	stopch <-chan struct{}
-	start  int64
+	acked  uint32
 }
 
-func newTx(ctx context.Context, p *tele.Packet, stopch <-chan struct{}) *tx {
-	tx := &tx{
+func newDelivery(ctx context.Context, p *tele.Packet, stopch <-chan struct{}) *delivery {
+	d := &delivery{
 		ctx:    ctx,
-		f:      helpers.NewFuture(),
-		p:      *p,
+		fu:     helpers.NewFuture(),
+		p:      p,
 		stopch: stopch,
-		start:  atomic_clock.Source(),
 	}
-	// ensure tx is cancelled with ctx/stopch
-	go tx.wait()
-	return tx
+	// ensure delivery is cancelled with ctx/stopch
+	go d.wait()
+	return d
 }
 
-func (tx *tx) wait() interface{} {
+func (d *delivery) acked1() bool { return atomic.LoadUint32(&d.acked) >= 1 }
+func (d *delivery) acked2() bool { return atomic.LoadUint32(&d.acked) >= 2 }
+
+func (d *delivery) wait() interface{} {
 	select {
-	case <-tx.f.Completed():
-	case <-tx.f.Cancelled():
-	case <-tx.ctx.Done():
-		tx.f.Cancel(context.Canceled)
-	case <-tx.stopch:
-		tx.f.Cancel(ErrClosing)
+	case <-d.fu.Completed():
+	case <-d.fu.Cancelled():
+	case <-d.ctx.Done():
+		d.fu.Cancel(context.Canceled)
+	case <-d.stopch:
+		d.fu.Cancel(ErrClosing)
 	}
-	return tx.f.Result()
+	return d.fu.Result()
 }

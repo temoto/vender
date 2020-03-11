@@ -23,7 +23,6 @@ type Conn interface {
 	Closed() bool
 	ID() (string, tele.VMID)
 	Options() *ConnOptions
-	Receive(context.Context) (*tele.Packet, error)
 	RemoteAddr() net.Addr
 	Send(context.Context, *tele.Packet) error
 	SetID(authid string, vmid tele.VMID)
@@ -36,12 +35,14 @@ type Conn interface {
 
 type ConnOptions struct {
 	Log       *log2.Log
-	GetSecret func(authid string) []byte
+	GetSecret GetSecretFunc
 	TLS       *tls.Config
 
+	AckDelay       time.Duration
+	Keepalive      time.Duration
 	NetworkTimeout time.Duration
 	RetryDelay     time.Duration
-	OnPacket       func(string, *tele.Packet) error
+	OnPacket       func(Conn, *tele.Packet) error
 	ReadLimit      uint32
 }
 

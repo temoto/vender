@@ -1,6 +1,7 @@
 package telenet
 
 import (
+	"encoding/hex"
 	"fmt"
 	"testing"
 
@@ -13,16 +14,18 @@ func TestAuth1(t *testing.T) {
 	t.Parallel()
 	type P = tele.Packet
 	cases := []struct { //nolint:maligned
-		p      tele.Packet
+		dhex   string
 		secret string
 		expect uint64
 	}{
-		{P{Seq: 123, Time: 1583220597483015936, VmId: 1, AuthId: ""}, "9d014afdc6a17816", 0xb6ef9d03b2cae03f},
+		{"516bc9c0138765ff8f3f", "9d014afdc6a17816", 0xf200902cd2bc7b01},
 	}
 	for _, c := range cases {
 		c := c
 		t.Run(fmt.Sprintf("%016x", c.expect), func(t *testing.T) {
-			auth, err := Auth1(&c.p, []byte(c.secret))
+			data, err := hex.DecodeString(c.dhex)
+			require.NoError(t, err)
+			auth, err := Auth1(data, []byte(c.secret))
 			require.NoError(t, err)
 			assert.Equal(t, c.expect, auth)
 		})

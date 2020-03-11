@@ -214,19 +214,23 @@ func (s *Server) handshake(conn Conn) error {
 		p.AuthId = fmt.Sprintf("vm%d", p.VmId)
 	}
 
-	ack := NewPacketAck(p)
-	ack.Time = time.Now().UnixNano()
-
+	reply := &tele.Packet{
+		Hello: true,
+		Time:  time.Now().UnixNano(),
+		// TODO SessionId:  s.newsid(),
+	}
 	if err = s.authorize(conn, p); err != nil {
-		ack.Error = "auth:" + err.Error()
-		_ = conn.Send(context.Background(), &ack)
+		reply.Error = "auth:" + err.Error()
+		_ = conn.Send(context.Background(), reply)
 		err = tele.ErrNotAuthorized
 		return errors.Trace(err)
 	}
 
-	s.log.Debugf("HELLO addr=%s seq=%d id=%s time=%d auth1=%x",
-		addr, p.Seq, p.AuthId, p.Time, p.Auth1)
-	if err = conn.Send(context.Background(), &ack); err != nil {
+	// Handshake was successful.
+	conn.SetID(p.AuthId, tele.VMID(p.VmId))
+	s.log.Debugf("HELLO addr=%s id=%s time=%d",
+		addr, p.AuthId, p.Time)
+	if err = conn.Send(context.Background(), reply); err != nil {
 		return errors.Trace(err)
 	}
 
@@ -239,7 +243,6 @@ func (s *Server) handshake(conn Conn) error {
 			_ = ex.die(ErrSameClient)
 		}
 		s.conns.m[p.AuthId] = conn
-		conn.SetID(p.AuthId, tele.VMID(p.VmId))
 	})
 	return nil
 }
@@ -301,13 +304,8 @@ func (s *Server) processPacket(conn Conn, p *tele.Packet) {
 		return
 	}
 
-	if !p.Ack {
-		err = s.onPacket(conn, p)
-		if err != nil {
-			s.log.Errorf("onPacket p=%s err=%v", p.String(), err)
-		}
-	}
-	if err != nil {
+	if err = s.onPacket(conn, p); err != nil {
+		s.log.Errorf("onPacket p=%s err=%v", p.String(), err)
 		_ = conn.die(err)
 	}
 }
