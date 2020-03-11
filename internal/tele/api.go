@@ -2,6 +2,7 @@ package tele
 
 import (
 	"context"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/internal/money"
@@ -74,8 +75,16 @@ func (self *tele) State(s tele_api.State) {
 		return
 	}
 
-	self.log.Infof("tele.State s=%v", s)
-	self.stateCh <- s
+	// FIXME tests expecting blocking behavior and just select default: nothing
+	tmr := time.NewTimer(100 * time.Millisecond)
+	select {
+	case self.stateCh <- s:
+		self.log.Infof("tele.State s=%s", s)
+		tmr.Stop()
+
+	case <-tmr.C:
+		self.log.Infof("tele.State s=%s chan busy, likely network problem", s)
+	}
 }
 
 func (self *tele) StatModify(fun func(s *tele_api.Stat)) {
