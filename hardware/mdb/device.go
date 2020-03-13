@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/helpers/atomic_clock"
+	"github.com/temoto/atomic_clock"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/log2"
 )

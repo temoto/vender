@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/temoto/vender/helpers/atomic_clock"
+	"github.com/temoto/atomic_clock"
 )
 
 type Int32 struct {

@@ -18,8 +18,9 @@ require (
 	github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942 // indirect
 	github.com/skip2/go-qrcode v0.0.0-20191027152451-9434209cb086
 	github.com/stretchr/objx v0.2.0 // indirect
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.5.1
 	github.com/temoto/alive/v2 v2.0.0
+	github.com/temoto/atomic_clock v1.0.1
 	github.com/temoto/extremofile v0.5.0
 	github.com/temoto/gpio-cdev-go v0.12.1-0.20191005112838-85f703f8e92e
 	github.com/temoto/inputevent-go v1.0.0
