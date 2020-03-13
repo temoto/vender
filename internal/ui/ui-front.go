@@ -31,6 +31,12 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		Sugar: DefaultSugar,
 	}
 
+	// FIXME special handling of separate graphic display
+	// Currently used to clear QR.
+	if d, _ := self.g.Display(); d != nil {
+		_ = d.Clear()
+	}
+
 	if err := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); err != nil {
 		self.g.Error(err)
 		return StateBroken
