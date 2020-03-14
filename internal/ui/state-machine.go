@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/money"
+	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
 	tele_api "github.com/temoto/vender/tele"
 )
@@ -84,13 +86,16 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		self.g.Tele.State(tele_api.State_Boot)
 		onStartSuccess := false
 		for i := 1; i <= 3; i++ {
-			err := self.g.Engine.ExecList(ctx, "on_boot", self.g.Config.Engine.OnBoot)
-			if err == nil {
+			errs := self.g.Engine.ExecList(ctx, "on_boot", self.g.Config.Engine.OnBoot)
+			if err := errors.Annotate(helpers.FoldErrors(errs), "on_boot"); err != nil {
+				self.g.Tele.Error(errors.Annotatef(err, "on_boot try=%d", i))
+				self.g.Log.Error(err)
+			}
+			// on_boot special behavior: log, report but don't stop on errors caused by optional offline devices
+			if len(removeOptionalOffline(self.g, errs)) == 0 {
 				onStartSuccess = true
 				break
 			}
-			self.g.Tele.Error(errors.Annotatef(err, "on_boot try=%d", i))
-			self.g.Log.Error(err)
 			// TODO restart all hardware
 			// hardware.Enum(ctx)
 		}
@@ -104,9 +109,9 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		self.g.Log.Infof("state=broken")
 		if !self.broken {
 			self.g.Tele.State(tele_api.State_Problem)
-			err := self.g.Engine.ExecList(ctx, "on_broken", self.g.Config.Engine.OnBroken)
-			if err != nil {
-				self.g.Log.Error(errors.ErrorStack(err))
+			if errs := self.g.Engine.ExecList(ctx, "on_broken", self.g.Config.Engine.OnBroken); len(errs) != 0 {
+				// TODO maybe ErrorStack should be removed
+				self.g.Log.Error(errors.ErrorStack(errors.Annotate(helpers.FoldErrors(errs), "on_broken")))
 			}
 			moneysys := money.GetGlobal(ctx)
 			_ = moneysys.SetAcceptMax(ctx, 0)
@@ -201,4 +206,32 @@ func replaceDefault(s, def State) State {
 		return def
 	}
 	return s
+}
+
+func filterErrors(errs []error, take func(error) bool) []error {
+	if len(errs) == 0 {
+		return nil
+	}
+	new := errs[:0]
+	for _, e := range errs {
+		if e != nil && take(e) {
+			new = append(new, e)
+		}
+	}
+	for i := len(new); i < len(errs); i++ {
+		errs[i] = nil
+	}
+	return new
+}
+
+func removeOptionalOffline(g *state.Global, errs []error) []error {
+	take := func(e error) bool {
+		if errOffline, ok := errors.Cause(e).(types.DeviceOfflineError); ok {
+			if devconf, err := g.GetDeviceConfig(errOffline.Device.Name()); err == nil {
+				return devconf.Required
+			}
+		}
+		return true
+	}
+	return filterErrors(errs, take)
 }

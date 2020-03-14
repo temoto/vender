@@ -15,9 +15,9 @@ func TestCup(t *testing.T) {
 	ctx, g := state_new.NewTestContext(t, "", `
 engine {
 inventory { stock "cup" { } }
-alias "add.cup" { scenario = "mdb.evend.cup_dispense stock.cup.spend1" }
+alias "add.cup" { scenario = "evend.cup.dispense stock.cup.spend1" }
 }
-hardware { device "mdb.evend.cup" {} }`)
+hardware { device "evend.cup" {} }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{

@@ -11,6 +11,7 @@ import (
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/hardware/text_display"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
@@ -37,17 +38,17 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		_ = d.Clear()
 	}
 
-	if err := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); err != nil {
-		self.g.Error(err)
+	if errs := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); len(errs) != 0 {
+		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_front_begin"))
 		return StateBroken
 	}
 
 	// XXX FIXME custom business logic creeped into code TODO move to config
-	if doCheckTempHot := self.g.Engine.Resolve("mdb.evend.valve_check_temp_hot"); doCheckTempHot != nil && !engine.IsNotResolved(doCheckTempHot) {
+	if doCheckTempHot := self.g.Engine.Resolve("evend.valve.check_temp_hot"); doCheckTempHot != nil && !engine.IsNotResolved(doCheckTempHot) {
 		err := doCheckTempHot.Validate()
 		if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
 			line1 := fmt.Sprintf(self.g.Config.UI.Front.MsgWaterTemp, errtemp.Current)
-			_ = self.g.Engine.ExecList(ctx, "water-temp", []string{"mdb.evend.cup_light_off"})
+			_ = self.g.Engine.ExecList(ctx, "water-temp", []string{"evend.cup.light_off"})
 			self.display.SetLines(line1, self.g.Config.UI.Front.MsgWait)
 			if e := self.wait(5 * time.Second); e.Kind == types.EventService {
 				return StateServiceBegin
@@ -320,8 +321,8 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	err = errors.Annotatef(err, "execute %s", selected.String())
 	self.g.Error(err)
 
-	if err := self.g.Engine.ExecList(ctx, "on_menu_error", self.g.Config.Engine.OnMenuError); err != nil {
-		self.g.Error(err)
+	if errs := self.g.Engine.ExecList(ctx, "on_menu_error", self.g.Config.Engine.OnMenuError); len(errs) != 0 {
+		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_menu_error"))
 	} else {
 		self.g.Log.Infof("on_menu_error success")
 	}

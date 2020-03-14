@@ -13,9 +13,9 @@ func TestEspresso(t *testing.T) {
 
 	ctx, g := state_new.NewTestContext(t, "", `
 engine { inventory {
-	stock "espresso" { register_add="ignore(?) mdb.evend.espresso_grind" spend_rate=7 }
+	stock "espresso" { register_add="ignore(?) evend.espresso.grind" spend_rate=7 }
 }}
-hardware { device "mdb.evend.espresso" {} }`)
+hardware { device "evend.espresso" {} }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{

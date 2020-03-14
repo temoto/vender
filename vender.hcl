@@ -6,7 +6,7 @@ debug {
 engine {
   // alias "cup_dispense" { scenario = "conveyor_move_cup cup_drop" }
 
-  // alias "conveyor_hopper18" { scenario = "mdb.evend.conveyor_move(1210)" }
+  // alias "conveyor_hopper18" { scenario = "evend.conveyor.move(1210)" }
 
   inventory {
     persist = true
@@ -25,7 +25,7 @@ engine {
     // stock "water" { hw_rate = 0.649999805 }
     // stock "cup" { code = 1 }
 
-    // stock "milk" { code = 1 check = true min = 100 register_add = "conveyor_hopper18 mdb.evend.hopper1_run(?)" spend_rate = 9.7 }
+    // stock "milk" { code = 1 check = true min = 100 register_add = "conveyor_hopper18 evend.hopper1.run(?)" spend_rate = 9.7 }
   }
 
   menu {
@@ -52,18 +52,18 @@ engine {
 hardware {
   // All devices must be listed here to use.
 
-  device "mdb.bill" {
+  device "bill" {
     // If any required devices are offline, switch to broken state.
     // required=false will still probe and report errors to telemetry.
     required = true
   }
 
-  device "mdb.coin" {
+  device "coin" {
     required = true
   }
 
-  // device "mdb.evend.cup" { required = true }
-  // device "mdb.evend.hopper5" { }
+  // device "evend.cup" { required = true }
+  // device "evend.hopper5" { }
 
   evend {
     conveyor {

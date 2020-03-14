@@ -18,7 +18,7 @@ import (
 // - built-in payout or dispense-by-coin using expend strategy
 // - give smallest amount >= requested
 func (self *CoinAcceptor) NewGive(requestAmount currency.Amount, over bool, success *currency.NominalGroup) engine.Doer {
-	const tag = "mdb.coin.give"
+	const tag = "coin.give"
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var err error
@@ -78,7 +78,7 @@ func (self *CoinAcceptor) NewGive(requestAmount currency.Amount, over bool, succ
 }
 
 func (self *CoinAcceptor) NewGiveLeastOver(requestAmount currency.Amount, success *currency.NominalGroup) engine.Doer {
-	const tag = "mdb.coin.give-least-over"
+	const tag = "coin.give-least-over"
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var err error
@@ -115,7 +115,7 @@ func (self *CoinAcceptor) NewGiveLeastOver(requestAmount currency.Amount, succes
 }
 
 func (self *CoinAcceptor) giveSmartManual(ctx context.Context, amount currency.Amount, success *currency.NominalGroup) error {
-	const tag = "mdb.coin.give-smart/manual"
+	const tag = "coin.give-smart/manual"
 	var err error
 
 	if err = self.TubeStatus(); err != nil {
@@ -153,7 +153,7 @@ func (self *CoinAcceptor) giveSmartManual(ctx context.Context, amount currency.A
 }
 
 func (self *CoinAcceptor) dispenseGroup(ctx context.Context, request, success *currency.NominalGroup) error {
-	const tag = "mdb.coin.dispense-group"
+	const tag = "coin.dispense-group"
 
 	return request.Iter(func(nominal currency.Nominal, count uint) error {
 		self.Device.Log.Debugf("%s n=%s c=%d", tag, currency.Amount(nominal).FormatCtx(ctx), count)
@@ -172,7 +172,7 @@ func (self *CoinAcceptor) dispenseGroup(ctx context.Context, request, success *c
 
 // MDB command DISPENSE (0d)
 func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) engine.Doer {
-	const tag = "mdb.coin.dispense"
+	const tag = "coin.dispense"
 
 	command := func(ctx context.Context) error {
 		if count > 15 { // count must fit into 4 bits
@@ -249,7 +249,7 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 
 // MDB command PAYOUT (0f02)
 func (self *CoinAcceptor) NewPayout(amount currency.Amount, success *currency.NominalGroup) engine.Doer {
-	const tag = "mdb.coin.payout"
+	const tag = "coin.payout"
 	self.Device.Log.Debugf("%s sf=%v amount=%s", tag, self.scalingFactor, amount.Format100I())
 	arg := amount / currency.Amount(self.scalingFactor)
 

@@ -15,7 +15,6 @@ const (
 )
 
 var (
-	ErrOffline      = fmt.Errorf("offline")
 	ErrStateInvalid = fmt.Errorf("CRITICAL code error state=invalid")
 	ErrStateError   = fmt.Errorf("state=error")
 )

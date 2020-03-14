@@ -11,7 +11,7 @@ import (
 func TestElevator(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, "", `hardware { device "mdb.evend.elevator" {} }`)
+	ctx, g := state_new.NewTestContext(t, "", `hardware { device "evend.elevator" {} }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{
@@ -59,7 +59,7 @@ func TestElevator(t *testing.T) {
 	})
 	require.NoError(t, Enum(ctx))
 
-	g.Engine.TestDo(t, ctx, "mdb.evend.elevator_move(100)")
-	g.Engine.TestDo(t, ctx, "mdb.evend.elevator_move(50)")
-	g.Engine.TestDo(t, ctx, "mdb.evend.elevator_move(70)")
+	g.Engine.TestDo(t, ctx, "evend.elevator.move(100)")
+	g.Engine.TestDo(t, ctx, "evend.elevator.move(50)")
+	g.Engine.TestDo(t, ctx, "evend.elevator.move(70)")
 }

@@ -29,12 +29,9 @@ type Config struct {
 
 	Hardware struct {
 		// only used for Unmarshal, do not access
-		XXX_Devices []struct {
-			Name     string `hcl:"name,key"`
-			Required bool   `hcl:"required"`
-		} `hcl:"device"`
-		Evend   evend_config.Config `hcl:"evend"`
-		Display struct {
+		XXX_Devices []DeviceConfig      `hcl:"device"`
+		Evend       evend_config.Config `hcl:"evend"`
+		Display     struct {
 			Framebuffer string `hcl:"framebuffer"`
 		}
 		HD44780 struct { //nolint:maligned
@@ -82,6 +79,11 @@ type Config struct {
 	UI   ui_config.Config
 
 	_copy_guard sync.Mutex //nolint:unused
+}
+
+type DeviceConfig struct {
+	Name     string `hcl:"name,key"`
+	Required bool   `hcl:"required"`
 }
 
 type ConfigSource struct {

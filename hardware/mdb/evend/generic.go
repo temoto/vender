@@ -36,6 +36,7 @@ func (c DeviceErrorCode) Error() string { return fmt.Sprintf("evend errorcode=%d
 
 type Generic struct {
 	dev          mdb.Device
+	name         string
 	logPrefix    string
 	readyTimeout time.Duration
 	proto        evendProtocol
@@ -47,7 +48,8 @@ type Generic struct {
 }
 
 func (self *Generic) Init(ctx context.Context, address uint8, name string, proto evendProtocol) {
-	self.logPrefix = fmt.Sprintf("mdb.evend.%s(%02x)", name, address)
+	self.name = "evend." + name
+	self.logPrefix = fmt.Sprintf("%s(%02x)", self.name, address)
 
 	if self.proto2BusyMask == 0 {
 		self.proto2BusyMask = genericPollBusy
@@ -65,7 +67,7 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 	}
 	g := state.GetGlobal(ctx)
 	mdbus, _ := g.Mdb()
-	self.dev.Init(mdbus, address, name, binary.BigEndian)
+	self.dev.Init(mdbus, address, self.name, binary.BigEndian)
 }
 
 // FIXME Enum, remove IO from Init
@@ -82,6 +84,8 @@ func (self *Generic) FIXME_initIO(ctx context.Context) error {
 	err = self.dev.TxSetup()
 	return errors.Annotate(err, tag)
 }
+
+func (self *Generic) Name() string { return self.name }
 
 func (self *Generic) NewErrPollProblem(p mdb.Packet) error {
 	return errors.Errorf("%s POLL=%x -> need to ask problem code", self.logPrefix, p.Bytes())

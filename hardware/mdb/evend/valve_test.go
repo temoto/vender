@@ -17,7 +17,7 @@ func TestValve(t *testing.T) {
 engine { inventory {
 	stock "water" { check=false hw_rate = 0.6 min = 500 }
 }}
-hardware { device "mdb.evend.valve" {} }`)
+hardware { device "evend.valve" {} }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{
@@ -39,12 +39,12 @@ hardware { device "mdb.evend.valve" {} }`)
 	})
 	require.NoError(t, Enum(ctx))
 
-	g.Engine.TestDo(t, ctx, "mdb.evend.valve_get_temp_hot")
-	dev, err := g.GetDevice("mdb.evend.valve")
+	g.Engine.TestDo(t, ctx, "evend.valve.get_temp_hot")
+	dev, err := g.GetDevice("evend.valve")
 	require.NoError(t, err)
 	assert.Equal(t, uint8(23), uint8(dev.(*DeviceValve).tempHot.Get()))
 
-	g.Engine.TestDo(t, ctx, "mdb.evend.valve_set_temp_hot(73)")
+	g.Engine.TestDo(t, ctx, "evend.valve.set_temp_hot(73)")
 
 	water, err := g.Inventory.Get("water")
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ hardware { device "mdb.evend.valve" {} }`)
 	assert.Equal(t, initial-90, water.Value())
 
 	{
-		getTemp := g.Engine.Resolve("mdb.evend.valve_get_temp_hot")
+		getTemp := g.Engine.Resolve("evend.valve.get_temp_hot")
 		require.NotNil(t, getTemp)
 		err := getTemp.Do(ctx)
 		require.Error(t, err)

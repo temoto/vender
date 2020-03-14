@@ -16,6 +16,7 @@ import (
 	"github.com/temoto/vender/hardware/mega-client"
 	"github.com/temoto/vender/hardware/text_display"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )
 
@@ -50,13 +51,10 @@ type hardware struct {
 	}
 }
 
-type Devicer interface{}
-
 type devWrap struct {
 	sync.RWMutex
-	name     string
-	dev      Devicer
-	required bool
+	config DeviceConfig
+	dev    types.Devicer
 }
 
 func (g *Global) Display() (*display.Display, error) {
@@ -211,7 +209,7 @@ func (g *Global) TextDisplay() (*text_display.TextDisplay, error) {
 }
 
 // Reference registered, inited device
-func (g *Global) GetDevice(name string) (Devicer, error) {
+func (g *Global) GetDevice(name string) (types.Devicer, error) {
 	d, ok, err := g.getDevice(name)
 	if err != nil {
 		return nil, err
@@ -230,9 +228,23 @@ func (g *Global) GetDevice(name string) (Devicer, error) {
 	return d.dev, nil
 }
 
+func (g *Global) GetDeviceConfig(name string) (DeviceConfig, error) {
+	d, ok, err := g.getDevice(name)
+	if err != nil {
+		return DeviceConfig{}, err
+	}
+	if !ok {
+		return DeviceConfig{}, errors.NotFoundf("device=%s", name)
+	}
+
+	d.RLock()
+	defer d.RUnlock()
+	return d.config, nil
+}
+
 // Drivers call RegisterDevice to declare device support.
 // probe is called only for devices enabled in config.
-func (g *Global) RegisterDevice(name string, dev Devicer, probe func() error) error {
+func (g *Global) RegisterDevice(name string, dev types.Devicer, probe func() error) error {
 	d, ok, err := g.getDevice(name)
 	g.Log.Debugf("RegisterDevice name=%s ok=%t err=%v", name, ok, err)
 	if err != nil {
@@ -248,10 +260,10 @@ func (g *Global) RegisterDevice(name string, dev Devicer, probe func() error) er
 	d.dev = dev
 
 	err = probe()
-	err = errors.Annotatef(err, "probe device=%s required=%t", name, d.required)
+	err = errors.Annotatef(err, "probe device=%s required=%t", name, d.config.Required)
 	g.Error(err)
 	// TODO err=offline + Required=false -> return nil
-	if !d.required {
+	if !d.config.Required {
 		return nil
 	}
 	return err
@@ -270,7 +282,7 @@ func (g *Global) CheckDevices() error {
 		ok := d.dev != nil
 		d.RUnlock()
 		if !ok {
-			errs = append(errs, fmt.Errorf("unknown device=%s in config (no driver)", d.name))
+			errs = append(errs, fmt.Errorf("unknown device=%s in config (no driver)", d.config.Name))
 		}
 	}
 	return helpers.FoldErrors(errs)
@@ -303,10 +315,7 @@ func (g *Global) initDevices() error {
 				continue
 			}
 
-			x.m[d.Name] = &devWrap{
-				name:     d.Name,
-				required: d.Required,
-			}
+			x.m[d.Name] = &devWrap{config: d}
 		}
 
 		err := helpers.FoldErrors(errs)

@@ -71,7 +71,6 @@ var (
 
 func (self *BillValidator) init(ctx context.Context) error {
 	const tag = deviceName + ".init"
-
 	g := state.GetGlobal(ctx)
 	mdbus, err := g.Mdb()
 	if err != nil {
@@ -96,7 +95,6 @@ func (self *BillValidator) init(ctx context.Context) error {
 	if err = self.Device.DoInit.Do(ctx); err != nil {
 		return errors.Annotate(err, tag)
 	}
-
 	return nil
 }
 

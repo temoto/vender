@@ -11,7 +11,7 @@ import (
 	"github.com/temoto/vender/internal/state"
 )
 
-const deviceName = "mdb.coin"
+const deviceName = "coin"
 
 func Enum(ctx context.Context) error {
 	g := state.GetGlobal(ctx)

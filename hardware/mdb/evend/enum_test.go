@@ -13,8 +13,8 @@ func TestRegister(t *testing.T) {
 	t.Parallel()
 
 	ctx, g := state_new.NewTestContext(t, "", `hardware {
-device "mdb.evend.hopper1" {}
-device "mdb.evend.conveyor" {}
+device "evend.hopper1" {}
+device "evend.conveyor" {}
 }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
@@ -36,9 +36,9 @@ device "mdb.evend.conveyor" {}
 		{"43", ""}, {"420a", ""}, {"43", ""}, // hopper run
 	})
 
-	assert.NoError(t, g.Engine.RegisterParse("hopper1(?)", "mdb.evend.conveyor_move(250) mdb.evend.hopper1_run(?)"))
-	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))
-	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))
+	assert.NoError(t, g.Engine.RegisterParse("hopper1(?)", "evend.conveyor.move(250) evend.hopper1.run(?)"))
+	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_cup", "evend.conveyor.move(1560)"))
+	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_elevator", "evend.conveyor.move(1895)"))
 
 	g.Engine.TestDo(t, ctx, "hopper1(10)")
 }

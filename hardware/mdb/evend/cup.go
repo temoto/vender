@@ -25,24 +25,23 @@ func (self *DeviceCup) init(ctx context.Context) error {
 
 	g := state.GetGlobal(ctx)
 	doDispense := self.Generic.WithRestart(self.NewDispenseProper())
-	g.Engine.Register("mdb.evend.cup_dispense", doDispense)
-	g.Engine.Register("mdb.evend.cup_light_on", self.NewLight(true))
-	g.Engine.Register("mdb.evend.cup_light_off", self.NewLight(false))
-	g.Engine.Register("mdb.evend.cup_ensure", self.NewEnsure())
+	g.Engine.Register(self.name+".dispense", doDispense)
+	g.Engine.Register(self.name+".light_on", self.NewLight(true))
+	g.Engine.Register(self.name+".light_off", self.NewLight(false))
+	g.Engine.Register(self.name+".ensure", self.NewEnsure())
 
 	err := self.Generic.FIXME_initIO(ctx)
-	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
+	return errors.Annotate(err, self.name+".init")
 }
 
 func (self *DeviceCup) NewDispenseProper() engine.Doer {
-	const tag = "mdb.evend.cup.dispense_proper"
-	return engine.NewSeq(tag).
+	return engine.NewSeq(self.name + ".dispense_proper").
 		Append(self.NewEnsure()).
 		Append(self.NewDispense())
 }
 
 func (self *DeviceCup) NewDispense() engine.Doer {
-	const tag = "mdb.evend.cup.dispense"
+	tag := self.name + ".dispense"
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
@@ -74,7 +73,7 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 }
 
 func (self *DeviceCup) NewLight(on bool) engine.Doer {
-	tag := fmt.Sprintf("mdb.evend.cup.light:%t", on)
+	tag := fmt.Sprintf("%s.light:%t", self.name, on)
 	arg := byte(0x02)
 	if !on {
 		arg = 0x03
@@ -83,7 +82,7 @@ func (self *DeviceCup) NewLight(on bool) engine.Doer {
 }
 
 func (self *DeviceCup) NewEnsure() engine.Doer {
-	const tag = "mdb.evend.cup.ensure"
+	tag := self.name + ".ensure"
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x04)).

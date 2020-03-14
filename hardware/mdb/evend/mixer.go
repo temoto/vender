@@ -32,24 +32,24 @@ func (self *DeviceMixer) init(ctx context.Context) error {
 	self.shakeTimeout = helpers.IntMillisecondDefault(config.ShakeTimeoutMs, 300*time.Millisecond)
 	self.Generic.Init(ctx, 0xc8, "mixer", proto1)
 
-	doCalibrate := engine.Func{Name: "mdb.evend.mixer_calibrate", F: self.calibrate}
-	doMove := engine.FuncArg{Name: "mdb.evend.mixer_move", F: func(ctx context.Context, arg engine.Arg) error {
+	doCalibrate := engine.Func{Name: self.name + ".calibrate", F: self.calibrate}
+	doMove := engine.FuncArg{Name: self.name + ".move", F: func(ctx context.Context, arg engine.Arg) error {
 		if self.currentPos == 0 && arg == 0 {
-			self.dev.Log.Debugf("mdb.evend.mixer currentPos=0 skip")
+			self.dev.Log.Debugf("evend.mixer currentPos=0 skip")
 			return nil
 		}
 		return self.move(uint8(arg)).Do(ctx)
 	}}
-	moveSeq := engine.NewSeq("mdb.evend.mixer_move(?)").Append(doCalibrate).Append(doMove)
-	g.Engine.Register("mdb.evend.mixer_shake(?)",
-		engine.FuncArg{Name: "mdb.evend.mixer_shake", F: func(ctx context.Context, arg engine.Arg) error {
+	moveSeq := engine.NewSeq(self.name + ".move(?)").Append(doCalibrate).Append(doMove)
+	g.Engine.Register(self.name+".shake(?)",
+		engine.FuncArg{Name: self.name + ".shake", F: func(ctx context.Context, arg engine.Arg) error {
 			return self.Generic.WithRestart(self.shake(uint8(arg))).Do(ctx)
 		}})
-	g.Engine.Register("mdb.evend.mixer_fan_on", self.NewFan(true))
-	g.Engine.Register("mdb.evend.mixer_fan_off", self.NewFan(false))
+	g.Engine.Register(self.name+".fan_on", self.NewFan(true))
+	g.Engine.Register(self.name+".fan_off", self.NewFan(false))
 	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
-	g.Engine.Register("mdb.evend.mixer_shake_set_speed(?)",
-		engine.FuncArg{Name: "mdb.evend.mixer.shake_set_speed", F: func(ctx context.Context, arg engine.Arg) error {
+	g.Engine.Register(self.name+".shake_set_speed(?)",
+		engine.FuncArg{Name: "evend.mixer.shake_set_speed", F: func(ctx context.Context, arg engine.Arg) error {
 			self.shakeSpeed = uint8(arg)
 			return nil
 		}})
@@ -58,12 +58,12 @@ func (self *DeviceMixer) init(ctx context.Context) error {
 	if keepaliveInterval > 0 {
 		go self.Generic.dev.Keepalive(keepaliveInterval, g.Alive.StopChan())
 	}
-	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
+	return errors.Annotate(err, self.name+".init")
 }
 
 // 1step = 100ms
 func (self *DeviceMixer) shake(steps uint8) engine.Doer {
-	tag := fmt.Sprintf("mdb.evend.mixer.shake:%d,%d", steps, self.shakeSpeed)
+	tag := fmt.Sprintf("%s.shake:%d,%d", self.name, steps, self.shakeSpeed)
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01, steps, self.shakeSpeed)).
@@ -71,7 +71,7 @@ func (self *DeviceMixer) shake(steps uint8) engine.Doer {
 }
 
 func (self *DeviceMixer) NewFan(on bool) engine.Doer {
-	tag := fmt.Sprintf("mdb.evend.mixer.fan:%t", on)
+	tag := fmt.Sprintf("%s.fan:%t", self.name, on)
 	arg := uint8(0)
 	if on {
 		arg = 1
@@ -91,7 +91,7 @@ func (self *DeviceMixer) calibrate(ctx context.Context) error {
 }
 
 func (self *DeviceMixer) move(position uint8) engine.Doer {
-	tag := fmt.Sprintf("mdb.evend.mixer.move:%d", position)
+	tag := fmt.Sprintf("%s.move:%d", self.name, position)
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, position, 0x64)).

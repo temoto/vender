@@ -12,7 +12,7 @@ import (
 func TestConveyor(t *testing.T) {
 	t.Parallel()
 
-	ctx, g := state_new.NewTestContext(t, "", `hardware { device "mdb.evend.conveyor" {} }`)
+	ctx, g := state_new.NewTestContext(t, "", `hardware { device "evend.conveyor" {} }`)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{
@@ -49,9 +49,9 @@ func TestConveyor(t *testing.T) {
 	})
 	require.NoError(t, Enum(ctx))
 
-	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_cup", "mdb.evend.conveyor_move(1560)"))
-	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_elevator", "mdb.evend.conveyor_move(1895)"))
+	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_cup", "evend.conveyor.move(1560)"))
+	assert.NoError(t, g.Engine.RegisterParse("conveyor_move_elevator", "evend.conveyor.move(1895)"))
 	g.Engine.TestDo(t, ctx, "conveyor_move_cup")
 	g.Engine.TestDo(t, ctx, "conveyor_move_elevator")
-	g.Engine.TestDo(t, ctx, "mdb.evend.conveyor_shake(4)")
+	g.Engine.TestDo(t, ctx, "evend.conveyor.shake(4)")
 }
