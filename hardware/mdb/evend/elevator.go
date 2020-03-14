@@ -27,7 +27,7 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 	self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
 	doMove := engine.FuncArg{
-		Name: "mdb.evend.elevator.move",
+		Name: self.name + ".move",
 		F:    self.moveProper,
 		V: func() error {
 			// FIXME Generic offline -> calibrated=false
@@ -42,20 +42,20 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 			return nil
 		},
 	}
-	g.Engine.Register("mdb.evend.elevator_move(?)", self.Generic.WithRestart(doMove))
+	g.Engine.Register(self.name+".move(?)", self.Generic.WithRestart(doMove))
 
 	err := self.Generic.FIXME_initIO(ctx)
 	if keepaliveInterval > 0 {
 		go self.Generic.dev.Keepalive(keepaliveInterval, g.Alive.StopChan())
 	}
-	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
+	return errors.Annotate(err, self.name+".init")
 }
 
 func (self *DeviceElevator) calibrated() bool { return self.cal0 && self.cal100 }
 func (self *DeviceElevator) calReset()        { self.cal0 = false; self.cal100 = false }
 func (self *DeviceElevator) calibrate(ctx context.Context) error {
-	const tag = "evend.elevator.calibrate"
-	self.dev.Log.Debugf("mdb.evend.elevator calibrate ready=%t cal0=%t cal100=%t", self.dev.Ready(), self.cal0, self.cal100)
+	tag := self.name + ".calibrate"
+	self.dev.Log.Debugf("%s calibrate ready=%t cal0=%t cal100=%t", self.name, self.dev.Ready(), self.cal0, self.cal100)
 	if !self.cal0 {
 		if err := self.moveRaw(ctx, 0); err != nil {
 			return errors.Annotate(err, tag)
@@ -84,7 +84,7 @@ func (self *DeviceElevator) moveProper(ctx context.Context, arg engine.Arg) (err
 
 func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err error) {
 	position := uint8(arg)
-	tag := fmt.Sprintf("mdb.evend.elevator.moveRaw:%d", position)
+	tag := fmt.Sprintf("%s.moveRaw:%d", self.name, position)
 	defer func() {
 		if err != nil {
 			self.calReset()

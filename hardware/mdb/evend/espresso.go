@@ -25,18 +25,18 @@ func (self *DeviceEspresso) init(ctx context.Context) error {
 	self.timeout = helpers.IntSecondDefault(espressoConfig.TimeoutSec, DefaultEspressoTimeout)
 	self.Generic.Init(ctx, 0xe8, "espresso", proto2)
 
-	g.Engine.Register("mdb.evend.espresso_grind", self.Generic.WithRestart(self.NewGrind()))
-	g.Engine.Register("mdb.evend.espresso_press", self.NewPress())
-	g.Engine.Register("mdb.evend.espresso_dispose", self.Generic.WithRestart(self.NewRelease()))
-	g.Engine.Register("mdb.evend.espresso_heat_on", self.NewHeat(true))
-	g.Engine.Register("mdb.evend.espresso_heat_off", self.NewHeat(false))
+	g.Engine.Register(self.name+".grind", self.Generic.WithRestart(self.NewGrind()))
+	g.Engine.Register(self.name+".press", self.NewPress())
+	g.Engine.Register(self.name+".dispose", self.Generic.WithRestart(self.NewRelease()))
+	g.Engine.Register(self.name+".heat_on", self.NewHeat(true))
+	g.Engine.Register(self.name+".heat_off", self.NewHeat(false))
 
 	err := self.Generic.FIXME_initIO(ctx)
-	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
+	return errors.Annotate(err, self.name+".init")
 }
 
 func (self *DeviceEspresso) NewGrind() engine.Doer {
-	const tag = "mdb.evend.espresso.grind"
+	tag := self.name + ".grind"
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
@@ -45,7 +45,7 @@ func (self *DeviceEspresso) NewGrind() engine.Doer {
 }
 
 func (self *DeviceEspresso) NewPress() engine.Doer {
-	const tag = "mdb.evend.espresso.press"
+	tag := self.name + ".press"
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x02)).
@@ -53,7 +53,7 @@ func (self *DeviceEspresso) NewPress() engine.Doer {
 }
 
 func (self *DeviceEspresso) NewRelease() engine.Doer {
-	const tag = "mdb.evend.espresso.release"
+	tag := self.name + ".release"
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03)).
@@ -61,7 +61,7 @@ func (self *DeviceEspresso) NewRelease() engine.Doer {
 }
 
 func (self *DeviceEspresso) NewHeat(on bool) engine.Doer {
-	tag := fmt.Sprintf("mdb.evend.espresso.heat:%t", on)
+	tag := fmt.Sprintf("%s.heat:%t", self.name, on)
 	arg := byte(0x05)
 	if !on {
 		arg = 0x06

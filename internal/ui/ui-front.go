@@ -11,6 +11,7 @@ import (
 	"github.com/temoto/vender/hardware/input"
 	"github.com/temoto/vender/hardware/mdb/evend"
 	"github.com/temoto/vender/hardware/text_display"
+	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
@@ -37,8 +38,8 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		_ = d.Clear()
 	}
 
-	if err := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); err != nil {
-		self.g.Error(err)
+	if errs := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); len(errs) != 0 {
+		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_front_begin"))
 		return StateBroken
 	}
 
@@ -320,8 +321,8 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	err = errors.Annotatef(err, "execute %s", selected.String())
 	self.g.Error(err)
 
-	if err := self.g.Engine.ExecList(ctx, "on_menu_error", self.g.Config.Engine.OnMenuError); err != nil {
-		self.g.Error(err)
+	if errs := self.g.Engine.ExecList(ctx, "on_menu_error", self.g.Config.Engine.OnMenuError); len(errs) != 0 {
+		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_menu_error"))
 	} else {
 		self.g.Log.Infof("on_menu_error success")
 	}

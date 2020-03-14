@@ -1,6 +1,7 @@
 package mdb
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/juju/errors"
@@ -13,9 +14,9 @@ const (
 )
 
 var (
-	ErrNak     = errors.Errorf("MDB NAK")
-	ErrBusy    = errors.Errorf("MDB busy")
-	ErrTimeout = errors.Errorf("MDB timeout")
+	ErrNak     = fmt.Errorf("MDB NAK")
+	ErrBusy    = fmt.Errorf("MDB busy")
+	ErrTimeout = fmt.Errorf("MDB timeout")
 )
 
 type Uarter interface {

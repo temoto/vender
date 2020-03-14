@@ -45,8 +45,8 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 	self.Log = g.Log
 	g.XXX_money.Store(self)
 
-	const devNameBill = "mdb.bill"
-	const devNameCoin = "mdb.coin"
+	const devNameBill = "bill"
+	const devNameCoin = "coin"
 	self.bill = bill.Stub{}
 	self.coin = coin.Stub{}
 	errs := make([]error, 0, 2)

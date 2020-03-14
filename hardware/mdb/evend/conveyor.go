@@ -35,49 +35,48 @@ func (self *DeviceConveyor) init(ctx context.Context) error {
 	if self.maxTimeout == 0 {
 		self.maxTimeout = ConveyorDefaultTimeout
 	}
-	g.Log.Debugf("mdb.evend.conveyor minSpeed=%d maxTimeout=%v keepalive=%v", self.minSpeed, self.maxTimeout, keepaliveInterval)
+	g.Log.Debugf("evend.conveyor minSpeed=%d maxTimeout=%v keepalive=%v", self.minSpeed, self.maxTimeout, keepaliveInterval)
 	self.dev.DelayNext = 245 * time.Millisecond // empirically found lower total WaitReady
 	self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
 
-	doCalibrate := engine.Func{Name: "mdb.evend.conveyor.calibrate", F: self.calibrate}
+	doCalibrate := engine.Func{Name: self.name + ".calibrate", F: self.calibrate}
 	doMove := engine.FuncArg{
-		Name: "mdb.evend.conveyor.move",
+		Name: self.name + ".move",
 		F: func(ctx context.Context, arg engine.Arg) error {
 			return self.move(ctx, uint16(arg))
 		}}
-	moveSeq := engine.NewSeq("mdb.evend.conveyor_move(?)").Append(doCalibrate).Append(doMove)
+	moveSeq := engine.NewSeq(self.name + ".move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
 
 	doShake := engine.FuncArg{
-		Name: "mdb.evend.conveyor.shake",
+		Name: self.name + ".shake",
 		F: func(ctx context.Context, arg engine.Arg) error {
 			return self.shake(ctx, uint8(arg))
 		}}
-	g.Engine.RegisterNewSeq("mdb.evend.conveyor_shake(?)", doCalibrate, doShake)
+	g.Engine.RegisterNewSeq(self.name+".shake(?)", doCalibrate, doShake)
 
 	err := self.Generic.FIXME_initIO(ctx)
 	if keepaliveInterval > 0 {
 		go self.Generic.dev.Keepalive(keepaliveInterval, g.Alive.StopChan())
 	}
-	return errors.Annotatef(err, "evend.%s.init", self.dev.Name)
+	return errors.Annotate(err, self.name+".init")
 }
 
 func (self *DeviceConveyor) calibrate(ctx context.Context) error {
-	const tag = "mdb.evend.conveyor.calibrate"
-	// self.dev.Log.Debugf("mdb.evend.conveyor calibrate ready=%t current=%d", self.dev.Ready(), self.currentPos)
+	// self.dev.Log.Debugf("%s calibrate ready=%t current=%d", self.name, self.dev.Ready(), self.currentPos)
 	if self.currentPos >= 0 {
 		return nil
 	}
-	// self.dev.Log.Debugf("mdb.evend.conveyor calibrate begin")
+	// self.dev.Log.Debugf("%s calibrate begin", self.name)
 	err := self.move(ctx, 0)
 	if err == nil {
-		self.dev.Log.Debugf("mdb.evend.conveyor calibrate success")
+		self.dev.Log.Debugf("%s calibrate success", self.name)
 	}
-	return errors.Annotate(err, tag)
+	return errors.Annotate(err, self.name+".calibrate")
 }
 
 func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
-	tag := fmt.Sprintf("mdb.evend.conveyor.move:%d", position)
+	tag := fmt.Sprintf("%s.move:%d", self.name, position)
 
 	doWaitDone := engine.Func{F: func(ctx context.Context) error {
 		timeout := self.maxTimeout
@@ -112,7 +111,7 @@ func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 }
 
 func (self *DeviceConveyor) shake(ctx context.Context, arg uint8) error {
-	tag := fmt.Sprintf("mdb.evend.conveyor.shake:%d", arg)
+	tag := fmt.Sprintf("%s.shake:%d", self.name, arg)
 
 	doWaitDone := engine.Func{F: func(ctx context.Context) error {
 		err := self.Generic.NewWaitDone(tag, self.maxTimeout).Do(ctx)

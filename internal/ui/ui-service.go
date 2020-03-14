@@ -97,9 +97,8 @@ func (self *UI) onServiceBegin(ctx context.Context) State {
 	})
 	// self.g.Log.Debugf("invlist=%v, invidx=%d", self.Service.invList, self.Service.invIdx)
 
-	err := self.g.Engine.ExecList(ctx, "on_service_begin", self.g.Config.Engine.OnServiceBegin)
-	if err != nil {
-		self.g.Error(err)
+	if errs := self.g.Engine.ExecList(ctx, "on_service_begin", self.g.Config.Engine.OnServiceBegin); len(errs) != 0 {
+		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_service_begin"))
 		return StateBroken
 	}
 
@@ -417,8 +416,8 @@ func (self *UI) onServiceMoneyLoad(ctx context.Context) State {
 
 func (self *UI) onServiceReport(ctx context.Context) State {
 	_ = self.g.Tele.Report(ctx, true)
-	if err := self.g.Engine.ExecList(ctx, "service-report", []string{"money.cashbox_zero"}); err != nil {
-		self.g.Error(err)
+	if errs := self.g.Engine.ExecList(ctx, "service-report", []string{"money.cashbox_zero"}); len(errs) != 0 {
+		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "service-report"))
 	}
 	return StateServiceMenu
 }
@@ -435,9 +434,8 @@ func (self *UI) onServiceEnd(ctx context.Context) State {
 		}
 	}
 
-	err := self.g.Engine.ExecList(ctx, "on_service_end", self.g.Config.Engine.OnServiceEnd)
-	if err != nil {
-		self.g.Error(err)
+	if errs := self.g.Engine.ExecList(ctx, "on_service_end", self.g.Config.Engine.OnServiceEnd); len(errs) != 0 {
+		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_service_end"))
 		return StateBroken
 	}
 	return StateDefault

@@ -23,22 +23,22 @@ func Enum(ctx context.Context) error {
 
 	go helpers.WrapErrChan(&wg, errch, func() error {
 		dev := &DeviceConveyor{}
-		return g.RegisterDevice("mdb.evend.conveyor", dev, func() error { return dev.init(ctx) })
+		return g.RegisterDevice("evend.conveyor", dev, func() error { return dev.init(ctx) })
 	})
 
 	go helpers.WrapErrChan(&wg, errch, func() error {
 		dev := &DeviceCup{}
-		return g.RegisterDevice("mdb.evend.cup", dev, func() error { return dev.init(ctx) })
+		return g.RegisterDevice("evend.cup", dev, func() error { return dev.init(ctx) })
 	})
 
 	go helpers.WrapErrChan(&wg, errch, func() error {
 		dev := &DeviceElevator{}
-		return g.RegisterDevice("mdb.evend.elevator", dev, func() error { return dev.init(ctx) })
+		return g.RegisterDevice("evend.elevator", dev, func() error { return dev.init(ctx) })
 	})
 
 	go helpers.WrapErrChan(&wg, errch, func() error {
 		dev := &DeviceEspresso{}
-		return g.RegisterDevice("mdb.evend.espresso", dev, func() error { return dev.init(ctx) })
+		return g.RegisterDevice("evend.espresso", dev, func() error { return dev.init(ctx) })
 	})
 
 	for i := 1; i <= Nhoppers; i++ {
@@ -47,23 +47,23 @@ func Enum(ctx context.Context) error {
 			dev := &DeviceHopper{}
 			addr := uint8(0x40 + (i-1)*8)
 			suffix := strconv.Itoa(i)
-			return g.RegisterDevice("mdb.evend.hopper"+suffix, dev, func() error { return dev.init(ctx, addr, suffix) })
+			return g.RegisterDevice("evend.hopper"+suffix, dev, func() error { return dev.init(ctx, addr, suffix) })
 		})
 	}
 
 	go helpers.WrapErrChan(&wg, errch, func() error {
 		dev := &DeviceMixer{}
-		return g.RegisterDevice("mdb.evend.mixer", dev, func() error { return dev.init(ctx) })
+		return g.RegisterDevice("evend.mixer", dev, func() error { return dev.init(ctx) })
 	})
 
 	go helpers.WrapErrChan(&wg, errch, func() error {
 		dev := &DeviceMultiHopper{}
-		return g.RegisterDevice("mdb.evend.multihopper", dev, func() error { return dev.init(ctx) })
+		return g.RegisterDevice("evend.multihopper", dev, func() error { return dev.init(ctx) })
 	})
 
 	go helpers.WrapErrChan(&wg, errch, func() error {
 		dev := &DeviceValve{}
-		return g.RegisterDevice("mdb.evend.valve", dev, func() error { return dev.init(ctx) })
+		return g.RegisterDevice("evend.valve", dev, func() error { return dev.init(ctx) })
 	})
 
 	wg.Wait()

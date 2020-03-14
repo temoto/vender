@@ -163,6 +163,8 @@ func (self *Engine) ResolveOrLazy(action string) (Doer, error) {
 var reNotSpace = regexp.MustCompile(`\S+`)
 
 func (self *Engine) ParseText(tag, text string) (Doer, error) {
+	// TODO cache with github.com/hashicorp/golang-lru
+
 	errs := make([]error, 0)
 	words := reNotSpace.FindAllString(text, -1)
 
@@ -177,24 +179,29 @@ func (self *Engine) ParseText(tag, text string) (Doer, error) {
 	return tx, helpers.FoldErrors(errs)
 }
 
-func (self *Engine) ExecList(ctx context.Context, tag string, list []string) error {
+func (self *Engine) Exec(ctx context.Context, d Doer) error {
+	err := d.Validate()
+	if err == nil {
+		err = d.Do(ctx)
+	}
+	return err
+}
+
+func (self *Engine) ExecList(ctx context.Context, tag string, list []string) []error {
 	self.Log.Debugf("engine.ExecList tag=%s list=%v", tag, list)
 
-	errs := make([]error, 0)
+	errs := make([]error, 0, len(list))
 	for i, text := range list {
 		itemTag := fmt.Sprintf("%s:%d", tag, i)
 		d, err := self.ParseText(itemTag, text)
 		if err == nil {
-			err = d.Validate()
-		}
-		if err == nil {
-			err = d.Do(ctx)
+			err = self.Exec(ctx, d)
 		}
 		if err != nil {
 			errs = append(errs, err)
 		}
 	}
-	return errors.Annotate(helpers.FoldErrors(errs), tag)
+	return errs
 }
 
 // Test `error` or `Doer` against ErrNotResolved

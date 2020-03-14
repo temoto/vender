@@ -11,6 +11,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/atomic_clock"
 	"github.com/temoto/vender/internal/engine"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )
 
@@ -37,7 +38,7 @@ type Device struct { //nolint:maligned
 	lastReset   *atomic_clock.Clock // last RESET attempt, 0 only at init, monotonic
 	Log         *log2.Log
 	Address     uint8
-	Name        string
+	name        string
 	ByteOrder   binary.ByteOrder
 	PacketReset Packet
 	PacketSetup Packet
@@ -63,7 +64,7 @@ func (self *Device) Init(bus *Bus, addr uint8, name string, byteOrder binary.Byt
 	self.ByteOrder = byteOrder
 	self.Log = bus.Log
 	self.bus = bus
-	self.Name = name
+	self.name = name
 	self.errCode = ErrCodeNone
 	self.LastOk = atomic_clock.New()
 	self.LastOff = atomic_clock.Now()
@@ -91,7 +92,7 @@ func (self *Device) Init(bus *Bus, addr uint8, name string, byteOrder binary.Byt
 	self.PacketReset = MustPacketFromBytes([]byte{self.Address + 0}, true)
 	self.PacketSetup = MustPacketFromBytes([]byte{self.Address + 1}, true)
 	self.PacketPoll = MustPacketFromBytes([]byte{self.Address + 3}, true)
-	self.DoReset = engine.Func0{Name: fmt.Sprintf("mdb.%s.reset", self.Name), F: self.Reset}
+	self.DoReset = engine.Func0{Name: fmt.Sprintf("%s.reset", self.name), F: self.Reset}
 	self.SetState(DeviceInited)
 
 	if _, ok := bus.u.(*MockUart); ok {
@@ -100,6 +101,8 @@ func (self *Device) Init(bus *Bus, addr uint8, name string, byteOrder binary.Byt
 	}
 }
 
+func (self *Device) Name() string { return self.name }
+
 func (self *Device) TeleError(e error) { self.bus.Error(e) }
 
 func (self *Device) ValidateErrorCode() error {
@@ -107,7 +110,7 @@ func (self *Device) ValidateErrorCode() error {
 	if value == ErrCodeNone {
 		return nil
 	}
-	return errors.Errorf("mdb.%s unhandled errorcode=%d", self.Name, value)
+	return errors.Errorf("%s unhandled errorcode=%d", self.name, value)
 }
 
 func (self *Device) ValidateOnline() error {
@@ -115,7 +118,7 @@ func (self *Device) ValidateOnline() error {
 	if st.Online() {
 		return nil
 	}
-	return errors.Errorf("mdb.%s state=%s offline duration=%v", self.Name, st.String(), atomic_clock.Since(self.LastOff))
+	return errors.Errorf("%s state=%s offline duration=%v", self.name, st.String(), atomic_clock.Since(self.LastOff))
 }
 
 // Command is known to be supported, MDB timeout means remote is offline.
@@ -139,7 +142,7 @@ func (self *Device) TxMaybe(request Packet, response *Packet) error {
 	defer self.cmdLk.Unlock()
 	st := self.State()
 	err := self.tx(request, response, txOptMaybe)
-	return errors.Annotatef(err, "mdb.%s TxMaybe request=%x state=%s", self.Name, request.Bytes(), st.String())
+	return errors.Annotatef(err, "%s TxMaybe request=%x state=%s", self.name, request.Bytes(), st.String())
 }
 
 func (self *Device) TxCustom(request Packet, response *Packet, opt TxOpt) error {
@@ -147,12 +150,12 @@ func (self *Device) TxCustom(request Packet, response *Packet, opt TxOpt) error 
 	defer self.cmdLk.Unlock()
 	st := self.State()
 	err := self.tx(request, response, opt)
-	return errors.Annotatef(err, "mdb.%s TxCustom request=%x state=%s", self.Name, request.Bytes(), st.String())
+	return errors.Annotatef(err, "%s TxCustom request=%x state=%s", self.name, request.Bytes(), st.String())
 }
 
 func (self *Device) TxSetup() error {
 	err := self.TxKnown(self.PacketSetup, &self.SetupResponse)
-	return errors.Annotatef(err, "mdb.%s SETUP", self.Name)
+	return errors.Annotatef(err, "%s SETUP", self.name)
 }
 
 func (self *Device) SetError(e error) {
@@ -162,13 +165,12 @@ func (self *Device) SetError(e error) {
 
 func (self *Device) ErrorCode() int32 { return atomic.LoadInt32(&self.errCode) }
 func (self *Device) SetErrorCode(c int32) {
-	tag := "mdb." + self.Name
 	prev := atomic.SwapInt32(&self.errCode, c)
 	if prev != ErrCodeNone && c != ErrCodeNone {
-		self.Log.Infof("%s PLEASE REPORT SetErrorCode overwrite previous=%d", tag, prev)
+		self.Log.Infof("%s PLEASE REPORT SetErrorCode overwrite previous=%d", self.name, prev)
 	}
 	if prev == ErrCodeNone && c != ErrCodeNone {
-		self.SetError(fmt.Errorf("%s errcode=%d", tag, c))
+		self.SetError(fmt.Errorf("%s errcode=%d", self.name, c))
 	}
 }
 
@@ -186,7 +188,6 @@ func (self *Device) Reset() error {
 
 // Keep particular devices "hot" to reduce useless POLL time.
 func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
-	tag := "mdb." + self.Name
 	wait := interval
 
 	for {
@@ -209,7 +210,7 @@ func (self *Device) Keepalive(interval time.Duration, stopch <-chan struct{}) {
 		if wait <= 0 {
 			err := self.txKnown(self.PacketPoll, new(Packet))
 			if !IsResponseTimeout(err) {
-				self.Log.Infof("%s Keepalive ignoring err=%v", tag, err)
+				self.Log.Infof("%s Keepalive ignoring err=%v", self.name, err)
 			}
 			wait = interval
 		}
@@ -275,35 +276,33 @@ func (self *Device) XXX_FIXME_SetAllDelays(d time.Duration) {
 
 // cmdLk used to ensure no concurrent commands during delays
 func (self *Device) locked_reset() error {
-	tag := fmt.Sprintf("mdb.%s", self.Name)
-
 	resetAge := atomic_clock.Since(self.lastReset)
 	if resetAge < self.DelayOffline { // don't RESET too often
-		self.Log.Debugf("%s locked_reset delay=%v", tag, self.DelayOffline-resetAge)
+		self.Log.Debugf("%s locked_reset delay=%v", self.name, self.DelayOffline-resetAge)
 		time.Sleep(self.DelayOffline - resetAge)
 	}
 
 	// st := self.State()
-	// self.Log.Debugf("%s locked_reset begin state=%s", tag, st.String())
+	// self.Log.Debugf("%s locked_reset begin state=%s", self.name, st.String())
 	self.LastOff.SetNowIfZero() // consider device offline from now till successful response
 	// self.SetState(DeviceInited)
 	time.Sleep(self.DelayBeforeReset)
 	err := self.tx(self.PacketReset, new(Packet), txOptReset)
-	// self.Log.Debugf("%s locked_reset after state=%s r.E=%v r.P=%s", tag, st.String(), r.E, r.P.Format())
+	// self.Log.Debugf("%s locked_reset after state=%s r.E=%v r.P=%s", self.name, st.String(), r.E, r.P.Format())
 	self.lastReset.SetNow()
 	atomic.StoreInt32(&self.errCode, ErrCodeNone)
 	if err != nil {
-		err = errors.Annotatef(err, "%s RESET", tag)
+		err = errors.Annotatef(err, "%s RESET", self.name)
 		return err
 	}
-	self.Log.Infof("%s addr=%02x is working", tag, self.Address)
+	self.Log.Infof("%s addr=%02x is working", self.name, self.Address)
 	time.Sleep(self.DelayAfterReset)
 	return nil
 }
 
 func (self *Device) txKnown(request Packet, response *Packet) error {
 	st := self.State()
-	self.Log.Debugf("mdb.%s txKnown request=%x state=%s", self.Name, request.Bytes(), st.String())
+	self.Log.Debugf("%s txKnown request=%x state=%s", self.name, request.Bytes(), st.String())
 	return self.tx(request, response, txOptKnown)
 }
 
@@ -312,7 +311,7 @@ func (self *Device) tx(request Packet, response *Packet, opt TxOpt) error {
 	st := self.State()
 	switch st {
 	case DeviceInvalid:
-		return errors.Annotatef(ErrStateInvalid, "mdb.%s", self.Name)
+		return errors.Annotatef(ErrStateInvalid, self.name)
 
 	case DeviceInited: // success path
 		if !opt.NoReset {
@@ -327,13 +326,13 @@ func (self *Device) tx(request Packet, response *Packet, opt TxOpt) error {
 		}
 
 	case DeviceOffline:
-		self.Log.Debugf("mdb.%s tx request=%x state=%s offline duration=%v", self.Name, request.Bytes(), st.String(), atomic_clock.Since(self.LastOff))
+		self.Log.Debugf("%s tx request=%x state=%s offline duration=%v", self.name, request.Bytes(), st.String(), atomic_clock.Since(self.LastOff))
 		if opt.ResetOffline && !opt.NoReset {
 			err = self.locked_reset()
 		}
 
 	default:
-		panic(fmt.Sprintf("code error mdb.%s tx request=%x unknown state=%v", self.Name, request.Bytes(), st))
+		panic(fmt.Sprintf("code error %s tx request=%x unknown state=%v", self.name, request.Bytes(), st))
 	}
 	if opt.RequireOK {
 		if st2 := self.State(); !st2.Ok() {
@@ -345,7 +344,7 @@ func (self *Device) tx(request Packet, response *Packet, opt TxOpt) error {
 		err = self.bus.Tx(request, response)
 	}
 	if err == nil {
-		// self.Log.Debugf("mdb.%s since last ok %v", self.Name, atomic_clock.Since(self.LastOk))
+		// self.Log.Debugf("%s since last ok %v", self.name, atomic_clock.Since(self.LastOk))
 		self.LastOk.SetNow()
 		self.LastOff.Set(0)
 		// Upgrade any state except Ready to Online
@@ -358,14 +357,14 @@ func (self *Device) tx(request Packet, response *Packet, opt TxOpt) error {
 		if opt.TimeoutOffline {
 			self.LastOff.SetNowIfZero()
 			self.SetState(DeviceOffline)
-			err = errors.Wrapf(err, ErrOffline, "mdb.%s is offline", self.Name)
+			err = errors.Wrap(err, types.DeviceOfflineError{Device: self})
 		}
 	} else { // other error
-		err = errors.Annotatef(err, "mdb.%s tx request=%x state=%s", self.Name, request.Bytes(), st.String())
+		err = errors.Annotatef(err, "%s tx request=%x state=%s", self.name, request.Bytes(), st.String())
 		self.SetError(err)
 	}
-	self.Log.Debugf("mdb.%s tx request=%x -> ok=%t timeout=%t state %s -> %s err=%v",
-		self.Name, request.Bytes(), err == nil, IsResponseTimeout(err), st.String(), self.State().String(), err)
+	self.Log.Debugf("%s tx request=%x -> ok=%t state %s -> %s err=%v",
+		self.name, request.Bytes(), err == nil, st, self.State(), err)
 	return err
 }
 

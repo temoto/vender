@@ -13,11 +13,12 @@ import (
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/helpers"
 	state_new "github.com/temoto/vender/internal/state/new"
+	"github.com/temoto/vender/internal/types"
 )
 
 type _PI = money.PollItem
 
-const testConfig = `hardware { device "mdb.bill" { required=true } } money { scale=100 }`
+const testConfig = `hardware { device "bill" { required=true } } money { scale=100 }`
 const testScalingFactor currency.Nominal = 10
 const devScaling currency.Nominal = 100
 
@@ -91,8 +92,8 @@ func TestBillOffline(t *testing.T) {
 
 	err := Enum(ctx)
 	require.Error(t, err, "check config")
-	assert.Contains(t, err.Error(), "mdb.bill is offline")
-	assert.Equal(t, mdb.ErrOffline, errors.Cause(err))
+	assert.Contains(t, err.Error(), "bill is offline")
+	assert.IsType(t, types.DeviceOfflineError{}, errors.Cause(err))
 }
 
 func TestBillPoll(t *testing.T) {

@@ -15,13 +15,14 @@ import (
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/internal/state"
 	state_new "github.com/temoto/vender/internal/state/new"
+	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )
 
 type _PI = money.PollItem
 
 const testScalingFactor currency.Nominal = 100
-const testConfig = `hardware { device "mdb.coin" { required=true } }
+const testConfig = `hardware { device "coin" { required=true } }
 money { scale=100 change_over_compensate=10 }`
 
 func mockInitRs() []mdb.MockR {
@@ -103,8 +104,8 @@ func TestCoinOffline(t *testing.T) {
 
 	err := Enum(ctx)
 	require.Error(t, err, "check config")
-	assert.Contains(t, err.Error(), "mdb.coin is offline")
-	assert.Equal(t, errors.Cause(err), mdb.ErrOffline)
+	assert.Contains(t, err.Error(), "coin is offline")
+	assert.IsType(t, types.DeviceOfflineError{}, errors.Cause(err))
 	dev, err := g.GetDevice(deviceName)
 	require.NoError(t, err)
 	ca := dev.(*CoinAcceptor)
