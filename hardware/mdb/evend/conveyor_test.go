@@ -42,6 +42,10 @@ func TestConveyor(t *testing.T) {
 		{"db", "50"},
 		{"db", ""},
 
+		{"db", ""},
+		{"dd101f", ""},
+		{"db", ""},
+
 		// TODO test + handle it too
 		// {"db", ""},
 		// {"da016707", ""},

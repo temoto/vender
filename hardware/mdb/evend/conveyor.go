@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/state"
@@ -17,6 +18,7 @@ const ConveyorMinTimeout = 1 * time.Second
 type DeviceConveyor struct { //nolint:maligned
 	Generic
 
+	DoSetSpeed engine.FuncArg
 	maxTimeout time.Duration
 	minSpeed   uint16
 	currentPos int16 // estimated
@@ -38,6 +40,8 @@ func (self *DeviceConveyor) init(ctx context.Context) error {
 	g.Log.Debugf("evend.conveyor minSpeed=%d maxTimeout=%v keepalive=%v", self.minSpeed, self.maxTimeout, keepaliveInterval)
 	self.dev.DelayNext = 245 * time.Millisecond // empirically found lower total WaitReady
 	self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
+	self.DoSetSpeed = self.newSetSpeed()
+
 
 	doCalibrate := engine.Func{Name: self.name + ".calibrate", F: self.calibrate}
 	doMove := engine.FuncArg{
@@ -47,6 +51,7 @@ func (self *DeviceConveyor) init(ctx context.Context) error {
 		}}
 	moveSeq := engine.NewSeq(self.name + ".move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
+	g.Engine.Register("evend.conveyor.set_speed(?)", self.DoSetSpeed)
 
 	doShake := engine.FuncArg{
 		Name: self.name + ".shake",
@@ -129,6 +134,23 @@ func (self *DeviceConveyor) shake(ctx context.Context, arg uint8) error {
 		Append(doWaitDone)
 	err := seq.Do(ctx)
 	return errors.Annotate(err, tag)
+}
+
+func (self *DeviceConveyor) newSetSpeed() engine.FuncArg {
+	tag := self.name + ".set_speed"
+
+	return engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
+		speed := uint8(arg)
+		bs := []byte{self.dev.Address + 5, 0x10, speed}
+		request := mdb.MustPacketFromBytes(bs, true)
+		response := mdb.Packet{}
+		err := self.dev.TxCustom(request, &response, mdb.TxOpt{})
+		if err != nil {
+			return errors.Annotatef(err, "%s target=%d request=%x", tag, speed, request.Bytes())
+		}
+		self.dev.Log.Debugf("%s target=%d request=%x response=%x", tag, speed, request.Bytes(), response.Bytes())
+		return nil
+	}}
 }
 
 func speedDistanceDuration(speedPerSecond float32, distance uint) time.Duration {
