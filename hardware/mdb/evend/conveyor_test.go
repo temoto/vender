@@ -42,9 +42,7 @@ func TestConveyor(t *testing.T) {
 		{"db", "50"},
 		{"db", ""},
 
-		{"db", ""},
 		{"dd101f", ""},
-		{"db", ""},
 
 		// TODO test + handle it too
 		// {"db", ""},
@@ -58,4 +56,5 @@ func TestConveyor(t *testing.T) {
 	g.Engine.TestDo(t, ctx, "conveyor_move_cup")
 	g.Engine.TestDo(t, ctx, "conveyor_move_elevator")
 	g.Engine.TestDo(t, ctx, "evend.conveyor.shake(4)")
+	g.Engine.TestDo(t, ctx, "evend.conveyor.set_speed(31)")
 }

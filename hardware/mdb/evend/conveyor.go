@@ -42,7 +42,6 @@ func (self *DeviceConveyor) init(ctx context.Context) error {
 	self.Generic.Init(ctx, 0xd8, "conveyor", proto2)
 	self.DoSetSpeed = self.newSetSpeed()
 
-
 	doCalibrate := engine.Func{Name: self.name + ".calibrate", F: self.calibrate}
 	doMove := engine.FuncArg{
 		Name: self.name + ".move",
@@ -51,7 +50,7 @@ func (self *DeviceConveyor) init(ctx context.Context) error {
 		}}
 	moveSeq := engine.NewSeq(self.name + ".move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register(moveSeq.String(), self.Generic.WithRestart(moveSeq))
-	g.Engine.Register("evend.conveyor.set_speed(?)", self.DoSetSpeed)
+	g.Engine.Register(self.name+".set_speed(?)", self.DoSetSpeed)
 
 	doShake := engine.FuncArg{
 		Name: self.name + ".shake",
