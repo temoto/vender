@@ -7,6 +7,7 @@ type Config struct { //nolint:maligned
 		KeepaliveMs int `hcl:"keepalive_ms"`
 		MinSpeed    int `hcl:"min_speed"`
 		PositionMax int `hcl:"position_max"`
+		LogAll		bool `hcl:"logging"`
 	} `hcl:"conveyor"`
 	Cup struct { //nolint:maligned
 		AssertBusyDelayMs  int `hcl:"assert_busy_delay_ms"`
@@ -16,6 +17,7 @@ type Config struct { //nolint:maligned
 	Elevator struct { //nolint:maligned
 		KeepaliveMs int `hcl:"keepalive_ms"`
 		TimeoutSec  int `hcl:"timeout_sec"`
+		LogAll		bool `hcl:"logging"`
 	} `hcl:"elevator"`
 	Espresso struct { //nolint:maligned
 		TimeoutSec int `hcl:"timeout_sec"`
@@ -27,6 +29,7 @@ type Config struct { //nolint:maligned
 		KeepaliveMs    int `hcl:"keepalive_ms"`
 		MoveTimeoutSec int `hcl:"move_timeout_sec"`
 		ShakeTimeoutMs int `hcl:"shake_timeout_ms"`
+		LogAll		bool `hcl:"logging"`
 	} `hcl:"mixer"`
 	Valve struct { //nolint:maligned
 		// TODO TemperatureCold int     `hcl:"temperature_cold"`

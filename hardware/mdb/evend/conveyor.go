@@ -81,7 +81,9 @@ func (self *DeviceConveyor) calibrate(ctx context.Context) error {
 
 func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 	tag := fmt.Sprintf("%s.move:%d", self.name, position)
-
+	tbegin := time.Now()
+	if (state.GetGlobal(ctx).Config.Hardware.Evend.Conveyor.LogAll) { self.dev.Log.Infof("%s.move:%d begin", self.name, position)}
+	
 	doWaitDone := engine.Func{F: func(ctx context.Context) error {
 		timeout := self.maxTimeout
 		if self.dev.Ready() && self.currentPos >= 0 {
@@ -99,6 +101,7 @@ func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 			self.currentPos = -1
 			// TODO check SetReady(false)
 		} else {
+			if (state.GetGlobal(ctx).Config.Hardware.Evend.Conveyor.LogAll) { self.dev.Log.Infof("%s.move:%d duration:%v", self.name, position, time.Since(tbegin)) }
 			self.currentPos = int16(position)
 			self.dev.SetReady()
 		}
