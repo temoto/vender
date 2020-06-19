@@ -85,8 +85,8 @@ func (self *DeviceElevator) moveProper(ctx context.Context, arg engine.Arg) (err
 func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err error) {
 	position := uint8(arg)
 	tag := fmt.Sprintf("%s.moveRaw:%d", self.name, position)
-	tbegin := time.Now()
-	if (state.GetGlobal(ctx).Config.Hardware.Evend.Elevator.LogAll) { self.dev.Log.Infof("%s.move:%d begin", self.name, position)}
+	// tbegin := time.Now()
+	// if (state.GetGlobal(ctx).Config.Hardware.Evend.Elevator.LogAll) { self.dev.Log.Infof("%s.move:%d begin", self.name, position)}
 	defer func() {
 		if err != nil {
 			self.calReset()
@@ -110,6 +110,6 @@ func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err er
 		return
 	}
 	err = self.Generic.NewWaitDone(tag, self.timeout).Do(ctx)
-	if (state.GetGlobal(ctx).Config.Hardware.Evend.Elevator.LogAll) { self.dev.Log.Infof("%s.move:%d duration:%v", self.name, position, time.Since(tbegin)) }
+	// if (state.GetGlobal(ctx).Config.Hardware.Evend.Elevator.LogAll) { self.dev.Log.Infof("%s.move:%d duration:%v", self.name, position, time.Since(tbegin)) }
 	return
 }

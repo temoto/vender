@@ -29,7 +29,6 @@ type Config struct { //nolint:maligned
 		KeepaliveMs    int `hcl:"keepalive_ms"`
 		MoveTimeoutSec int `hcl:"move_timeout_sec"`
 		ShakeTimeoutMs int `hcl:"shake_timeout_ms"`
-		LogAll		bool `hcl:"logging"`
 	} `hcl:"mixer"`
 	Valve struct { //nolint:maligned
 		// TODO TemperatureCold int     `hcl:"temperature_cold"`
