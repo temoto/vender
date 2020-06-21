@@ -146,25 +146,25 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 
 			case input.IsAccept(&e.Input):
 				if len(self.inputBuf) == 0 {
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuCodeEmpty)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuCodeEmpty)
 					goto wait
 				}
 
 				mitem, ok := self.menu[string(self.inputBuf)]
 				if !ok {
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuCodeInvalid)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuCodeInvalid)
 					goto wait
 				}
 				credit := moneysys.Credit(ctx)
 				self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
 				if mitem.Price > credit {
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuInsufficientCredit)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuInsufficientCredit)
 					goto wait
 				}
 				self.g.Log.Debugf("mitem=%s validate", mitem.String())
 				if err := mitem.D.Validate(); err != nil {
 					self.g.Log.Errorf("ui-front selected=%s Validate err=%v", mitem.String(), err)
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, MsgMenuNotAvailable)
+					self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuNotAvailable)
 					goto wait
 				}
 
@@ -203,8 +203,8 @@ func (self *UI) frontSelectShow(ctx context.Context, credit currency.Amount) {
 	l1 := config.MsgStateIntro
 	l2 := ""
 	if (credit != 0) || (len(self.inputBuf) > 0) {
-		l1 = MsgCredit + credit.FormatCtx(ctx)
-		l2 = fmt.Sprintf(MsgInputCode, string(self.inputBuf))
+		l1 = self.g.Config.UI.Front.MsgCredit + credit.FormatCtx(ctx)
+		l2 = fmt.Sprintf(self.g.Config.UI.Front.MsgInputCode, string(self.inputBuf))
 	}
 	self.display.SetLines(l1, l2)
 }
@@ -251,11 +251,11 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 	next := StateFrontSelect
 	switch e.Key {
 	case input.EvendKeyCreamLess, input.EvendKeyCreamMore:
-		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", MsgCream, self.FrontResult.Cream))
+		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", self.g.Config.UI.Front.MsgCream, self.FrontResult.Cream))
 		t2 = formatScale(self.FrontResult.Cream, 0, MaxCream, ScaleAlpha)
 		next = StateFrontTune
 	case input.EvendKeySugarLess, input.EvendKeySugarMore:
-		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", MsgSugar, self.FrontResult.Sugar))
+		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", self.g.Config.UI.Front.MsgSugar, self.FrontResult.Sugar))
 		t2 = formatScale(self.FrontResult.Sugar, 0, MaxSugar, ScaleAlpha)
 		next = StateFrontTune
 	}
@@ -305,7 +305,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
 		}
 	}
-	self.display.SetLines(MsgMaking1, MsgMaking2)
+	self.display.SetLines(self.g.Config.UI.Front.MsgMaking1, self.g.Config.UI.Front.MsgMaking2)
 
 	err := selected.D.Do(itemCtx)
 	if invErr := self.g.Inventory.Persist.Store(); invErr != nil {

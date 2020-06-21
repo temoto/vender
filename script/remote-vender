@@ -2,7 +2,7 @@
 set -eu
 base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 test_flag=(-race -timeout=11s)
-: ${remote="pi@pipi"}
+: ${remote="vmc@vm-1"}
 cd "$base"
 
 go test "${test_flag[@]}" ./... >/dev/null || go test -v "${test_flag[@]}" ./...
