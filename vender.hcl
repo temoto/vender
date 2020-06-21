@@ -70,6 +70,7 @@ hardware {
       keepalive_ms = 0
       min_speed    = 200
       position_max = 0
+	  logging      = true
     }
 
     cup {
@@ -81,6 +82,7 @@ hardware {
     elevator {
       keepalive_ms = 0
       timeout_sec  = 10
+	  logging      = true
     }
 
     espresso {
