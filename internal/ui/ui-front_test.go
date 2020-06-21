@@ -43,11 +43,11 @@ ui {
 
 	steps := []step{
 		{expect: env._T("hello tune", " "), inev: env._Key(input.EvendKeyCreamMore)},
-		{expect: env._T(fmt.Sprintf("%s  /5", ui.MsgCream), "   - \x97\x97\x97\x97\x97\x94 +   "), inev: env._Key(input.EvendKeySugarLess)},
-		{expect: env._T(fmt.Sprintf("%s  /3", ui.MsgSugar), "   - \x97\x97\x95\x94\x94\x94 +   "), inev: env._Key(input.EvendKeySugarLess)},
-		{expect: env._T(fmt.Sprintf("%s  /2", ui.MsgSugar), "   - \x97\x96\x94\x94\x94\x94 +   "), inev: env._Key('1')},
-		{expect: env._T(fmt.Sprintf("%s0", ui.MsgCredit), fmt.Sprintf(ui.MsgInputCode, "1")), inev: env._KeyAccept},
-		{expect: env._T(ui.MsgMaking1, ui.MsgMaking2), inev: env._Timeout},
+		{expect: env._T(fmt.Sprintf("%s  /5", g.Config.UI.Front.MsgCream), "   - \x97\x97\x97\x97\x97\x94 +   "), inev: env._Key(input.EvendKeySugarLess)},
+		{expect: env._T(fmt.Sprintf("%s  /3", g.Config.UI.Front.MsgSugar), "   - \x97\x97\x95\x94\x94\x94 +   "), inev: env._Key(input.EvendKeySugarLess)},
+		{expect: env._T(fmt.Sprintf("%s  /2", g.Config.UI.Front.MsgSugar), "   - \x97\x96\x94\x94\x94\x94 +   "), inev: env._Key('1')},
+		{expect: env._T(fmt.Sprintf("%s0", g.Config.UI.Front.MsgCredit), fmt.Sprintf(g.Config.UI.Front.MsgInputCode, "1")), inev: env._KeyAccept},
+		{expect: env._T(g.Config.UI.Front.MsgMaking1, g.Config.UI.Front.MsgMaking2), inev: env._Timeout},
 		{},
 	}
 	uiTestWait(t, env, steps)
@@ -81,8 +81,8 @@ ui {
 
 	steps := []step{
 		{expect: env._T("money-abort", ""), inev: env._Key(input.EvendKeyCreamMore)},
-		{expect: env._T(fmt.Sprintf("%s  /5", ui.MsgCream), "   - \x97\x97\x97\x97\x97\x94 +   "), inev: env._Key('1')},
-		{expect: env._T(fmt.Sprintf("%s0", ui.MsgCredit), fmt.Sprintf(ui.MsgInputCode, "1")), inev: env._MoneyAbort},
+		{expect: env._T(fmt.Sprintf("%s  /5", g.Config.UI.Front.MsgCream), "   - \x97\x97\x97\x97\x97\x94 +   "), inev: env._Key('1')},
+		{expect: env._T(fmt.Sprintf("%s0", g.Config.UI.Front.MsgCredit), fmt.Sprintf(g.Config.UI.Front.MsgInputCode, "1")), inev: env._MoneyAbort},
 		{}, // MoneyKeyAbort -> ui.StateFrontEnd
 	}
 	uiTestWait(t, env, steps)
@@ -150,13 +150,13 @@ ui {
 	env.requireDisplay(t, "please buy", "")
 	require.NoError(t, moneysys.XXX_InjectCoin(500))
 	env.g.Hardware.Input.Emit(env._Key('1').Input)
-	env.requireDisplay(t, ui.MsgCredit+"5", fmt.Sprintf(ui.MsgInputCode, "1"))
+	env.requireDisplay(t, g.Config.UI.Front.MsgCredit+"5", fmt.Sprintf(g.Config.UI.Front.MsgInputCode, "1"))
 	env.g.Hardware.Input.Emit(env._KeyAccept.Input)
-	env.requireDisplay(t, "", ui.MsgMenuInsufficientCredit)
+	env.requireDisplay(t, "", g.Config.UI.Front.MsgMenuInsufficientCredit)
 	require.NoError(t, moneysys.XXX_InjectCoin(200))
 	env.g.Hardware.Input.Emit(env._KeyAccept.Input)
 	env.requireState(t, ui.StateFrontAccept)
-	env.requireDisplay(t, ui.MsgMaking1, ui.MsgMaking2)
+	env.requireDisplay(t, g.Config.UI.Front.MsgMaking1, g.Config.UI.Front.MsgMaking2)
 	env.requireState(t, ui.StateFrontEnd)
 	if assert.False(t, env.g.Alive.IsRunning(), "ui still running") {
 		env.g.Alive.Wait()

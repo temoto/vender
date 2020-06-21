@@ -2,7 +2,7 @@
 set -eu
 base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 test_flag=(-race -timeout=11s)
-: ${remote="pi@pipi"}
+: ${remote?"set env ssh deploy target"}
 cd "$base"
 
 go test "${test_flag[@]}" ./... >/dev/null || go test -v "${test_flag[@]}" ./...

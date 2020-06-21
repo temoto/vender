@@ -199,7 +199,19 @@ ui {
     msg_broken = "TODO_EDIT showed after critical error"
     msg_locked = "remotely locked"
     msg_wait   = "please wait"
-    reset_sec  = 180
+
+    msg_menu_code_empty          = "Code empty"
+    msg_menu_code_invalid        = "Code invalid"
+    msg_menu_insufficient_credit = "Insufficient credit"
+    msg_menu_not_available       = "Not available"
+    msg_cream                    = "Cream"
+    msg_sugar                    = "Sugar"
+    msg_credit                   = "Credit"
+    msg_making1                  = "Making text line1"
+    msg_making2                  = "Making text line2"
+    msg_input_code               = "Code:%s\x00"
+
+    reset_sec = 180
   }
 }
 
