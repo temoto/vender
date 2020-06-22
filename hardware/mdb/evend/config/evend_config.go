@@ -4,10 +4,10 @@ package evend_config
 
 type Config struct { //nolint:maligned
 	Conveyor struct { //nolint:maligned
-		KeepaliveMs int `hcl:"keepalive_ms"`
-		MinSpeed    int `hcl:"min_speed"`
-		PositionMax int `hcl:"position_max"`
-		LogAll		bool `hcl:"logging"`
+		KeepaliveMs int  `hcl:"keepalive_ms"`
+		MinSpeed    int  `hcl:"min_speed"`
+		PositionMax int  `hcl:"position_max"`
+		LogAll      bool `hcl:"logging"`
 	} `hcl:"conveyor"`
 	Cup struct { //nolint:maligned
 		AssertBusyDelayMs  int `hcl:"assert_busy_delay_ms"`
@@ -15,9 +15,9 @@ type Config struct { //nolint:maligned
 		EnsureTimeoutSec   int `hcl:"ensure_timeout_sec"`
 	} `hcl:"cup"`
 	Elevator struct { //nolint:maligned
-		KeepaliveMs int `hcl:"keepalive_ms"`
-		TimeoutSec  int `hcl:"timeout_sec"`
-		LogAll		bool `hcl:"logging"`
+		KeepaliveMs int  `hcl:"keepalive_ms"`
+		TimeoutSec  int  `hcl:"timeout_sec"`
+		LogAll      bool `hcl:"logging"`
 	} `hcl:"elevator"`
 	Espresso struct { //nolint:maligned
 		TimeoutSec int `hcl:"timeout_sec"`
