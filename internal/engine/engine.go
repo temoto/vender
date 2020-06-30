@@ -24,6 +24,16 @@ type Engine struct {
 	Log     *log2.Log
 	lk      sync.RWMutex
 	actions map[string]Doer
+	profile struct {
+		// optimistic field access guard; fastpath=0 -> profiling disabled, don't touch mutex
+		fastpath uint32
+
+		sync.Mutex // fields below access guard
+
+		re  *regexp.Regexp
+		min time.Duration
+		fun ProfileFunc
+	}
 }
 
 func NewEngine(log *log2.Log) *Engine {
@@ -75,30 +85,52 @@ func (self *Engine) resolve(action string) (Doer, error) {
 	// self.Log.Debugf("engine.resolve action=%s", action)
 	self.lk.RLock()
 	defer self.lk.RUnlock()
+	return self.locked_resolve(action)
+}
+
+type token struct {
+	tag  string
+	norm string
+	arg  string
+	ok   bool
+}
+
+func parseArg(s string) token {
+	match := reActionArg.FindStringSubmatch(s)
+	if match == nil {
+		return token{tag: s}
+	}
+	return token{
+		tag:  match[1],
+		norm: match[1] + "(?)",
+		arg:  match[2],
+		ok:   true,
+	}
+}
+
+func (self *Engine) locked_resolve(action string) (Doer, error) {
 	d, ok := self.actions[action]
 	if ok {
 		// self.Log.Debugf("engine.resolve action=%s resolved d=%v", action, d)
 		return d, nil
 	}
 
-	match := reActionArg.FindStringSubmatch(action)
-	if match == nil {
+	tok := parseArg(action)
+	if !tok.ok {
 		// self.Log.Debugf("engine.resolve action=%s match=nil", action)
 		return nil, NewErrNotResolved(action)
 	}
 
-	normalized := match[1] + "(?)"
-	argString := match[2]
-	d, ok = self.actions[normalized]
-	// self.Log.Debugf("engine.resolve action=%s match=%v normalized=%s ok=%t", action, match, normalized, ok)
+	d, ok = self.actions[tok.norm]
+	// self.Log.Debugf("engine.resolve action=%s match=%v normalized=%s ok=%t", action, match, tok.norm, ok)
 	if !ok {
-		self.Log.Debugf("resolve action=%s normalized=%s not found", action, normalized)
-		err := NewErrNotResolved(normalized)
+		self.Log.Debugf("resolve action=%s normalized=%s not found", action, tok.norm)
+		err := NewErrNotResolved(tok.norm)
 		err.msg = fmt.Sprintf(FmtErrContext, action) + err.msg
 		return nil, err
 	}
-	if argString != "?" {
-		argn, err := strconv.Atoi(argString)
+	if tok.arg != "?" {
+		argn, err := strconv.Atoi(tok.arg)
 		if err != nil {
 			self.Log.Debugf("resolve action=%s err=%s", action, err)
 			return nil, errors.Annotatef(err, FmtErrContext, action)
@@ -110,7 +142,7 @@ func (self *Engine) resolve(action string) (Doer, error) {
 			return nil, errors.Annotatef(err, FmtErrContext, action)
 		}
 		if !applied {
-			self.Log.Debugf("resolve action=%s arg=%v not applied", action, argString)
+			self.Log.Debugf("resolve action=%s arg=%v not applied", action, tok.arg)
 			err = ErrArgNotApplied
 			return nil, errors.Annotatef(err, FmtErrContext, action)
 		}
@@ -179,12 +211,12 @@ func (self *Engine) ParseText(tag, text string) (Doer, error) {
 	return tx, helpers.FoldErrors(errs)
 }
 
-func (self *Engine) Exec(ctx context.Context, d Doer) error {
-	err := d.Validate()
-	if err == nil {
-		err = d.Do(ctx)
-	}
-	return err
+func (self *Engine) Exec(ctx context.Context, d Doer) error { return self.exec(ctx, d, false, true) }
+func (self *Engine) ExecPart(ctx context.Context, d Doer) error {
+	return self.exec(ctx, d, false, false)
+}
+func (self *Engine) ValidateExec(ctx context.Context, d Doer) error {
+	return self.exec(ctx, d, true, true)
 }
 
 func (self *Engine) ExecList(ctx context.Context, tag string, list []string) []error {
@@ -195,13 +227,34 @@ func (self *Engine) ExecList(ctx context.Context, tag string, list []string) []e
 		itemTag := fmt.Sprintf("%s:%d", tag, i)
 		d, err := self.ParseText(itemTag, text)
 		if err == nil {
-			err = self.Exec(ctx, d)
+			err = self.exec(ctx, d, true, true)
 		}
 		if err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return errs
+}
+
+func (self *Engine) exec(ctx context.Context, d Doer, validate, enableProfile bool) (err error) {
+	if validate {
+		err = d.Validate()
+	}
+	if err == nil {
+		if enableProfile {
+			tag := d.String() // FIXME faster .Tag() or cache result
+			if profFun, profMin := self.matchProfile(tag); profFun != nil {
+				tbegin := time.Now()
+				defer func() {
+					if duration := time.Since(tbegin); duration >= profMin {
+						profFun(d, duration)
+					}
+				}()
+			}
+		}
+		err = d.Do(ctx)
+	}
+	return err
 }
 
 // Test `error` or `Doer` against ErrNotResolved

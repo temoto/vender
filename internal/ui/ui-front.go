@@ -307,7 +307,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	}
 	self.display.SetLines(self.g.Config.UI.Front.MsgMaking1, self.g.Config.UI.Front.MsgMaking2)
 
-	err := selected.D.Do(itemCtx)
+	err := self.g.Engine.Exec(itemCtx, selected.D)
 	if invErr := self.g.Inventory.Persist.Store(); invErr != nil {
 		self.g.Error(errors.Annotate(invErr, "critical inventory persist"))
 	}

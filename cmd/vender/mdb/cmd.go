@@ -55,7 +55,7 @@ func Main(ctx context.Context, config *state.Config) error {
 	}
 	defer g.Hardware.Mdb.Uarter.Close()
 
-	if err := doBusReset.Do(ctx); err != nil {
+	if err := g.Engine.ValidateExec(ctx, doBusReset); err != nil {
 		g.Log.Fatal(err)
 	}
 
@@ -99,7 +99,7 @@ func newExecutor(ctx context.Context) func(string) {
 			// TODO continue when input is interactive (tty)
 			return
 		}
-		err = d.Do(ctx)
+		err = g.Engine.ValidateExec(ctx, d)
 		if err != nil {
 			g.Log.Errorf(errors.ErrorStack(err))
 		}

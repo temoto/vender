@@ -37,7 +37,7 @@ func Main(ctx context.Context, config *state.Config) error {
 	g.MustInit(ctx, config)
 	g.Log.Debugf("config=%+v", g.Config)
 
-	if err := doMdbBusReset.Do(ctx); err != nil {
+	if err := g.Engine.ValidateExec(ctx, doMdbBusReset); err != nil {
 		return errors.Annotate(err, "mdb bus reset")
 	}
 
@@ -99,7 +99,7 @@ func newExecutor(ctx context.Context) func(string) {
 			return
 		}
 		tbegin := time.Now()
-		err = d.Do(ctx)
+		err = g.Engine.ValidateExec(ctx, d)
 		if err != nil {
 			g.Log.Errorf(errors.ErrorStack(err))
 		}

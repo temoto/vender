@@ -55,8 +55,7 @@ menu {
 	menuDo := g.Config.Engine.Menu.Items[0].Doer
 	// TODO make sure tuning survives transformations like Force
 	require.NotNil(t, menuDo)
-	require.NoError(t, menuDo.Validate())
-	require.NoError(t, menuDo.Do(ctx))
+	require.NoError(t, g.Engine.ValidateExec(ctx, menuDo))
 	hwSugar1 := <-hwSugar
 	hwTea1 := <-hwTea
 	hwTea2 := <-hwTea

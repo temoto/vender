@@ -65,9 +65,10 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 		}}).
 		Append(engine.Func{
 			F: func(ctx context.Context) error {
-				cupConfig := &state.GetGlobal(ctx).Config.Hardware.Evend.Cup
+				g := state.GetGlobal(ctx)
+				cupConfig := &g.Config.Hardware.Evend.Cup
 				dispenseTimeout := helpers.IntSecondDefault(cupConfig.DispenseTimeoutSec, DefaultCupDispenseTimeout)
-				return self.Generic.NewWaitDone(tag, dispenseTimeout).Do(ctx)
+				return g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, dispenseTimeout))
 			},
 		})
 }
@@ -88,9 +89,10 @@ func (self *DeviceCup) NewEnsure() engine.Doer {
 		Append(self.Generic.NewAction(tag, 0x04)).
 		Append(engine.Func{
 			F: func(ctx context.Context) error {
-				cupConfig := &state.GetGlobal(ctx).Config.Hardware.Evend.Cup
+				g := state.GetGlobal(ctx)
+				cupConfig := &g.Config.Hardware.Evend.Cup
 				ensureTimeout := helpers.IntSecondDefault(cupConfig.EnsureTimeoutSec, DefaultCupEnsureTimeout)
-				return self.Generic.NewWaitDone(tag, ensureTimeout).Do(ctx)
+				return g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, ensureTimeout))
 			},
 		})
 }

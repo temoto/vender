@@ -14,7 +14,7 @@ import (
 func TestGenericProto2Error(t *testing.T) {
 	t.Parallel()
 
-	ctx, _ := state_new.NewTestContext(t, "", ``)
+	ctx, g := state_new.NewTestContext(t, "", ``)
 	mock := mdb.MockFromContext(ctx)
 	defer mock.Close()
 	go mock.Expect([]mdb.MockR{
@@ -36,7 +36,7 @@ func TestGenericProto2Error(t *testing.T) {
 		Append(dev.NewWaitDone(tag, time.Second))
 	ch := make(chan error)
 	go func() {
-		ch <- d.Do(ctx)
+		ch <- g.Engine.Exec(ctx, d)
 	}()
 	select {
 	case err := <-ch:

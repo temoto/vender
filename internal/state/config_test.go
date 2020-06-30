@@ -54,7 +54,7 @@ engine {
 					mockArg += int(arg)
 					return nil
 				}})
-				err := e.Resolve("complex").Do(ctx)
+				err := e.ValidateExec(ctx, e.Resolve("complex"))
 				if err != nil {
 					t.Error(err)
 				}
@@ -168,6 +168,7 @@ engine { inventory {
 			}
 			ctx := context.Background()
 			ctx = context.WithValue(ctx, log2.ContextKey, log)
+			ctx = context.WithValue(ctx, engine.ContextKey, g.Engine)
 			ctx = context.WithValue(ctx, ContextKey, g)
 
 			fs := NewMockFullReader(map[string]string{

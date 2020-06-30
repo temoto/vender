@@ -92,7 +92,7 @@ func (self *BillValidator) init(ctx context.Context) error {
 	self.Device.DoInit = self.newIniter()
 
 	// TODO remove IO from Init()
-	if err = self.Device.DoInit.Do(ctx); err != nil {
+	if err = g.Engine.Exec(ctx, self.Device.DoInit); err != nil {
 		return errors.Annotate(err, tag)
 	}
 	return nil
@@ -378,8 +378,8 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 				return false
 			}
 		})
-		err := self.Device.NewPollLoop(tag, self.Device.PacketPoll, DefaultEscrowTimeout, fun).Do(ctx)
-		if err != nil {
+		d := self.Device.NewPollLoop(tag, self.Device.PacketPoll, DefaultEscrowTimeout, fun)
+		if err := engine.GetGlobal(ctx).Exec(ctx, d); err != nil {
 			return err
 		}
 		return result

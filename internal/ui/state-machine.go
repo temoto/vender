@@ -26,7 +26,7 @@ const (
 	StateFrontBegin   // t=checkVariables +=FrontHello
 	StateFrontSelect  // t=input/money/timeout +inputService=ServiceBegin +input=... +money=... +inputAccept=FrontAccept +timeout=FrontTimeout
 	StateFrontTune    // t=input/money/timeout +inputTune=FrontTune ->FrontSelect
-	StateFrontAccept  // t=Item.Do() +OK=FrontEnd +err=Broken
+	StateFrontAccept  // t=engine.Exec(Item) +OK=FrontEnd +err=Broken
 	StateFrontTimeout // t=saveMoney ->FrontEnd
 	StateFrontEnd     // ->FrontBegin
 

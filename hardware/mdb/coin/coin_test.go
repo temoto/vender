@@ -175,7 +175,8 @@ func TestCoinPayout(t *testing.T) {
 
 	dispensed := new(currency.NominalGroup)
 	dispensed.SetValid(ca.SupportedNominals())
-	err := ca.NewPayout(7*currency.Amount(ca.scalingFactor), dispensed).Do(ctx)
+	g := state.GetGlobal(ctx)
+	err := g.Engine.Exec(ctx, ca.NewPayout(7*currency.Amount(ca.scalingFactor), dispensed))
 	require.NoError(t, err)
 	assert.Equal(t, "1:7,total:7", dispensed.String())
 }
@@ -187,7 +188,8 @@ func TestCoinAccept(t *testing.T) {
 	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 
-	err := ca.AcceptMax(1000).Do(ctx)
+	g := state.GetGlobal(ctx)
+	err := g.Engine.Exec(ctx, ca.AcceptMax(1000))
 	require.NoError(t, err)
 }
 
@@ -215,12 +217,13 @@ func TestCoinGive(t *testing.T) {
 		{"0f03", "0001"},
 	}
 	ctx := mockContext(t, rs)
+	g := state.GetGlobal(ctx)
 	defer mdb.MockFromContext(ctx).Close()
 	ca := newDevice(t, ctx)
 	ca.giveSmart = true // FIXME set in config
 
 	dispensed := new(currency.NominalGroup)
-	err := ca.NewGive(1*currency.Amount(ca.scalingFactor), true, dispensed).Do(ctx)
+	err := g.Engine.Exec(ctx, ca.NewGive(1*currency.Amount(ca.scalingFactor), true, dispensed))
 	require.NoError(t, err)
 	assert.Equal(t, "2:1,total:2", dispensed.String())
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/internal/state"
 	state_new "github.com/temoto/vender/internal/state/new"
 	"github.com/temoto/vender/internal/types"
 )
@@ -134,7 +135,7 @@ func TestBillAcceptMax(t *testing.T) {
 	// FIXME explicit enable/disable escrow in config
 	ctx, bv := testMake(t, []mdb.MockR{{"3400070007", ""}}, testScalingFactor, 0)
 	defer mdb.MockFromContext(ctx).Close()
-	err := bv.AcceptMax(10000).Do(ctx)
+	err := state.GetGlobal(ctx).Engine.Exec(ctx, bv.AcceptMax(10000))
 	require.NoError(t, err)
 }
 

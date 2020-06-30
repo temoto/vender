@@ -25,15 +25,15 @@ type Biller interface {
 	Run(context.Context, *alive.Alive, func(money.PollItem) bool)
 	SupportedNominals() []currency.Nominal
 	EscrowAmount() currency.Amount
-	EscrowAccept(context.Context) error
-	EscrowReject(context.Context) error
+	EscrowAccept() engine.Doer
+	EscrowReject() engine.Doer
 }
 
 var _ Biller = &BillValidator{}
 var _ Biller = Stub{}
 
-func (self *BillValidator) EscrowAccept(ctx context.Context) error { return self.DoEscrowAccept.Do(ctx) }
-func (self *BillValidator) EscrowReject(ctx context.Context) error { return self.DoEscrowReject.Do(ctx) }
+func (self *BillValidator) EscrowAccept() engine.Doer { return self.DoEscrowAccept }
+func (self *BillValidator) EscrowReject() engine.Doer { return self.DoEscrowReject }
 
 type Stub struct{}
 
@@ -56,7 +56,7 @@ func (Stub) SupportedNominals() []currency.Nominal { return nil }
 
 func (Stub) EscrowAmount() currency.Amount { return 0 }
 
-// func (Stub) EscrowAccept(context.Context) error { return errors.NotSupportedf("bill.Stub.EscrowAccept") }
-// func (Stub) EscrowReject(context.Context) error { return errors.NotSupportedf("bill.Stub.EscrowReject") }
-func (Stub) EscrowAccept(context.Context) error { return nil }
-func (Stub) EscrowReject(context.Context) error { return nil }
+// func (Stub) EscrowAccept() engine.Doer { return engine.Fail{E: errors.NotSupportedf("bill.Stub.EscrowAccept")} }
+// func (Stub) EscrowReject() engine.Doer { return engine.Fail{E: errors.NotSupportedf("bill.Stub.EscrowReject")} }
+func (Stub) EscrowAccept() engine.Doer { return engine.Nothing{} }
+func (Stub) EscrowReject() engine.Doer { return engine.Nothing{} }

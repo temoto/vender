@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"regexp"
 	"testing"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
@@ -13,7 +15,7 @@ import (
 func TestNotResolved(t *testing.T) {
 	t.Parallel()
 
-	e := NewEngine(log2.NewTest(t, log2.LDebug))
+	_, e := newTestContext(t)
 	require.NoError(t, e.RegisterParse("root", "sudo make me a sandwich"))
 	e.Register("sudo", Nothing{})
 	e.Register("make", Nothing{})
@@ -32,8 +34,7 @@ func TestNotResolved(t *testing.T) {
 func TestResolveLazyArg(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-	e := NewEngine(log2.NewTest(t, log2.LDebug))
+	ctx, e := newTestContext(t)
 
 	// lazy reference step(?) before register
 	require.NoError(t, e.RegisterParse("seq(?)", "sub step(?) fixed(2)"))
@@ -66,7 +67,7 @@ func TestResolveLazyArg(t *testing.T) {
 func TestParseText(t *testing.T) {
 	t.Parallel()
 
-	e := NewEngine(log2.NewTest(t, log2.LDebug))
+	ctx, e := newTestContext(t)
 	doHello, doWorld := &mockdo{}, Func0{F: func() error { return nil }}
 	e.Register("hello", doHello) // eager register
 	require.NoError(t, e.RegisterParse("subseq", "hello subarg(42)"))
@@ -83,17 +84,41 @@ func TestParseText(t *testing.T) {
 	e.Register("funarg(?)", IgnoreArg{Nothing{}})
 	require.NoError(t, d.Validate())
 	assert.Zero(t, doHello.called)
-	require.NoError(t, d.Do(context.Background()))
+	require.NoError(t, e.Exec(ctx, d))
 	assert.Equal(t, int32(2), doHello.called)
 }
 
 func TestRegisterNewFunc(t *testing.T) {
 	t.Parallel()
 
-	e := NewEngine(log2.NewTest(t, log2.LDebug))
+	ctx, e := newTestContext(t)
 	mock := &mockdo{}
 	e.RegisterNewFunc("lights-on", mock.Do)
 	d := e.Resolve("lights-on")
-	require.NoError(t, d.Validate())
-	require.NoError(t, d.Do(context.Background()))
+	require.NoError(t, e.ValidateExec(ctx, d))
+	assert.Equal(t, int32(1), mock.called)
+}
+
+func TestMeasure(t *testing.T) {
+	t.Parallel()
+
+	durs := make([]time.Duration, 0)
+	mfun := func(d Doer, td time.Duration) {
+		durs = append(durs, td)
+		t.Logf("profile d=%s duration=%s\n", d.String(), td)
+	}
+	ctx, e := newTestContext(t)
+	e.SetProfile(regexp.MustCompile(`^ignore`), 0, mfun)
+	require.NoError(t, e.ValidateExec(ctx, e.Resolve("ignore(115)")))
+	require.Len(t, durs, 1)
+	assert.NotZero(t, durs[0])
+}
+
+func newTestContext(t testing.TB) (context.Context, *Engine) {
+	log := log2.NewTest(t, log2.LDebug)
+	e := NewEngine(log)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, log2.ContextKey, log)
+	ctx = context.WithValue(ctx, ContextKey, e)
+	return ctx, e
 }

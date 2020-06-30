@@ -30,6 +30,7 @@ func NewContext(log *log2.Log, teler tele_api.Teler) (context.Context, *state.Gl
 	}
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, log2.ContextKey, log)
+	ctx = context.WithValue(ctx, engine.ContextKey, g.Engine)
 	ctx = context.WithValue(ctx, state.ContextKey, g)
 
 	return ctx, g

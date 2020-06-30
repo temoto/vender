@@ -61,11 +61,13 @@ func (self RepeatN) Do(ctx context.Context) error {
 	var err error
 	for i := uint(1); i <= self.N && err == nil; i++ {
 		log.Debugf("engine loop %d/%d", i, self.N)
-		err = self.D.Do(ctx)
+		err = GetGlobal(ctx).ExecPart(ctx, self.D)
 	}
 	return err
 }
-func (self RepeatN) String() string { return fmt.Sprintf("RepeatN(N=%d D=%s)", self.N, self.D.String()) }
+func (self RepeatN) String() string {
+	return fmt.Sprintf("RepeatN(N=%d D=%s)", self.N, self.D.String())
+}
 
 type ValidateFunc func() error
 
@@ -90,14 +92,14 @@ type RestartError struct {
 
 func (self *RestartError) Validate() error { return self.Doer.Validate() }
 func (self *RestartError) Do(ctx context.Context) error {
-	first := self.Doer.Do(ctx)
+	first := GetGlobal(ctx).ExecPart(ctx, self.Doer)
 	if first != nil {
 		if self.Check(first) {
-			resetErr := self.Reset.Do(ctx)
+			resetErr := GetGlobal(ctx).ExecPart(ctx, self.Reset)
 			if resetErr != nil {
 				return errors.Wrap(first, resetErr)
 			}
-			return self.Doer.Do(ctx)
+			return GetGlobal(ctx).ExecPart(ctx, self.Doer)
 		}
 	}
 	return first

@@ -114,7 +114,8 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 		Name: "money.give(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
 			dispensed := currency.NominalGroup{}
-			err := self.coin.NewGive(g.Config.ScaleU(uint32(arg)), false, &dispensed).Do(ctx)
+			d := self.coin.NewGive(g.Config.ScaleU(uint32(arg)), false, &dispensed)
+			err := g.Engine.Exec(ctx, d)
 			self.Log.Infof("dispensed=%s", dispensed.String())
 			return err
 		}}
@@ -136,10 +137,11 @@ func (self *MoneySystem) Start(ctx context.Context) error {
 
 func (self *MoneySystem) Stop(ctx context.Context) error {
 	const tag = "money.Stop"
+	g := state.GetGlobal(ctx)
 	errs := make([]error, 0, 8)
 	errs = append(errs, self.Abort(ctx))
-	errs = append(errs, self.bill.AcceptMax(0).Do(ctx))
-	errs = append(errs, self.coin.AcceptMax(0).Do(ctx))
+	errs = append(errs, g.Engine.Exec(ctx, self.bill.AcceptMax(0)))
+	errs = append(errs, g.Engine.Exec(ctx, self.coin.AcceptMax(0)))
 	return errors.Annotate(helpers.FoldErrors(errs), tag)
 }
 

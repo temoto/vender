@@ -99,7 +99,7 @@ func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 		}
 		self.dev.Log.Debugf("%s position current=%d target=%d timeout=%v maxtimeout=%v", tag, self.currentPos, position, timeout, self.maxTimeout)
 
-		err := self.Generic.NewWaitDone(tag, timeout).Do(ctx)
+		err := g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, timeout))
 		if err != nil {
 			self.currentPos = -1
 			// TODO check SetReady(false)
@@ -118,15 +118,16 @@ func (self *DeviceConveyor) move(ctx context.Context, position uint16) error {
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01, byte(position&0xff), byte(position>>8))).
 		Append(doWaitDone)
-	err := seq.Do(ctx)
+	err := g.Engine.Exec(ctx, seq)
 	return errors.Annotate(err, tag)
 }
 
 func (self *DeviceConveyor) shake(ctx context.Context, arg uint8) error {
+	g := state.GetGlobal(ctx)
 	tag := fmt.Sprintf("%s.shake:%d", self.name, arg)
 
 	doWaitDone := engine.Func{F: func(ctx context.Context) error {
-		err := self.Generic.NewWaitDone(tag, self.maxTimeout).Do(ctx)
+		err := g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, self.maxTimeout))
 		if err != nil {
 			self.currentPos = -1
 			// TODO check SetReady(false)
@@ -139,7 +140,7 @@ func (self *DeviceConveyor) shake(ctx context.Context, arg uint8) error {
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, byte(arg), 0)).
 		Append(doWaitDone)
-	err := seq.Do(ctx)
+	err := g.Engine.Exec(ctx, seq)
 	return errors.Annotate(err, tag)
 }
 

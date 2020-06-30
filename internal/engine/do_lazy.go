@@ -56,7 +56,7 @@ func (l *Lazy) Do(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return d.Do(ctx)
+	return GetGlobal(ctx).ExecPart(ctx, d)
 }
 
 func (l *Lazy) String() string { return l.Name }

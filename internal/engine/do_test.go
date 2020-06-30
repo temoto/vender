@@ -29,8 +29,8 @@ func TestArg(t *testing.T) {
 		return fmt.Errorf("this error is expected once")
 	}}
 
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, log2.ContextKey, log2.NewTest(t, log2.LDebug))
+	ctx, _ := newTestContext(t)
+
 	var action Doer = FuncArg{Name: "worker", F: worker}
 
 	cases := []func() Doer{
@@ -68,10 +68,10 @@ func TestArg(t *testing.T) {
 func BenchmarkSequentialDo(b *testing.B) {
 	mkbench := func(kind string, length int) func(b *testing.B) {
 		return func(b *testing.B) {
-			ctx := context.Background()
-			log := log2.NewTest(b, log2.LError)
+			ctx, _ := newTestContext(b)
+			log := log2.ContextValueLogger(ctx)
+			log.SetLevel(log2.LError)
 			log.SetFlags(log2.LTestFlags)
-			ctx = context.WithValue(ctx, log2.ContextKey, log)
 
 			var tx Doer
 			switch kind {

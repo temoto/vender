@@ -77,6 +77,7 @@ func (self *MoneySystem) SetGiftCredit(ctx context.Context, value currency.Amoun
 
 func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Amount) error {
 	const tag = "money.withdraw-prepare"
+	g := state.GetGlobal(ctx)
 
 	self.lk.Lock()
 	defer self.lk.Unlock()
@@ -105,7 +106,7 @@ func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Am
 
 		billEscrowAmount := self.bill.EscrowAmount()
 		if billEscrowAmount != 0 {
-			if err := self.bill.EscrowAccept(ctx); err != nil {
+			if err := g.Engine.Exec(ctx, self.bill.EscrowAccept()); err != nil {
 				err = errors.Annotate(err, tag+"CRITICAL EscrowAccept")
 				self.Log.Error(err)
 			} else {
@@ -166,10 +167,11 @@ func (self *MoneySystem) Abort(ctx context.Context) error {
 func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amount) error {
 	const tag = "money.payout"
 	var err error
+	g := state.GetGlobal(ctx)
 
 	billEscrowAmount := self.bill.EscrowAmount()
 	if billEscrowAmount != 0 && billEscrowAmount <= amount {
-		if err = self.bill.EscrowReject(ctx); err != nil {
+		if err = g.Engine.Exec(ctx, self.bill.EscrowReject()); err != nil {
 			return errors.Annotate(err, tag)
 		}
 		amount -= billEscrowAmount
@@ -181,7 +183,7 @@ func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amou
 	// TODO bill.recycler-release
 
 	dispensed := new(currency.NominalGroup)
-	err = self.coin.NewGive(amount, true, dispensed).Do(ctx)
+	err = g.Engine.Exec(ctx, self.coin.NewGive(amount, true, dispensed))
 	// Warning: `dispensedAmount` may be more or less than `amount`
 	dispensedAmount := dispensed.Total()
 	self.Log.Debugf("%s coin total dispensed=%s", tag, dispensedAmount.FormatCtx(ctx))

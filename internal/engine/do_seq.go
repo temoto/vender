@@ -44,8 +44,9 @@ func (seq *Seq) Validate() error {
 }
 
 func (seq *Seq) Do(ctx context.Context) error {
+	e := GetGlobal(ctx)
 	for _, d := range seq.items {
-		err := d.Do(ctx)
+		err := e.Exec(ctx, d)
 		// log.Printf("seq.Do seq=%s elem=%s err=%v", seq.String(), d.String(), err)
 		if err != nil {
 			return err

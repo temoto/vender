@@ -302,8 +302,7 @@ wait:
 
 	case input.IsAccept(&e):
 		self.display.SetLines(line1, "in progress")
-		err := testCurrent.Do(ctx)
-		if err == nil {
+		if err := self.g.Engine.ValidateExec(ctx, testCurrent); err == nil {
 			self.display.SetLines(line1, "OK")
 		} else {
 			self.g.Error(err)

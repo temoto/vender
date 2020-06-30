@@ -96,7 +96,7 @@ func (self *CoinAcceptor) init(ctx context.Context) error {
 	// TODO register payout,etc
 
 	// TODO (Enum idea) no IO in Init()
-	err = self.Device.DoInit.Do(ctx)
+	err = g.Engine.Exec(ctx, self.Device.DoInit)
 	return errors.Annotate(err, tag)
 }
 

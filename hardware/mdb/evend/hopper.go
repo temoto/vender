@@ -54,17 +54,18 @@ func (self *DeviceMultiHopper) init(ctx context.Context) error {
 
 func newHopperRun(gen *Generic, tag string, argsPrefix []byte) engine.FuncArg {
 	return engine.FuncArg{Name: tag, F: func(ctx context.Context, arg engine.Arg) error {
-		hopperConfig := &state.GetGlobal(ctx).Config.Hardware.Evend.Hopper
+		g := state.GetGlobal(ctx)
+		hopperConfig := &g.Config.Hardware.Evend.Hopper
 		units := uint8(arg)
 		runTimeout := helpers.IntMillisecondDefault(hopperConfig.RunTimeoutMs, DefaultHopperRunTimeout)
 
-		if err := gen.NewWaitReady(tag).Do(ctx); err != nil {
+		if err := g.Engine.Exec(ctx, gen.NewWaitReady(tag)); err != nil {
 			return err
 		}
 		args := append(argsPrefix, units)
 		if err := gen.txAction(args); err != nil {
 			return err
 		}
-		return gen.NewWaitDone(tag, runTimeout*time.Duration(units)+HopperTimeout).Do(ctx)
+		return g.Engine.Exec(ctx, gen.NewWaitDone(tag, runTimeout*time.Duration(units)+HopperTimeout))
 	}}
 }

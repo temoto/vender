@@ -22,9 +22,12 @@ func TestStockErrors(t *testing.T) {
 
 	rand := helpers.RandUnix()
 	try := func(t testing.TB, c engine_config.Stock) string {
-		ctx := context.Background()
 		log := log2.NewTest(t, log2.LDebug)
 		e := engine.NewEngine(log)
+		ctx := context.Background()
+		ctx = context.WithValue(ctx, log2.ContextKey, log)
+		ctx = context.WithValue(ctx, engine.ContextKey, e)
+
 		e.Register("fail", engine.Func0{F: func() error { return errors.New("expected error") }})
 		require.NoError(t, e.RegisterParse("subseq(?)", "unknown(?)"))
 		s, err := NewStock(c, e)
@@ -36,12 +39,7 @@ func TestStockErrors(t *testing.T) {
 		s.Set(initial)
 		if c.RegisterAdd != "" {
 			d := e.Resolve(fmt.Sprintf("add.%s(1)", c.Name))
-			err = d.Validate()
-			if err != nil {
-				return err.Error()
-			}
-			err = d.Do(ctx)
-			if err != nil {
+			if err = e.ValidateExec(ctx, d); err != nil {
 				return err.Error()
 			}
 		}

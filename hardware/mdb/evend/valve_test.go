@@ -57,7 +57,7 @@ hardware { device "evend.valve" {} }`)
 	{
 		getTemp := g.Engine.Resolve("evend.valve.get_temp_hot")
 		require.NotNil(t, getTemp)
-		err := getTemp.Do(ctx)
+		err := g.Engine.Exec(ctx, getTemp)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "sensor problem")
 	}

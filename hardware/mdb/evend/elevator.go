@@ -107,13 +107,13 @@ func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err er
 		}
 	}()
 
-	if err = self.Generic.NewWaitReady(tag).Do(ctx); err != nil {
+	if err = g.Engine.Exec(ctx, self.Generic.NewWaitReady(tag)); err != nil {
 		return
 	}
-	if err = self.Generic.NewAction(tag, 0x03, position, 0).Do(ctx); err != nil {
+	if err = g.Engine.Exec(ctx, self.Generic.NewAction(tag, 0x03, position, 0)); err != nil {
 		return
 	}
-	err = self.Generic.NewWaitDone(tag, self.timeout).Do(ctx)
+	err = g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, self.timeout))
 	if g.Config.Hardware.Evend.Elevator.LogDebug {
 		self.dev.Log.Debugf("%s duration=%s", tag, time.Since(tbegin))
 	}

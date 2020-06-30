@@ -38,12 +38,12 @@ func (self *DeviceMixer) init(ctx context.Context) error {
 			self.dev.Log.Debugf("evend.mixer currentPos=0 skip")
 			return nil
 		}
-		return self.move(uint8(arg)).Do(ctx)
+		return g.Engine.Exec(ctx, self.move(uint8(arg)))
 	}}
 	moveSeq := engine.NewSeq(self.name + ".move(?)").Append(doCalibrate).Append(doMove)
 	g.Engine.Register(self.name+".shake(?)",
 		engine.FuncArg{Name: self.name + ".shake", F: func(ctx context.Context, arg engine.Arg) error {
-			return self.Generic.WithRestart(self.shake(uint8(arg))).Do(ctx)
+			return g.Engine.Exec(ctx, self.Generic.WithRestart(self.shake(uint8(arg))))
 		}})
 	g.Engine.Register(self.name+".fan_on", self.NewFan(true))
 	g.Engine.Register(self.name+".fan_off", self.NewFan(false))
@@ -83,7 +83,7 @@ func (self *DeviceMixer) calibrate(ctx context.Context) error {
 	if self.currentPos >= 0 {
 		return nil
 	}
-	err := self.move(0).Do(ctx)
+	err := engine.GetGlobal(ctx).Exec(ctx, self.move(0))
 	if err == nil {
 		self.currentPos = 0
 	}

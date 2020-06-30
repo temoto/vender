@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -216,6 +217,19 @@ func (g *Global) initEngine() error {
 		}
 		// g.Log.Debugf("config.engine.menu %s pxxx=%d ps=%d", x.String(), x.XXX_Price, x.Price)
 		g.Engine.Register("menu."+x.Code, x.Doer)
+	}
+
+	if pcfg := g.Config.Engine.Profile; pcfg.Regexp != "" {
+		if re, err := regexp.Compile(pcfg.Regexp); err != nil {
+			errs = append(errs, err)
+		} else {
+			format := pcfg.LogFormat
+			if format == "" {
+				format = `engine profile action=%s time=%s`
+			}
+			min := time.Duration(pcfg.MinUs) * time.Microsecond
+			g.Engine.SetProfile(re, min, func(d engine.Doer, td time.Duration) { g.Log.Debugf(format, d.String(), td) })
+		}
 	}
 
 	return helpers.FoldErrors(errs)

@@ -16,9 +16,10 @@ import (
 )
 
 func (self *MoneySystem) SetAcceptMax(ctx context.Context, limit currency.Amount) error {
+	g := state.GetGlobal(ctx)
 	errs := []error{
-		self.bill.AcceptMax(limit).Do(ctx),
-		self.coin.AcceptMax(limit).Do(ctx),
+		g.Engine.Exec(ctx, self.bill.AcceptMax(limit)),
+		g.Engine.Exec(ctx, self.coin.AcceptMax(limit)),
 	}
 	err := helpers.FoldErrors(errs)
 	if err != nil {
@@ -58,7 +59,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 		switch pi.Status {
 		case money.StatusEscrow:
 			if pi.DataCount == 1 {
-				if err := self.bill.EscrowAccept(ctx); err != nil {
+				if err := g.Engine.Exec(ctx, self.bill.EscrowAccept()); err != nil {
 					g.Error(errors.Annotatef(err, "money.bill escrow accept n=%s", currency.Amount(pi.DataNominal).FormatCtx(ctx)))
 				}
 			}

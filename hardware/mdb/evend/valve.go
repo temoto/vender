@@ -82,7 +82,7 @@ func (self *DeviceValve) init(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return d.Do(ctx)
+		return g.Engine.Exec(ctx, d)
 	}})
 	g.Engine.Register("evend.valve.pour_espresso(?)", self.DoPourEspresso.(engine.Doer))
 	g.Engine.Register("evend.valve.pour_cold(?)", self.DoPourCold.(engine.Doer))
@@ -129,7 +129,7 @@ func (self *DeviceValve) newGetTempHot() engine.Func {
 		if temp == 0 {
 			self.dev.SetErrorCode(1)
 			if doSetZero, _, _ := engine.ArgApply(self.DoSetTempHot, 0); doSetZero != nil {
-				_ = doSetZero.Do(ctx)
+				_ = engine.GetGlobal(ctx).Exec(ctx, doSetZero)
 			}
 			sensorErr := errors.Errorf("%s current=0 sensor problem", tag)
 			if !self.tempHotReported {
@@ -173,24 +173,25 @@ func (self *DeviceValve) newPourCareful(name string, arg1 byte, abort engine.Doe
 			if arg >= 256 {
 				return errors.Errorf("arg=%d overflows hardware units", arg)
 			}
+			e := engine.GetGlobal(ctx)
 			units := uint8(arg)
 			if units > self.cautionPartUnit {
-				err := self.newCommand(tagPour, strconv.Itoa(int(self.cautionPartUnit)), arg1, self.cautionPartUnit).Do(ctx)
-				if err != nil {
+				d := self.newCommand(tagPour, strconv.Itoa(int(self.cautionPartUnit)), arg1, self.cautionPartUnit)
+				if err := e.Exec(ctx, d); err != nil {
 					return err
 				}
-				err = self.Generic.NewWaitDone(tag, self.pourTimeout).Do(ctx)
-				if err != nil {
-					_ = abort.Do(ctx) // TODO likely redundant
+				d = self.Generic.NewWaitDone(tag, self.pourTimeout)
+				if err := e.Exec(ctx, d); err != nil {
+					_ = e.Exec(ctx, abort) // TODO likely redundant
 					return err
 				}
 				units -= self.cautionPartUnit
 			}
-			err := self.newCommand(tagPour, strconv.Itoa(int(units)), arg1, units).Do(ctx)
-			if err != nil {
+			d := self.newCommand(tagPour, strconv.Itoa(int(units)), arg1, units)
+			if err := e.Exec(ctx, d); err != nil {
 				return err
 			}
-			err = self.Generic.NewWaitDone(tag, self.pourTimeout).Do(ctx)
+			err := e.Exec(ctx, self.Generic.NewWaitDone(tag, self.pourTimeout))
 			return err
 		}}
 
@@ -272,23 +273,23 @@ func (self *DeviceValve) newCommand(cmdName, argName string, arg1, arg2 byte) en
 }
 
 func (self *DeviceValve) newCheckTempHotValidate(ctx context.Context) func() error {
+	g := state.GetGlobal(ctx)
 	return func() error {
 		tag := self.name + ".check_temp_hot"
 		var getErr error
 		temp := self.tempHot.GetOrUpdate(func() {
-			if getErr = self.doGetTempHot.Do(ctx); getErr != nil {
+			if getErr = g.Engine.Exec(ctx, self.doGetTempHot); getErr != nil {
 				getErr = errors.Annotate(getErr, tag)
 				self.dev.Log.Error(getErr)
 			}
 		})
 		if getErr != nil {
 			if doSetZero, _, _ := engine.ArgApply(self.DoSetTempHot, 0); doSetZero != nil {
-				_ = doSetZero.Do(ctx)
+				_ = g.Engine.Exec(ctx, doSetZero)
 			}
 			return getErr
 		}
 
-		g := state.GetGlobal(ctx)
 		diff := absDiffU16(uint16(temp), uint16(self.tempHotTarget))
 		const tempHotMargin = 10 // FIXME margin from config
 		msg := fmt.Sprintf("%s current=%d config=%d diff=%d", tag, temp, self.tempHotTarget, diff)

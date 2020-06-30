@@ -23,6 +23,7 @@ func (self *CoinAcceptor) NewGive(requestAmount currency.Amount, over bool, succ
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var err error
 		var successAmount currency.Amount
+		g := state.GetGlobal(ctx)
 		self.Device.Log.Debugf("%s requested=%s", tag, requestAmount.FormatCtx(ctx))
 		leftAmount := requestAmount // save original requested amount for logs
 		success.SetValid(self.nominals[:])
@@ -47,7 +48,7 @@ func (self *CoinAcceptor) NewGive(requestAmount currency.Amount, over bool, succ
 		}
 
 		// === Fallback to PAYOUT
-		err = self.NewPayout(leftAmount, success).Do(ctx)
+		err = g.Engine.Exec(ctx, self.NewPayout(leftAmount, success))
 		if err != nil {
 			return errors.Annotate(err, tag)
 		}
@@ -69,9 +70,8 @@ func (self *CoinAcceptor) NewGive(requestAmount currency.Amount, over bool, succ
 		successAmount = success.Total()
 		self.Device.Log.Errorf("%s dispensed=%s < requested=%s debt=%s",
 			tag, successAmount.FormatCtx(ctx), requestAmount.FormatCtx(ctx), leftAmount.FormatCtx(ctx))
-		config := state.GetGlobal(ctx).Config
-		if leftAmount <= currency.Amount(config.Money.ChangeOverCompensate) {
-			return self.NewGiveLeastOver(leftAmount, success).Do(ctx)
+		if leftAmount <= currency.Amount(g.Config.Money.ChangeOverCompensate) {
+			return g.Engine.Exec(ctx, self.NewGiveLeastOver(leftAmount, success))
 		}
 		return currency.ErrNominalCount
 	}}
@@ -82,6 +82,7 @@ func (self *CoinAcceptor) NewGiveLeastOver(requestAmount currency.Amount, succes
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var err error
+		g := state.GetGlobal(ctx)
 		leftAmount := requestAmount
 
 		nominals := self.SupportedNominals()
@@ -98,7 +99,7 @@ func (self *CoinAcceptor) NewGiveLeastOver(requestAmount currency.Amount, succes
 			payed := success.Copy()
 			payed.Clear()
 			// TODO use DISPENSE
-			err = self.NewPayout(payoutAmount, payed).Do(ctx)
+			err = g.Engine.Exec(ctx, self.NewPayout(payoutAmount, payed))
 			success.AddFrom(payed)
 			payedAmount := payed.Total()
 			// self.Device.Log.Debugf("%s dispense err=%v", tag, err)
@@ -154,14 +155,15 @@ func (self *CoinAcceptor) giveSmartManual(ctx context.Context, amount currency.A
 
 func (self *CoinAcceptor) dispenseGroup(ctx context.Context, request, success *currency.NominalGroup) error {
 	const tag = "coin.dispense-group"
+	g := state.GetGlobal(ctx)
 
 	return request.Iter(func(nominal currency.Nominal, count uint) error {
 		self.Device.Log.Debugf("%s n=%s c=%d", tag, currency.Amount(nominal).FormatCtx(ctx), count)
 		if count == 0 {
 			return nil
 		}
-		err := self.NewDispense(nominal, uint8(count)).Do(ctx)
-		if err != nil {
+		d := self.NewDispense(nominal, uint8(count))
+		if err := g.Engine.Exec(ctx, d); err != nil {
 			err = errors.Annotatef(err, "%s nominal=%s count=%d", tag, currency.Amount(nominal).FormatCtx(ctx), count)
 			self.Device.Log.Error(err)
 			return errors.Annotate(err, tag)
@@ -205,6 +207,7 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		var err error
+		g := state.GetGlobal(ctx)
 		// TODO  avoid double mutex acquire
 		if err = self.TubeStatus(); err != nil {
 			return errors.Annotate(err, tag)
@@ -225,7 +228,8 @@ func (self *CoinAcceptor) NewDispense(nominal currency.Nominal, count uint8) eng
 			return errors.Annotate(err, tag)
 		}
 		totalTimeout := self.dispenseTimeout * time.Duration(count)
-		if err = self.Device.NewPollLoop(tag, self.Device.PacketPoll, totalTimeout, pollFun).Do(ctx); err != nil {
+		doPoll := self.Device.NewPollLoop(tag, self.Device.PacketPoll, totalTimeout, pollFun)
+		if err = g.Engine.Exec(ctx, doPoll); err != nil {
 			return errors.Annotate(err, tag)
 		}
 

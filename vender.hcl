@@ -47,6 +47,13 @@ engine {
   // on_front_begin = []
   // on_menu_error = ["money.abort", "cup_serve"]
   // on_service_begin = []
+
+  profile {
+    // additional escape of \ is required
+    regexp     = "^(cup_|money\\.)"
+    min_us     = 500
+    log_format = "engine profile action=%s time=%s"
+  }
 }
 
 hardware {

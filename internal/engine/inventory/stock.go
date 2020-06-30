@@ -158,6 +158,7 @@ func (c *custom) Validate() error {
 }
 
 func (c *custom) Do(ctx context.Context) error {
+	e := engine.GetGlobal(ctx)
 	if tunedCtx, tuneRate, ok := takeTuneRate(ctx, c.stock.tuneKey); ok {
 		tunedArg := engine.Arg(math.Round(float64(c.arg) * float64(tuneRate)))
 		d, _, err := c.apply(tunedArg)
@@ -165,7 +166,7 @@ func (c *custom) Do(ctx context.Context) error {
 		if err != nil {
 			return errors.Annotatef(err, "stock=%s tunedArg=%v", c.stock.Name, tunedArg)
 		}
-		return d.Do(tunedCtx)
+		return e.Exec(tunedCtx, d)
 	}
 
 	// log.Printf("stock=%s value=%f arg=%v spending=%f", c.stock.Name, c.stock.Value(), c.arg, c.spend)
@@ -177,7 +178,7 @@ func (c *custom) Do(ctx context.Context) error {
 	if err := c.after.Validate(); err != nil {
 		return errors.Annotatef(err, "stock=%s", c.stock.Name)
 	}
-	err := c.after.Do(ctx)
+	err := e.Exec(ctx, c.after)
 	if err != nil {
 		return err
 	}

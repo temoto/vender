@@ -19,6 +19,11 @@ type Config struct {
 	Menu           struct {
 		Items []*MenuItem `hcl:"item"`
 	}
+	Profile struct {
+		Regexp    string `hcl:"regexp"`
+		MinUs     int    `hcl:"min_us"`
+		LogFormat string `hcl:"log_format"`
+	}
 }
 
 type Alias struct {
