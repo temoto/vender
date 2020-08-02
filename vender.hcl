@@ -222,6 +222,8 @@ ui {
   }
 }
 
+display { framebuffer = "/dev/fb0" }
+
 include "local.hcl" {
   optional = true
 }
