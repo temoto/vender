@@ -56,6 +56,21 @@ func (d *Display) Flush() error {
 	return nil
 }
 
+func (d *Display) Picture(file string) error {
+    input, err := ioutil.ReadFile("/home/vmc/coffe-pic")
+    if err != nil {
+            d.Clear()
+            return errors.Annotate(err,"Picture ReadFile")
+    }
+
+    err = ioutil.WriteFile("/dev/fb0", input, 0644)
+    if err != nil {
+            d.Clear()
+            return errors.Annotate(err,"Picture WriteFile")
+    }
+
+}
+
 func (d *Display) QR(text string, border bool, level qrcode.RecoveryLevel) error {
 	qr, err := qrcode.New(text, level)
 	if err != nil {

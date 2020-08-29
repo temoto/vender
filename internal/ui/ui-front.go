@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"io/ioutil"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive/v2"
@@ -35,7 +36,8 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	// FIXME special handling of separate graphic display
 	// Currently used to clear QR.
 	if d, _ := self.g.Display(); d != nil {
-		_ = d.Clear()
+		// _ = d.Clear()
+		_ = d.Picture("/home/vmc/coffe-pic")
 	}
 
 	if errs := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); len(errs) != 0 {
