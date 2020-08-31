@@ -64,7 +64,7 @@ func (d *Display) Picture(file string) error {
             return errors.Annotate(err,"Picture ReadFile")
     }
 
-    err = ioutil.WriteFile("/dev/fb0", input, 0644)
+    err = ioutil.WriteFile(d.fb.Fbpath, input, 0644)
     if err != nil {
             d.Clear()
             return errors.Annotate(err,"Picture WriteFile")
