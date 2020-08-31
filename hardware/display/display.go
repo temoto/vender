@@ -69,7 +69,7 @@ func (d *Display) Picture(file string) error {
             d.Clear()
             return errors.Annotate(err,"Picture WriteFile")
     }
-    return d.Flush()
+    return nil
 }
 
 func (d *Display) QR(text string, border bool, level qrcode.RecoveryLevel) error {
