@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"strings"
+	"io/ioutil"
 
 	"github.com/juju/errors"
 	"github.com/skip2/go-qrcode"
@@ -57,7 +58,7 @@ func (d *Display) Flush() error {
 }
 
 func (d *Display) Picture(file string) error {
-    input, err := ioutil.ReadFile("/home/vmc/coffe-pic")
+    input, err := ioutil.ReadFile(file)
     if err != nil {
             d.Clear()
             return errors.Annotate(err,"Picture ReadFile")
@@ -68,7 +69,7 @@ func (d *Display) Picture(file string) error {
             d.Clear()
             return errors.Annotate(err,"Picture WriteFile")
     }
-
+    return d.Flush()
 }
 
 func (d *Display) QR(text string, border bool, level qrcode.RecoveryLevel) error {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-	"io/ioutil"
 
 	"github.com/juju/errors"
 	"github.com/temoto/alive/v2"
