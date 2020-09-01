@@ -118,6 +118,10 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		}
 		self.broken = true
 		self.display.SetLines(self.g.Config.UI.Front.MsgStateBroken, "")
+		if d, _ := self.g.Display(); d != nil {
+			// _ = d.Clear()
+			_ = d.Picture(self.g.Config.UI.Front.PicBroken)
+		}
 		for self.g.Alive.IsRunning() {
 			e := self.wait(time.Second)
 			// TODO receive tele command to reboot or change state

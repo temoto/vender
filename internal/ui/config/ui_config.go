@@ -24,6 +24,9 @@ type Config struct { //nolint:maligned
 		MsgInputCode string `hcl:"msg_input_code"`
 
 		ResetTimeoutSec int `hcl:"reset_sec"`
+
+		PicIdle		string `hcl:"pic_idle"`
+		PicBroken	string `hcl:"pic_broken"`
 	}
 
 	Service struct {

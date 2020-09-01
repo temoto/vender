@@ -58,6 +58,7 @@ func (d *Display) Flush() error {
 }
 
 func (d *Display) Picture(file string) error {
+	// FIXME Надо прочитать картину в Image и позвать palleted
     input, err := ioutil.ReadFile(file)
     if err != nil {
             d.Clear()

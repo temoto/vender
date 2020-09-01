@@ -218,6 +218,9 @@ ui {
     msg_making2                  = "Making text line2"
     msg_input_code               = "Code:%s\x00"
 
+    pic_idle    = "/home/idle-picture"
+    pic_broken  = "/home/broken-picture"
+
     reset_sec = 180
   }
 }
