@@ -3,8 +3,8 @@ package display
 import (
 	"image"
 	"image/color"
-	"strings"
 	"io/ioutil"
+	"strings"
 
 	"github.com/juju/errors"
 	"github.com/skip2/go-qrcode"
@@ -59,18 +59,18 @@ func (d *Display) Flush() error {
 
 func (d *Display) Picture(file string) error {
 	// FIXME Надо прочитать картину в Image и позвать palleted
-    input, err := ioutil.ReadFile(file)
-    if err != nil {
-            d.Clear()
-            return errors.Annotate(err,"Picture ReadFile")
-    }
+	input, err := ioutil.ReadFile(file)
+	if err != nil {
+		d.Clear()
+		return errors.Annotate(err, "Picture ReadFile")
+	}
 
-    err = ioutil.WriteFile(d.fb.Fbpath, input, 0644)
-    if err != nil {
-            d.Clear()
-            return errors.Annotate(err,"Picture WriteFile")
-    }
-    return nil
+	err = ioutil.WriteFile(d.fb.Fbpath, input, 0644)
+	if err != nil {
+		d.Clear()
+		return errors.Annotate(err, "Picture WriteFile")
+	}
+	return nil
 }
 
 func (d *Display) QR(text string, border bool, level qrcode.RecoveryLevel) error {
