@@ -18,7 +18,6 @@ type Framebuffer struct {
 	dev    *os.File
 	finfo  fixedScreenInfo
 	vinfo  variableScreenInfo
-	Fbpath string
 }
 
 func New(dev string) (*Framebuffer, error) {
@@ -40,7 +39,6 @@ func New(dev string) (*Framebuffer, error) {
 	}
 
 	fb.buf = make([]byte, fb.vinfo.Xres*fb.vinfo.Yres*(fb.vinfo.Bits_per_pixel/8))
-	fb.Fbpath = dev
 
 	return fb, nil
 }
