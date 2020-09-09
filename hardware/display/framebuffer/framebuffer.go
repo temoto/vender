@@ -14,10 +14,10 @@ import (
 )
 
 type Framebuffer struct {
-	buf    []byte
-	dev    *os.File
-	finfo  fixedScreenInfo
-	vinfo  variableScreenInfo
+	buf   []byte
+	dev   *os.File
+	finfo fixedScreenInfo
+	vinfo variableScreenInfo
 }
 
 func New(dev string) (*Framebuffer, error) {
