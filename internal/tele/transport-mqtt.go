@@ -108,14 +108,14 @@ func (self *transportMqtt) Close() {
 
 func (self *transportMqtt) SendState(payload []byte) bool {
 	self.log.Infof("transport sendstate payload=%x", payload)
-	t := self.m.Publish(self.topicState, 1, true, payload)
+	t := self.m.Publish(self.topicState, 0, true, payload)
 	err := self.tokenWait(t, "publish state")
 	self.log.Infof("transport sendstate err=%v", err)
 	return err == nil
 }
 
 func (self *transportMqtt) SendTelemetry(payload []byte) bool {
-	t := self.m.Publish(self.topicTelemetry, 1, true, payload)
+	t := self.m.Publish(self.topicTelemetry, 0, true, payload)
 	err := self.tokenWait(t, "publish telemetry")
 	return err == nil
 }
@@ -123,7 +123,7 @@ func (self *transportMqtt) SendTelemetry(payload []byte) bool {
 func (self *transportMqtt) SendCommandResponse(topicSuffix string, payload []byte) bool {
 	topic := fmt.Sprintf("%s/%s", self.topicPrefix, topicSuffix)
 	self.log.Debugf("mqtt publish command response to topic=%s", topic)
-	t := self.m.Publish(topic, 1, false, payload)
+	t := self.m.Publish(topic, 0, false, payload)
 	err := self.tokenWait(t, "publish command response")
 	return err == nil
 }
@@ -145,7 +145,7 @@ func (self *transportMqtt) online() {
 
 	for self.isRunning() {
 		self.log.Debugf("tele sub-command before")
-		t := self.m.Subscribe(self.topicCommand, 1, self.mqttSubCommand)
+		t := self.m.Subscribe(self.topicCommand, 0, self.mqttSubCommand)
 		if self.tokenWait(t, "subscribe:"+self.topicCommand) == nil {
 			break // success path
 		}

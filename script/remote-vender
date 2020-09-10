@@ -9,7 +9,7 @@ go test "${test_flag[@]}" ./... >/dev/null || go test -v "${test_flag[@]}" ./...
 
 script/build
 
-rsync -a build/vender $remote:~/vender
+rsync -a --progress build/vender $remote:~/vender
 cmd=$1 ; shift
 #ssh -t $remote time sudo -n env GODEBUG=gctrace=1 chrt --fifo 99 \~/vender -config=local.hcl "$cmd" "$@"
 ssh -t $remote time sudo -n \~/vender -config=local.hcl "$cmd" "$@"
