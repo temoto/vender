@@ -22,10 +22,10 @@ require (
 	github.com/temoto/alive/v2 v2.0.0
 	github.com/temoto/atomic_clock v1.0.1
 	github.com/temoto/extremofile v0.5.0
-	github.com/temoto/gpio-cdev-go v0.12.1-0.20191005112838-85f703f8e92e
+	github.com/temoto/gpio-cdev-go v1.1.0
 	github.com/temoto/inputevent-go v1.0.0
 	github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 	github.com/temoto/spq v0.10.0
-	golang.org/x/sys v0.0.0-20190412213103-97732733099d
-	periph.io/x/periph v3.4.0+incompatible
+	golang.org/x/sys v0.0.0-20200929083018-4d22bbb62b3c
+	periph.io/x/periph v3.6.4+incompatible
 )

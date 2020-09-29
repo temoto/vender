@@ -26,6 +26,19 @@ Supported peripherals:
 # Design
 
 VMC overall structure:
-- engine (see engine packages) executes actions, handles concurrency and errors
+- engine (see internal/engine packages) executes actions, handles concurrency and errors
 - device/feature drivers provide actions to engine
 - configuration scenario specifies action groups and when to execute them
+
+
+# Build
+
+- Install Go 1.15 from https://golang.org/dl/
+- Set target environment, default is `GOARCH=arm GOOS=linux`
+- Run `script/build`
+- Deploy file `build/vender` to your hardware
+
+## Supported Go versions: 1.13 and 1.15
+
+Vender compiled with Go 1.13 was successfully running in production until release v0.200630.0.
+Go 1.14 introduced async preemtible runtime by interrupting syscalls. Go 1.15 os and net packages automatically retry on EINTR.

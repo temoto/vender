@@ -17,7 +17,7 @@ import (
 //
 // A negative angle is valid.
 //
-// The highest representable value is a bit over 500,000,000,000°.
+// The highest representable value is a bit over 9.223GRad or 500,000,000,000°.
 type Angle int64
 
 // String returns the angle formatted as a string in degree.
@@ -68,16 +68,18 @@ func (a *Angle) Set(s string) error {
 	d, n, err := atod(s)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s[n:], "rad", "deg", "°"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s[n:], "Rad", "rad", "Deg", "deg", "°"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"Rad\"")
+				return notNumberUnitErr("Rad, Deg or °")
 			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxAngle.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return maxValueErr(maxAngle.String())
 			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minAngle.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return minValueErr(minAngle.String())
 			}
 		}
 		return err
@@ -87,9 +89,7 @@ func (a *Angle) Set(s string) error {
 	if n != len(s) {
 		r, rsize := utf8.DecodeRuneInString(s[n:])
 		if r <= 1 || rsize == 0 {
-			return &parseError{
-				err: errors.New("unexpected end of string"),
-			}
+			return errors.New("unexpected end of string")
 		}
 		var siSize int
 		si, siSize = parseSIPrefix(r)
@@ -97,53 +97,44 @@ func (a *Angle) Set(s string) error {
 	}
 
 	switch s[n:] {
-	case "deg", "°", "Deg":
+	case "Deg", "deg", "°":
 		degreePerRadian := decimal{
 			base: 17453293,
 			exp:  0,
 			neg:  false,
 		}
-		lbf, _ := decimalMul(d, degreePerRadian)
+		deg, _ := decimalMul(d, degreePerRadian)
 		// Impossible for precision loss to exceed 9 since the number of
 		// significant figures in degrees per radian is only 8.
-		v, err := dtoi(lbf, int(si))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + maxAngle.String())
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + minAngle.String())
-				}
+		v, overflow := dtoi(deg, int(si))
+		if overflow {
+			if deg.neg {
+				return minValueErr(minAngle.String())
 			}
-			return err
+			return maxValueErr(maxAngle.String())
 		}
 		*a = (Angle)(v)
-	case "rad", "Rad":
-		v, err := dtoi(d, int(si-nano))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + maxAngle.String())
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + minAngle.String())
-				}
+	case "Rad", "rad":
+		v, overflow := dtoi(d, int(si-nano))
+		if overflow {
+			if d.neg {
+				return minValueErr("-9.223G" + s[n:])
 			}
-			return err
+			return maxValueErr("9.223G" + s[n:])
 		}
 		*a = (Angle)(v)
 	case "":
-		return noUnits("Rad")
+		return noUnitErr("Rad, Deg or °")
 	default:
-		if found, extra := containsUnitString(s[n:], "Rad", "Deg", "°"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "Rad", "rad", "Deg", "deg", "°"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Angle")
+		return incorrectUnitErr("Rad, Deg or °")
 	}
 	return nil
 }
 
+// Well known Angle constants.
 const (
 	NanoRadian  Angle = 1
 	MicroRadian Angle = 1000 * NanoRadian
@@ -175,20 +166,21 @@ func (d Distance) String() string {
 // be provided in "m", "Mile", "Yard", "in", or "ft" with an optional SI
 // prefix: "p", "n", "u", "µ", "m", "k", "M", "G" or "T".
 func (d *Distance) Set(s string) error {
-	decimal, n, err := atod(s)
+	dc, n, err := atod(s)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s[n:], "in", "ft", "Yard", "Mile", "m"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s[n:], "in", "ft", "Yard", "yard", "Mile", "mile", "m"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"m\"")
+				return notNumberUnitErr("m, Mile, in, ft or Yard")
 			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxDistance.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return maxValueErr(maxDistance.String())
 			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minDistance.String())
-
+				// TODO(maruel): Look for suffix, and reuse it.
+				return minValueErr(minDistance.String())
 			}
 		}
 		return err
@@ -197,9 +189,7 @@ func (d *Distance) Set(s string) error {
 	if n != len(s) {
 		r, rsize := utf8.DecodeRuneInString(s[n:])
 		if r <= 1 || rsize == 0 {
-			return &parseError{
-				err: errors.New("unexpected end of string"),
-			}
+			return errors.New("unexpected end of string")
 		}
 		var siSize int
 		si, siSize = parseSIPrefix(r)
@@ -213,40 +203,33 @@ func (d *Distance) Set(s string) error {
 			n += siSize
 		}
 	}
-	v, err := dtoi(decimal, int(si-nano))
-	if err != nil {
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + maxDistance.String())
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + minDistance.String())
-				}
-			}
-			return err
+	v, overflow := dtoi(dc, int(si-nano))
+	if overflow {
+		if dc.neg {
+			return minValueErr(minDistance.String())
 		}
+		return maxValueErr(maxDistance.String())
 	}
 	switch s[n:] {
 	case "m":
 		*d = (Distance)(v)
-	case "mile", "Mile":
+	case "Mile", "mile":
 		switch {
 		case v > maxMiles:
-			return errors.New("maximum value is 5731Mile")
+			return maxValueErr("5731Mile")
 		case v < minMiles:
-			return errors.New("minimum value is -5731Mile")
+			return minValueErr("-5731Mile")
 		case v >= 0:
 			*d = (Distance)((v*1609344 + 500) / 1000)
 		default:
 			*d = (Distance)((v*1609344 - 500) / 1000)
 		}
-	case "yard", "Yard":
+	case "Yard", "yard":
 		switch {
 		case v > maxYards:
-			return errors.New("maximum value is 1 Million Yard")
+			return maxValueErr("1 Million Yard")
 		case v < minYards:
-			return errors.New("minimum value is -1 Million Yard")
+			return minValueErr("-1 Million Yard")
 		case v >= 0:
 			*d = (Distance)((v*9144 + 5000) / 10000)
 		default:
@@ -255,9 +238,9 @@ func (d *Distance) Set(s string) error {
 	case "ft":
 		switch {
 		case v > maxFeet:
-			return errors.New("maximum value is 3 Million ft")
+			return maxValueErr("3 Million ft")
 		case v < minFeet:
-			return errors.New("minimum value is 3 Million ft")
+			return minValueErr("-3 Million ft")
 		case v >= 0:
 			*d = (Distance)((v*3048 + 5000) / 10000)
 		default:
@@ -266,25 +249,26 @@ func (d *Distance) Set(s string) error {
 	case "in":
 		switch {
 		case v > maxInches:
-			return errors.New("maximum value is 36 Million inch")
+			return maxValueErr("36 Million inch")
 		case v < minInches:
-			return errors.New("minimum value is 36 Million inch")
+			return minValueErr("-36 Million inch")
 		case v >= 0:
 			*d = (Distance)((v*254 + 5000) / 10000)
 		default:
 			*d = (Distance)((v*254 - 5000) / 10000)
 		}
 	case "":
-		return noUnits("m, Mile, in, ft or Yard")
+		return noUnitErr("m, Mile, in, ft or Yard")
 	default:
-		if found, extra := containsUnitString(s[n:], "in", "ft", "Yard", "Mile", "m"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "in", "ft", "Yard", "Mile", "m"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Distance")
+		return incorrectUnitErr("m, Mile, in, ft or Yard")
 	}
 	return nil
 }
 
+// Well known Distance constants.
 const (
 	NanoMetre  Distance = 1
 	MicroMetre Distance = 1000 * NanoMetre
@@ -333,36 +317,37 @@ func (c *ElectricCurrent) Set(s string) error {
 	v, n, err := valueOfUnitString(s, nano)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxElectricCurrent.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minElectricCurrent.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "A"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "A", "a"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"A\"")
+				return notNumberUnitErr("A")
+			case errOverflowsInt64:
+				return maxValueErr(maxElectricCurrent.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minElectricCurrent.String())
 			}
 		}
 		return err
 	}
 
 	switch s[n:] {
-	case "a", "A":
+	case "A", "a":
 		*c = (ElectricCurrent)(v)
 	case "":
-		return noUnits("A")
+		return noUnitErr("A")
 	default:
-		if found, extra := containsUnitString(s[n:], "A"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "A"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.ElectricCurrent")
+		return incorrectUnitErr("A")
 	}
 
 	return nil
 }
 
+// Well known ElectricCurrent constants.
 const (
 	NanoAmpere  ElectricCurrent = 1
 	MicroAmpere ElectricCurrent = 1000 * NanoAmpere
@@ -394,34 +379,35 @@ func (p *ElectricPotential) Set(s string) error {
 	v, n, err := valueOfUnitString(s, nano)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxElectricPotential.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minElectricPotential.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "V"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "V", "v"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"V\"")
+				return notNumberUnitErr("V")
+			case errOverflowsInt64:
+				return maxValueErr(maxElectricPotential.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minElectricPotential.String())
 			}
 		}
 		return err
 	}
 	switch s[n:] {
-	case "v", "V":
+	case "V", "v":
 		*p = (ElectricPotential)(v)
 	case "":
-		return noUnits("V")
+		return noUnitErr("V")
 	default:
-		if found, extra := containsUnitString(s[n:], "V"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "V", "v"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.ElectricPotential")
+		return incorrectUnitErr("V")
 	}
 	return nil
 }
 
+// Well known ElectricPotential constants.
 const (
 	// Volt is W/A, kg⋅m²/s³/A.
 	NanoVolt  ElectricPotential = 1
@@ -454,35 +440,36 @@ func (r *ElectricResistance) Set(s string) error {
 	v, n, err := valueOfUnitString(s, nano)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxElectricResistance.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minElectricResistance.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "Ohm", "Ω"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "Ohm", "ohm", "Ω"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"Ohm\"")
+				return notNumberUnitErr("Ohm or Ω")
+			case errOverflowsInt64:
+				return maxValueErr(maxElectricResistance.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minElectricResistance.String())
 			}
 		}
 		return err
 	}
 
 	switch s[n:] {
-	case "ohm", "Ohm", "Ω":
+	case "Ohm", "ohm", "Ω":
 		*r = (ElectricResistance)(v)
 	case "":
-		return noUnits("Ohm")
+		return noUnitErr("Ohm or Ω")
 	default:
-		if found, extra := containsUnitString(s[n:], "Ohm", "Ω"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "Ohm", "ohm", "Ω"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.ElectricResistance")
+		return incorrectUnitErr("Ohm or Ω")
 	}
 	return nil
 }
 
+// Well known ElectricResistance constants.
 const (
 	// Ohm is V/A, kg⋅m²/s³/A².
 	NanoOhm  ElectricResistance = 1
@@ -519,16 +506,18 @@ func (f *Force) Set(s string) error {
 	d, n, err := atod(s)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s[n:], "N", "lbf"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s[n:], "N", "lbf"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"N\" or \"lbf\"")
+				return notNumberUnitErr("N or lbf")
 			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxForce.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return maxValueErr(maxForce.String())
 			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minForce.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return minValueErr(minForce.String())
 			}
 		}
 		return err
@@ -538,9 +527,7 @@ func (f *Force) Set(s string) error {
 	if n != len(s) {
 		r, rsize := utf8.DecodeRuneInString(s[n:])
 		if r <= 1 || rsize == 0 {
-			return &parseError{
-				err: errors.New("unexpected end of string"),
-			}
+			return errors.New("unexpected end of string")
 		}
 		var siSize int
 		si, siSize = parseSIPrefix(r)
@@ -559,44 +546,35 @@ func (f *Force) Set(s string) error {
 		if loss > 9 {
 			return errors.New("converting to nano Newtons would overflow, consider using nN for maximum precision")
 		}
-		v, err := dtoi(lbf, int(si))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is 2.073496519Glbf")
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is -2.073496519Glbf")
-				}
+		v, overflow := dtoi(lbf, int(si))
+		if overflow {
+			if lbf.neg {
+				return minValueErr("-2.073496519Glbf")
 			}
-			return err
+			return maxValueErr("2.073496519Glbf")
 		}
 		*f = (Force)(v)
 	case "N":
-		v, err := dtoi(d, int(si-nano))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + maxForce.String())
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + minForce.String())
-				}
+		v, overflow := dtoi(d, int(si-nano))
+		if overflow {
+			if d.neg {
+				return minValueErr(minForce.String())
 			}
-			return err
+			return maxValueErr(maxForce.String())
 		}
 		*f = (Force)(v)
 	case "":
-		return noUnits("N")
+		return noUnitErr("N or lbf")
 	default:
-		if found, extra := containsUnitString(s[n:], "N"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "N", "lbf"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Force")
+		return incorrectUnitErr("N or lbf")
 	}
 	return nil
 }
 
+// Well known Force constants.
 const (
 	// Newton is kg⋅m/s².
 	NanoNewton  Force = 1
@@ -618,7 +596,7 @@ const (
 	minForce Force = -((1 << 63) - 1)
 )
 
-// Frequency is a measurement of cycle per second, stored as an int32 micro
+// Frequency is a measurement of cycle per second, stored as an int64 micro
 // Hertz.
 //
 // The highest representable value is 9.2THz.
@@ -630,53 +608,77 @@ func (f Frequency) String() string {
 }
 
 // Set sets the Frequency to the value represented by s. Units are to
-// be provided in "Hz" with an optional SI prefix: "p", "n", "u", "µ", "m", "k",
-// "M", "G" or "T".
+// be provided in "Hz" or "rpm" with an optional SI prefix: "p", "n", "u", "µ",
+// "m", "k", "M", "G" or "T".
+//
+// Unlike most Set() functions, "Hz" is assumed by default.
 func (f *Frequency) Set(s string) error {
 	v, n, err := valueOfUnitString(s, micro)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxFrequency.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minFrequency.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "Hz"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "Hz", "hz"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"Hz\"")
+				return notNumberUnitErr("Hz")
+			case errOverflowsInt64:
+				return maxValueErr(maxFrequency.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minFrequency.String())
 			}
 		}
 		return err
 	}
 
 	switch s[n:] {
-	case "hz", "Hz":
+	case "Hz", "hz", "":
 		*f = (Frequency)(v)
-	case "":
-		return noUnits("Hz")
 	default:
-		if found, extra := containsUnitString(s[n:], "Hz"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "Hz", "hz"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Frequency")
+		return incorrectUnitErr("Hz")
 	}
 	return nil
 }
 
+// Period returns the duration of one cycle at this frequency.
+//
+// Frequency above GigaHertz cannot be represented as Duration.
+//
+// A 0Hz frequency returns a 0s period.
+func (f Frequency) Period() time.Duration {
+	if f == 0 {
+		return 0
+	}
+	if f < 0 {
+		return (time.Second*time.Duration(Hertz) - time.Duration(f/2)) / time.Duration(f)
+	}
+	return (time.Second*time.Duration(Hertz) + time.Duration(f/2)) / time.Duration(f)
+}
+
 // Duration returns the duration of one cycle at this frequency.
+//
+// Deprecated: This method is removed in v4.0.0. Use Period() instead.
 func (f Frequency) Duration() time.Duration {
-	// Note: Duration() should have been named Period().
-	// TODO(maruel): Rounding should be fine-tuned.
-	return time.Second * time.Duration(Hertz) / time.Duration(f)
+	return f.Period()
 }
 
 // PeriodToFrequency returns the frequency for a period of this interval.
-func PeriodToFrequency(t time.Duration) Frequency {
-	return Frequency(time.Second) * Hertz / Frequency(t)
+//
+// A 0s period returns a 0Hz frequency.
+func PeriodToFrequency(p time.Duration) Frequency {
+	if p == 0 {
+		return 0
+	}
+	if p < 0 {
+		return (Frequency(time.Second)*Hertz - Frequency(p/2)) / Frequency(p)
+	}
+	return (Frequency(time.Second)*Hertz + Frequency(p/2)) / Frequency(p)
 }
 
+// Well known Frequency constants.
 const (
 	// Hertz is 1/s.
 	MicroHertz Frequency = 1
@@ -713,16 +715,18 @@ func (m *Mass) Set(s string) error {
 	d, n, err := atod(s)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s[n:], "g", "lb", "oz"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s[n:], "g", "lb", "oz"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"g\"")
+				return notNumberUnitErr("g, lb or oz")
 			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxMass.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return maxValueErr(maxMass.String())
 			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minMass.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return minValueErr(minMass.String())
 			}
 		}
 		return err
@@ -732,9 +736,7 @@ func (m *Mass) Set(s string) error {
 	if n != len(s) {
 		r, rsize := utf8.DecodeRuneInString(s[n:])
 		if r <= 1 || rsize == 0 {
-			return &parseError{
-				err: errors.New("unexpected end of string"),
-			}
+			return errors.New("unexpected end of string")
 		}
 		var siSize int
 		si, siSize = parseSIPrefix(r)
@@ -743,17 +745,12 @@ func (m *Mass) Set(s string) error {
 
 	switch s[n:] {
 	case "g":
-		v, err := dtoi(d, int(si-nano))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + maxMass.String())
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + minMass.String())
-				}
+		v, overflow := dtoi(d, int(si-nano))
+		if overflow {
+			if d.neg {
+				return minValueErr(minMass.String())
 			}
-			return err
+			return maxValueErr(maxMass.String())
 		}
 		*m = (Mass)(v)
 	case "lb":
@@ -763,17 +760,12 @@ func (m *Mass) Set(s string) error {
 			neg:  false,
 		}
 		lbs, _ := decimalMul(d, gramsPerlb)
-		v, err := dtoi(lbs, int(si))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + strconv.FormatInt(int64(maxPoundMass), 10) + "lb")
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + strconv.FormatInt(int64(minPoundMass), 10) + "lb")
-				}
+		v, overflow := dtoi(lbs, int(si))
+		if overflow {
+			if lbs.neg {
+				return minValueErr(strconv.FormatInt(int64(minPoundMass), 10) + "lb")
 			}
-			return err
+			return maxValueErr(strconv.FormatInt(int64(maxPoundMass), 10) + "lb")
 		}
 		*m = (Mass)(v)
 	case "oz":
@@ -783,30 +775,26 @@ func (m *Mass) Set(s string) error {
 			neg:  false,
 		}
 		oz, _ := decimalMul(d, gramsPerOz)
-		v, err := dtoi(oz, int(si))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + strconv.FormatInt(int64(maxOunceMass), 10) + "oz")
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + strconv.FormatInt(int64(minOunceMass), 10) + "oz")
-				}
+		v, overflow := dtoi(oz, int(si))
+		if overflow {
+			if oz.neg {
+				return minValueErr(strconv.FormatInt(int64(minOunceMass), 10) + "oz")
 			}
-			return err
+			return maxValueErr(strconv.FormatInt(int64(maxOunceMass), 10) + "oz")
 		}
 		*m = (Mass)(v)
 	case "":
-		return noUnits("g")
+		return noUnitErr("g, lb or oz")
 	default:
-		if found, extra := containsUnitString(s[n:], "g", "lb", "oz"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "g", "lb", "oz"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Mass")
+		return incorrectUnitErr("g, lb or oz")
 	}
 	return nil
 }
 
+// Well known Mass constants.
 const (
 	NanoGram  Mass = 1
 	MicroGram Mass = 1000 * NanoGram
@@ -857,36 +845,37 @@ func (p *Pressure) Set(s string) error {
 	v, n, err := valueOfUnitString(s, nano)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxPressure.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minPressure.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "Pa"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "Pa"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"Pa\"")
+				return notNumberUnitErr("Pa")
+			case errOverflowsInt64:
+				return maxValueErr(maxPressure.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minPressure.String())
 			}
 		}
 		return err
 	}
 
 	switch s[n:] {
-	case "pa", "Pa":
+	case "Pa":
 		*p = (Pressure)(v)
 	case "":
-		return noUnits("Pa")
+		return noUnitErr("Pa")
 	default:
-		if found, extra := containsUnitString(s[n:], "Pa"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "Pa"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Pressure")
+		return incorrectUnitErr("Pa")
 	}
 
 	return nil
 }
 
+// Well known Pressure constants.
 const (
 	// Pascal is N/m², kg/m/s².
 	NanoPascal  Pressure = 1
@@ -908,16 +897,16 @@ const (
 type RelativeHumidity int32
 
 // String returns the humidity formatted as a string.
-func (h RelativeHumidity) String() string {
-	h /= MilliRH
-	frac := int(h % 10)
+func (r RelativeHumidity) String() string {
+	r /= MilliRH
+	frac := int(r % 10)
 	if frac == 0 {
-		return strconv.Itoa(int(h)/10) + "%rH"
+		return strconv.Itoa(int(r)/10) + "%rH"
 	}
 	if frac < 0 {
 		frac = -frac
 	}
-	return strconv.Itoa(int(h)/10) + "." + strconv.Itoa(frac) + "%rH"
+	return strconv.Itoa(int(r)/10) + "." + strconv.Itoa(frac) + "%rH"
 }
 
 // Set sets the RelativeHumidity to the value represented by s. Units are to
@@ -928,44 +917,45 @@ func (r *RelativeHumidity) Set(s string) error {
 	v, n, err := valueOfUnitString(s, micro+deca)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxRelativeHumidity.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minRelativeHumidity.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s[n:], "%rH", "%"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s[n:], "%rH", "%"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"%rH\"")
+				return notNumberUnitErr("%rH or %")
+			case errOverflowsInt64:
+				return maxValueErr(maxRelativeHumidity.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minRelativeHumidity.String())
 			}
 		}
 		return err
 	}
 
 	switch s[n:] {
-	case "%", "%rH":
+	case "%rH", "%":
 		// We need an extra check here to make sure that v will fit inside a
 		// int32.
 		switch {
 		case v > int64(maxRelativeHumidity):
-			return errors.New("maximum value is " + maxRelativeHumidity.String())
+			return maxValueErr(maxRelativeHumidity.String())
 		case v < int64(minRelativeHumidity):
-			return errors.New("minimum value is " + minRelativeHumidity.String())
+			return minValueErr(minRelativeHumidity.String())
 		}
 		*r = (RelativeHumidity)(v)
 	case "":
-		return noUnits("%rH")
+		return noUnitErr("%rH or %")
 	default:
-		if found, extra := containsUnitString(s[n:], "%rH", "%"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "%rH", "%"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.RelativeHumidity")
+		return incorrectUnitErr("%rH or %")
 	}
 
 	return nil
 }
 
+// Well known RelativeHumidity constants.
 const (
 	TenthMicroRH RelativeHumidity = 1                 // 0.00001%rH
 	MicroRH      RelativeHumidity = 10 * TenthMicroRH // 0.0001%rH
@@ -983,8 +973,8 @@ const (
 type Speed int64
 
 // String returns the speed formatted as a string in m/s.
-func (s Speed) String() string {
-	return nanoAsString(int64(s)) + "m/s"
+func (sp Speed) String() string {
+	return nanoAsString(int64(sp)) + "m/s"
 }
 
 // Set sets the Speed to the value represented by s. Units are to be provided in
@@ -994,16 +984,18 @@ func (sp *Speed) Set(s string) error {
 	d, n, err := atod(s)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s[n:], "m/s", "mps", "kph", "fps", "mph"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s[n:], "m/s", "mps", "kph", "fps", "mph"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"m/s\"")
+				return notNumberUnitErr("m/s, mps, kph, fps or mph")
 			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxSpeed.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return maxValueErr(maxSpeed.String())
 			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minSpeed.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return minValueErr(minSpeed.String())
 			}
 		}
 		return err
@@ -1013,9 +1005,7 @@ func (sp *Speed) Set(s string) error {
 	if n != len(s) {
 		r, rsize := utf8.DecodeRuneInString(s[n:])
 		if r <= 1 || rsize == 0 {
-			return &parseError{
-				err: errors.New("unexpected end of string"),
-			}
+			return errors.New("unexpected end of string")
 		}
 		var siSize int
 		si, siSize = parseSIPrefix(r)
@@ -1037,17 +1027,12 @@ func (sp *Speed) Set(s string) error {
 	}
 	switch s[n:] {
 	case "m/s", "mps":
-		v, err := dtoi(d, int(si-nano))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + maxSpeed.String())
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + minSpeed.String())
-				}
+		v, overflow := dtoi(d, int(si-nano))
+		if overflow {
+			if d.neg {
+				return minValueErr(minSpeed.String())
 			}
-			return err
+			return maxValueErr(maxSpeed.String())
 		}
 		*sp = (Speed)(v)
 	case "kph":
@@ -1057,17 +1042,12 @@ func (sp *Speed) Set(s string) error {
 			neg:  false,
 		}
 		kph, _ := decimalMul(d, mpsPerkph)
-		v, err := dtoi(kph, int(si))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + strconv.FormatInt(int64(maxKilometrePerHour), 10) + "kph")
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + strconv.FormatInt(int64(minKilometrePerHour), 10) + "kph")
-				}
+		v, overflow := dtoi(kph, int(si))
+		if overflow {
+			if kph.neg {
+				return minValueErr(strconv.FormatInt(int64(minKilometrePerHour), 10) + "kph")
 			}
-			return err
+			return maxValueErr(strconv.FormatInt(int64(maxKilometrePerHour), 10) + "kph")
 		}
 		*sp = (Speed)(v)
 	case "fps":
@@ -1077,17 +1057,12 @@ func (sp *Speed) Set(s string) error {
 			neg:  false,
 		}
 		oz, _ := decimalMul(d, mpsPerfps)
-		v, err := dtoi(oz, int(si))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + strconv.FormatInt(int64(maxFootPerSecond), 10) + "fps")
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + strconv.FormatInt(int64(minFootPerSecond), 10) + "fps")
-				}
+		v, overflow := dtoi(oz, int(si))
+		if overflow {
+			if oz.neg {
+				return minValueErr(strconv.FormatInt(int64(minFootPerSecond), 10) + "fps")
 			}
-			return err
+			return maxValueErr(strconv.FormatInt(int64(maxFootPerSecond), 10) + "fps")
 		}
 		*sp = (Speed)(v)
 	case "mph":
@@ -1097,30 +1072,26 @@ func (sp *Speed) Set(s string) error {
 			neg:  false,
 		}
 		oz, _ := decimalMul(d, mpsPermph)
-		v, err := dtoi(oz, int(si))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + strconv.FormatInt(int64(maxMilePerHour), 10) + "mph")
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is " + strconv.FormatInt(int64(minMilePerHour), 10) + "mph")
-				}
+		v, overflow := dtoi(oz, int(si))
+		if overflow {
+			if oz.neg {
+				return minValueErr(strconv.FormatInt(int64(minMilePerHour), 10) + "mph")
 			}
-			return err
+			return maxValueErr(strconv.FormatInt(int64(maxMilePerHour), 10) + "mph")
 		}
 		*sp = (Speed)(v)
 	case "":
-		return noUnits("m/s")
+		return noUnitErr("m/s, mps, kph, fps or mph")
 	default:
-		if found, extra := containsUnitString(s[n:], "m/s", "mps", "kph", "fps", "mph"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "m/s", "mps", "kph", "fps", "mph"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Speed")
+		return incorrectUnitErr("m/s, mps, kph, fps or mph")
 	}
 	return nil
 }
 
+// Well known Speed constants.
 const (
 	// MetrePerSecond is m/s.
 	NanoMetrePerSecond  Speed = 1
@@ -1173,16 +1144,18 @@ func (t *Temperature) Set(s string) error {
 	d, n, err := atod(s)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s[n:], "°C", "C", "°F", "F", "K"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s[n:], "°C", "C", "°F", "F", "K"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"°C\"")
+				return notNumberUnitErr("K, °C, C, °F or F")
 			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxTemperature.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return maxValueErr(maxTemperature.String())
 			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minTemperature.String())
+				// TODO(maruel): Look for suffix, and reuse it.
+				return minValueErr(minTemperature.String())
 			}
 		}
 		return err
@@ -1192,9 +1165,7 @@ func (t *Temperature) Set(s string) error {
 	if n != len(s) {
 		r, rsize := utf8.DecodeRuneInString(s[n:])
 		if r <= 1 || rsize == 0 {
-			return &parseError{
-				err: errors.New("unexpected end of string"),
-			}
+			return errors.New("unexpected end of string")
 		}
 		var siSize int
 		si, siSize = parseSIPrefix(r)
@@ -1209,79 +1180,75 @@ func (t *Temperature) Set(s string) error {
 			neg:  false,
 		}
 		f, _ := decimalMul(d, fPerK)
-		v, err := dtoi(f, int(si))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + strconv.FormatInt(int64(maxFahrenheit), 10) + "F")
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is -459.67F")
-				}
+		v, overflow := dtoi(f, int(si))
+		if overflow {
+			if f.neg {
+				return minValueErr("-459.67F")
 			}
-			return err
+			return maxValueErr(strconv.FormatInt(int64(maxFahrenheit), 10) + "F")
 		}
 		// We need an extra check here to make sure that will not overflow with
 		// the addition of ZeroFahrenheit.
 		switch {
 		case v > int64(maxTemperature-ZeroFahrenheit):
-			return errors.New("maximum value is " + strconv.FormatInt(int64(maxFahrenheit), 10) + "F")
+			return maxValueErr(strconv.FormatInt(int64(maxFahrenheit), 10) + "F")
 		case v < int64(-ZeroFahrenheit):
-			return errors.New("minimum value is -459.67F")
+			return minValueErr("-459.67F")
 		}
 		v += int64(ZeroFahrenheit)
 		*t = (Temperature)(v)
 	case "K":
-		v, err := dtoi(d, int(si-nano))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + strconv.FormatInt(int64(maxTemperature/1000000000), 10) + "K")
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is 0K")
-				}
+		v, overflow := dtoi(d, int(si-nano))
+		if overflow {
+			if d.neg {
+				return minValueErr("0K")
 			}
-			return err
+			return maxValueErr(strconv.FormatInt(int64(maxTemperature/1000000000), 10) + "K")
 		}
 		if v < 0 {
-			return errors.New("minimum value is 0K")
+			return minValueErr("0K")
 		}
 		*t = (Temperature)(v)
 	case "C", "°C":
-		v, err := dtoi(d, int(si-nano))
-		if err != nil {
-			if e, ok := err.(*parseError); ok {
-				switch e.err {
-				case errOverflowsInt64:
-					return errors.New("maximum value is " + strconv.FormatInt(int64(maxCelsius/1000000000), 10) + "°C")
-				case errOverflowsInt64Negative:
-					return errors.New("minimum value is -273.15°C")
-				}
+		v, overflow := dtoi(d, int(si-nano))
+		if overflow {
+			if d.neg {
+				return minValueErr("-273.15°C")
 			}
-			return err
+			return maxValueErr(strconv.FormatInt(int64(maxCelsius/1000000000), 10) + "°C")
 		}
 		// We need an extra check here to make sure that will not overflow with
 		// the addition of ZeroCelsius.
 		switch {
 		case v > int64(maxCelsius):
-			return errors.New("maximum value is " + strconv.FormatInt(int64(maxCelsius/1000000000), 10) + "°C")
+			return maxValueErr(strconv.FormatInt(int64(maxCelsius/1000000000), 10) + "°C")
 		case v < int64(-ZeroCelsius):
-			return errors.New("minimum value is " + "-273.15°C")
+			return minValueErr("-273.15°C")
 		}
 		v += int64(ZeroCelsius)
 		*t = (Temperature)(v)
 	case "":
-		return noUnits("°C")
+		return noUnitErr("K, °C, C, °F or F")
 	default:
-		if found, extra := containsUnitString(s[n:], "°C", "C", "°F", "F", "K"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "°C", "C", "°F", "F", "K"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Temperature")
+		return incorrectUnitErr("K, °C, C, °F or F")
 	}
 	return nil
 }
 
+// Celsius returns the temperature as a floating number of °Celsius.
+func (t Temperature) Celsius() float64 {
+	return float64(t-ZeroCelsius) / float64(Celsius)
+}
+
+// Fahrenheit returns the temperature as a floating number of °Fahrenheit.
+func (t Temperature) Fahrenheit() float64 {
+	return float64(t-ZeroFahrenheit) / float64(Fahrenheit)
+}
+
+// Well known Temperature constants.
 const (
 	NanoKelvin  Temperature = 1
 	MicroKelvin Temperature = 1000 * NanoKelvin
@@ -1328,36 +1295,37 @@ func (p *Power) Set(s string) error {
 	v, n, err := valueOfUnitString(s, nano)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxPower.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minPower.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "W"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "W", "w"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"W\"")
+				return notNumberUnitErr("W")
+			case errOverflowsInt64:
+				return maxValueErr(maxPower.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minPower.String())
 			}
 		}
 		return err
 	}
 
 	switch s[n:] {
-	case "w", "W":
+	case "W", "w":
 		*p = (Power)(v)
 	case "":
-		return noUnits("W")
+		return noUnitErr("W")
 	default:
-		if found, extra := containsUnitString(s[n:], "W"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "W", "w"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Power")
+		return incorrectUnitErr("W")
 	}
 
 	return nil
 }
 
+// Well known Power constants.
 const (
 	// Watt is unit of power J/s, kg⋅m²⋅s⁻³
 	NanoWatt  Power = 1
@@ -1389,36 +1357,37 @@ func (e *Energy) Set(s string) error {
 	v, n, err := valueOfUnitString(s, nano)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxEnergy.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minEnergy.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "J"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "J", "j"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"J\"")
+				return notNumberUnitErr("J")
+			case errOverflowsInt64:
+				return maxValueErr(maxEnergy.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minEnergy.String())
 			}
 		}
 		return err
 	}
 
 	switch s[n:] {
-	case "j", "J":
+	case "J", "j":
 		*e = (Energy)(v)
 	case "":
-		return noUnits("J")
+		return noUnitErr("J")
 	default:
-		if found, extra := containsUnitString(s[n:], "J"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "J", "j"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.Energy")
+		return incorrectUnitErr("J")
 	}
 
 	return nil
 }
 
+// Well known Energy constants.
 const (
 	// Joule is a unit of work. kg⋅m²⋅s⁻²
 	NanoJoule  Energy = 1
@@ -1458,36 +1427,37 @@ func (c *ElectricalCapacitance) Set(s string) error {
 	v, n, err := valueOfUnitString(s, pico)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxElectricalCapacitance.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minElectricalCapacitance.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "F"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "F", "f"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"F\"")
+				return notNumberUnitErr("F")
+			case errOverflowsInt64:
+				return maxValueErr(maxElectricalCapacitance.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minElectricalCapacitance.String())
 			}
 		}
 		return err
 	}
 
 	switch s[n:] {
-	case "f", "F":
+	case "F", "f":
 		*c = (ElectricalCapacitance)(v)
 	case "":
-		return noUnits("F")
+		return noUnitErr("F")
 	default:
-		if found, extra := containsUnitString(s[n:], "F"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "F", "f"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.ElectricalCapacitance")
+		return incorrectUnitErr("F")
 	}
 
 	return nil
 }
 
+// Well known ElectricalCapacitance constants.
 const (
 	// Farad is a unit of capacitance. kg⁻¹⋅m⁻²⋅s⁴A²
 	PicoFarad  ElectricalCapacitance = 1
@@ -1526,16 +1496,16 @@ func (i *LuminousIntensity) Set(s string) error {
 	v, n, err := valueOfUnitString(s, nano)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxLuminousIntensity.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minLuminousIntensity.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "cd"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "cd"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"cd\"")
+				return notNumberUnitErr("cd")
+			case errOverflowsInt64:
+				return maxValueErr(maxLuminousIntensity.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minLuminousIntensity.String())
 			}
 		}
 		return err
@@ -1545,17 +1515,18 @@ func (i *LuminousIntensity) Set(s string) error {
 	case "cd":
 		*i = (LuminousIntensity)(v)
 	case "":
-		return noUnits("cd")
+		return noUnitErr("cd")
 	default:
-		if found, extra := containsUnitString(s[n:], "cd"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "cd"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.LuminousIntensity")
+		return incorrectUnitErr("cd")
 	}
 
 	return nil
 }
 
+// Well known LuminousIntensity constants.
 const (
 	// Candela is a unit of luminous intensity. cd
 	NanoCandela  LuminousIntensity = 1
@@ -1592,16 +1563,16 @@ func (f *LuminousFlux) Set(s string) error {
 	v, n, err := valueOfUnitString(s, nano)
 	if err != nil {
 		if e, ok := err.(*parseError); ok {
-			switch e.err {
-			case errOverflowsInt64:
-				return errors.New("maximum value is " + maxLuminousFlux.String())
-			case errOverflowsInt64Negative:
-				return errors.New("minimum value is " + minLuminousFlux.String())
+			switch e.error {
 			case errNotANumber:
-				if found, _ := containsUnitString(s, "lm"); found != "" {
-					return errors.New("does not contain number")
+				if found := hasSuffixes(s, "lm"); found != "" {
+					return err
 				}
-				return errors.New("does not contain number or unit \"lm\"")
+				return notNumberUnitErr("lm")
+			case errOverflowsInt64:
+				return maxValueErr(maxLuminousFlux.String())
+			case errOverflowsInt64Negative:
+				return minValueErr(minLuminousFlux.String())
 			}
 		}
 		return err
@@ -1611,17 +1582,18 @@ func (f *LuminousFlux) Set(s string) error {
 	case "lm":
 		*f = (LuminousFlux)(v)
 	case "":
-		return noUnits("lm")
+		return noUnitErr("lm")
 	default:
-		if found, extra := containsUnitString(s[n:], "lm"); found != "" {
-			return unknownUnitPrefix(found, extra, "p,n,u,µ,m,k,M,G or T")
+		if found := hasSuffixes(s[n:], "lm"); found != "" {
+			return unknownUnitPrefixErr(found, "p,n,u,µ,m,k,M,G or T")
 		}
-		return incorrectUnit(s[n:], "physic.LuminousFlux")
+		return incorrectUnitErr("lm")
 	}
 
 	return nil
 }
 
+// Well known LuminousFlux constants.
 const (
 	// Lumen is a unit of luminous flux. cd⋅sr
 	NanoLumen  LuminousFlux = 1
@@ -1925,13 +1897,15 @@ var (
 	errOverflowsInt64         = errors.New("exceeds maximum")
 	errOverflowsInt64Negative = errors.New("exceeds minimum")
 	errNotANumber             = errors.New("not a number")
-	errExponentOverflow       = errors.New("exponent exceeds int64")
 )
 
 // Converts from decimal to int64.
+//
 // Scale is combined with the decimal exponent to maximise the resolution and is
 // in powers of ten.
-func dtoi(d decimal, scale int) (int64, error) {
+//
+// Returns true if the value overflowed.
+func dtoi(d decimal, scale int) (int64, bool) {
 	// Get the total magnitude of the number.
 	// a^x * b^y = a*b^(x+y) since scale is of the order unity this becomes
 	// 1^x * b^y = b^(x+y).
@@ -1941,50 +1915,31 @@ func dtoi(d decimal, scale int) (int64, error) {
 	if mag < 0 {
 		mag = -mag
 	}
+	var n int64
 	if mag > 18 {
-		return 0, errExponentOverflow
+		return 0, true
 	}
 	// Divide is = 10^(-mag)
 	switch {
 	case d.exp+scale < 0:
 		u = (u + powerOf10[mag]/2) / powerOf10[mag]
-		break
 	case mag == 0:
 		if u > maxInt64 {
-			if d.neg {
-				return -maxInt64, &parseError{
-					msg: "-" + maxInt64Str,
-					err: errOverflowsInt64Negative,
-				}
-			}
-			return maxInt64, &parseError{
-				msg: maxInt64Str,
-				err: errOverflowsInt64,
-			}
+			return 0, true
 		}
-		break
 	default:
 		check := u * powerOf10[mag]
 		if check/powerOf10[mag] != u || check > maxInt64 {
-			if d.neg {
-				return -maxInt64, &parseError{
-					msg: "-" + maxInt64Str,
-					err: errOverflowsInt64Negative,
-				}
-			}
-			return maxInt64, &parseError{
-				msg: maxInt64Str,
-				err: errOverflowsInt64,
-			}
+			return 0, true
 		}
 		u *= powerOf10[mag]
 	}
 
-	n := int64(u)
+	n = int64(u)
 	if d.neg {
 		n = -n
 	}
-	return n, nil
+	return n, false
 }
 
 // Converts a string to a decimal form. The return int is how many bytes of the
@@ -2013,14 +1968,12 @@ func atod(s string) (decimal, int, error) {
 			}
 			if seenPlus {
 				return decimal{}, 0, &parseError{
-					msg: s,
-					err: errors.New("can't contain both plus and minus symbols"),
+					errors.New("contains both plus and minus symbols"),
 				}
 			}
 			if d.neg {
 				return decimal{}, 0, &parseError{
-					msg: s,
-					err: errors.New("multiple minus symbols"),
+					errors.New("contains multiple minus symbols"),
 				}
 			}
 			d.neg = true
@@ -2032,14 +1985,12 @@ func atod(s string) (decimal, int, error) {
 			}
 			if d.neg {
 				return decimal{}, 0, &parseError{
-					msg: s,
-					err: errors.New("can't contain both plus and minus symbols"),
+					errors.New("contains both plus and minus symbols"),
 				}
 			}
 			if seenPlus {
 				return decimal{}, 0, &parseError{
-					msg: s,
-					err: errors.New("multiple plus symbols"),
+					errors.New("contains multiple plus symbols"),
 				}
 			}
 			seenPlus = true
@@ -2047,8 +1998,7 @@ func atod(s string) (decimal, int, error) {
 		case s[i] == '.':
 			if isPoint {
 				return decimal{}, 0, &parseError{
-					msg: s,
-					err: errors.New("multiple decimal points"),
+					errors.New("contains multiple decimal points"),
 				}
 			}
 			isPoint = true
@@ -2065,13 +2015,9 @@ func atod(s string) (decimal, int, error) {
 			seenDigit = true
 		default:
 			if !seenDigit && !seenZero {
-				return decimal{}, 0, &parseError{
-					msg: s,
-					err: errNotANumber,
-				}
+				return decimal{}, 0, &parseError{errNotANumber}
 			}
 			end = i
-			break
 		}
 	}
 
@@ -2114,19 +2060,13 @@ func atod(s string) (decimal, int, error) {
 			// Similarly if check > max it will overflow when converted to int64.
 			if check < d.base || check > maxInt64 {
 				if d.neg {
-					return decimal{}, 0, &parseError{
-						msg: "-" + maxInt64Str,
-						err: errOverflowsInt64Negative,
-					}
+					return decimal{}, 0, &parseError{errOverflowsInt64Negative}
 				}
-				return decimal{}, 0, &parseError{
-					msg: maxInt64Str,
-					err: errOverflowsInt64,
-				}
+				return decimal{}, 0, &parseError{errOverflowsInt64}
 			}
 			d.base = check
 		} else if c != '.' {
-			return decimal{}, 0, &parseError{err: errNotANumber}
+			return decimal{}, 0, &parseError{errNotANumber}
 		}
 	}
 	if !isPoint {
@@ -2160,18 +2100,19 @@ func valueOfUnitString(s string, base prefix) (int64, int, error) {
 		r, rsize := utf8.DecodeRuneInString(s[n:])
 		if r <= 1 || rsize == 0 {
 			return 0, 0, &parseError{
-				err: errors.New("unexpected end of string"),
-				msg: s,
+				errors.New("unexpected end of string"),
 			}
 		}
 		var siSize int
 		si, siSize = parseSIPrefix(r)
 		n += siSize
-
 	}
-	v, err := dtoi(d, int(si-base))
-	if err != nil {
-		return v, 0, err
+	v, overflow := dtoi(d, int(si-base))
+	if overflow {
+		if d.neg {
+			return -maxInt64, 0, &parseError{errOverflowsInt64Negative}
+		}
+		return maxInt64, 0, &parseError{errOverflowsInt64}
 	}
 	return v, n, nil
 }
@@ -2230,51 +2171,42 @@ func decimalMul(a, b decimal) (decimal, uint) {
 	return decimal{}, 21
 }
 
-// For units with short and or plural variations order units with longest first.
-// eg Degrees, Degree, Deg.
-func containsUnitString(s string, units ...string) (string, string) {
-	sub := strings.ToLower(s)
-	for _, unit := range units {
-		unitLow := strings.ToLower(unit)
-		if strings.Contains(sub, unitLow) {
-			index := strings.Index(sub, unitLow)
-			if index >= 0 {
-				// prefix
-				return unit, s[:index]
-			}
+// hasSuffixes returns the first suffix found and the prefix content.
+func hasSuffixes(s string, suffixes ...string) string {
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(s, suffix) {
+			return suffix
 		}
 	}
-	return "", ""
+	return ""
 }
 
 type parseError struct {
-	msg string
-	err error
+	error
 }
 
-func (p *parseError) Error() string {
-	if p.err == nil {
-		return "parse error"
-	}
-	if p.msg == "" {
-		return p.err.Error()
-	}
-	return p.err.Error() + " " + p.msg
+func noUnitErr(valid string) error {
+	return errors.New("no unit provided; need " + valid)
 }
 
-func noUnits(s string) error {
-	return &parseError{msg: s, err: errors.New("no units provided, need")}
+func incorrectUnitErr(valid string) error {
+	return errors.New("unknown unit provided; need " + valid)
 }
 
-func incorrectUnit(inputString, want string) error {
-	return &parseError{err: errors.New("\"" + inputString + "\"" + " is not a valid unit for " + want)}
+func unknownUnitPrefixErr(unit, valid string) error {
+	return errors.New("unknown unit prefix; valid prefixes for \"" + unit + "\" are " + valid)
 }
 
-func unknownUnitPrefix(unit string, prefix string, valid string) error {
-	return &parseError{
-		msg: "valid prefixes for \"" + unit + "\" are " + valid,
-		err: errors.New("contains unknown unit prefix \"" + prefix + "\"."),
-	}
+func maxValueErr(valid string) error {
+	return errors.New("maximum value is " + valid)
+}
+
+func minValueErr(valid string) error {
+	return errors.New("minimum value is " + valid)
+}
+
+func notNumberUnitErr(unit string) error {
+	return errors.New("does not contain number or unit " + unit)
 }
 
 type prefix int
