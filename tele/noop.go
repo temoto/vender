@@ -23,4 +23,4 @@ func (Noop) StatModify(func(*Stat)) {}
 
 func (Noop) Report(ctx context.Context, serviceTag bool) error { return nil }
 
-func (Noop) Transaction(Telemetry_Transaction) {}
+func (Noop) Transaction(*Telemetry_Transaction) {}
