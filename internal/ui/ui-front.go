@@ -271,7 +271,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	moneysys := money.GetGlobal(ctx)
 	uiConfig := &self.g.Config.UI
 	selected := &self.FrontResult.Item
-	teletx := tele_api.Telemetry_Transaction{
+	teletx := &tele_api.Telemetry_Transaction{
 		Code:    selected.Code,
 		Price:   uint32(selected.Price),
 		Options: []int32{int32(self.FrontResult.Cream), int32(self.FrontResult.Sugar)},

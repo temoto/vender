@@ -310,7 +310,11 @@ func ioctl(fd uintptr, op, arg uintptr) (err error) {
 	if fd+1 == 0 { // mock for test
 		return nil
 	}
+retry:
 	r, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, op, arg)
+	if errno == syscall.EINTR {
+		goto retry
+	}
 	if errno != 0 {
 		err = os.NewSyscallError("SYS_IOCTL", errno)
 	} else if r != 0 {

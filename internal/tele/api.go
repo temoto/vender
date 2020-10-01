@@ -98,12 +98,12 @@ func (self *tele) StatModify(fun func(s *tele_api.Stat)) {
 	self.stat.Unlock()
 }
 
-func (self *tele) Transaction(tx tele_api.Telemetry_Transaction) {
+func (self *tele) Transaction(tx *tele_api.Telemetry_Transaction) {
 	if !self.config.Enabled {
 		self.log.Infof(logMsgDisabled)
 		return
 	}
-	err := self.qpushTelemetry(&tele_api.Telemetry{Transaction: &tx})
+	err := self.qpushTelemetry(&tele_api.Telemetry{Transaction: tx})
 	if err != nil {
 		self.log.Errorf("CRITICAL transaction=%#v err=%v", tx, err)
 	}

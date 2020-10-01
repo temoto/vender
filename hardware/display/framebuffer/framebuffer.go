@@ -85,7 +85,12 @@ func encode565(c color.RGBA) uint16 {
 }
 
 func ioctl(fd uintptr, cmd uintptr, data uintptr) error {
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, cmd, data); errno != 0 {
+retry:
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, cmd, data)
+	if errno == syscall.EINTR {
+		goto retry
+	}
+	if errno != 0 {
 		return os.NewSyscallError("ioctl", errno)
 	}
 	return nil

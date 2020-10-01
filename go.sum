@@ -89,8 +89,8 @@ github.com/temoto/atomic_clock v1.0.1 h1:krTG20goQdrrTpZxjmjF5XaEt1w1OsLPufj51oc
 github.com/temoto/atomic_clock v1.0.1/go.mod h1:NyzIIb8jnXU/5+I3M6OCsgqT3qPM0YmvNXQDnkLzwfk=
 github.com/temoto/extremofile v0.5.0 h1:eadF+qMsK8krR2GqemEdUcSttfCnkzs6LcE85G3BQZw=
 github.com/temoto/extremofile v0.5.0/go.mod h1:kvFLb1SHVqYRp91AnHNn1OA9o8I1ZHMMOd4a/u/D++w=
-github.com/temoto/gpio-cdev-go v0.12.1-0.20191005112838-85f703f8e92e h1:ugo/iGDB9oZ5vEl6gluIey6H+5zrElBAW7rP8MZCVF4=
-github.com/temoto/gpio-cdev-go v0.12.1-0.20191005112838-85f703f8e92e/go.mod h1:+vXZ39ODGFfxfkL3SphEBCDXXTUIOuyUbGX4mES6Jhw=
+github.com/temoto/gpio-cdev-go v1.1.0 h1:AQtqaxzaQ2kOlJUVvPLohr+UL5vChSOWFeQXUzCtlK0=
+github.com/temoto/gpio-cdev-go v1.1.0/go.mod h1:+vXZ39ODGFfxfkL3SphEBCDXXTUIOuyUbGX4mES6Jhw=
 github.com/temoto/inputevent-go v1.0.0 h1:x36+62cshGIsFLwOtTBeD3cTcMfJ+r2ih0bAV2IhE4U=
 github.com/temoto/inputevent-go v1.0.0/go.mod h1:RY5lgc0aR8Ouq8WUDe5E4Mo7D8NN9Czh7xpr+uCQxTo=
 github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86 h1:28eUgClE9ZSaq7N79vvygkYH0CoRSdx2eLBGaB/T4Uk=
@@ -108,6 +108,8 @@ golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223 h1:DH4skfRX4EBpamg7iV4ZlCpbl
 golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190412213103-97732733099d h1:+R4KGOnez64A81RvjARKc4UT5/tI9ujCIVX+P5KiHuI=
 golang.org/x/sys v0.0.0-20190412213103-97732733099d/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20200929083018-4d22bbb62b3c h1:/h0vtH0PyU0xAoZJVcRw1k0Ng+U0JAy3QDiFmppIlIE=
+golang.org/x/sys v0.0.0-20200929083018-4d22bbb62b3c/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/text v0.3.0 h1:g61tztE5qeGQ89tm6NTjjM9VPIm088od1l6aSorWRWg=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
@@ -128,5 +130,5 @@ gopkg.in/yaml.v2 v2.2.2 h1:ZCJp+EgiOT7lHqUV2J862kp8Qj64Jo6az82+3Td9dZw=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.2.8 h1:obN1ZagJSUGI0Ek/LBmuj4SNLPfIny3KsKFopxRdj10=
 gopkg.in/yaml.v2 v2.2.8/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
-periph.io/x/periph v3.4.0+incompatible h1:5gzxE4ryPq52cdqSw0mErR6pyJK8cBF2qdUAcOWh0bo=
-periph.io/x/periph v3.4.0+incompatible/go.mod h1:EWr+FCIU2dBWz5/wSWeiIUJTriYv9v2j2ENBmgYyy7Y=
+periph.io/x/periph v3.6.4+incompatible h1:8FyXTbu9lcMVofz8mf+cj1pzTLN4V6EuPY2EF+DoJF4=
+periph.io/x/periph v3.6.4+incompatible/go.mod h1:EWr+FCIU2dBWz5/wSWeiIUJTriYv9v2j2ENBmgYyy7Y=

@@ -1,3 +1,13 @@
+# github.com/256dpi/gomqtt v0.14.1
+github.com/256dpi/gomqtt/broker
+github.com/256dpi/gomqtt/client
+github.com/256dpi/gomqtt/client/future
+github.com/256dpi/gomqtt/packet
+github.com/256dpi/gomqtt/session
+github.com/256dpi/gomqtt/topic
+github.com/256dpi/gomqtt/transport
+# github.com/256dpi/mercury v0.2.0
+github.com/256dpi/mercury
 # github.com/c-bata/go-prompt v0.2.3
 github.com/c-bata/go-prompt
 # github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
@@ -11,16 +21,20 @@ github.com/eclipse/paho.mqtt.golang/packets
 github.com/golang/protobuf/proto
 # github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
 github.com/golang/snappy
+# github.com/gorilla/websocket v1.4.1
+github.com/gorilla/websocket
 # github.com/hashicorp/hcl v1.0.0
 github.com/hashicorp/hcl
 github.com/hashicorp/hcl/hcl/ast
 github.com/hashicorp/hcl/hcl/parser
-github.com/hashicorp/hcl/hcl/token
-github.com/hashicorp/hcl/json/parser
 github.com/hashicorp/hcl/hcl/scanner
 github.com/hashicorp/hcl/hcl/strconv
+github.com/hashicorp/hcl/hcl/token
+github.com/hashicorp/hcl/json/parser
 github.com/hashicorp/hcl/json/scanner
 github.com/hashicorp/hcl/json/token
+# github.com/jpillora/backoff v0.0.0-20170918002102-8eab2debe79d
+github.com/jpillora/backoff
 # github.com/juju/errors v0.0.0-20190930114154-d42613fe1ab9
 github.com/juju/errors
 # github.com/mattn/go-colorable v0.1.1
@@ -38,30 +52,36 @@ github.com/paulrosania/go-charset/data
 github.com/pkg/term/termios
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
+# github.com/skip2/go-qrcode v0.0.0-20191027152451-9434209cb086
+github.com/skip2/go-qrcode
+github.com/skip2/go-qrcode/bitset
+github.com/skip2/go-qrcode/reedsolomon
 # github.com/stretchr/objx v0.2.0
 github.com/stretchr/objx
-# github.com/stretchr/testify v1.4.0
-github.com/stretchr/testify/require
+# github.com/stretchr/testify v1.5.1
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/mock
+github.com/stretchr/testify/require
 # github.com/syndtr/goleveldb v1.0.0
 github.com/syndtr/goleveldb/leveldb
-github.com/syndtr/goleveldb/leveldb/errors
-github.com/syndtr/goleveldb/leveldb/opt
-github.com/syndtr/goleveldb/leveldb/storage
-github.com/syndtr/goleveldb/leveldb/util
 github.com/syndtr/goleveldb/leveldb/cache
 github.com/syndtr/goleveldb/leveldb/comparer
+github.com/syndtr/goleveldb/leveldb/errors
 github.com/syndtr/goleveldb/leveldb/filter
 github.com/syndtr/goleveldb/leveldb/iterator
 github.com/syndtr/goleveldb/leveldb/journal
 github.com/syndtr/goleveldb/leveldb/memdb
+github.com/syndtr/goleveldb/leveldb/opt
+github.com/syndtr/goleveldb/leveldb/storage
 github.com/syndtr/goleveldb/leveldb/table
-# github.com/temoto/alive v1.1.0
-github.com/temoto/alive
+github.com/syndtr/goleveldb/leveldb/util
+# github.com/temoto/alive/v2 v2.0.0
+github.com/temoto/alive/v2
+# github.com/temoto/atomic_clock v1.0.1
+github.com/temoto/atomic_clock
 # github.com/temoto/extremofile v0.5.0
 github.com/temoto/extremofile
-# github.com/temoto/gpio-cdev-go v0.12.1-0.20191005112838-85f703f8e92e
+# github.com/temoto/gpio-cdev-go v1.1.0
 github.com/temoto/gpio-cdev-go
 github.com/temoto/gpio-cdev-go/mock
 # github.com/temoto/inputevent-go v1.0.0
@@ -70,41 +90,45 @@ github.com/temoto/inputevent-go
 github.com/temoto/iodin/client/go-iodin
 # github.com/temoto/spq v0.10.0
 github.com/temoto/spq
-# golang.org/x/net v0.0.0-20190311183353-d8887717615a
+# golang.org/x/net v0.0.0-20190620200207-3b0461eec859
+golang.org/x/net/context
+golang.org/x/net/internal/socks
 golang.org/x/net/proxy
 golang.org/x/net/websocket
-golang.org/x/net/internal/socks
-# golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223
+# golang.org/x/sys v0.0.0-20200929083018-4d22bbb62b3c
+golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
-# gopkg.in/yaml.v2 v2.2.2
+# gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
+gopkg.in/tomb.v2
+# gopkg.in/yaml.v2 v2.2.8
 gopkg.in/yaml.v2
-# periph.io/x/periph v3.4.0+incompatible
+# periph.io/x/periph v3.6.4+incompatible
+periph.io/x/periph
+periph.io/x/periph/conn
+periph.io/x/periph/conn/gpio
+periph.io/x/periph/conn/gpio/gpioreg
+periph.io/x/periph/conn/gpio/gpiostream
+periph.io/x/periph/conn/i2c
+periph.io/x/periph/conn/i2c/i2creg
 periph.io/x/periph/conn/physic
+periph.io/x/periph/conn/pin
+periph.io/x/periph/conn/pin/pinreg
 periph.io/x/periph/conn/spi
 periph.io/x/periph/conn/spi/spireg
 periph.io/x/periph/host
-periph.io/x/periph/conn
-periph.io/x/periph/conn/gpio
-periph.io/x/periph/conn/pin
-periph.io/x/periph
 periph.io/x/periph/host/allwinner
 periph.io/x/periph/host/am335x
 periph.io/x/periph/host/bcm283x
+periph.io/x/periph/host/beagle/black
 periph.io/x/periph/host/beagle/bone
 periph.io/x/periph/host/beagle/green
 periph.io/x/periph/host/chip
-periph.io/x/periph/host/odroidc1
-periph.io/x/periph/host/pine64
-periph.io/x/periph/host/rpi
-periph.io/x/periph/host/sysfs
-periph.io/x/periph/conn/gpio/gpioreg
 periph.io/x/periph/host/cpu
 periph.io/x/periph/host/distro
-periph.io/x/periph/host/pmem
-periph.io/x/periph/conn/gpio/gpiostream
-periph.io/x/periph/host/videocore
-periph.io/x/periph/conn/pin/pinreg
-periph.io/x/periph/host/beagle/black
 periph.io/x/periph/host/fs
-periph.io/x/periph/conn/i2c
-periph.io/x/periph/conn/i2c/i2creg
+periph.io/x/periph/host/odroidc1
+periph.io/x/periph/host/pine64
+periph.io/x/periph/host/pmem
+periph.io/x/periph/host/rpi
+periph.io/x/periph/host/sysfs
+periph.io/x/periph/host/videocore
