@@ -35,8 +35,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	// FIXME special handling of separate graphic display
 	// Currently used to clear QR.
 	if d, _ := self.g.Display(); d != nil {
-		// _ = d.Clear()
-		_ = d.Picture(self.g.Config.UI.Front.PicIdle)
+		_ = d.Clear()
 	}
 
 	if errs := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); len(errs) != 0 {

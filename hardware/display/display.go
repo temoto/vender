@@ -3,7 +3,6 @@ package display
 import (
 	"image"
 	"image/color"
-	"io/ioutil"
 	"strings"
 
 	"github.com/juju/errors"
@@ -53,22 +52,6 @@ func (d *Display) Flush() error {
 			return err
 		}
 		return d.fb.Flush()
-	}
-	return nil
-}
-
-func (d *Display) Picture(file string) error {
-	// FIXME Надо прочитать картину в Image и позвать palleted
-	input, err := ioutil.ReadFile(file)
-	if err != nil {
-		d.Clear()
-		return errors.Annotate(err, "Picture ReadFile")
-	}
-
-	err = ioutil.WriteFile("/dev/fb0", input, 0644)
-	if err != nil {
-		d.Clear()
-		return errors.Annotate(err, "Picture WriteFile")
 	}
 	return nil
 }

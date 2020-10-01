@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 	"time"
-
+"os/exec"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/money"
@@ -106,7 +106,17 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return StateFrontBegin
 
 	case StateBroken:
+		self.g.Log.Infof("Alexxx")
 		self.g.Log.Infof("state=broken")
+		cmd := exec.Command("fbi", " -a -d /dev/fb0 -T 1 -noverbose /home/vmc/broken.jpg ")
+	err := cmd.Start()
+	self.g.Log.Infof("Alexxx1%s",err)
+	if err != nil {
+		self.g.Log.Error(err)
+	}
+	// log.Printf("Waiting for command to finish...")
+	err = cmd.Wait()
+self.g.Log.Infof("Alexxx2 %s",err)
 		if !self.broken {
 			self.g.Tele.State(tele_api.State_Problem)
 			if errs := self.g.Engine.ExecList(ctx, "on_broken", self.g.Config.Engine.OnBroken); len(errs) != 0 {
@@ -120,7 +130,9 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		self.display.SetLines(self.g.Config.UI.Front.MsgStateBroken, "")
 		if d, _ := self.g.Display(); d != nil {
 			// _ = d.Clear()
-			_ = d.Picture(self.g.Config.UI.Front.PicBroken)
+			// _ = d.Picture(self.g.Config.UI.Front.PicBroken)
+
+
 		}
 		for self.g.Alive.IsRunning() {
 			e := self.wait(time.Second)
@@ -238,4 +250,19 @@ func removeOptionalOffline(g *state.Global, errs []error) []error {
 		return true
 	}
 	return filterErrors(errs, take)
+}
+func executeScript(ctx context.Context, script string) {
+	g := state.GetGlobal(ctx)
+	if script != "" {
+		cmd := exec.Command(script) //nolint:gosec
+		g.Alive.Add(1)
+		go func() {
+			defer g.Alive.Done()
+			execOutput, execErr := cmd.CombinedOutput()
+			if execErr != nil {
+				execErr = errors.Annotatef(execErr, "state_script %s output=%s", cmd.Path, execOutput)
+				g.Log.Error(execErr)
+			}
+		}()
+	}
 }
