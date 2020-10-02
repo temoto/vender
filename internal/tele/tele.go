@@ -2,6 +2,7 @@ package tele
 
 import (
 	"context"
+	// "fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -65,7 +66,6 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	if err := self.transport.Init(ctx, log, teleConfig, self.onCommandMessage, willPayload); err != nil {
 		return errors.Annotate(err, "tele transport")
 	}
-
 	if !self.config.Enabled {
 		return nil
 	}
@@ -80,8 +80,8 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	}
 
 	go self.qworker()
-	go self.stateWorker()
-	self.stateCh <- tele_api.State_Boot
+	self.State(tele_api.State_Boot)
+
 	return nil
 }
 
@@ -89,34 +89,6 @@ func (self *tele) Close() {
 	close(self.stopCh)
 	if self.q != nil {
 		self.q.Close()
-	}
-}
-
-func (self *tele) stateWorker() {
-	const retryInterval = 17 * time.Second
-	var b [1]byte
-	var sent bool
-	tmrRegular := time.NewTicker(self.stateInterval)
-	tmrRetry := time.NewTicker(retryInterval)
-	for {
-		select {
-		case next := <-self.stateCh:
-			if next != tele_api.State(b[0]) {
-				b[0] = byte(next)
-				sent = self.transport.SendState(b[:])
-			}
-
-		case <-tmrRegular.C:
-			sent = self.transport.SendState(b[:])
-
-		case <-tmrRetry.C:
-			if !sent {
-				sent = self.transport.SendState(b[:])
-			}
-
-		case <-self.stopCh:
-			return
-		}
 	}
 }
 
@@ -166,6 +138,7 @@ func (self *tele) qworker() {
 }
 
 func (self *tele) qhandle(b []byte) (bool, error) {
+
 	if len(b) == 0 {
 		self.log.Errorf("tele spq peek=empty")
 		// what else can we do?
