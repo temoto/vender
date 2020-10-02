@@ -4,7 +4,10 @@ import (
 	"context"
 	"sync/atomic"
 	"time"
-"os/exec"
+    "os/exec"
+   	"fmt"
+	"strings"
+
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/money"
@@ -83,6 +86,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	self.g.Log.Debugf("ui enter %s", s.String())
 	switch s {
 	case StateBoot:
+		executeScript(ctx, "StateBoot","")
 		self.g.Tele.State(tele_api.State_Boot)
 		onStartSuccess := false
 		for i := 1; i <= 3; i++ {
@@ -106,17 +110,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return StateFrontBegin
 
 	case StateBroken:
-		self.g.Log.Infof("Alexxx")
 		self.g.Log.Infof("state=broken")
-		cmd := exec.Command("fbi", " -a -d /dev/fb0 -T 1 -noverbose /home/vmc/broken.jpg ")
-	err := cmd.Start()
-	self.g.Log.Infof("Alexxx1%s",err)
-	if err != nil {
-		self.g.Log.Error(err)
-	}
-	// log.Printf("Waiting for command to finish...")
-	err = cmd.Wait()
-self.g.Log.Infof("Alexxx2 %s",err)
 		if !self.broken {
 			self.g.Tele.State(tele_api.State_Problem)
 			if errs := self.g.Engine.ExecList(ctx, "on_broken", self.g.Config.Engine.OnBroken); len(errs) != 0 {
@@ -129,11 +123,9 @@ self.g.Log.Infof("Alexxx2 %s",err)
 		self.broken = true
 		self.display.SetLines(self.g.Config.UI.Front.MsgStateBroken, "")
 		if d, _ := self.g.Display(); d != nil {
-			// _ = d.Clear()
-			// _ = d.Picture(self.g.Config.UI.Front.PicBroken)
-
-
+			_ = d.Clear()
 		}
+		executeScript(ctx, "StateBroken", "")
 		for self.g.Alive.IsRunning() {
 			e := self.wait(time.Second)
 			// TODO receive tele command to reboot or change state
@@ -161,6 +153,7 @@ self.g.Log.Infof("Alexxx2 %s",err)
 	case StateFrontBegin:
 		self.inputBuf = self.inputBuf[:0]
 		self.broken = false
+		self.g.Log.Infof("state=StateFrontBegin")
 		return self.onFrontBegin(ctx)
 
 	case StateFrontSelect:
@@ -170,6 +163,7 @@ self.g.Log.Infof("Alexxx2 %s",err)
 		return self.onFrontTune(ctx)
 
 	case StateFrontAccept:
+		self.g.Log.Infof("state=StateFrontAccept")
 		return self.onFrontAccept(ctx)
 
 	case StateFrontTimeout:
@@ -251,16 +245,22 @@ func removeOptionalOffline(g *state.Global, errs []error) []error {
 	}
 	return filterErrors(errs, take)
 }
-func executeScript(ctx context.Context, script string) {
+func executeScript(ctx context.Context, onstate string, data string) {
 	g := state.GetGlobal(ctx)
-	if script != "" {
-		cmd := exec.Command(script) //nolint:gosec
+	g.Log.Debugf("execute script (%s)", onstate)
+	if g.Config.Engine.Profile.StateScript != "" {
+		cmd := exec.Command(g.Config.Engine.Profile.StateScript) //nolint:gosec
+		cmd.Env = []string{
+			fmt.Sprintf("state=%s", onstate),
+			fmt.Sprintf("data=%s", data),
+		}
 		g.Alive.Add(1)
 		go func() {
 			defer g.Alive.Done()
 			execOutput, execErr := cmd.CombinedOutput()
+			prettyEnv := strings.Join(cmd.Env, " ")
 			if execErr != nil {
-				execErr = errors.Annotatef(execErr, "state_script %s output=%s", cmd.Path, execOutput)
+				execErr = errors.Annotatef(execErr, "state_script %s (%s) output=%s", cmd.Path, prettyEnv, execOutput)
 				g.Log.Error(execErr)
 			}
 		}()

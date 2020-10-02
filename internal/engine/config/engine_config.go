@@ -20,9 +20,10 @@ type Config struct {
 		Items []*MenuItem `hcl:"item"`
 	}
 	Profile struct {
-		Regexp    string `hcl:"regexp"`
-		MinUs     int    `hcl:"min_us"`
-		LogFormat string `hcl:"log_format"`
+		Regexp    	string `hcl:"regexp"`
+		MinUs     	int    `hcl:"min_us"`
+		LogFormat 	string `hcl:"log_format"`
+		StateScript string `hcl:"state_script"` // env ${data}, ${state} (StateBoot, StateBroken, BeginProcess, EndProcess )
 	}
 }
 

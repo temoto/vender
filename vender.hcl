@@ -3,6 +3,13 @@ debug {
   pprof_listen = "127.0.0.1:6060"
 }
 
+script {
+    on_boot = ""
+    on_broken = ""
+    on_begin = ""
+    on_front_accept = ""
+}
+
 engine {
   // alias "cup_dispense" { scenario = "conveyor_move_cup cup_drop" }
 
