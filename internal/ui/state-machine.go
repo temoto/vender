@@ -2,11 +2,11 @@ package ui
 
 import (
 	"context"
+	"fmt"
+	"os/exec"
+	"strings"
 	"sync/atomic"
 	"time"
-    "os/exec"
-   	"fmt"
-	"strings"
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
@@ -86,7 +86,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	self.g.Log.Debugf("ui enter %s", s.String())
 	switch s {
 	case StateBoot:
-		executeScript(ctx, "StateBoot","")
+		executeScript(ctx, "StateBoot", "")
 		self.g.Tele.State(tele_api.State_Boot)
 		onStartSuccess := false
 		for i := 1; i <= 3; i++ {
