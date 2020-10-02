@@ -37,7 +37,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	if d, _ := self.g.Display(); d != nil {
 		_ = d.Clear()
 	}
-
+	executeScript(ctx, "FrontBegin", "")
 	if errs := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); len(errs) != 0 {
 		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_front_begin"))
 		return StateBroken
