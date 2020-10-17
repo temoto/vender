@@ -70,7 +70,7 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 		tlsconf.RootCAs = x509.NewCertPool()
 		cabytes, err := ioutil.ReadFile(teleConfig.TlsCaFile)
 		if err != nil {
-			panic(err)
+			self.log.Errorf("tls not possible. certivicate not found")
 		}
 		tlsconf.RootCAs.AppendCertsFromPEM(cabytes)
 	}
@@ -79,32 +79,25 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 	}
 	self.mopt = mqtt.NewClientOptions().
 		AddBroker(teleConfig.MqttBroker).
-		SetAutoReconnect(true).
 		SetBinaryWill(self.topicState, willPayload, 1, true).
 		SetCleanSession(false).
 		SetClientID(mqttClientId).
-		SetConnectTimeout(connectTimeout).
 		SetCredentialsProvider(credFun).
-		SetDefaultPublishHandler(defaultHandler).
+1		SetDefaultPublishHandler(defaultHandler).
 		SetKeepAlive(keepaliveTimeout).
-		SetMaxReconnectInterval(connectTimeout).
-		SetMessageChannelDepth(1).
 		SetOrderMatters(false).
-		SetPingTimeout(networkTimeout).
 		SetTLSConfig(tlsconf).
-		SetWriteTimeout(networkTimeout)
+    SetResumeSubs(true).SetCleanSession(false).
+    SetStore(mqtt.NewFileStore("/home/alexm/test/0")).
+1    SetOnConnectHandler(OnConnectHandler).
+1    SetConnectionLostHandler(connLostHandler).
+    SetConnectRetry(true).SetConnectRetryInterval(10 * time.Second)
 	self.m = mqtt.NewClient(self.mopt)
 
-	go self.online()
+ 	go self.online()
 	return nil
 }
 
-func (self *transportMqtt) Close() {
-	close(self.stopCh)
-	for self.m.IsConnected() {
-		time.Sleep(1 * time.Second)
-	}
-}
 
 func (self *transportMqtt) SendState(payload []byte) bool {
 	self.log.Infof("transport sendstate payload=%x", payload)
@@ -129,6 +122,7 @@ func (self *transportMqtt) SendCommandResponse(topicSuffix string, payload []byt
 }
 
 func (self *transportMqtt) online() {
+	transportMqtt
 	if self.m.IsConnected() {
 		return
 	}

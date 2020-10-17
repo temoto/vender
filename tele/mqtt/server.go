@@ -1,4 +1,4 @@
-package mqtt
+package gomqtt
 
 // Vender telemetry specific MQTT server.
 // Part of public API for external usage.
