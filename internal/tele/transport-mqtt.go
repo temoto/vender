@@ -54,7 +54,7 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 	if networkTimeout < 1*time.Second {
 		networkTimeout = 1 * time.Second
 	}
-	keepaliveTimeout := helpers.IntSecondDefault(teleConfig.KeepaliveSec, networkTimeout/2)
+	RetryInterval := helpers.IntSecondDefault(teleConfig.KeepaliveSec, networkTimeout*10)
 
 	tlsconf := new(tls.Config)
 	if teleConfig.TlsCaFile != "" {
@@ -75,12 +75,12 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 		SetClientID(mqttClientId).
 		SetCredentialsProvider(credFun).
 		SetDefaultPublishHandler(self.messageHandler).
-		SetKeepAlive(keepaliveTimeout).
+		SetKeepAlive(networkTimeout).
 		SetOrderMatters(false).
 		SetTLSConfig(tlsconf).
 		SetResumeSubs(true).SetCleanSession(false).
 		SetStore(mqtt.NewFileStore("/home/vmc/testmqtt")).
-		SetConnectRetryInterval(10 * time.Second).
+		SetConnectRetryInterval(RetryInterval).
 		SetOnConnectHandler(self.onConnectHandler).
 		SetConnectionLostHandler(self.connectLostHandler).
 		SetConnectRetry(true)
