@@ -66,7 +66,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		self.g.Error(err)
 		return StateBroken
 	}
-	self.g.Tele.State(tele_api.State_Nominal)
+	// self.g.Tele.State(tele_api.State_Nominal)
 	return StateFrontSelect
 }
 

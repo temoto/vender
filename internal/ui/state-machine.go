@@ -107,6 +107,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 			return StateBroken
 		}
 		self.broken = false
+		self.g.Tele.State(tele_api.State_Nominal)
 		return StateFrontBegin
 
 	case StateBroken:

@@ -1,4 +1,4 @@
-package gomqtt
+package mqtt
 
 import (
 	"fmt"
