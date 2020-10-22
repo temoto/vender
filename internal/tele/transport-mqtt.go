@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/temoto/vender/helpers"
@@ -20,8 +19,10 @@ type transportMqtt struct {
 	m         mqtt.Client
 	mopt      *mqtt.ClientOptions
 	stopCh    chan struct{}
+	connected bool
 
 	topicPrefix    string
+	topicConnect   string
 	topicState     string
 	topicTelemetry string
 	topicCommand   string
@@ -46,16 +47,17 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 		return onCommand(ctx, payload)
 	}
 	self.topicPrefix = mqttClientId // coincidence
+	self.topicConnect = fmt.Sprintf("%s/c", self.topicPrefix)
 	self.topicState = fmt.Sprintf("%s/w/1s", self.topicPrefix)
 	self.topicTelemetry = fmt.Sprintf("%s/w/1t", self.topicPrefix)
 	self.topicCommand = fmt.Sprintf("%s/r/c", self.topicPrefix)
-
-	networkTimeout := helpers.IntSecondDefault(teleConfig.NetworkTimeoutSec, DefaultNetworkTimeout)
-	if networkTimeout < 1*time.Second {
-		networkTimeout = 1 * time.Second
+	keepAlive := helpers.IntSecondConfigDefault(teleConfig.KeepaliveSec, 60)
+	pingTimeout := helpers.IntSecondConfigDefault(teleConfig.PingTimeoutSec, 30)
+	retryInterval := helpers.IntSecondConfigDefault(teleConfig.KeepaliveSec/2, 30)
+	storePath := teleConfig.StorePath
+	if teleConfig.StorePath == "" {
+		storePath = "/home/vmc/telemessages"
 	}
-	RetryInterval := helpers.IntSecondDefault(teleConfig.KeepaliveSec, networkTimeout*10)
-
 	tlsconf := new(tls.Config)
 	if teleConfig.TlsCaFile != "" {
 		tlsconf.RootCAs = x509.NewCertPool()
@@ -70,17 +72,18 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 	}
 	self.mopt = mqtt.NewClientOptions().
 		AddBroker(teleConfig.MqttBroker).
-		SetBinaryWill(self.topicState, willPayload, 1, true).
+		SetBinaryWill(self.topicConnect, []byte{0x00}, 1, true).
 		SetCleanSession(false).
 		SetClientID(mqttClientId).
 		SetCredentialsProvider(credFun).
 		SetDefaultPublishHandler(self.messageHandler).
-		SetKeepAlive(networkTimeout).
+		SetKeepAlive(keepAlive).
+		SetPingTimeout(pingTimeout).
 		SetOrderMatters(false).
 		SetTLSConfig(tlsconf).
 		SetResumeSubs(true).SetCleanSession(false).
-		SetStore(mqtt.NewFileStore("/home/vmc/testmqtt")).
-		SetConnectRetryInterval(RetryInterval).
+		SetStore(mqtt.NewFileStore(storePath)).
+		SetConnectRetryInterval(retryInterval).
 		SetOnConnectHandler(self.onConnectHandler).
 		SetConnectionLostHandler(self.connectLostHandler).
 		SetConnectRetry(true)
@@ -117,19 +120,14 @@ func (self *transportMqtt) messageHandler(c mqtt.Client, msg mqtt.Message) {
 }
 
 func (self *transportMqtt) connectLostHandler(c mqtt.Client, err error) {
-	fmt.Printf("Connection lost, reason: %v\n", err)
-	//Perform additional action...
 }
 
 func (self *transportMqtt) onConnectHandler(c mqtt.Client) {
 	fmt.Printf("OnConnectHandler \n")
-	//Perform additional action...
-	if token := c.Subscribe("vm-2/r/c", 2, nil); token.Wait() && token.Error() != nil {
-		fmt.Println(token.Error())
-		fmt.Printf("Subscribe error \n")
+	if token := c.Subscribe(self.topicCommand, 2, nil); token.Wait() && token.Error() != nil {
+		self.log.Errorf("Subscribe error")
 	} else {
-		fmt.Printf("Subscribe Ok \n")
-		c.Publish("vm-2/online", 1, true, []byte{0x01})
-		c.Publish(self.topicState, 1, true, []byte{0x00})
+		self.log.Debugf("Subscribe Ok")
+		c.Publish(self.topicConnect, 1, true, []byte{0x01})
 	}
 }

@@ -2,7 +2,7 @@ package tele
 
 import (
 	"context"
-	"fmt"
+	// "fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -66,7 +66,6 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	if err := self.transport.Init(ctx, log, teleConfig, self.onCommandMessage, willPayload); err != nil {
 		return errors.Annotate(err, "tele transport")
 	}
-	fmt.Printf("\033[41m init tele \033[0m\n")
 	if !self.config.Enabled {
 		return nil
 	}
@@ -81,11 +80,8 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	}
 
 	go self.qworker()
-	// go self.stateWorker()
 	self.State(tele_api.State_Boot)
-	// fmt.Printf("\033[41m tele 85 \033[0m\n")
-	// 	self.transport.SendState([]byte{0x01,})
-	// 	fmt.Printf("\033[41m tele 85+1 \033[0m\n")
+
 	return nil
 }
 

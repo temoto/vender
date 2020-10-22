@@ -7,6 +7,7 @@ type Config struct { //nolint:maligned
 	VmId              int    `hcl:"vm_id"`
 	LogDebug          bool   `hcl:"log_debug"`
 	KeepaliveSec      int    `hcl:"keepalive_sec"`
+	PingTimeoutSec    int    `hcl:"ping_timeout_sec"`
 	MqttBroker        string `hcl:"mqtt_broker"`
 	MqttLogDebug      bool   `hcl:"mqtt_log_debug"`
 	MqttPassword      string `hcl:"mqtt_password"` // secret
@@ -14,6 +15,7 @@ type Config struct { //nolint:maligned
 	StateIntervalSec  int    `hcl:"state_interval_sec"`
 	TlsCaFile         string `hcl:"tls_ca_file"`
 	TlsPsk            string `hcl:"tls_psk"` // secret
+	StorePath         string `hcl:"store_path"`
 
 	PersistPath        string             `hcl:"-"`
 	GetInventory       func() interface{} `hcl:"-"`

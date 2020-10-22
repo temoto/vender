@@ -198,13 +198,17 @@ persist {
 }
 
 tele {
-  enable         = false
-  vm_id          = -1
-  log_debug      = true
-  mqtt_log_debug = false
-  mqtt_broker    = "tls://TODO_EDIT:8884"
-  mqtt_password  = "TODO_EDIT"
-  tls_ca_file    = "TODO_EDIT"
+  enable              = false
+  vm_id               = -1
+  log_debug           = true
+  mqtt_log_debug      = false
+  mqtt_broker         = "tls://TODO_EDIT:8884"
+  mqtt_password       = "TODO_EDIT"
+  tls_ca_file         = "TODO_EDIT"
+ 	keepalive_sec       = 60 //default
+	ping_timeout_sec    = 30 //default
+  store_path          = "TODO_EDIT store unsend messages"
+
 }
 
 ui {
