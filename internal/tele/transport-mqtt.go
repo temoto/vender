@@ -19,7 +19,6 @@ type transportMqtt struct {
 	m         mqtt.Client
 	mopt      *mqtt.ClientOptions
 	stopCh    chan struct{}
-	connected bool
 
 	topicPrefix    string
 	topicConnect   string
@@ -123,6 +122,7 @@ func (self *transportMqtt) connectLostHandler(c mqtt.Client, err error) {
 }
 
 func (self *transportMqtt) onConnectHandler(c mqtt.Client) {
+	sss.TeleConnected()
 	fmt.Printf("OnConnectHandler \n")
 	if token := c.Subscribe(self.topicCommand, 2, nil); token.Wait() && token.Error() != nil {
 		self.log.Errorf("Subscribe error")
