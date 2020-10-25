@@ -19,7 +19,6 @@ type transportMqtt struct {
 	m         mqtt.Client
 	mopt      *mqtt.ClientOptions
 	stopCh    chan struct{}
-	connected bool
 
 	topicPrefix    string
 	topicConnect   string

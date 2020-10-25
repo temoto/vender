@@ -2,7 +2,6 @@ package tele
 
 import (
 	"context"
-	// "fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
