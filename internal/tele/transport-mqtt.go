@@ -123,7 +123,7 @@ func (self *transportMqtt) connectLostHandler(c mqtt.Client, err error) {
 
 func (self *transportMqtt) onConnectHandler(c mqtt.Client) {
 	fmt.Printf("OnConnectHandler \n")
-	if token := c.Subscribe(self.topicCommand, 2, nil); token.Wait() && token.Error() != nil {
+	if token := c.Subscribe(self.topicCommand, 1, nil); token.Wait() && token.Error() != nil {
 		self.log.Errorf("Subscribe error")
 	} else {
 		self.log.Debugf("Subscribe Ok")
