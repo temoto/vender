@@ -288,10 +288,10 @@ func (self *BillValidator) CommandExpansionIdentification() error {
 	if len(bs) < expectLength {
 		return fmt.Errorf("%s response=%x length=%d expected=%d", tag, bs, len(bs), expectLength)
 	}
-	self.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
-	self.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
-	self.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
-	self.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
+	self.Log.Infof("%s Manufacturer Code: %x", tag, bs[0:0+3])
+	self.Log.Infof("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
+	self.Log.Infof("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
+	self.Log.Infof("%s Software Version: %x", tag, bs[27:27+2])
 	return nil
 }
 
@@ -322,11 +322,11 @@ func (self *BillValidator) CommandExpansionIdentificationOptions() error {
 		return fmt.Errorf("%s response=%s expected %d bytes", tag, response.Format(), expectLength)
 	}
 	self.supportedFeatures = Features(self.Device.ByteOrder.Uint32(bs[29 : 29+4]))
-	self.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
-	self.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
-	self.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
-	self.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
-	self.Log.Debugf("%s Optional Features: %b", tag, self.supportedFeatures)
+	self.Log.Infof("%s Manufacturer Code: %x", tag, bs[0:0+3])
+	self.Log.Infof("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
+	self.Log.Infof("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
+	self.Log.Infof("%s Software Version: %x", tag, bs[27:27+2])
+	self.Log.Infof("%s Optional Features: %b", tag, self.supportedFeatures)
 	return nil
 }
 

@@ -330,11 +330,11 @@ func (self *CoinAcceptor) CommandExpansionIdentification() error {
 		return errors.Errorf("%s response=%s expected %d bytes", tag, response.Format(), expectLength)
 	}
 	self.supportedFeatures = Features(self.Device.ByteOrder.Uint32(bs[29 : 29+4]))
-	self.Device.Log.Debugf("%s Manufacturer Code: %x", tag, bs[0:0+3])
-	self.Device.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
-	self.Device.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
-	self.Device.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
-	self.Device.Log.Debugf("%s Optional Features: %b", tag, self.supportedFeatures)
+	self.Device.Log.Infof("%s Manufacturer Code: %x", tag, bs[0:0+3])
+	self.Device.Log.Infof("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
+	self.Device.Log.Infof("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
+	self.Device.Log.Infof("%s Software Version: %x", tag, bs[27:27+2])
+	self.Device.Log.Infof("%s Optional Features: %b", tag, self.supportedFeatures)
 	return nil
 }
 
