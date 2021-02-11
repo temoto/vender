@@ -35,7 +35,7 @@ var Mod = subcmd.Mod{Name: "engine-cli", Main: Main}
 func Main(ctx context.Context, config *state.Config) error {
 	g := state.GetGlobal(ctx)
 	g.MustInit(ctx, config)
-	g.Log.Debugf("config=%+v", g.Config)
+	// g.Log.Debugf("config=%+v", g.Config)
 
 	if err := g.Engine.ValidateExec(ctx, doMdbBusReset); err != nil {
 		return errors.Annotate(err, "mdb bus reset")
