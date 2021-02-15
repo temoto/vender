@@ -39,6 +39,7 @@ type Dispatch struct {
 	mu   sync.Mutex
 	subs map[string]*sub
 	stop <-chan struct{}
+	enable bool
 }
 
 func NewDispatch(log *log2.Log, stop <-chan struct{}) *Dispatch {
@@ -47,8 +48,14 @@ func NewDispatch(log *log2.Log, stop <-chan struct{}) *Dispatch {
 		bus:  make(chan types.InputEvent),
 		subs: make(map[string]*sub, 16),
 		stop: stop,
+		enable: true,
 	}
 }
+
+func (self *Dispatch) Enable(e bool){
+	self.enable = e
+}
+
 
 func (self *Dispatch) SubscribeChan(name string, substop <-chan struct{}) chan types.InputEvent {
 	target := make(chan types.InputEvent)
@@ -170,6 +177,10 @@ func (self *Dispatch) readSource(source Source) {
 			err = errors.Annotatef(err, "input source=%s", tag)
 			self.Log.Fatal(errors.ErrorStack(err))
 		}
-		self.Emit(event)
+		if self.enable {
+			self.Emit(event)
+		} else {
+			self.Log.Debugf("keyboard disable. ignore event =%#v", event)
+		}
 	}
 }

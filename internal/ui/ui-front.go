@@ -26,6 +26,7 @@ type UIMenuResult struct {
 }
 
 func (self *UI) onFrontBegin(ctx context.Context) State {
+	self.g.Hardware.Input.Enable(true)
 	self.FrontResult = UIMenuResult{
 		// TODO read config
 		Cream: DefaultCream,
@@ -268,6 +269,7 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 }
 
 func (self *UI) onFrontAccept(ctx context.Context) State {
+	self.g.Hardware.Input.Enable(false)
 	moneysys := money.GetGlobal(ctx)
 	uiConfig := &self.g.Config.UI
 	selected := &self.FrontResult.Item
