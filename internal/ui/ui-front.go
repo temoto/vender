@@ -138,6 +138,10 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 				self.inputBuf = append(self.inputBuf, byte(e.Input.Key))
 				goto refresh
 
+			case e.Input.IsDot():
+				self.inputBuf = append(self.inputBuf, byte(e.Input.Key))
+				goto refresh
+
 			case input.IsReject(&e.Input):
 				// backspace semantic
 				if len(self.inputBuf) > 0 {

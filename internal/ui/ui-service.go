@@ -457,7 +457,7 @@ func (self *UI) serviceWaitInput() (State, types.InputEvent) {
 
 	case types.EventLock:
 		return StateLocked, types.InputEvent{}
-	
+
 	case types.EventService:
 		self.g.Log.Debugf("service exit")
 		return StateServiceEnd, types.InputEvent{}

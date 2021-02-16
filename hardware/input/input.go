@@ -34,28 +34,27 @@ type sub struct {
 }
 
 type Dispatch struct {
-	Log  *log2.Log
-	bus  chan types.InputEvent
-	mu   sync.Mutex
-	subs map[string]*sub
-	stop <-chan struct{}
+	Log    *log2.Log
+	bus    chan types.InputEvent
+	mu     sync.Mutex
+	subs   map[string]*sub
+	stop   <-chan struct{}
 	enable bool
 }
 
 func NewDispatch(log *log2.Log, stop <-chan struct{}) *Dispatch {
 	return &Dispatch{
-		Log:  log,
-		bus:  make(chan types.InputEvent),
-		subs: make(map[string]*sub, 16),
-		stop: stop,
+		Log:    log,
+		bus:    make(chan types.InputEvent),
+		subs:   make(map[string]*sub, 16),
+		stop:   stop,
 		enable: true,
 	}
 }
 
-func (self *Dispatch) Enable(e bool){
+func (self *Dispatch) Enable(e bool) {
 	self.enable = e
 }
-
 
 func (self *Dispatch) SubscribeChan(name string, substop <-chan struct{}) chan types.InputEvent {
 	target := make(chan types.InputEvent)

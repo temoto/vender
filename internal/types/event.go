@@ -47,3 +47,4 @@ type InputEvent struct {
 
 func (e *InputEvent) IsZero() bool  { return e.Key == 0 }
 func (e *InputEvent) IsDigit() bool { return e.Key >= '0' && e.Key <= '9' }
+func (e *InputEvent) IsDot() bool   { return e.Key >= '.' }
