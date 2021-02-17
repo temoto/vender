@@ -35,6 +35,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 	maxConfig := currency.Amount(g.Config.Money.CreditMax)
 	// Accept limit = lesser of: configured max credit or highest menu price.
 	limit := maxConfig
+	maxIn := maxConfig
 
 	self.lk.Lock()
 	available := self.locked_credit(creditCash | creditEscrow)
@@ -44,54 +45,58 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 	}
 	if available >= maxPrice {
 		limit = 0
+		maxIn = 0
+		self.Log.Debugf("%s bill input disable", tag)
 	}
 	self.Log.Debugf("%s maxConfig=%s maxPrice=%s available=%s -> limit=%s",
 		tag, maxConfig.FormatCtx(ctx), maxPrice.FormatCtx(ctx), available.FormatCtx(ctx), limit.FormatCtx(ctx))
 
-	err := self.SetAcceptMax(ctx, limit)
+	err := self.SetAcceptMax(ctx, maxIn)
 	if err != nil {
 		return err
 	}
 
 	alive := alive.NewAlive()
 	alive.Add(2)
-	go self.bill.Run(ctx, alive, func(pi money.PollItem) bool {
-		switch pi.Status {
-		case money.StatusEscrow:
-			if pi.DataCount == 1 {
-				if err := g.Engine.Exec(ctx, self.bill.EscrowAccept()); err != nil {
-					g.Error(errors.Annotatef(err, "money.bill escrow accept n=%s", currency.Amount(pi.DataNominal).FormatCtx(ctx)))
+	if maxIn != 0 {
+		go self.bill.Run(ctx, alive, func(pi money.PollItem) bool {
+			switch pi.Status {
+			case money.StatusEscrow:
+				if pi.DataCount == 1 {
+					if err := g.Engine.Exec(ctx, self.bill.EscrowAccept()); err != nil {
+						g.Error(errors.Annotatef(err, "money.bill escrow accept n=%s", currency.Amount(pi.DataNominal).FormatCtx(ctx)))
+					}
 				}
-			}
 
-		case money.StatusCredit:
-			self.lk.Lock()
-			defer self.lk.Unlock()
+			case money.StatusCredit:
+				self.lk.Lock()
+				defer self.lk.Unlock()
 
-			if pi.DataCashbox {
-				if err := self.billCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
-					g.Error(errors.Annotatef(err, "money.bill cashbox.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
+				if pi.DataCashbox {
+					if err := self.billCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
+						g.Error(errors.Annotatef(err, "money.bill cashbox.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
+						break
+					}
+				}
+				if err := self.billCredit.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
+					g.Error(errors.Annotatef(err, "money.bill credit.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
 					break
 				}
+				self.Log.Debugf("money.bill credit amount=%s bill=%s cash=%s total=%s",
+					pi.Amount().FormatCtx(ctx), self.billCredit.Total().FormatCtx(ctx),
+					self.locked_credit(creditCash|creditEscrow).FormatCtx(ctx),
+					self.locked_credit(creditAll).FormatCtx(ctx))
+				self.dirty += pi.Amount()
+				alive.Stop()
+				if out != nil {
+					event := types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}
+					// async channel send to avoid deadlock lk.Lock vs <-out
+					go func() { out <- event }()
+				}
 			}
-			if err := self.billCredit.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
-				g.Error(errors.Annotatef(err, "money.bill credit.Add n=%v c=%d", pi.DataNominal, pi.DataCount))
-				break
-			}
-			self.Log.Debugf("money.bill credit amount=%s bill=%s cash=%s total=%s",
-				pi.Amount().FormatCtx(ctx), self.billCredit.Total().FormatCtx(ctx),
-				self.locked_credit(creditCash|creditEscrow).FormatCtx(ctx),
-				self.locked_credit(creditAll).FormatCtx(ctx))
-			self.dirty += pi.Amount()
-			alive.Stop()
-			if out != nil {
-				event := types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}
-				// async channel send to avoid deadlock lk.Lock vs <-out
-				go func() { out <- event }()
-			}
-		}
-		return false
-	})
+			return false
+		})
+	}
 	go self.coin.Run(ctx, alive, func(pi money.PollItem) bool {
 		self.lk.Lock()
 		defer self.lk.Unlock()
