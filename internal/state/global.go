@@ -101,7 +101,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	go helpers.WrapErrChan(&wg, errch, func() error { return g.initInventory(ctx) }) // storage read
 	go helpers.WrapErrChan(&wg, errch, g.initEngine)
 	// TODO init money system, load money state from storage
-
+	g.RegisterCommands(ctx)
 	wg.Wait()
 	close(errch)
 
@@ -245,4 +245,33 @@ func (g *Global) initInventory(ctx context.Context) error {
 		err = g.Inventory.Persist.Load()
 	}
 	return errors.Annotate(err, "initInventory")
+}
+
+func (g *Global) RegisterCommands(ctx context.Context) {
+	g.Engine.RegisterNewFunc(
+		"input.enable",
+		func(ctx context.Context) error {
+			g.Hardware.Input.Enable(true)
+			return nil
+		},
+	)
+	g.Engine.RegisterNewFunc(
+		"input.disable",
+		func(ctx context.Context) error {
+			g.Hardware.Input.Enable(false)
+			return nil
+		},
+	)
+
+	doEmuKey := engine.FuncArg{
+		Name: "emulate.key(?)",
+		F: func(ctx context.Context, arg engine.Arg) error {
+			// h := fmt.Sprintf("%x", arg)
+			event := types.InputEvent{Source: "evend-keyboard", Key: types.InputKey(arg), Up: true}
+			g.Hardware.Input.Emit(event)
+			// g.Hardware.Input.Enable(true)
+			return nil
+		}}
+	g.Engine.Register(doEmuKey.Name, doEmuKey)
+
 }
