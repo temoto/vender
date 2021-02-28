@@ -78,7 +78,7 @@ func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err er
 		self.dev.Log.Debugf("%s begin", tag)
 	}
 
-self.dev.SetReady()
+	self.dev.SetReady()
 
 	if err = g.Engine.Exec(ctx, self.Generic.NewWaitReady(tag)); err != nil {
 		return
