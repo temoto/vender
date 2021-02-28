@@ -32,11 +32,11 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 		V: func() error {
 			// FIXME Generic offline -> calibrated=false
 			if err := self.Generic.dev.ValidateOnline(); err != nil {
-				self.calReset()
+				// self.calReset()
 				return err
 			}
 			if err := self.Generic.dev.ValidateErrorCode(); err != nil {
-				self.calReset()
+				// self.calReset()
 				return err
 			}
 			return nil
@@ -51,23 +51,23 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 	return errors.Annotate(err, self.name+".init")
 }
 
-func (self *DeviceElevator) calibrated() bool { return self.cal0 && self.cal100 }
-func (self *DeviceElevator) calReset()        { self.cal0 = false; self.cal100 = false }
-func (self *DeviceElevator) calibrate(ctx context.Context) error {
-	tag := self.name + ".calibrate"
-	self.dev.Log.Debugf("%s calibrate ready=%t cal0=%t cal100=%t", self.name, self.dev.Ready(), self.cal0, self.cal100)
-	if !self.cal0 {
-		if err := self.moveRaw(ctx, 0); err != nil {
-			return errors.Annotate(err, tag)
-		}
-	}
-	if !self.cal100 {
-		if err := self.moveRaw(ctx, 100); err != nil {
-			return errors.Annotate(err, tag)
-		}
-	}
-	return nil
-}
+// func (self *DeviceElevator) calibrated() bool { return self.cal0 && self.cal100 }
+// func (self *DeviceElevator) calReset()        { self.cal0 = false; self.cal100 = false }
+// func (self *DeviceElevator) calibrate(ctx context.Context) error {
+// 	tag := self.name + ".calibrate"
+// 	self.dev.Log.Debugf("%s calibrate ready=%t cal0=%t cal100=%t", self.name, self.dev.Ready(), self.cal0, self.cal100)
+// 	if !self.cal0 {
+// 		if err := self.moveRaw(ctx, 0); err != nil {
+// 			return errors.Annotate(err, tag)
+// 		}
+// 	}
+// 	if !self.cal100 {
+// 		if err := self.moveRaw(ctx, 100); err != nil {
+// 			return errors.Annotate(err, tag)
+// 		}
+// 	}
+// 	return nil
+// }
 
 func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err error) {
 	g := state.GetGlobal(ctx)
@@ -84,6 +84,7 @@ func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err er
 		return
 	}
 	if err = g.Engine.Exec(ctx, self.Generic.NewAction(tag, 0x03, position, 0)); err != nil {
+		return
 	}
 	err = g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, self.timeout))
 	if g.Config.Hardware.Evend.Elevator.LogDebug {
