@@ -28,7 +28,7 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 
 	doMove := engine.FuncArg{
 		Name: self.name + ".move",
-		F:    self.moveProper,
+		F:    self.moveRaw,
 		V: func() error {
 			// FIXME Generic offline -> calibrated=false
 			if err := self.Generic.dev.ValidateOnline(); err != nil {
@@ -69,19 +69,6 @@ func (self *DeviceElevator) calibrate(ctx context.Context) error {
 	return nil
 }
 
-func (self *DeviceElevator) moveProper(ctx context.Context, arg engine.Arg) (err error) {
-	position := uint8(arg)
-
-	if !(position == 0 || position == 100) {
-		if err = self.calibrate(ctx); err != nil {
-			return
-		}
-	}
-
-	err = self.moveRaw(ctx, arg)
-	return
-}
-
 func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err error) {
 	g := state.GetGlobal(ctx)
 	position := uint8(arg)
@@ -91,27 +78,12 @@ func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err er
 		self.dev.Log.Debugf("%s begin", tag)
 	}
 
-	defer func() {
-		if err != nil {
-			self.calReset()
-		} else {
-			switch position {
-			case 0:
-				self.cal0 = true
-			case 100:
-				self.cal100 = true
-			}
-			if self.calibrated() {
-				self.dev.SetReady()
-			}
-		}
-	}()
+self.dev.SetReady()
 
 	if err = g.Engine.Exec(ctx, self.Generic.NewWaitReady(tag)); err != nil {
 		return
 	}
 	if err = g.Engine.Exec(ctx, self.Generic.NewAction(tag, 0x03, position, 0)); err != nil {
-		return
 	}
 	err = g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, self.timeout))
 	if g.Config.Hardware.Evend.Elevator.LogDebug {
