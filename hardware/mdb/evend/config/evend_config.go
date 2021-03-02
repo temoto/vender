@@ -15,9 +15,8 @@ type Config struct { //nolint:maligned
 		EnsureTimeoutSec   int `hcl:"ensure_timeout_sec"`
 	} `hcl:"cup"`
 	Elevator struct { //nolint:maligned
-		KeepaliveMs int  `hcl:"keepalive_ms"`
-		LogDebug    bool `hcl:"log_debug"`
-		TimeoutSec  int  `hcl:"timeout_sec"`
+		KeepaliveMs    int `hcl:"keepalive_ms"`
+		MoveTimeoutSec int `hcl:"move_timeout_sec"`
 	} `hcl:"elevator"`
 	Espresso struct { //nolint:maligned
 		TimeoutSec int `hcl:"timeout_sec"`

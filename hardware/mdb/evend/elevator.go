@@ -11,38 +11,34 @@ import (
 	"github.com/temoto/vender/internal/state"
 )
 
-type DeviceElevator struct {
+type DeviceElevator struct { //nolint:maligned
 	Generic
 
-	timeout time.Duration
-	cal0    bool
-	cal100  bool
+	earlyPos    int16 // estimated
+	currentPos  int16 // estimated
+	moveTimeout time.Duration
 }
 
 func (self *DeviceElevator) init(ctx context.Context) error {
+	self.currentPos = -1
 	g := state.GetGlobal(ctx)
 	config := &g.Config.Hardware.Evend.Elevator
 	keepaliveInterval := helpers.IntMillisecondDefault(config.KeepaliveMs, 0)
-	self.timeout = helpers.IntSecondDefault(config.TimeoutSec, 10*time.Second)
+	self.moveTimeout = helpers.IntSecondDefault(config.MoveTimeoutSec, 10*time.Second)
 	self.Generic.Init(ctx, 0xd0, "elevator", proto1)
 
-	doMove := engine.FuncArg{
-		Name: self.name + ".move",
-		F:    self.moveRaw,
-		V: func() error {
-			// FIXME Generic offline -> calibrated=false
-			if err := self.Generic.dev.ValidateOnline(); err != nil {
-				// self.calReset()
-				return err
-			}
-			if err := self.Generic.dev.ValidateErrorCode(); err != nil {
-				// self.calReset()
-				return err
-			}
+	g.Engine.Register(self.name+".move(?)",
+		engine.FuncArg{Name: self.name + ".move", F: func(ctx context.Context, arg engine.Arg) error {
+			return g.Engine.Exec(ctx, self.move(uint8(arg)))
+		}})
+
+	g.Engine.RegisterNewFunc(
+		"elevator.status",
+		func(ctx context.Context) error {
+			fmt.Printf("\n\033[41m elevatropos(%v) \033[0m\n\n", self.currentPos)
 			return nil
 		},
-	}
-	g.Engine.Register(self.name+".move(?)", self.Generic.WithRestart(doMove))
+	)
 
 	err := self.Generic.FIXME_initIO(ctx)
 	if keepaliveInterval > 0 {
@@ -51,44 +47,12 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 	return errors.Annotate(err, self.name+".init")
 }
 
-// func (self *DeviceElevator) calibrated() bool { return self.cal0 && self.cal100 }
-// func (self *DeviceElevator) calReset()        { self.cal0 = false; self.cal100 = false }
-// func (self *DeviceElevator) calibrate(ctx context.Context) error {
-// 	tag := self.name + ".calibrate"
-// 	self.dev.Log.Debugf("%s calibrate ready=%t cal0=%t cal100=%t", self.name, self.dev.Ready(), self.cal0, self.cal100)
-// 	if !self.cal0 {
-// 		if err := self.moveRaw(ctx, 0); err != nil {
-// 			return errors.Annotate(err, tag)
-// 		}
-// 	}
-// 	if !self.cal100 {
-// 		if err := self.moveRaw(ctx, 100); err != nil {
-// 			return errors.Annotate(err, tag)
-// 		}
-// 	}
-// 	return nil
-// }
-
-func (self *DeviceElevator) moveRaw(ctx context.Context, arg engine.Arg) (err error) {
-	g := state.GetGlobal(ctx)
-	position := uint8(arg)
-	tag := fmt.Sprintf("%s.moveRaw:%d", self.name, position)
-	tbegin := time.Now()
-	if g.Config.Hardware.Evend.Elevator.LogDebug {
-		self.dev.Log.Debugf("%s begin", tag)
-	}
-
-	self.dev.SetReady()
-
-	if err = g.Engine.Exec(ctx, self.Generic.NewWaitReady(tag)); err != nil {
-		return
-	}
-	if err = g.Engine.Exec(ctx, self.Generic.NewAction(tag, 0x03, position, 0)); err != nil {
-		return
-	}
-	err = g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, self.timeout))
-	if g.Config.Hardware.Evend.Elevator.LogDebug {
-		self.dev.Log.Debugf("%s duration=%s", tag, time.Since(tbegin))
-	}
-	return
+func (self *DeviceElevator) move(position uint8) engine.Doer {
+	tag := fmt.Sprintf("%s.move:%d->%d", self.name, self.currentPos, position)
+	self.currentPos = -1
+	return engine.NewSeq(tag).
+		Append(self.NewWaitReady(tag)).
+		Append(self.Generic.NewAction(tag, 0x03, position, 0x64)).
+		Append(self.NewWaitDone(tag, self.moveTimeout)).
+		Append(engine.Func0{F: func() error { self.currentPos = int16(position); return nil }})
 }
