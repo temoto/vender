@@ -35,7 +35,8 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 	maxConfig := currency.Amount(g.Config.Money.CreditMax)
 	// Accept limit = lesser of: configured max credit or highest menu price.
 	limit := maxConfig
-	maxIn := maxConfig
+	billmax := maxConfig
+	coinmax := currency.Amount(1000)
 
 	self.lk.Lock()
 	available := self.locked_credit(creditCash | creditEscrow)
@@ -45,20 +46,23 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 	}
 	if available >= maxPrice {
 		limit = 0
-		maxIn = 0
+		billmax = 0
+		coinmax = 0
 		self.Log.Debugf("%s bill input disable", tag)
 	}
 	self.Log.Debugf("%s maxConfig=%s maxPrice=%s available=%s -> limit=%s",
 		tag, maxConfig.FormatCtx(ctx), maxPrice.FormatCtx(ctx), available.FormatCtx(ctx), limit.FormatCtx(ctx))
 
-	err := self.SetAcceptMax(ctx, maxIn)
-	if err != nil {
-		return err
-	}
+	g.Engine.Exec(ctx, self.bill.AcceptMax(billmax))
+	g.Engine.Exec(ctx, self.coin.AcceptMax(coinmax))
+	// err := self.SetAcceptMax(ctx, limit)
+	// if err != nil {
+	// 	return err
+	// }
 
 	alive := alive.NewAlive()
 	alive.Add(2)
-	if maxIn != 0 {
+	if billmax != 0 {
 		go self.bill.Run(ctx, alive, func(pi money.PollItem) bool {
 			switch pi.Status {
 			case money.StatusEscrow:
@@ -88,6 +92,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 					self.locked_credit(creditAll).FormatCtx(ctx))
 				self.dirty += pi.Amount()
 				alive.Stop()
+				g.Engine.Exec(ctx, self.bill.AcceptMax(0))
 				if out != nil {
 					event := types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}
 					// async channel send to avoid deadlock lk.Lock vs <-out

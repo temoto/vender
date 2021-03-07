@@ -364,6 +364,9 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 			code := pi.HardwareCode
 			switch code {
 			case StatusValidatorDisabled:
+				if self.escrowBill != 0 {
+					return false
+				}
 				self.Log.Errorf("CRITICAL likely code error: escrow request while disabled")
 				result = ErrEscrowImpossible
 				return true
