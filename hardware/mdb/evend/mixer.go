@@ -35,7 +35,7 @@ func (self *DeviceMixer) init(ctx context.Context) error {
 
 	g.Engine.Register(self.name+".shake(?)",
 		engine.FuncArg{Name: self.name + ".shake", F: func(ctx context.Context, arg engine.Arg) error {
-			return g.Engine.Exec(ctx, self.shake(uint8(arg)))
+			return g.Engine.Exec(ctx, self.Generic.WithRestart(self.shake(uint8(arg))))
 		}})
 	g.Engine.Register(self.name+".move(?)",
 		engine.FuncArg{Name: self.name + ".move", F: func(ctx context.Context, arg engine.Arg) error {
@@ -85,7 +85,6 @@ func (self *DeviceMixer) NewFan(on bool) engine.Doer {
 func (self *DeviceMixer) move(position uint8) engine.Doer {
 	tag := fmt.Sprintf("%s.move:%d->%d", self.name, self.currentPos, position)
 	self.currentPos = -1
-	fmt.Printf("\n\033[41m tag (%v) \033[0m\n\n", tag)
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, position, 0x64)).
