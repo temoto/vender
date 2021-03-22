@@ -26,7 +26,9 @@ type UIMenuResult struct {
 }
 
 func (self *UI) onFrontBegin(ctx context.Context) State {
-	self.g.Hardware.Input.Enable(true)
+	ms := money.GetGlobal(ctx)
+	ms.ResetMoney()
+	self.g.ClientEnd()
 	self.FrontResult = UIMenuResult{
 		// TODO read config
 		Cream: DefaultCream,
@@ -126,7 +128,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
 				return StateFrontEnd
 			}
-
+			self.g.ClientBegin()
 			switch e.Input.Key {
 			case input.EvendKeyCreamLess, input.EvendKeyCreamMore, input.EvendKeySugarLess, input.EvendKeySugarMore:
 				// could skip state machine transition and just State=StateFrontTune; goto refresh

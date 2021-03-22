@@ -38,7 +38,8 @@ func (self *MoneySystem) locked_credit(flag creditFlag) currency.Amount {
 		result += self.bill.EscrowAmount()
 	}
 	if flag.Contains(creditCash) {
-		result += self.dirty
+		// result += self.dirty
+		result += self.GetDirty()
 		// result += self.billCredit.Total()
 		// result += self.coinCredit.Total()
 	}
@@ -110,11 +111,13 @@ func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Am
 				err = errors.Annotate(err, tag+"CRITICAL EscrowAccept")
 				self.Log.Error(err)
 			} else {
-				self.dirty += billEscrowAmount
+				// self.dirty += billEscrowAmount
+				self.AddDirty(billEscrowAmount)
 			}
 		}
 
-		if self.dirty != amount {
+		// if self.dirty != amount {
+		if self.GetDirty() != amount {
 			self.Log.Errorf("%s CRITICAL amount=%s dirty=%s", tag, amount.FormatCtx(ctx), self.dirty.FormatCtx(ctx))
 		}
 	}()
@@ -130,7 +133,8 @@ func (self *MoneySystem) WithdrawCommit(ctx context.Context, amount currency.Amo
 	defer self.lk.Unlock()
 
 	self.Log.Debugf("%s amount=%s dirty=%s", tag, amount.FormatCtx(ctx), self.dirty.FormatCtx(ctx))
-	if self.dirty != amount {
+	// if self.dirty != amount {
+	if self.GetDirty() != amount {
 		self.Log.Errorf("%s CRITICAL amount=%s dirty=%s", tag, amount.FormatCtx(ctx), self.dirty.FormatCtx(ctx))
 	}
 	self.locked_zero()
@@ -153,10 +157,12 @@ func (self *MoneySystem) Abort(ctx context.Context) error {
 		return err
 	}
 
-	if self.dirty != 0 {
+	// if self.dirty != 0 {
+	if self.GetDirty() != 0 {
 		self.Log.Errorf("%s CRITICAL (debt or code error) dirty=%s", tag, self.dirty.FormatCtx(ctx))
 	}
-	self.dirty = 0
+	// self.dirty = 0
+	self.SetDirty(0)
 	self.billCredit.Clear()
 	self.coinCredit.Clear()
 	self.giftCredit = 0
@@ -192,15 +198,18 @@ func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amou
 		err = errors.Annotatef(err, "debt=%s", debt.FormatCtx(ctx))
 	}
 	if dispensedAmount <= amount {
-		self.dirty -= dispensedAmount
+		// self.dirty -= dispensedAmount
+		self.AddDirty(-dispensedAmount)
 	} else {
-		self.dirty -= amount
+		// self.dirty -= amount
+		self.AddDirty(-amount)
 	}
 	return err
 }
 
 func (self *MoneySystem) locked_zero() {
-	self.dirty = 0
+	// self.dirty = 0
+	self.SetDirty(0)
 	self.billCredit.Clear()
 	self.coinCredit.Clear()
 	self.giftCredit = 0

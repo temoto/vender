@@ -37,6 +37,24 @@ func GetGlobal(ctx context.Context) *MoneySystem {
 	return state.GetGlobal(ctx).XXX_money.Load().(*MoneySystem)
 }
 
+
+func (ms *MoneySystem) AddDirty (dirty currency.Amount) {
+	ms.dirty += dirty
+}
+
+func (ms *MoneySystem) SetDirty (dirty currency.Amount) {
+	ms.dirty = dirty
+}
+
+func (ms *MoneySystem) GetDirty() (currency.Amount) {
+	return ms.dirty 
+}
+
+func (ms *MoneySystem) ResetMoney()  {
+	ms.locked_zero()
+}
+
+
 func (self *MoneySystem) Start(ctx context.Context) error {
 	g := state.GetGlobal(ctx)
 

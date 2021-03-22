@@ -64,6 +64,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 	alive.Add(2)
 	if billmax != 0 {
 		go self.bill.Run(ctx, alive, func(pi money.PollItem) bool {
+			g.ClientBegin()
 			switch pi.Status {
 			case money.StatusEscrow:
 				if pi.DataCount == 1 {
@@ -90,7 +91,8 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 					pi.Amount().FormatCtx(ctx), self.billCredit.Total().FormatCtx(ctx),
 					self.locked_credit(creditCash|creditEscrow).FormatCtx(ctx),
 					self.locked_credit(creditAll).FormatCtx(ctx))
-				self.dirty += pi.Amount()
+				// self.dirty += pi.Amount()
+				self.AddDirty(pi.Amount())
 				alive.Stop()
 				g.Engine.Exec(ctx, self.bill.AcceptMax(0))
 				if out != nil {
@@ -103,6 +105,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 		})
 	}
 	go self.coin.Run(ctx, alive, func(pi money.PollItem) bool {
+		g.ClientBegin()
 		self.lk.Lock()
 		defer self.lk.Unlock()
 
@@ -134,7 +137,8 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			}
 			_ = self.coin.TubeStatus()
 			_ = self.coin.ExpansionDiagStatus(nil)
-			self.dirty += pi.Amount()
+			// self.dirty += pi.Amount()
+			self.AddDirty(pi.Amount())
 			alive.Stop()
 			if out != nil {
 				event := types.Event{Kind: types.EventMoneyCredit, Amount: pi.Amount()}

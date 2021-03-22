@@ -36,9 +36,33 @@ type Global struct {
 	XXX_uier  atomic.Value // UIer crutch to import/init cycle
 
 	_copy_guard sync.Mutex //nolint:unused
+	Client	ClientStrust
+}
+
+type ClientStrust struct {
+	Work	bool
+	ActionTime time.Time
 }
 
 const ContextKey = "run/state-global"
+
+func (g *Global) ClientBegin() {
+	if !g.Client.Work {
+		g.Client.Work = true
+		g.Client.ActionTime = time.Now()
+		g.Log.Infof("--- client activity begin ---")
+	}
+}
+
+func (g *Global) ClientEnd() {
+	g.Hardware.Input.Enable(true)
+	if g.Client.Work {
+		g.Client.ActionTime = time.Now()
+		g.Client.Work = false
+		g.Log.Infof("--- client activity ending ---")
+	}
+}
+
 
 func GetGlobal(ctx context.Context) *Global {
 	v := ctx.Value(ContextKey)

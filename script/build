@@ -1,6 +1,8 @@
 #!/bin/bash
-set -eu
+set -e 
 base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+#argv="$1"
+#arglength=("$#")
 
 main() {
   local gopkg="./cmd/vender"
@@ -23,6 +25,18 @@ main() {
     export -- GOARCH GOOS GOARM=6
     go build "${build_flags[@]}" "$gopkg"
   )
+
+  if [ -z "$1" ]; then
+    return
+  fi
+
+  case ${1} in
+    test)
+      scp ./build/vender vm-1:/var/log/0
+      ;;
+    *)
+      ;;
+  esac
 }
 
 build_version() {
