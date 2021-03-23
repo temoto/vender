@@ -35,7 +35,7 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 	g.Engine.RegisterNewFunc(
 		"elevator.status",
 		func(ctx context.Context) error {
-			fmt.Printf("\n\033[41m elevatropos(%v) \033[0m\n\n", self.currentPos)
+			g.Log.Infof("%s.position:%d", self.name, self.currentPos)
 			return nil
 		},
 	)

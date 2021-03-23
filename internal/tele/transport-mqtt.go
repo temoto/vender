@@ -25,17 +25,17 @@ type transportMqtt struct {
 	topicState     string
 	topicTelemetry string
 	topicCommand   string
+
+	connected bool
 }
 
 func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback, willPayload []byte) error {
-	mqttLog := self.log.Clone(log2.LDebug)
-	// TODO wrap with level filter and prefix "tele.mqtt critical/error/warn/debug"
-	mqtt.CRITICAL = mqttLog
-	mqtt.ERROR = mqttLog
-	mqtt.WARN = mqttLog
-	if teleConfig.MqttLogDebug {
-		mqtt.DEBUG = mqttLog
-	}
+	self.log = log
+	// FIXME add loglevel to config
+	mqtt.ERROR = log
+	mqtt.CRITICAL = log
+	mqtt.WARN = log
+	//	mqtt.DEBUG = log
 
 	mqttClientId := fmt.Sprintf("vm%d", teleConfig.VmId)
 	credFun := func() (string, string) {
@@ -119,10 +119,13 @@ func (self *transportMqtt) messageHandler(c mqtt.Client, msg mqtt.Message) {
 }
 
 func (self *transportMqtt) connectLostHandler(c mqtt.Client, err error) {
+	self.log.Info("transport tunnel damaged")
+	self.connected = false
 }
 
 func (self *transportMqtt) onConnectHandler(c mqtt.Client) {
-	fmt.Printf("OnConnectHandler \n")
+	self.connected = true
+	self.log.Infof("connected to server")
 	if token := c.Subscribe(self.topicCommand, 1, nil); token.Wait() && token.Error() != nil {
 		self.log.Errorf("Subscribe error")
 	} else {

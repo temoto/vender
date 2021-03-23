@@ -52,7 +52,7 @@ func (self *DeviceMixer) init(ctx context.Context) error {
 	g.Engine.RegisterNewFunc(
 		"mixer.status",
 		func(ctx context.Context) error {
-			fmt.Printf("\n\033[41m mixpos(%v) \033[0m\n\n", self.currentPos)
+			g.Log.Infof("%s.position:%d", self.name, self.currentPos)
 			return nil
 		},
 	)

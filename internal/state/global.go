@@ -36,11 +36,11 @@ type Global struct {
 	XXX_uier  atomic.Value // UIer crutch to import/init cycle
 
 	_copy_guard sync.Mutex //nolint:unused
-	Client	ClientStrust
+	Client      ClientStrust
 }
 
 type ClientStrust struct {
-	Work	bool
+	Work       bool
 	ActionTime time.Time
 }
 
@@ -62,7 +62,6 @@ func (g *Global) ClientEnd() {
 		g.Log.Infof("--- client activity ending ---")
 	}
 }
-
 
 func GetGlobal(ctx context.Context) *Global {
 	v := ctx.Value(ContextKey)
