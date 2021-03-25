@@ -8,7 +8,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
-	"github.com/temoto/vender/internal/global"
+	"github.com/temoto/vender/internal/glb"
 	"github.com/temoto/vender/internal/state"
 )
 
