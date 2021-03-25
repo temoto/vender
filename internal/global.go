@@ -1,4 +1,4 @@
-package global
+package glb
 
 import (
 	"github.com/temoto/vender/log2"
