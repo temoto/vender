@@ -8,8 +8,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
-	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/global"
+	"github.com/temoto/vender/internal/state"
 )
 
 type DeviceElevator struct { //nolint:maligned
@@ -51,12 +51,12 @@ func (self *DeviceElevator) move(position uint8) engine.Doer {
 	cp := global.GetEnv(self.name)
 	mp := fmt.Sprintf("%s->%d", cp, position)
 	// self.currentPos = -1
-	global.SetEnv(self.name,mp)
+	global.SetEnv(self.name, mp)
 	tag := fmt.Sprintf("%s.move:%s", self.name, mp)
 	// fmt.Printf("\n\033[41m ENV (%v) \033[0m\n\n",helpers.GetEnv("EL"))
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, position, 0x64)).
 		Append(self.NewWaitDone(tag, self.moveTimeout)).
-		Append(engine.Func0{F: func() error { global.SetEnv(self.name,fmt.Sprintf("%d",position)); return nil }})
+		Append(engine.Func0{F: func() error { global.SetEnv(self.name, fmt.Sprintf("%d", position)); return nil }})
 }

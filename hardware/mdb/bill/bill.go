@@ -487,7 +487,7 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 				self.Log.Errorf("%s b=%b CRITICAL likely code error, ESCROW POSITION with EscrowAmount not empty", tag, b)
 			}
 			dn := result.DataNominal
-			fmt.Printf("\n\033[41m (%v) \033[0m\n\n",dn)
+			fmt.Printf("\n\033[41m (%v) \033[0m\n\n", dn)
 			self.setEscrowBill(dn)
 			// self.Log.Debugf("bill routing ESCROW POSITION")
 			result.Status = money.StatusEscrow
