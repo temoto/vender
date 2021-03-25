@@ -3,7 +3,7 @@ package money
 import (
 	"context"
 	"fmt"
-
+"time"
 	"github.com/juju/errors"
 	"github.com/temoto/alive/v2"
 	"github.com/temoto/vender/currency"
@@ -67,6 +67,8 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			g.ClientBegin()
 			switch pi.Status {
 			case money.StatusEscrow:
+				fmt.Printf("\n\033[41m money.StatusEscrowwww pi.DataCount(%v) \033[0m\n\n",pi.DataCount)
+				time.Sleep(5 * time.Second)
 				if pi.DataCount == 1 {
 					if err := g.Engine.Exec(ctx, self.bill.EscrowAccept()); err != nil {
 						g.Error(errors.Annotatef(err, "money.bill escrow accept n=%s", currency.Amount(pi.DataNominal).FormatCtx(ctx)))

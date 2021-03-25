@@ -16,6 +16,7 @@ import (
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/state"
+	// "github.com/temoto/vender/helpers"
 )
 
 const (
@@ -476,18 +477,23 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 		}
 		switch status {
 		case StatusRoutingBillStacked:
+			fmt.Printf("\n\033[41m StatusRoutingBillStackeddddd \033[0m\n\n")
 			self.setEscrowBill(0)
 			result.DataCashbox = true
 			result.Status = money.StatusCredit
 		case StatusRoutingEscrowPosition:
+			fmt.Printf("\n\033[41m  StatusRoutingEscrowPositionnnnn \033[0m\n\n")
 			if self.EscrowAmount() != 0 {
 				self.Log.Errorf("%s b=%b CRITICAL likely code error, ESCROW POSITION with EscrowAmount not empty", tag, b)
 			}
-			self.setEscrowBill(result.DataNominal)
+			dn := result.DataNominal
+			fmt.Printf("\n\033[41m (%v) \033[0m\n\n",dn)
+			self.setEscrowBill(dn)
 			// self.Log.Debugf("bill routing ESCROW POSITION")
 			result.Status = money.StatusEscrow
 			result.DataCount = 1
 		case StatusRoutingBillReturned:
+			fmt.Printf("\n\033[41m StatusRoutingBillReturnedddd \033[0m\n\n")
 			if self.EscrowAmount() == 0 {
 				// most likely code error, but also may be rare case of boot up
 				self.Log.Errorf("%s b=%b CRITICAL likely code error, BILL RETURNED with EscrowAmount empty", tag, b)
@@ -499,21 +505,26 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 			result.Status = money.StatusEscrow
 			result.DataCount = 0
 		case StatusRoutingBillToRecycler:
+			fmt.Printf("\n\033[41m StatusRoutingBillToRecyclerrrr \033[0m\n\n")
 			self.setEscrowBill(0)
 			// self.Log.Debugf("bill routing BILL TO RECYCLER")
 			result.Status = money.StatusCredit
 		case StatusRoutingDisabledBillRejected:
+			fmt.Printf("\n\033[41m StatusRoutingDisabledBillRejectedddd \033[0m\n\n")
 			// TODO maybe rejected?
 			// result.Status = money.StatusRejected
 			result.Status = money.StatusInfo
 			result.Error = fmt.Errorf("bill routing DISABLED BILL REJECTED")
 		case StatusRoutingBillToRecyclerManualFill:
+			fmt.Printf("\n\033[41m StatusRoutingBillToRecyclerManualFilllll \033[0m\n\n")
 			result.Status = money.StatusInfo
 			result.Error = fmt.Errorf("bill routing BILL TO RECYCLER – MANUAL FILL")
 		case StatusRoutingManualDispense:
+			fmt.Printf("\n\033[41m StatusRoutingManualDispenseeee \033[0m\n\n")
 			result.Status = money.StatusInfo
 			result.Error = fmt.Errorf("bill routing MANUAL DISPENSE")
 		case StatusRoutingTransferredFromRecyclerToCashbox:
+			fmt.Printf("\n\033[41m StatusRoutingTransferredFromRecyclerToCashboxxxx \033[0m\n\n")
 			result.Status = money.StatusInfo
 			result.Error = fmt.Errorf("bill routing TRANSFERRED FROM RECYCLER TO CASHBOX")
 		default:

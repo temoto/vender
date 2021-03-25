@@ -14,13 +14,12 @@ import (
 type DeviceElevator struct { //nolint:maligned
 	Generic
 
-	earlyPos    int16 // estimated
-	currentPos  int16 // estimated
+	// earlyPos    int16 // estimated
+	// currentPos  int16 // estimated
 	moveTimeout time.Duration
 }
 
 func (self *DeviceElevator) init(ctx context.Context) error {
-	self.currentPos = -1
 	g := state.GetGlobal(ctx)
 	config := &g.Config.Hardware.Evend.Elevator
 	keepaliveInterval := helpers.IntMillisecondDefault(config.KeepaliveMs, 0)
@@ -35,7 +34,7 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 	g.Engine.RegisterNewFunc(
 		"elevator.status",
 		func(ctx context.Context) error {
-			g.Log.Infof("%s.position:%d", self.name, self.currentPos)
+			g.Log.Infof("position:%s", helpers.GetEnv(self.name))
 			return nil
 		},
 	)
@@ -48,11 +47,15 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 }
 
 func (self *DeviceElevator) move(position uint8) engine.Doer {
-	tag := fmt.Sprintf("%s.move:%d->%d", self.name, self.currentPos, position)
-	self.currentPos = -1
+	cp := helpers.GetEnv(self.name)
+	mp := fmt.Sprintf("%s->%d", cp, position)
+	// self.currentPos = -1
+	helpers.SetEnv(self.name,mp)
+	tag := fmt.Sprintf("%s.move:%s", self.name, mp)
+	// fmt.Printf("\n\033[41m ENV (%v) \033[0m\n\n",helpers.GetEnv("EL"))
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, position, 0x64)).
 		Append(self.NewWaitDone(tag, self.moveTimeout)).
-		Append(engine.Func0{F: func() error { self.currentPos = int16(position); return nil }})
+		Append(engine.Func0{F: func() error { helpers.SetEnv(self.name,fmt.Sprintf("%d",position)); return nil }})
 }
