@@ -16,6 +16,7 @@ import (
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/engine/inventory"
+	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 	tele_api "github.com/temoto/vender/tele"
@@ -286,13 +287,19 @@ func (g *Global) RegisterCommands(ctx context.Context) {
 		},
 	)
 
+	g.Engine.RegisterNewFunc(
+		"envs.print",
+		func(ctx context.Context) error {
+			global.ShowEnvs()
+			return nil
+		},
+	)
+
 	doEmuKey := engine.FuncArg{
 		Name: "emulate.key(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
-			// h := fmt.Sprintf("%x", arg)
 			event := types.InputEvent{Source: "evend-keyboard", Key: types.InputKey(arg), Up: true}
 			g.Hardware.Input.Emit(event)
-			// g.Hardware.Input.Enable(true)
 			return nil
 		}}
 	g.Engine.Register(doEmuKey.Name, doEmuKey)

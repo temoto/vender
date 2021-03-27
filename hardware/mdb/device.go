@@ -11,6 +11,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/atomic_clock"
 	"github.com/temoto/vender/internal/engine"
+	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )
@@ -295,7 +296,8 @@ func (self *Device) locked_reset() error {
 		err = errors.Annotatef(err, "%s RESET", self.name)
 		return err
 	}
-	self.Log.Infof("%s addr=%02x is working", self.name, self.Address)
+	global.SetEnv(self.name+".working", "true")
+	// self.Log.Infof("%s addr=%02x is working", self.name, self.Address)
 	time.Sleep(self.DelayAfterReset)
 	return nil
 }

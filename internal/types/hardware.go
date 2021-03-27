@@ -1,12 +1,18 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/temoto/vender/internal/global"
+)
 
 type DeviceOfflineError struct {
 	Device Devicer
 }
 
-func (oe DeviceOfflineError) Error() string { return fmt.Sprintf("%s is offline", oe.Device.Name()) }
+func (oe DeviceOfflineError) Error() string {
+	global.SetEnv(oe.Device.Name()+".working", "false")
+	return fmt.Sprintf("%s is offline", oe.Device.Name())
+}
 
 type Devicer interface {
 	Name() string

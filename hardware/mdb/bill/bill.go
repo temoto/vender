@@ -15,8 +15,8 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/internal/engine"
+	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
-	// "github.com/temoto/vender/helpers"
 )
 
 const (
@@ -52,6 +52,7 @@ type BillValidator struct { //nolint:maligned
 	escrowBill   currency.Nominal // assume only one bill may be in escrow position
 	stackerFull  bool
 	stackerCount uint32
+	Work         bool
 }
 
 var (
@@ -150,6 +151,12 @@ func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func
 		self.pollmu.Unlock()
 		if err == nil {
 			active, err = parse(response)
+			self.Work = !active
+			if self.Work {
+				global.SetEnv("bill.working", "true")
+			} else {
+				global.SetEnv("bill.working", "false")
+			}
 		}
 		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.Device, active, err != nil, stopch)
 		// self.Log.Debugf("bill.Run r.E=%v perr=%v pactive=%t alive_not_nil=%t alive_running=%t -> again=%t",
@@ -177,6 +184,7 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollReques
 			case money.StatusFatal:
 				self.Device.TeleError(errors.Annotate(pi.Error, tag))
 			case money.StatusBusy:
+			case money.StatusDisabled:
 			default:
 				if fun(pi) {
 					return true, nil
@@ -348,6 +356,10 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 	// - serializing via channel on mdb.Device would be better
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
+		if self.escrowBill == 0 {
+			global.Log.Errorf("escrow (%v) not possilbe. no bills.", accept)
+			return nil
+		}
 		self.pollmu.Lock()
 		defer self.pollmu.Unlock()
 
@@ -365,9 +377,6 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 			code := pi.HardwareCode
 			switch code {
 			case StatusValidatorDisabled:
-				if self.escrowBill != 0 {
-					return false
-				}
 				self.Log.Errorf("CRITICAL likely code error: escrow request while disabled")
 				result = ErrEscrowImpossible
 				return true
@@ -375,8 +384,11 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 				self.Log.Errorf("CRITICAL likely code error: escrow request invalid")
 				result = ErrEscrowImpossible
 				return true
-			case StatusRoutingBillStacked, StatusRoutingBillReturned, StatusRoutingBillToRecycler:
-				self.Log.Infof("escrow result code=%02x", code) // TODO string
+			case StatusRoutingBillStacked:
+				return true
+			case StatusRoutingBillReturned:
+				return false
+			case StatusRoutingBillToRecycler:
 				return true
 			default:
 				return false
@@ -465,7 +477,11 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 	case StatusBillRejected:
 		return money.PollItem{HardwareCode: b, Status: money.StatusRejected}
 	case StatusCreditedBillRemoval: // fishing attempt
-		return money.PollItem{HardwareCode: b, Status: money.StatusError, Error: money.ErrFraud}
+		if self.escrowBill == 0 {
+			return money.PollItem{HardwareCode: b, Status: money.StatusError, Error: money.ErrFishingFail}
+		} else {
+			return money.PollItem{HardwareCode: b, Status: money.StatusError, Error: money.ErrFishingOK}
+		}
 	}
 
 	if b&0x80 != 0 { // Bill Routing
@@ -477,23 +493,22 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 		}
 		switch status {
 		case StatusRoutingBillStacked:
-			fmt.Printf("\n\033[41m StatusRoutingBillStackeddddd \033[0m\n\n")
+			global.Log.Infof("stacked bill:%v", result.DataNominal/100)
 			self.setEscrowBill(0)
 			result.DataCashbox = true
 			result.Status = money.StatusCredit
 		case StatusRoutingEscrowPosition:
-			fmt.Printf("\n\033[41m  StatusRoutingEscrowPositionnnnn \033[0m\n\n")
 			if self.EscrowAmount() != 0 {
 				self.Log.Errorf("%s b=%b CRITICAL likely code error, ESCROW POSITION with EscrowAmount not empty", tag, b)
 			}
 			dn := result.DataNominal
-			fmt.Printf("\n\033[41m (%v) \033[0m\n\n", dn)
+			// global.Log.Infof("escrow bill:%v",dn)
+			global.Log.Infof("escrow bill:%v", dn/100)
+
 			self.setEscrowBill(dn)
-			// self.Log.Debugf("bill routing ESCROW POSITION")
 			result.Status = money.StatusEscrow
 			result.DataCount = 1
 		case StatusRoutingBillReturned:
-			fmt.Printf("\n\033[41m StatusRoutingBillReturnedddd \033[0m\n\n")
 			if self.EscrowAmount() == 0 {
 				// most likely code error, but also may be rare case of boot up
 				self.Log.Errorf("%s b=%b CRITICAL likely code error, BILL RETURNED with EscrowAmount empty", tag, b)
@@ -502,8 +517,10 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 			// self.Log.Debugf("bill routing BILL RETURNED")
 			// TODO make something smarter than Status:Escrow,DataCount:0
 			// maybe Status:Info is enough?
-			result.Status = money.StatusEscrow
+
 			result.DataCount = 0
+			result.DataNominal = 0
+			result.Status = money.StatusInfo
 		case StatusRoutingBillToRecycler:
 			fmt.Printf("\n\033[41m StatusRoutingBillToRecyclerrrr \033[0m\n\n")
 			self.setEscrowBill(0)
