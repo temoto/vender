@@ -152,11 +152,7 @@ func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func
 		if err == nil {
 			active, err = parse(response)
 			self.Work = !active
-			if self.Work {
-				global.SetEnv("bill.working", "true")
-			} else {
-				global.SetEnv("bill.working", "false")
-			}
+			global.SetEnvB("bill.working", self.Work)
 		}
 		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.Device, active, err != nil, stopch)
 		// self.Log.Debugf("bill.Run r.E=%v perr=%v pactive=%t alive_not_nil=%t alive_running=%t -> again=%t",

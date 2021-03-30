@@ -99,6 +99,7 @@ func (self *megaUart) Tx(request, response []byte) (int, error) {
 			time.Sleep(DelayErr)
 
 		case mega.ErrCriticalProtocol:
+			// Alexm - падает все. бабло не возвращает.
 			err = errors.Annotatef(err, "%s CRITICAL request=%x", tag, request)
 			self.c.Log.Fatal(err)
 			return 0, err

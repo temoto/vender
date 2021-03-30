@@ -10,7 +10,7 @@ type DeviceOfflineError struct {
 }
 
 func (oe DeviceOfflineError) Error() string {
-	global.SetEnv(oe.Device.Name()+".working", "false")
+	global.SetEnvB(oe.Device.Name()+".working", false)
 	return fmt.Sprintf("%s is offline", oe.Device.Name())
 }
 

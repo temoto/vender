@@ -11,6 +11,7 @@ import (
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/helpers/cacheval"
 	"github.com/temoto/vender/internal/engine"
+	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
 )
 
@@ -278,11 +279,13 @@ func (self *DeviceValve) newCheckTempHotValidate(ctx context.Context) func() err
 		tag := self.name + ".check_temp_hot"
 		var getErr error
 		temp := self.tempHot.GetOrUpdate(func() {
+			// Alexm - если отключить давчик температуры, после инита, то ошибок не будет и температура не меняется.
 			if getErr = g.Engine.Exec(ctx, self.doGetTempHot); getErr != nil {
 				getErr = errors.Annotate(getErr, tag)
 				self.dev.Log.Error(getErr)
 			}
 		})
+		global.SetEnvI("temperature", int(temp))
 		if getErr != nil {
 			if doSetZero, _, _ := engine.ArgApply(self.DoSetTempHot, 0); doSetZero != nil {
 				_ = g.Engine.Exec(ctx, doSetZero)

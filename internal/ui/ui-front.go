@@ -13,6 +13,7 @@ import (
 	"github.com/temoto/vender/hardware/text_display"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
+	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
@@ -51,8 +52,12 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		err := doCheckTempHot.Validate()
 		if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
 			line1 := fmt.Sprintf(self.g.Config.UI.Front.MsgWaterTemp, errtemp.Current)
-			_ = self.g.Engine.ExecList(ctx, "water-temp", []string{"evend.cup.light_off"})
-			self.display.SetLines(line1, self.g.Config.UI.Front.MsgWait)
+			if global.ChSetEnvB("light.working", false) {
+				_ = self.g.Engine.ExecList(ctx, "water-temp", []string{"evend.cup.light_off"})
+			}
+			if !global.ChSetEnv("display.line1", line1) {
+				self.display.SetLines(line1, self.g.Config.UI.Front.MsgWait)
+			}
 			if e := self.wait(5 * time.Second); e.Kind == types.EventService {
 				return StateServiceBegin
 			}

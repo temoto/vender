@@ -11,6 +11,7 @@ import (
 	"github.com/paulrosania/go-charset/charset"
 	_ "github.com/paulrosania/go-charset/data"
 	"github.com/temoto/alive/v2"
+	"github.com/temoto/vender/internal/global"
 )
 
 const MaxWidth = 40
@@ -136,6 +137,8 @@ func (self *TextDisplay) SetLines(line1, line2 string) {
 	self.SetLinesBytes(
 		self.Translate(line1),
 		self.Translate(line2))
+	global.SetEnv("display.line1", line1)
+	global.SetEnv("display.line2", line2)
 }
 
 func (self *TextDisplay) Tick() {

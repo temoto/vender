@@ -37,31 +37,25 @@ type Global struct {
 	XXX_uier  atomic.Value // UIer crutch to import/init cycle
 
 	_copy_guard sync.Mutex //nolint:unused
-	Client      ClientStrust
-}
-
-type ClientStrust struct {
-	Work       bool
-	ActionTime time.Time
 }
 
 const ContextKey = "run/state-global"
 
 func (g *Global) ClientBegin() {
-	if !g.Client.Work {
-		g.Client.Work = true
-		g.Client.ActionTime = time.Now()
-		g.Log.Infof("--- client activity begin ---")
+	t := "client.working"
+	if global.ChSetEnvB(t, true) {
+		global.SetEnv(t+".time", time.Now().Format("02 Jan 15:04:05"))
+		global.Log.Infof("--- client activity begin ---")
 	}
 }
 
 func (g *Global) ClientEnd() {
-	g.Hardware.Input.Enable(true)
-	if g.Client.Work {
-		g.Client.ActionTime = time.Now()
-		g.Client.Work = false
-		g.Log.Infof("--- client activity ending ---")
+	t := "client.working"
+	if global.ChSetEnvB(t, false) {
+		global.SetEnv(t+".time", time.Now().Format("02 Jan 15:04:05"))
+		global.Log.Infof("--- client activity begin ---")
 	}
+
 }
 
 func GetGlobal(ctx context.Context) *Global {
@@ -80,6 +74,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	g.Config = cfg
 
 	g.Log.Infof("build version=%s", g.BuildVersion)
+	global.SetEnv("version", g.BuildVersion)
 
 	if g.Config.Persist.Root == "" {
 		g.Config.Persist.Root = "./tmp-vender-db"

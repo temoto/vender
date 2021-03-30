@@ -9,6 +9,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/log2"
 	tele_config "github.com/temoto/vender/tele/config"
 )
@@ -121,11 +122,13 @@ func (self *transportMqtt) messageHandler(c mqtt.Client, msg mqtt.Message) {
 func (self *transportMqtt) connectLostHandler(c mqtt.Client, err error) {
 	self.log.Info("transport tunnel damaged")
 	self.connected = false
+	global.SetEnvB("connect.working", false)
 }
 
 func (self *transportMqtt) onConnectHandler(c mqtt.Client) {
 	self.connected = true
 	self.log.Infof("connected to server")
+	global.SetEnvB("connect.working", true)
 	if token := c.Subscribe(self.topicCommand, 1, nil); token.Wait() && token.Error() != nil {
 		self.log.Errorf("Subscribe error")
 	} else {

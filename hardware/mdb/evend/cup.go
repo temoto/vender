@@ -9,6 +9,7 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
+	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
 )
 
@@ -79,7 +80,11 @@ func (self *DeviceCup) NewLight(on bool) engine.Doer {
 	if !on {
 		arg = 0x03
 	}
-	return self.Generic.NewAction(tag, arg)
+	// return { self.Generic.NewAction(tag, arg)}
+	return engine.NewSeq(tag).
+		Append(self.Generic.NewAction(tag, arg)).
+		Append(engine.Func0{F: func() error { global.SetEnvB("light.working", on); return nil }})
+
 }
 
 func (self *DeviceCup) NewEnsure() engine.Doer {
