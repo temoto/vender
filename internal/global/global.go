@@ -11,7 +11,7 @@ var Log = *log2.NewStderr(log2.LDebug)
 // Env later will be entry to external EEPROM (Save important when the power loss)
 func init() {
 	Log.SetFlags(0)
-	os.Clearenv()
+	// os.Clearenv()
 }
 
 func SetEnv(key string, val string) {
