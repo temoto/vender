@@ -50,10 +50,11 @@ func (g *Global) ClientBegin() {
 }
 
 func (g *Global) ClientEnd() {
+	g.Hardware.Input.Enable(true)
 	t := "client.working"
 	if global.ChSetEnvB(t, false) {
 		global.SetEnv(t+".time", time.Now().Format("02 Jan 15:04:05"))
-		global.Log.Infof("--- client activity begin ---")
+		global.Log.Infof("--- client activity end ---")
 	}
 
 }

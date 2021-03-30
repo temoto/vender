@@ -122,13 +122,13 @@ func (self *transportMqtt) messageHandler(c mqtt.Client, msg mqtt.Message) {
 func (self *transportMqtt) connectLostHandler(c mqtt.Client, err error) {
 	self.log.Info("transport tunnel damaged")
 	self.connected = false
-	global.SetEnvB("connect.working", false)
+	_ = global.ChSetEnvB("connect.working", false)
 }
 
 func (self *transportMqtt) onConnectHandler(c mqtt.Client) {
 	self.connected = true
 	self.log.Infof("connected to server")
-	global.SetEnvB("connect.working", true)
+	_ = global.ChSetEnvB("connect.working", true)
 	if token := c.Subscribe(self.topicCommand, 1, nil); token.Wait() && token.Error() != nil {
 		self.log.Errorf("Subscribe error")
 	} else {

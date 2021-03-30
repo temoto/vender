@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
+	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )
@@ -53,6 +54,7 @@ func NewDispatch(log *log2.Log, stop <-chan struct{}) *Dispatch {
 }
 
 func (self *Dispatch) Enable(e bool) {
+	global.SetEnvB("input.worked", e)
 	self.enable = e
 }
 
