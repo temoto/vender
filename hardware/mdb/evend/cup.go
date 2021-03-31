@@ -83,7 +83,7 @@ func (self *DeviceCup) NewLight(on bool) engine.Doer {
 	// return { self.Generic.NewAction(tag, arg)}
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewAction(tag, arg)).
-		Append(engine.Func0{F: func() error { global.SetEnvB("light.working", on); return nil }})
+		Append(engine.Func0{F: func() error { _ = global.ChSetEnvB("light.working", on); return nil }})
 
 }
 

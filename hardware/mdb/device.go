@@ -296,7 +296,7 @@ func (self *Device) locked_reset() error {
 		err = errors.Annotatef(err, "%s RESET", self.name)
 		return err
 	}
-	global.SetEnvB(self.name+".working", true)
+	_ = global.ChSetEnvB(self.name+".working", true)
 	// self.Log.Infof("%s addr=%02x is working", self.name, self.Address)
 	time.Sleep(self.DelayAfterReset)
 	return nil

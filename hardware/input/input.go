@@ -54,7 +54,7 @@ func NewDispatch(log *log2.Log, stop <-chan struct{}) *Dispatch {
 }
 
 func (self *Dispatch) Enable(e bool) {
-	global.SetEnvB("input.worked", e)
+	_ = global.ChSetEnvB("input.working", e)
 	self.enable = e
 }
 

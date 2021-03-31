@@ -28,7 +28,7 @@ func SetEnvI(key string, val int) {
 
 func ChSetEnv(key string, val string) bool {
 	if os.Getenv(key) != val {
-		Log.Infof("key:(%s) value:(%s)", key, val)
+		Log.Infof("%s=%s", key, val)
 		SetEnv(key, val)
 		return true
 	}
@@ -37,6 +37,7 @@ func ChSetEnv(key string, val string) bool {
 
 func ChSetEnvB(key string, val bool) bool {
 	if GetEnvB(key) != val {
+		Log.Infof("%s=%v", key, val)
 		SetEnv(key, strconv.FormatBool(val))
 		return true
 	}
