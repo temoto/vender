@@ -5,7 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"hash/fnv"
-	"net"
+	// "net"
+"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -334,33 +335,53 @@ func (self *UI) onServiceReboot() State {
 }
 
 func (self *UI) onServiceNetwork() State {
-	allAddrs, _ := net.InterfaceAddrs()
-	addrs := make([]string, 0, len(allAddrs))
-	// TODO parse ignored networks from config
-addrLoop:
-	for _, addr := range allAddrs {
-		ip, _, err := net.ParseCIDR(addr.String())
-		if err != nil {
-			self.g.Log.Errorf("invalid local addr=%v", addr)
-			continue addrLoop
-		}
-		if ip.IsLoopback() {
-			continue addrLoop
-		}
-		addrs = append(addrs, ip.String())
-	}
-	listString := strings.Join(addrs, " ")
-	self.display.SetLines("network", listString)
 
-	for {
-		next, e := self.serviceWaitInput()
-		if next != StateDefault {
-			return next
-		}
-		if input.IsReject(&e) {
-			return StateServiceMenu
-		}
+	self.display.SetLines("for restart wifi", "press 1") // FIXME extract message string
+
+	next, e := self.serviceWaitInput()
+	if next != StateDefault {
+		return next
 	}
+
+	switch {
+	case e.Key == '1':
+		self.display.SetLines("wifi restart", "in progress") // FIXME extract message string
+
+    lsCmd := exec.Command("bash", "-c", "ifdown wlan0 && ifup wlan0")
+    lsOut, err := lsCmd.Output()
+    if err != nil {
+        panic(err)
+    }
+		return StateServiceEnd
+	}
+	return StateServiceMenu
+// 	allAddrs, _ := net.InterfaceAddrs()
+// 	addrs := make([]string, 0, len(allAddrs))
+// 	// TODO parse ignored networks from config
+// addrLoop:
+// 	for _, addr := range allAddrs {
+// 		ip, _, err := net.ParseCIDR(addr.String())
+// 		if err != nil {
+// 			self.g.Log.Errorf("invalid local addr=%v", addr)
+// 			continue addrLoop
+// 		}
+// 		if ip.IsLoopback() {
+// 			continue addrLoop
+// 		}
+// 		addrs = append(addrs, ip.String())
+// 	}
+// 	listString := strings.Join(addrs, " ")
+// 	self.display.SetLines("network", listString)
+
+// 	for {
+// 		next, e := self.serviceWaitInput()
+// 		if next != StateDefault {
+// 			return next
+// 		}
+// 		if input.IsReject(&e) {
+// 			return StateServiceMenu
+// 		}
+// 	}
 }
 
 func (self *UI) onServiceMoneyLoad(ctx context.Context) State {
