@@ -113,6 +113,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 
 	for {
 	refresh:
+		global.SetEnv("input.buff", fmt.Sprintf("%s", self.inputBuf))
 		// step 1: refresh display
 		credit := moneysys.Credit(ctx)
 		if self.State() == StateFrontTune { // XXX onFrontTune
