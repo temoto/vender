@@ -171,7 +171,10 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 				credit := moneysys.Credit(ctx)
 				self.g.Log.Debugf("compare price=%v credit=%v", mitem.Price, credit)
 				if mitem.Price > credit {
-					self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuInsufficientCredit)
+					// self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuInsufficientCredit)
+					// ALexM-FIX (вынести в конфиг текст. сделать scale )
+					dl2 :=  fmt.Sprintf("credit=%v prise(%v)=%v",credit,mitem.Code, (mitem.Price/100))
+					self.display.SetLines(self.g.Config.UI.Front.MsgMenuInsufficientCredit,dl2)
 					goto wait
 				}
 				self.g.Log.Debugf("mitem=%s validate", mitem.String())
