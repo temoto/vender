@@ -54,8 +54,8 @@ func NewDispatch(log *log2.Log, stop <-chan struct{}) *Dispatch {
 }
 
 func (self *Dispatch) Enable(e bool) {
-	_ = global.ChSetEnvB("input.working", e)
-	self.enable = e
+	global.GBL.HW.EvendInput = e
+	global.Log.Infof("evendInput = %v", e)
 }
 
 func (self *Dispatch) SubscribeChan(name string, substop <-chan struct{}) chan types.InputEvent {

@@ -185,6 +185,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return StateFrontBegin
 
 	case StateServiceBegin:
+		global.SetEnv("state", "StateServiceBegin")
 		return self.onServiceBegin(ctx)
 	case StateServiceAuth:
 		return self.onServiceAuth()

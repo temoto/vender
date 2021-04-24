@@ -42,21 +42,22 @@ type Global struct {
 const ContextKey = "run/state-global"
 
 func (g *Global) ClientBegin() {
-	t := "client.working"
-	if global.ChSetEnvB(t, true) {
-		global.SetEnv(t+".time", time.Now().Format("02 Jan 15:04:05"))
+	gg := &global.GBL.Client
+	if !gg.Working {
+		gg.Working = true
+		gg.WorkTime = time.Now()
 		global.Log.Infof("--- client activity begin ---")
 	}
 }
 
 func (g *Global) ClientEnd() {
+	gg := &global.GBL.Client
 	g.Hardware.Input.Enable(true)
-	t := "client.working"
-	if global.ChSetEnvB(t, false) {
-		global.SetEnv(t+".time", time.Now().Format("02 Jan 15:04:05"))
+	if gg.Working {
+		gg.Working = false
+		gg.WorkTime = time.Now()
 		global.Log.Infof("--- client activity end ---")
 	}
-
 }
 
 func GetGlobal(ctx context.Context) *Global {

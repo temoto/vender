@@ -52,7 +52,6 @@ type BillValidator struct { //nolint:maligned
 	escrowBill   currency.Nominal // assume only one bill may be in escrow position
 	stackerFull  bool
 	stackerCount uint32
-	Work         bool
 }
 
 var (
@@ -151,8 +150,6 @@ func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func
 		self.pollmu.Unlock()
 		if err == nil {
 			active, err = parse(response)
-			self.Work = !active
-			_ = global.ChSetEnvB("bill.working", self.Work)
 		}
 		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.Device, active, err != nil, stopch)
 		// self.Log.Debugf("bill.Run r.E=%v perr=%v pactive=%t alive_not_nil=%t alive_running=%t -> again=%t",

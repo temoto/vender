@@ -131,6 +131,8 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		switch e.Kind {
 		case types.EventInput:
 			if input.IsMoneyAbort(&e.Input) {
+				global.Log.Infof("money abort event.")
+				self.g.Hardware.Input.Enable(false)
 				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
 				return StateFrontEnd
 			}
@@ -173,8 +175,8 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 				if mitem.Price > credit {
 					// self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuInsufficientCredit)
 					// ALexM-FIX (вынести в конфиг текст. сделать scale )
-					dl2 :=  fmt.Sprintf("credit=%v prise(%v)=%v",credit,mitem.Code, (mitem.Price/100))
-					self.display.SetLines(self.g.Config.UI.Front.MsgMenuInsufficientCredit,dl2)
+					dl2 := fmt.Sprintf("credit=%v prise(%v)=%v", credit, mitem.Code, (mitem.Price / 100))
+					self.display.SetLines(self.g.Config.UI.Front.MsgMenuInsufficientCredit, dl2)
 					goto wait
 				}
 				self.g.Log.Debugf("mitem=%s validate", mitem.String())

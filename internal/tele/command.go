@@ -10,6 +10,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/skip2/go-qrcode"
 	"github.com/temoto/vender/helpers"
+	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
 	tele_api "github.com/temoto/vender/tele"
 )
@@ -72,9 +73,17 @@ func (self *tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
 }
 
 func (self *tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgLock) error {
+	if global.GBL.Client.Working {
+		err := errors.Errorf("Processing the client")
+		return err
+	}
 	g := state.GetGlobal(ctx)
+	global.Log.Infof("precessing lock command")
+	g.Hardware.Input.Enable(false)
 	return g.ScheduleSync(ctx, cmd.Priority, func(context.Context) error {
 		time.Sleep(time.Duration(arg.Duration) * time.Second)
+		fmt.Printf("\n\033[41m lockenddd \033[0m\n\n")
+		g.Hardware.Input.Enable(true)
 		return nil
 	})
 }
