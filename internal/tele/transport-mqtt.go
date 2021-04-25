@@ -12,6 +12,7 @@ import (
 	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/log2"
 	tele_config "github.com/temoto/vender/tele/config"
+	// "time"
 )
 
 type transportMqtt struct {
@@ -87,6 +88,7 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 		SetConnectRetry(true)
 	self.m = mqtt.NewClient(self.mopt)
 	sConnToken := self.m.Connect()
+	// if sConnToken.Wait() && sConnToken.Error() != nil {
 	if sConnToken.Error() != nil {
 		self.log.Errorf("token.Error\n")
 	}
@@ -106,14 +108,14 @@ func (self *transportMqtt) SendTelemetry(payload []byte) bool {
 
 func (self *transportMqtt) SendCommandResponse(topicSuffix string, payload []byte) bool {
 	topic := fmt.Sprintf("%s/%s", self.topicPrefix, topicSuffix)
-	self.log.Debugf("mqtt publish command response to topic=%s", topic)
+	global.Log.Infof("mqtt publish command response to topic=%s", topic)
 	self.m.Publish(topic, 1, false, payload)
 	return true
 }
 
 func (self *transportMqtt) messageHandler(c mqtt.Client, msg mqtt.Message) {
 	payload := msg.Payload()
-	fmt.Printf("income mqtt message %s", payload)
+	global.Log.Infof("mqtt income message (%x)", payload)
 	self.onCommand(payload)
 }
 

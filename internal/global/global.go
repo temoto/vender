@@ -33,9 +33,9 @@ type cliStruct struct {
 	Light    bool
 }
 type hardwareStruct struct {
-	Temperature      int
-	EvendInput       bool
-	Elevator         uint8
+	Temperature int
+	EvendInput  bool
+	Elevator    uint8
 }
 
 // Env later will be entry to external EEPROM (Save important when the power loss)
@@ -43,7 +43,6 @@ func init() {
 	Log.SetFlags(0)
 	_ = GG()
 	GBL.HW.Elevator = 255
-	// os.Clearenv()
 }
 
 func GG() *globalStruct {

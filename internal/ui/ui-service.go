@@ -317,7 +317,7 @@ wait:
 	return StateServiceTest
 }
 
-func (self *UI) onServiceReboot() State {
+func (self *UI) onServiceReboot(ctx context.Context) State {
 	self.display.SetLines("for reboot", "press 1") // FIXME extract message string
 
 	next, e := self.serviceWaitInput()
@@ -328,7 +328,7 @@ func (self *UI) onServiceReboot() State {
 	switch {
 	case e.Key == '1':
 		self.display.SetLines("reboot", "in progress") // FIXME extract message string
-		self.g.Stop()
+		self.g.VmcReload(ctx)
 		return StateStop
 	}
 	return StateServiceMenu

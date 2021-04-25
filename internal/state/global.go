@@ -60,6 +60,22 @@ func (g *Global) ClientEnd() {
 	}
 }
 
+func (g *Global) VmcReload(ctx context.Context) {
+	if global.GBL.Client.Working {
+		global.Log.Infof("reload fail. processing client")
+		return
+	}
+	td := g.MustTextDisplay()
+	td.SetLines("reboot", "in progress") // FIXME extract message string
+	g.Tele.State(tele_api.State_Boot)
+	_ = g.Engine.ExecList(ctx, "reboot", []string{"evend.cup.light_off evend.valve.set_temp_hot(0)"})
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		g.Stop()
+	}()
+}
+
 func GetGlobal(ctx context.Context) *Global {
 	v := ctx.Value(ContextKey)
 	if v == nil {
@@ -269,6 +285,14 @@ func (g *Global) initInventory(ctx context.Context) error {
 }
 
 func (g *Global) RegisterCommands(ctx context.Context) {
+	g.Engine.RegisterNewFunc(
+		"vmc.reload!",
+		func(ctx context.Context) error {
+			g.VmcReload(ctx)
+			return nil
+		},
+	)
+
 	g.Engine.RegisterNewFunc(
 		"input.enable",
 		func(ctx context.Context) error {

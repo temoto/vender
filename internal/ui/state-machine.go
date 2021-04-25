@@ -185,7 +185,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	case StateServiceTest:
 		return self.onServiceTest(ctx)
 	case StateServiceReboot:
-		return self.onServiceReboot()
+		return self.onServiceReboot(ctx)
 	case StateServiceNetwork:
 		return self.onServiceNetwork()
 	case StateServiceMoneyLoad:
