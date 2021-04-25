@@ -34,7 +34,6 @@ type cliStruct struct {
 }
 type hardwareStruct struct {
 	Temperature      int
-	TemperatureValid bool
 	EvendInput       bool
 	Elevator         uint8
 }
