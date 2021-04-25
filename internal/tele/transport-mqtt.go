@@ -26,8 +26,6 @@ type transportMqtt struct {
 	topicState     string
 	topicTelemetry string
 	topicCommand   string
-
-	connected bool
 }
 
 func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback, willPayload []byte) error {
@@ -120,19 +118,17 @@ func (self *transportMqtt) messageHandler(c mqtt.Client, msg mqtt.Message) {
 }
 
 func (self *transportMqtt) connectLostHandler(c mqtt.Client, err error) {
-	self.log.Info("transport tunnel damaged")
-	self.connected = false
-	_ = global.ChSetEnvB("connect.working", false)
+	global.GBL.Tele.Working = false
+	global.Log.Infof("mqtt disconnect")
 }
 
 func (self *transportMqtt) onConnectHandler(c mqtt.Client) {
-	self.connected = true
-	self.log.Infof("connected to server")
-	_ = global.ChSetEnvB("connect.working", true)
+	global.GBL.Tele.Working = true
+	global.Log.Infof("mqtt connect")
 	if token := c.Subscribe(self.topicCommand, 1, nil); token.Wait() && token.Error() != nil {
-		self.log.Errorf("Subscribe error")
+		global.Log.Infof("mqtt subscribe error")
 	} else {
-		self.log.Debugf("Subscribe Ok")
+		global.Log.Infof("mqtt subscribe Ok")
 		c.Publish(self.topicConnect, 1, true, []byte{0x01})
 	}
 }

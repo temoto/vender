@@ -29,7 +29,6 @@ type UIMenuResult struct {
 func (self *UI) onFrontBegin(ctx context.Context) State {
 	ms := money.GetGlobal(ctx)
 	ms.ResetMoney()
-	self.g.ClientEnd()
 	self.FrontResult = UIMenuResult{
 		// TODO read config
 		Cream: DefaultCream,
@@ -42,20 +41,17 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		_ = d.Clear()
 	}
 	// executeScript(ctx, "FrontBegin", "")
-	if errs := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); len(errs) != 0 {
-		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_front_begin"))
-		return StateBroken
-	}
 
 	// XXX FIXME custom business logic creeped into code TODO move to config
 	if doCheckTempHot := self.g.Engine.Resolve("evend.valve.check_temp_hot"); doCheckTempHot != nil && !engine.IsNotResolved(doCheckTempHot) {
 		err := doCheckTempHot.Validate()
 		if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
 			line1 := fmt.Sprintf(self.g.Config.UI.Front.MsgWaterTemp, errtemp.Current)
-			if global.ChSetEnvB("light.working", false) {
+			if global.GBL.Client.Light {
+				global.GBL.Client.Light = false
 				_ = self.g.Engine.ExecList(ctx, "water-temp", []string{"evend.cup.light_off"})
 			}
-			if !global.ChSetEnv("display.line1", line1) {
+			if global.GBL.Display.L1 != line1 {
 				self.display.SetLines(line1, self.g.Config.UI.Front.MsgWait)
 			}
 			if e := self.wait(5 * time.Second); e.Kind == types.EventService {
@@ -67,6 +63,11 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 			return StateBroken
 		}
 	}
+	if errs := self.g.Engine.ExecList(ctx, "on_front_begin", self.g.Config.Engine.OnFrontBegin); len(errs) != 0 {
+		self.g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_front_begin"))
+		return StateBroken
+	}
+	self.g.ClientEnd()
 
 	var err error
 	self.FrontMaxPrice, err = menuMaxPrice(ctx, self.menu)
@@ -113,7 +114,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 
 	for {
 	refresh:
-		global.SetEnv("input.buff", fmt.Sprintf("%s", self.inputBuf))
+		global.GBL.Client.Input = fmt.Sprintf("%s", self.inputBuf)
 		// step 1: refresh display
 		credit := moneysys.Credit(ctx)
 		if self.State() == StateFrontTune { // XXX onFrontTune
@@ -132,6 +133,8 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		case types.EventInput:
 			if input.IsMoneyAbort(&e.Input) {
 				global.Log.Infof("money abort event.")
+				credit := moneysys.Credit(ctx) / 100
+				self.display.SetLines("  :-(", fmt.Sprintf(" -%v", credit))
 				self.g.Hardware.Input.Enable(false)
 				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
 				return StateFrontEnd

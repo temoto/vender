@@ -35,7 +35,7 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 	g.Engine.RegisterNewFunc(
 		"elevator.status",
 		func(ctx context.Context) error {
-			g.Log.Infof("position:%s", global.GetEnv(self.name))
+			g.Log.Infof("position:%d", global.GBL.HW.Elevator)
 			return nil
 		},
 	)
@@ -48,13 +48,15 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 }
 
 func (self *DeviceElevator) move(position uint8) engine.Doer {
-	cp := global.GetEnv(self.name + ".position")
-	mp := fmt.Sprintf("%s->%d", cp, position)
-	global.SetEnv(self.name+".position", mp)
+	// cp := global.GetEnv(self.name + ".position")
+	cp := global.GBL.HW.Elevator
+	global.GBL.HW.Elevator = 255
+	mp := fmt.Sprintf("%d->%d", cp, position)
+	global.Log.Infof(self.name+".position = %s", mp)
 	tag := fmt.Sprintf("%s.move:%s", self.name, mp)
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, position, 0x64)).
 		Append(self.NewWaitDone(tag, self.moveTimeout)).
-		Append(engine.Func0{F: func() error { global.SetEnv(self.name+".position", fmt.Sprintf("%d", position)); return nil }})
+		Append(engine.Func0{F: func() error { global.GBL.HW.Elevator = position; return nil }})
 }

@@ -2,7 +2,7 @@ package types
 
 import (
 	"fmt"
-	"github.com/temoto/vender/internal/global"
+	// "github.com/temoto/vender/internal/global"
 )
 
 type DeviceOfflineError struct {
@@ -10,7 +10,7 @@ type DeviceOfflineError struct {
 }
 
 func (oe DeviceOfflineError) Error() string {
-	_ = global.ChSetEnvB(oe.Device.Name()+".working", false)
+	// _ = global.ChSetEnvB(oe.Device.Name()+".working", false)
 	return fmt.Sprintf("%s is offline", oe.Device.Name())
 }
 

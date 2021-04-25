@@ -10,7 +10,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
-	"github.com/temoto/vender/internal/global"
+	// "github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
@@ -87,8 +87,6 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	self.g.Log.Debugf("ui enter %s", s.String())
 	switch s {
 	case StateBoot:
-		global.SetEnv("state", "Boot")
-		executeScript(ctx, "StateBoot", "")
 		self.g.Tele.State(tele_api.State_Boot)
 		onStartSuccess := false
 		for i := 1; i <= 3; i++ {
@@ -113,7 +111,6 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return StateFrontBegin
 
 	case StateBroken:
-		global.SetEnv("state", "Broken")
 		self.g.Log.Infof("state=broken")
 		if !self.broken {
 			self.g.Tele.State(tele_api.State_Problem)
@@ -140,7 +137,6 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return StateDefault
 
 	case StateLocked:
-		global.SetEnv("state", "Locked")
 		self.display.SetLines(self.g.Config.UI.Front.MsgStateLocked, "")
 		self.g.Tele.State(tele_api.State_Lock)
 		for self.g.Alive.IsRunning() {
@@ -156,36 +152,29 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return StateDefault
 
 	case StateFrontBegin:
-		global.SetEnv("state", "FronBegin")
 		self.inputBuf = self.inputBuf[:0]
 		self.broken = false
 		self.g.Log.Infof("state=StateFrontBegin")
 		return self.onFrontBegin(ctx)
 
 	case StateFrontSelect:
-		global.SetEnv("state", "FrontSelect")
 		return self.onFrontSelect(ctx)
 
 	case StateFrontTune:
-		global.SetEnv("state", "FrontTune")
 		return self.onFrontTune(ctx)
 
 	case StateFrontAccept:
-		global.SetEnv("state", "FrontAccept")
 		self.g.Log.Infof("state=StateFrontAccept")
 		return self.onFrontAccept(ctx)
 
 	case StateFrontTimeout:
-		global.SetEnv("state", "FrontTimeout")
 		return self.onFrontTimeout(ctx)
 
 	case StateFrontEnd:
-		global.SetEnv("state", "FrontEnd")
 		// self.onFrontEnd(ctx)
 		return StateFrontBegin
 
 	case StateServiceBegin:
-		global.SetEnv("state", "StateServiceBegin")
 		return self.onServiceBegin(ctx)
 	case StateServiceAuth:
 		return self.onServiceAuth()
@@ -207,7 +196,6 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return replaceDefault(self.onServiceEnd(ctx), StateFrontBegin)
 
 	case StateStop:
-		global.SetEnv("state", "StateStop")
 		return StateStop
 
 	default:

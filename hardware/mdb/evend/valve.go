@@ -285,7 +285,7 @@ func (self *DeviceValve) newCheckTempHotValidate(ctx context.Context) func() err
 				self.dev.Log.Error(getErr)
 			}
 		})
-		global.SetEnvI("temperature", int(temp))
+		global.GBL.HW.Temperature = int(temp)
 		if getErr != nil {
 			if doSetZero, _, _ := engine.ArgApply(self.DoSetTempHot, 0); doSetZero != nil {
 				_ = g.Engine.Exec(ctx, doSetZero)
@@ -298,6 +298,7 @@ func (self *DeviceValve) newCheckTempHotValidate(ctx context.Context) func() err
 		msg := fmt.Sprintf("%s current=%d config=%d diff=%d", tag, temp, self.tempHotTarget, diff)
 		self.dev.Log.Debugf(msg)
 		if diff > tempHotMargin {
+			global.GBL.HW.TemperatureValid = false
 			if !self.tempHotReported {
 				g.Error(errors.New(msg))
 				self.tempHotReported = true
@@ -308,6 +309,7 @@ func (self *DeviceValve) newCheckTempHotValidate(ctx context.Context) func() err
 				Target:  int16(self.tempHotTarget),
 			}
 		} else if self.tempHotReported {
+			global.GBL.HW.TemperatureValid = true
 			// TODO report OK
 			self.tempHotReported = false
 		}

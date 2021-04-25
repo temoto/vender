@@ -76,7 +76,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	g.Config = cfg
 
 	g.Log.Infof("build version=%s", g.BuildVersion)
-	global.SetEnv("version", g.BuildVersion)
+	global.GBL.Version = g.BuildVersion
 
 	if g.Config.Persist.Root == "" {
 		g.Config.Persist.Root = "./tmp-vender-db"
