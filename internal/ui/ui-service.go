@@ -236,9 +236,19 @@ func (self *UI) onServiceInventory() State {
 	invIdxMax := uint8(len(self.Service.invList))
 	switch {
 	case e.Key == input.EvendKeyCreamLess:
+		if len(self.inputBuf) != 0 {
+			self.display.SetLines(MsgError, "set or clear?") // FIXME extract message string
+			self.serviceWaitInput()
+			return StateServiceInventory
+		}
 		self.Service.invIdx = addWrap(self.Service.invIdx, invIdxMax, -1)
 		self.inputBuf = self.inputBuf[:0]
 	case e.Key == input.EvendKeyCreamMore:
+		if len(self.inputBuf) != 0 {
+			self.display.SetLines(MsgError, "set or clear?") // FIXME extract message string
+			self.serviceWaitInput()
+			return StateServiceInventory
+		}
 		self.Service.invIdx = addWrap(self.Service.invIdx, invIdxMax, +1)
 		self.inputBuf = self.inputBuf[:0]
 
