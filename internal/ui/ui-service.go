@@ -78,7 +78,6 @@ func (self *uiService) Init(ctx context.Context) {
 
 func (self *UI) onServiceBegin(ctx context.Context) State {
 	self.inputBuf = self.inputBuf[:0]
-	self.lastActivity = time.Now()
 	self.Service.askReport = false
 	self.Service.menuIdx = 0
 	self.Service.invIdx = 0
@@ -235,23 +234,17 @@ func (self *UI) onServiceInventory() State {
 
 	invIdxMax := uint8(len(self.Service.invList))
 	switch {
-	case e.Key == input.EvendKeyCreamLess:
+	case e.Key == input.EvendKeyCreamLess || e.Key == input.EvendKeyCreamMore:
 		if len(self.inputBuf) != 0 {
 			self.display.SetLines(MsgError, "set or clear?") // FIXME extract message string
 			self.serviceWaitInput()
 			return StateServiceInventory
 		}
-		self.Service.invIdx = addWrap(self.Service.invIdx, invIdxMax, -1)
-		self.inputBuf = self.inputBuf[:0]
-	case e.Key == input.EvendKeyCreamMore:
-		if len(self.inputBuf) != 0 {
-			self.display.SetLines(MsgError, "set or clear?") // FIXME extract message string
-			self.serviceWaitInput()
-			return StateServiceInventory
+		if e.Key == input.EvendKeyCreamLess {
+			self.Service.invIdx = addWrap(self.Service.invIdx, invIdxMax, -1)
+		} else {
+			self.Service.invIdx = addWrap(self.Service.invIdx, invIdxMax, +1)
 		}
-		self.Service.invIdx = addWrap(self.Service.invIdx, invIdxMax, +1)
-		self.inputBuf = self.inputBuf[:0]
-
 	case e.Key == input.EvendKeyDot || e.IsDigit():
 		self.inputBuf = append(self.inputBuf, byte(e.Key))
 

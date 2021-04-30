@@ -73,8 +73,7 @@ func (self *tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
 }
 
 func (self *tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgLock) error {
-	if global.GBL.Client.Working {
-		err := errors.Errorf("Processing the client")
+	if err := state.CheckClientWorking(); err != nil {
 		return err
 	}
 	g := state.GetGlobal(ctx)
@@ -89,6 +88,11 @@ func (self *tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_
 }
 
 func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgExec) error {
+	if arg.Scenario[:1] == "_" {	// If the command contains the "_" prefix, then you ignore the client lock flag
+		arg.Scenario = arg.Scenario[1:]
+	} else if err := state.CheckClientWorking(); err != nil {
+		return err
+	}
 	g := state.GetGlobal(ctx)
 	doer, err := g.Engine.ParseText("tele-exec", arg.Scenario)
 	if err != nil {

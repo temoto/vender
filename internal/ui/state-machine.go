@@ -126,7 +126,6 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		if d, _ := self.g.Display(); d != nil {
 			_ = d.Clear()
 		}
-		executeScript(ctx, "StateBroken", "")
 		for self.g.Alive.IsRunning() {
 			e := self.wait(time.Second)
 			// TODO receive tele command to reboot or change state

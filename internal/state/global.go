@@ -60,6 +60,15 @@ func (g *Global) ClientEnd() {
 	}
 }
 
+func CheckClientWorking() error {
+	if global.GBL.Client.Working {
+		global.Log.Errorf("execute imposible. processing the client.")
+		return errors.Errorf("Processing the client")
+	}
+	return nil
+}
+
+
 func (g *Global) VmcReload(ctx context.Context) {
 	if global.GBL.Client.Working {
 		global.Log.Infof("reload fail. processing client")

@@ -26,7 +26,6 @@ type UI struct { //nolint:maligned
 	broken       bool
 	menu         Menu
 	display      *text_display.TextDisplay // FIXME
-	lastActivity time.Time
 	inputBuf     []byte
 	eventch      chan types.Event
 	inputch      chan types.InputEvent
@@ -81,13 +80,11 @@ again:
 	select {
 	case e := <-self.eventch:
 		if e.Kind != types.EventInvalid {
-			self.lastActivity = time.Now()
 		}
 		return e
 
 	case e := <-self.inputch:
 		if e.Source != "" {
-			self.lastActivity = time.Now()
 		}
 		if e.Source == input.DevInputEventTag && e.Up {
 			return types.Event{Kind: types.EventService}
