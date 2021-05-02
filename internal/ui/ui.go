@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 	"time"
-
+"fmt"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
@@ -58,7 +58,8 @@ func (self *UI) Init(ctx context.Context) error {
 
 	self.frontResetTimeout = helpers.IntSecondDefault(self.g.Config.UI.Front.ResetTimeoutSec, 0)
 
-	self.lock.ch = make(chan struct{}, 1)
+	// self.lock.ch = make(chan struct{}, 1)
+	self.g.LockCh = make(chan bool, 1)
 
 	self.Service.Init(ctx)
 	self.g.XXX_uier.Store(types.UIer(self)) // FIXME import cycle traded for pointer cycle
@@ -76,7 +77,7 @@ func (self *UI) ScheduleSync(ctx context.Context, priority tele_api.Priority, fu
 func (self *UI) wait(timeout time.Duration) types.Event {
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
-again:
+// again:
 	select {
 	case e := <-self.eventch:
 		if e.Kind != types.EventInvalid {
@@ -91,11 +92,13 @@ again:
 		}
 		return types.Event{Kind: types.EventInput, Input: e}
 
-	case <-self.lock.ch:
+	// case <-self.lock.ch:
+	case <-self.g.LockCh:
+		fmt.Printf("\n\033[41m uilockkkk \033[0m\n\n")
 		// chan buffer may produce false positive
-		if !self.lock.locked() {
-			goto again
-		}
+		// if !self.lock.locked() {
+		// 	goto again
+		// }
 		return types.Event{Kind: types.EventLock}
 
 	case <-tmr.C:

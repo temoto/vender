@@ -31,6 +31,7 @@ type Global struct {
 	Inventory    *inventory.Inventory
 	Log          *log2.Log
 	Tele         tele_api.Teler
+	LockCh		 chan bool
 	// TODO UI           types.UIer
 
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
@@ -294,6 +295,14 @@ func (g *Global) initInventory(ctx context.Context) error {
 }
 
 func (g *Global) RegisterCommands(ctx context.Context) {
+	g.Engine.RegisterNewFunc(
+		"vmc.lock!",
+		func(ctx context.Context) error {
+			go func() {g.LockCh <- true}()
+			return nil
+		},
+	)
+
 	g.Engine.RegisterNewFunc(
 		"vmc.reload!",
 		func(ctx context.Context) error {
