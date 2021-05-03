@@ -31,7 +31,7 @@ type Global struct {
 	Inventory    *inventory.Inventory
 	Log          *log2.Log
 	Tele         tele_api.Teler
-	LockCh		 chan bool
+	LockCh		 chan struct{}
 	// TODO UI           types.UIer
 
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
@@ -298,7 +298,7 @@ func (g *Global) RegisterCommands(ctx context.Context) {
 	g.Engine.RegisterNewFunc(
 		"vmc.lock!",
 		func(ctx context.Context) error {
-			go func() {g.LockCh <- true}()
+			g.LockCh <- struct{}{}
 			return nil
 		},
 	)

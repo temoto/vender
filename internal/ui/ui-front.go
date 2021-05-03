@@ -211,6 +211,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			return StateFrontTimeout
 
 		case types.EventLock, types.EventStop:
+			fmt.Printf("\n\033[41m eventlock \033[0m\n\n")
 			return StateFrontEnd
 
 		default:

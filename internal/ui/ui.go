@@ -59,7 +59,7 @@ func (self *UI) Init(ctx context.Context) error {
 	self.frontResetTimeout = helpers.IntSecondDefault(self.g.Config.UI.Front.ResetTimeoutSec, 0)
 
 	// self.lock.ch = make(chan struct{}, 1)
-	self.g.LockCh = make(chan bool, 1)
+	self.g.LockCh = make(chan struct{}, 1)
 
 	self.Service.Init(ctx)
 	self.g.XXX_uier.Store(types.UIer(self)) // FIXME import cycle traded for pointer cycle
