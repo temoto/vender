@@ -17,6 +17,7 @@ const (
 	EventLock
 	EventService
 	EventStop
+	EventFrontLock
 )
 
 type Event struct {

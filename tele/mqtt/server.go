@@ -1,4 +1,4 @@
-package mqtt
+package mqtt_dpi256
 
 // Vender telemetry specific MQTT server.
 // Part of public API for external usage.

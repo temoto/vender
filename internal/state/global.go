@@ -31,7 +31,7 @@ type Global struct {
 	Inventory    *inventory.Inventory
 	Log          *log2.Log
 	Tele         tele_api.Teler
-	LockCh		 chan struct{}
+	LockCh       chan struct{}
 	// TODO UI           types.UIer
 
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
@@ -68,7 +68,6 @@ func CheckClientWorking() error {
 	}
 	return nil
 }
-
 
 func (g *Global) VmcReload(ctx context.Context) {
 	if global.GBL.Client.Working {

@@ -210,8 +210,11 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			}
 			return StateFrontTimeout
 
-		case types.EventLock, types.EventStop:
+		case types.EventFrontLock:
 			fmt.Printf("\n\033[41m eventlock \033[0m\n\n")
+			return StateFrontLock
+
+		case types.EventLock, types.EventStop:
 			return StateFrontEnd
 
 		default:
@@ -237,6 +240,7 @@ func (self *UI) onFrontTune(ctx context.Context) State {
 }
 
 func (self *UI) onFrontTuneInput(e types.InputEvent) State {
+	fmt.Printf("\n\033[41m fronttunekey (%v) \033[0m\n\n", e.Key)
 	switch e.Key {
 	case input.EvendKeyCreamLess:
 		if self.FrontResult.Cream > 0 {
@@ -267,6 +271,7 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 			// TODO notify "impossible input" (sound?)
 		}
 	default:
+		fmt.Printf("\n\033[41m как он может сработать? \033[0m\n\n")
 		return StateFrontSelect
 	}
 	var t1, t2 []byte
@@ -280,6 +285,9 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", self.g.Config.UI.Front.MsgSugar, self.FrontResult.Sugar))
 		t2 = formatScale(self.FrontResult.Sugar, 0, MaxSugar, ScaleAlpha)
 		next = StateFrontTune
+	default:
+		fmt.Printf("\n\033[41m как он может сработать2? \033[0m\n\n")
+		return StateFrontSelect
 	}
 	t2 = append(append(append(make([]byte, 0, text_display.MaxWidth), '-', ' '), t2...), ' ', '+')
 	self.display.SetLinesBytes(
@@ -358,6 +366,25 @@ func (self *UI) onFrontTimeout(ctx context.Context) State {
 	self.g.Log.Debugf("ui state=%s result=%#v", self.State().String(), self.FrontResult)
 	// moneysys := money.GetGlobal(ctx)
 	// moneysys.save
+	return StateFrontEnd
+}
+
+func (self *UI) onFrontLock() State {
+	self.g.Hardware.Input.Enable(false)
+	self.display.SetLines(self.g.Config.UI.Front.MsgStateLocked, "")
+	timeout := self.frontResetTimeout
+	e := self.wait(timeout)
+	switch e.Kind {
+	case types.EventService:
+		return StateServiceBegin
+	case types.EventTime:
+		if self.State() == StateFrontTune { // XXX onFrontTune
+			return StateFrontSelect // "return to previous mode"
+		}
+		return StateFrontTimeout
+	case types.EventFrontLock:
+		return StateFrontSelect
+	}
 	return StateFrontEnd
 }
 

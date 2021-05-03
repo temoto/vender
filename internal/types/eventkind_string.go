@@ -15,11 +15,12 @@ func _() {
 	_ = x[EventLock-4]
 	_ = x[EventService-5]
 	_ = x[EventStop-6]
+	_ = x[EventFrontLock-7]
 }
 
-const _EventKind_name = "InvalidInputMoneyCreditTimeLockServiceStop"
+const _EventKind_name = "InvalidInputMoneyCreditTimeLockServiceStopLock"
 
-var _EventKind_index = [...]uint8{0, 7, 12, 23, 27, 31, 38, 42}
+var _EventKind_index = [...]uint8{0, 7, 12, 23, 27, 31, 38, 42, 46}
 
 func (i EventKind) String() string {
 	if i >= EventKind(len(_EventKind_index)-1) {

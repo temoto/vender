@@ -46,6 +46,8 @@ const (
 	StateServiceEnd // +askReport=ServiceReport ->FrontBegin
 
 	StateStop
+
+	StateFrontLock
 )
 
 func (self *UI) State() State               { return State(atomic.LoadUint32((*uint32)(&self.state))) }
@@ -153,7 +155,6 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	case StateFrontBegin:
 		self.inputBuf = self.inputBuf[:0]
 		self.broken = false
-		self.g.Log.Infof("state=StateFrontBegin")
 		return self.onFrontBegin(ctx)
 
 	case StateFrontSelect:
@@ -163,7 +164,6 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return self.onFrontTune(ctx)
 
 	case StateFrontAccept:
-		self.g.Log.Infof("state=StateFrontAccept")
 		return self.onFrontAccept(ctx)
 
 	case StateFrontTimeout:
@@ -172,6 +172,10 @@ func (self *UI) enter(ctx context.Context, s State) State {
 	case StateFrontEnd:
 		// self.onFrontEnd(ctx)
 		return StateFrontBegin
+
+	case StateFrontLock:
+		fmt.Printf("\n\033[41m statefrontlock \033[0m\n\n")
+		return self.onFrontLock()
 
 	case StateServiceBegin:
 		return self.onServiceBegin(ctx)

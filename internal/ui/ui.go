@@ -2,8 +2,7 @@ package ui
 
 import (
 	"context"
-	"time"
-"fmt"
+	"fmt"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
@@ -13,6 +12,7 @@ import (
 	"github.com/temoto/vender/internal/types"
 	ui_config "github.com/temoto/vender/internal/ui/config"
 	tele_api "github.com/temoto/vender/tele"
+	"time"
 )
 
 type UI struct { //nolint:maligned
@@ -20,16 +20,16 @@ type UI struct { //nolint:maligned
 	FrontResult   UIMenuResult
 	Service       uiService
 
-	config       *ui_config.Config
-	g            *state.Global
-	state        State
-	broken       bool
-	menu         Menu
-	display      *text_display.TextDisplay // FIXME
-	inputBuf     []byte
-	eventch      chan types.Event
-	inputch      chan types.InputEvent
-	lock         uiLock
+	config   *ui_config.Config
+	g        *state.Global
+	state    State
+	broken   bool
+	menu     Menu
+	display  *text_display.TextDisplay // FIXME
+	inputBuf []byte
+	eventch  chan types.Event
+	inputch  chan types.InputEvent
+	lock     uiLock
 
 	frontResetTimeout time.Duration
 
@@ -77,7 +77,7 @@ func (self *UI) ScheduleSync(ctx context.Context, priority tele_api.Priority, fu
 func (self *UI) wait(timeout time.Duration) types.Event {
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
-// again:
+again:
 	select {
 	case e := <-self.eventch:
 		if e.Kind != types.EventInvalid {
@@ -92,13 +92,15 @@ func (self *UI) wait(timeout time.Duration) types.Event {
 		}
 		return types.Event{Kind: types.EventInput, Input: e}
 
-	// case <-self.lock.ch:
 	case <-self.g.LockCh:
-		fmt.Printf("\n\033[41m uilockkkk \033[0m\n\n")
+		fmt.Printf("\n\033[41m uilockChevent \033[0m\n\n")
+		return types.Event{Kind: types.EventFrontLock}
+
+	case <-self.lock.ch:
 		// chan buffer may produce false positive
-		// if !self.lock.locked() {
-		// 	goto again
-		// }
+		if !self.lock.locked() {
+			goto again
+		}
 		return types.Event{Kind: types.EventLock}
 
 	case <-tmr.C:
