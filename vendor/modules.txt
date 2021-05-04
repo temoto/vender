@@ -1,29 +1,26 @@
 # github.com/256dpi/gomqtt v0.14.1
-github.com/256dpi/gomqtt/broker
-github.com/256dpi/gomqtt/client
-github.com/256dpi/gomqtt/client/future
-github.com/256dpi/gomqtt/packet
-github.com/256dpi/gomqtt/session
-github.com/256dpi/gomqtt/topic
-github.com/256dpi/gomqtt/transport
-# github.com/256dpi/mercury v0.2.0
-github.com/256dpi/mercury
+## explicit
 # github.com/c-bata/go-prompt v0.2.3
+## explicit
 github.com/c-bata/go-prompt
 # github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
+## explicit
 github.com/coreos/go-systemd/daemon
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/eclipse/paho.mqtt.golang v1.2.0
+# github.com/eclipse/paho.mqtt.golang v1.3.2
+## explicit
 github.com/eclipse/paho.mqtt.golang
 github.com/eclipse/paho.mqtt.golang/packets
-# github.com/golang/protobuf v1.3.1
+# github.com/golang/protobuf v1.5.2
+## explicit
 github.com/golang/protobuf/proto
 # github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
 github.com/golang/snappy
-# github.com/gorilla/websocket v1.4.1
+# github.com/gorilla/websocket v1.4.2
 github.com/gorilla/websocket
 # github.com/hashicorp/hcl v1.0.0
+## explicit
 github.com/hashicorp/hcl
 github.com/hashicorp/hcl/hcl/ast
 github.com/hashicorp/hcl/hcl/parser
@@ -33,32 +30,40 @@ github.com/hashicorp/hcl/hcl/token
 github.com/hashicorp/hcl/json/parser
 github.com/hashicorp/hcl/json/scanner
 github.com/hashicorp/hcl/json/token
-# github.com/jpillora/backoff v0.0.0-20170918002102-8eab2debe79d
-github.com/jpillora/backoff
 # github.com/juju/errors v0.0.0-20190930114154-d42613fe1ab9
+## explicit
 github.com/juju/errors
 # github.com/mattn/go-colorable v0.1.1
+## explicit
 github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.7
+## explicit
 github.com/mattn/go-isatty
 # github.com/mattn/go-runewidth v0.0.4
+## explicit
 github.com/mattn/go-runewidth
 # github.com/mattn/go-tty v0.0.0-20181127064339-e4f871175a2f
+## explicit
 github.com/mattn/go-tty
 # github.com/paulrosania/go-charset v0.0.0-20151028000031-621bb39fcc83
+## explicit
 github.com/paulrosania/go-charset/charset
 github.com/paulrosania/go-charset/data
 # github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942
+## explicit
 github.com/pkg/term/termios
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
 # github.com/skip2/go-qrcode v0.0.0-20191027152451-9434209cb086
+## explicit
 github.com/skip2/go-qrcode
 github.com/skip2/go-qrcode/bitset
 github.com/skip2/go-qrcode/reedsolomon
 # github.com/stretchr/objx v0.2.0
+## explicit
 github.com/stretchr/objx
 # github.com/stretchr/testify v1.5.1
+## explicit
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/mock
 github.com/stretchr/testify/require
@@ -76,33 +81,69 @@ github.com/syndtr/goleveldb/leveldb/storage
 github.com/syndtr/goleveldb/leveldb/table
 github.com/syndtr/goleveldb/leveldb/util
 # github.com/temoto/alive/v2 v2.0.0
+## explicit
 github.com/temoto/alive/v2
 # github.com/temoto/atomic_clock v1.0.1
+## explicit
 github.com/temoto/atomic_clock
 # github.com/temoto/extremofile v0.5.0
+## explicit
 github.com/temoto/extremofile
 # github.com/temoto/gpio-cdev-go v1.1.0
+## explicit
 github.com/temoto/gpio-cdev-go
 github.com/temoto/gpio-cdev-go/mock
 # github.com/temoto/inputevent-go v1.0.0
+## explicit
 github.com/temoto/inputevent-go
 # github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
+## explicit
 github.com/temoto/iodin/client/go-iodin
 # github.com/temoto/spq v0.10.0
+## explicit
 github.com/temoto/spq
-# golang.org/x/net v0.0.0-20190620200207-3b0461eec859
-golang.org/x/net/context
+# golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+## explicit
+# golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4
+## explicit
 golang.org/x/net/internal/socks
 golang.org/x/net/proxy
-golang.org/x/net/websocket
-# golang.org/x/sys v0.0.0-20200929083018-4d22bbb62b3c
+# golang.org/x/sys v0.0.0-20210315160823-c6e025ad8005
+## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
-# gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
-gopkg.in/tomb.v2
+# google.golang.org/protobuf v1.26.0
+google.golang.org/protobuf/encoding/prototext
+google.golang.org/protobuf/encoding/protowire
+google.golang.org/protobuf/internal/descfmt
+google.golang.org/protobuf/internal/descopts
+google.golang.org/protobuf/internal/detrand
+google.golang.org/protobuf/internal/encoding/defval
+google.golang.org/protobuf/internal/encoding/messageset
+google.golang.org/protobuf/internal/encoding/tag
+google.golang.org/protobuf/internal/encoding/text
+google.golang.org/protobuf/internal/errors
+google.golang.org/protobuf/internal/filedesc
+google.golang.org/protobuf/internal/filetype
+google.golang.org/protobuf/internal/flags
+google.golang.org/protobuf/internal/genid
+google.golang.org/protobuf/internal/impl
+google.golang.org/protobuf/internal/order
+google.golang.org/protobuf/internal/pragma
+google.golang.org/protobuf/internal/set
+google.golang.org/protobuf/internal/strs
+google.golang.org/protobuf/internal/version
+google.golang.org/protobuf/proto
+google.golang.org/protobuf/reflect/protodesc
+google.golang.org/protobuf/reflect/protoreflect
+google.golang.org/protobuf/reflect/protoregistry
+google.golang.org/protobuf/runtime/protoiface
+google.golang.org/protobuf/runtime/protoimpl
+google.golang.org/protobuf/types/descriptorpb
 # gopkg.in/yaml.v2 v2.2.8
 gopkg.in/yaml.v2
 # periph.io/x/periph v3.6.4+incompatible
+## explicit
 periph.io/x/periph
 periph.io/x/periph/conn
 periph.io/x/periph/conn/gpio
