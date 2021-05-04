@@ -1,0 +1,24 @@
+cache:
+  go: true
+  directories:
+    - $HOME/.cache
+    - $HOME/gopath/pkg/mod
+language: go
+go:
+- 1.13
+- 1.x
+env:
+  - GO111MODULE=on
+
+matrix:
+  include:
+  - go: 1.x
+    env: task=clean GO111MODULE=on
+    install:
+      - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b $GOPATH/bin v1.19.1
+
+install: true
+script: ./script/${task:-test}
+before_cache: rm -f $HOME/.cache/go-build/log.txt
+
+after_success: if [[ -z "$task" ]] ; then bash <(curl -s https://codecov.io/bash) ; fi
