@@ -35,6 +35,7 @@ type tele struct { //nolint:maligned
 	vmId          int32
 	stateInterval time.Duration
 	stat          tele_api.Stat
+	currentState  tele_api.State
 }
 
 func New() tele_api.Teler {

@@ -2,7 +2,6 @@ package tele
 
 import (
 	"context"
-
 	"github.com/juju/errors"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
@@ -69,7 +68,10 @@ func (self *tele) Report(ctx context.Context, serviceTag bool) error {
 }
 
 func (self *tele) State(s tele_api.State) {
-	self.transport.SendState([]byte{byte(s)})
+	if self.currentState != s {
+		self.currentState = s
+		self.transport.SendState([]byte{byte(s)})
+	}
 }
 
 func (self *tele) StatModify(fun func(s *tele_api.Stat)) {

@@ -7,7 +7,7 @@ require (
 	github.com/c-bata/go-prompt v0.2.3
 	github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
 	github.com/eclipse/paho.mqtt.golang v1.3.2
-	github.com/golang/protobuf v1.3.1
+	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/hcl v1.0.0
 	github.com/juju/errors v0.0.0-20190930114154-d42613fe1ab9
 	github.com/mattn/go-colorable v0.1.1 // indirect

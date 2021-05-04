@@ -27,6 +27,7 @@ enum State {
   Problem = 4;
   Service = 5;
   Lock = 6;
+  Client = 7;
 }
 
 // Optimising for rare, bulk delivery on cell network.
@@ -79,6 +80,7 @@ enum PaymentMethod {
   Cash = 1;
   Cashless = 2;
   Gift = 3;
+  Balance = 4;
 }
 
 message Command {
