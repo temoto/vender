@@ -83,7 +83,7 @@ func (self *DeviceCup) NewLight(on bool) engine.Doer {
 	// return { self.Generic.NewAction(tag, arg)}
 	return engine.NewSeq(tag).
 		Append(self.Generic.NewAction(tag, arg)).
-		Append(engine.Func0{F: func() error { global.GBL.Client.Light = on; global.Log.Infof("light = %v", on); return nil }})
+		Append(engine.Func0{F: func() error { global.SetLight(on); return nil }})
 
 }
 

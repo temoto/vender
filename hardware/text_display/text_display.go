@@ -137,10 +137,14 @@ func (self *TextDisplay) SetLines(line1, line2 string) {
 	self.SetLinesBytes(
 		self.Translate(line1),
 		self.Translate(line2))
-	global.GBL.Display.L1 = line1
-	global.GBL.Display.L2 = line2
-	global.Log.Infof("Display.L1=%s", line1)
-	global.Log.Infof("Display.L2=%s", line2)
+	if global.GBL.Display.L1 != line1 {
+		global.GBL.Display.L1 = line1
+		global.Log.Infof("Display.L1=%s", line1)
+	}
+	if global.GBL.Display.L2 != line2 {
+		global.GBL.Display.L2 = line2
+		global.Log.Infof("Display.L2=%s", line2)
+	}
 }
 
 func (self *TextDisplay) Tick() {

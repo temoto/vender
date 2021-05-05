@@ -220,7 +220,7 @@ func (self *Engine) ValidateExec(ctx context.Context, d Doer) error {
 }
 
 func (self *Engine) ExecList(ctx context.Context, tag string, list []string) []error {
-	self.Log.Debugf("engine.ExecList tag=%s list=%v", tag, list)
+	// self.Log.Debugf("engine.ExecList tag=%s list=%v", tag, list)
 
 	errs := make([]error, 0, len(list))
 	for i, text := range list {

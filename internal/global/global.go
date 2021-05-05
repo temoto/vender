@@ -53,6 +53,14 @@ func GG() *globalStruct {
 	return GBL
 }
 
+func SetLight(v bool) {
+	if GBL.Client.Light == v {
+		return
+	}
+	GBL.Client.Light = v
+	Log.Infof("light = %v", v)
+}
+
 func ShowEnvs() {
 	Log.Infof("GBL=%+v", GBL)
 }

@@ -1,7 +1,8 @@
 package ui_config
 
 type Config struct { //nolint:maligned
-	Front struct {
+	LogDebug bool `hcl:"log_debug"`
+	Front    struct {
 		MsgError       string `hcl:"msg_error"`
 		MsgMenuError   string `hcl:"msg_menu_error"`
 		MsgStateBroken string `hcl:"msg_broken"`

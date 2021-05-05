@@ -28,9 +28,9 @@ type UIMenuResult struct {
 
 func (self *UI) onFrontBegin(ctx context.Context) State {
 	ms := money.GetGlobal(ctx)
-	credit := ms.Credit(ctx)/100
-	if credit !=0 {
-		self.g.Error(errors.Errorf("money timeout lost (%v)",credit))
+	credit := ms.Credit(ctx) / 100
+	if credit != 0 {
+		self.g.Error(errors.Errorf("money timeout lost (%v)", credit))
 	}
 	ms.ResetMoney()
 	// if available != 0 {}
@@ -53,7 +53,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
 			line1 := fmt.Sprintf(self.g.Config.UI.Front.MsgWaterTemp, errtemp.Current)
 			if global.GBL.Client.Light {
-				global.GBL.Client.Light = false
+				global.SetLight(false)
 				_ = self.g.Engine.ExecList(ctx, "water-temp", []string{"evend.cup.light_off"})
 			}
 			if global.GBL.Display.L1 != line1 {
@@ -245,9 +245,9 @@ func (self *UI) onFrontTune(ctx context.Context) State {
 }
 
 func (self *UI) onFrontTuneInput(e types.InputEvent) State {
-	fmt.Printf("\n\033[41m fronttunekey (%v) \033[0m\n\n", e.Key)
 	switch e.Key {
 	case input.EvendKeyCreamLess:
+		global.Log.Infof("key.cream-")
 		if self.FrontResult.Cream > 0 {
 			self.FrontResult.Cream--
 			//lint:ignore SA9003 empty branch
@@ -255,6 +255,7 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 			// TODO notify "impossible input" (sound?)
 		}
 	case input.EvendKeyCreamMore:
+		global.Log.Infof("key.cream+")
 		if self.FrontResult.Cream < MaxCream {
 			self.FrontResult.Cream++
 			//lint:ignore SA9003 empty branch
@@ -262,6 +263,7 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 			// TODO notify "impossible input" (sound?)
 		}
 	case input.EvendKeySugarLess:
+		global.Log.Infof("key.sugar-")
 		if self.FrontResult.Sugar > 0 {
 			self.FrontResult.Sugar--
 			//lint:ignore SA9003 empty branch
@@ -269,6 +271,7 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 			// TODO notify "impossible input" (sound?)
 		}
 	case input.EvendKeySugarMore:
+		global.Log.Infof("key.sugar+")
 		if self.FrontResult.Sugar < MaxSugar {
 			self.FrontResult.Sugar++
 			//lint:ignore SA9003 empty branch
@@ -368,7 +371,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 }
 
 func (self *UI) onFrontTimeout(ctx context.Context) State {
-	self.g.Log.Debugf("ui state=%s result=%#v", self.State().String(), self.FrontResult)
+	// self.g.Log.Debugf("ui state=%s result=%#v", self.State().String(), self.FrontResult)
 	// moneysys := money.GetGlobal(ctx)
 	// moneysys.save
 	return StateFrontEnd

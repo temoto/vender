@@ -49,8 +49,10 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 		coinmax = 0
 		self.Log.Debugf("%s bill input disable", tag)
 	}
-	self.Log.Debugf("%s maxConfig=%s maxPrice=%s available=%s -> limit=%s",
-		tag, maxConfig.FormatCtx(ctx), maxPrice.FormatCtx(ctx), available.FormatCtx(ctx), limit.FormatCtx(ctx))
+	if self.Credit(ctx) != 0 {
+		self.Log.Debugf("%s maxConfig=%s maxPrice=%s available=%s -> limit=%s",
+			tag, maxConfig.FormatCtx(ctx), maxPrice.FormatCtx(ctx), available.FormatCtx(ctx), limit.FormatCtx(ctx))
+	}
 
 	g.Engine.Exec(ctx, self.bill.AcceptMax(billmax))
 	g.Engine.Exec(ctx, self.coin.AcceptMax(coinmax))

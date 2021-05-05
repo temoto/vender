@@ -86,7 +86,7 @@ func (self *UI) Loop(ctx context.Context) {
 }
 
 func (self *UI) enter(ctx context.Context, s State) State {
-	self.g.Log.Debugf("ui enter %s", s.String())
+	// self.g.Log.Debugf("ui enter %s", s.String())
 	switch s {
 	case StateBoot:
 		self.g.Tele.State(tele_api.State_Boot)
@@ -208,7 +208,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 }
 
 func (self *UI) exit(ctx context.Context, current, next State) {
-	self.g.Log.Debugf("ui exit %s -> %s", current.String(), next.String())
+	// self.g.Log.Debugf("ui exit %s -> %s", current.String(), next.String())
 
 	if next != StateBroken {
 		self.broken = false
