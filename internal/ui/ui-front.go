@@ -28,7 +28,12 @@ type UIMenuResult struct {
 
 func (self *UI) onFrontBegin(ctx context.Context) State {
 	ms := money.GetGlobal(ctx)
+	credit := ms.Credit(ctx)/100
+	if credit !=0 {
+		self.g.Error(errors.Errorf("money timeout lost (%v)",credit))
+	}
 	ms.ResetMoney()
+	// if available != 0 {}
 	self.FrontResult = UIMenuResult{
 		// TODO read config
 		Cream: DefaultCream,
@@ -198,7 +203,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			}
 
 		case types.EventMoneyCredit:
-			self.g.Log.Debugf("ui-front money event=%s", e.String())
+			// self.g.Log.Debugf("ui-front money event=%s", e.String())
 			go moneysys.AcceptCredit(ctx, self.FrontMaxPrice, alive.StopChan(), self.eventch)
 
 		case types.EventService:

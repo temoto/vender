@@ -173,6 +173,7 @@ func (g *Global) Error(err error, args ...interface{}) {
 			err = errors.Annotatef(err, msg, args...)
 		}
 		g.Tele.Error(err)
+		global.Log.Error(err)
 	}
 }
 

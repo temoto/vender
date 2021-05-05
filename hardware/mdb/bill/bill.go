@@ -500,7 +500,7 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 
 			self.setEscrowBill(dn)
 			result.Status = money.StatusEscrow
-			result.DataCount = 1
+			// result.DataCount = 1
 		case StatusRoutingBillReturned:
 			if self.EscrowAmount() == 0 {
 				// most likely code error, but also may be rare case of boot up
