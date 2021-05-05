@@ -339,7 +339,7 @@ func (self *UI) onServiceReboot(ctx context.Context) State {
 
 func (self *UI) onServiceNetwork() State {
 
-	self.display.SetLines("for restart wifi", "press 1") // FIXME extract message string
+	self.display.SetLines("for select net 0", "press 1") // FIXME extract message string
 
 	next, e := self.serviceWaitInput()
 	if next != StateDefault {
@@ -350,12 +350,23 @@ func (self *UI) onServiceNetwork() State {
 	case e.Key == '1':
 		self.display.SetLines("wifi restart", "in progress") // FIXME extract message string
 
-		lsCmd := exec.Command("bash", "-c", "ifdown wlan0 && ifup wlan0")
+		// lsCmd := exec.Command("bash", "-c", "wpa_cli select_network 0 && wpa_cli enable_network 1")
+		lsCmd := exec.Command("bash", "-c", "wpa_cli select_network 0")
 		bashOut, err := lsCmd.Output()
 		self.g.Log.Infof("restart wlan (%v)", bashOut)
 		if err != nil {
-			panic(err)
+			self.g.Log.Infof("%v", err)
+			// panic(err)
 		}
+
+		lsCmd = exec.Command("bash", "-c", "wpa_cli enable_network 1")
+		bashOut, err = lsCmd.Output()
+		self.g.Log.Infof("restart wlan (%v)", bashOut)
+		if err != nil {
+			self.g.Log.Infof("%v", err)
+			// panic(err)
+		}
+
 		return StateServiceEnd
 	}
 	return StateServiceMenu
