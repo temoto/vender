@@ -324,7 +324,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	}
 
 	self.g.Log.Debugf("ui-front selected=%s begin", selected.String())
-	executeScript(ctx, "BeginProcess", selected.String())
+	// executeScript(ctx, "BeginProcess", selected.String())
 	if err := moneysys.WithdrawPrepare(ctx, selected.Price); err != nil {
 		self.g.Log.Errorf("ui-front CRITICAL error while return change")
 	}
@@ -353,7 +353,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	}
 	self.g.Log.Debugf("ui-front selected=%s end err=%v", selected.String(), err)
 	if err == nil { // success path
-		executeScript(ctx, "EndProcess", selected.String())
+		// executeScript(ctx, "EndProcess", selected.String())
 		self.g.Tele.Transaction(teletx)
 		return StateFrontEnd
 	}

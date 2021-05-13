@@ -19,6 +19,8 @@ const DefaultCupEnsureTimeout = 70 * time.Second
 
 type DeviceCup struct {
 	Generic
+	dispenseTimeout   time.Duration
+	assertBusyDelayMs time.Duration
 }
 
 func (self *DeviceCup) init(ctx context.Context) error {
@@ -30,6 +32,8 @@ func (self *DeviceCup) init(ctx context.Context) error {
 	g.Engine.Register(self.name+".light_on", self.NewLight(true))
 	g.Engine.Register(self.name+".light_off", self.NewLight(false))
 	g.Engine.Register(self.name+".ensure", self.NewEnsure())
+	self.dispenseTimeout = helpers.IntSecondDefault(g.Config.Hardware.Evend.Cup.DispenseTimeoutSec, DefaultCupDispenseTimeout)
+	self.assertBusyDelayMs = helpers.IntMillisecondDefault(g.Config.Hardware.Evend.Cup.AssertBusyDelayMs, DefaultCupAssertBusyDelay)
 
 	err := self.Generic.FIXME_initIO(ctx)
 	return errors.Annotate(err, self.name+".init")
@@ -44,11 +48,11 @@ func (self *DeviceCup) NewDispenseProper() engine.Doer {
 func (self *DeviceCup) NewDispense() engine.Doer {
 	tag := self.name + ".dispense"
 	return engine.NewSeq(tag).
+		Append(engine.Func0{F: func() error { global.Log.Info("cup dispence"); return nil }}).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
 		Append(engine.Func{Name: tag + "/assert-busy", F: func(ctx context.Context) error {
-			cupConfig := &state.GetGlobal(ctx).Config.Hardware.Evend.Cup
-			time.Sleep(helpers.IntMillisecondDefault(cupConfig.AssertBusyDelayMs, DefaultCupAssertBusyDelay))
+			time.Sleep(self.assertBusyDelayMs)
 			response := mdb.Packet{}
 			err := self.dev.TxKnown(self.dev.PacketPoll, &response)
 			if err != nil {
@@ -67,9 +71,7 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 		Append(engine.Func{
 			F: func(ctx context.Context) error {
 				g := state.GetGlobal(ctx)
-				cupConfig := &g.Config.Hardware.Evend.Cup
-				dispenseTimeout := helpers.IntSecondDefault(cupConfig.DispenseTimeoutSec, DefaultCupDispenseTimeout)
-				return g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, dispenseTimeout))
+				return g.Engine.Exec(ctx, self.Generic.NewWaitDone(tag, self.dispenseTimeout))
 			},
 		})
 }
