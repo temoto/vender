@@ -58,6 +58,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 			}
 			if global.GBL.Display.L1 != line1 {
 				self.display.SetLines(line1, self.g.Config.UI.Front.MsgWait)
+				self.g.Tele.State(tele_api.State_TempProblem)
 			}
 			if e := self.wait(5 * time.Second); e.Kind == types.EventService {
 				return StateServiceBegin
@@ -80,7 +81,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		self.g.Error(err)
 		return StateBroken
 	}
-	// self.g.Tele.State(tele_api.State_Nominal)
+	self.g.Tele.State(tele_api.State_Nominal)
 	return StateFrontSelect
 }
 

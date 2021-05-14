@@ -59,7 +59,7 @@ func (g *Global) ClientEnd() {
 		gg.Working = false
 		gg.WorkTime = time.Now()
 		global.Log.Infof("--- client activity end ---")
-		g.Tele.State(tele_api.State_Nominal)
+		// g.Tele.State(tele_api.State_Nominal)
 	}
 }
 
