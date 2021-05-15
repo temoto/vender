@@ -38,7 +38,7 @@ func (self *tele) Error(e error) {
 	self.log.Debugf("tele.Error: " + errors.ErrorStack(e))
 	tm := &tele_api.Telemetry{
 		Error:        &tele_api.Telemetry_Error{Message: e.Error()},
-		BuildVersion: self.config.BuildVersion,
+		// BuildVersion: self.config.BuildVersion,
 	}
 	if err := self.qpushTelemetry(tm); err != nil {
 		self.log.Errorf("CRITICAL qpushTelemetry telemetry_error=%#v err=%v", tm.Error, err)
@@ -58,7 +58,7 @@ func (self *tele) Report(ctx context.Context, serviceTag bool) error {
 		MoneyCashbox: moneysys.TeleCashbox(ctx),
 		MoneyChange:  moneysys.TeleChange(ctx),
 		AtService:    serviceTag,
-		BuildVersion: g.BuildVersion,
+		// BuildVersion: g.BuildVersion,
 	}
 	err := self.qpushTelemetry(tm)
 	if err != nil {
