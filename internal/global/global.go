@@ -4,6 +4,7 @@ import (
 	"github.com/temoto/vender/log2"
 	"sync"
 	"time"
+"fmt"
 )
 
 var Log = *log2.NewStderr(log2.LDebug)
@@ -61,6 +62,8 @@ func SetLight(v bool) {
 	Log.Infof("light = %v", v)
 }
 
-func ShowEnvs() {
-	Log.Infof("GBL=%+v", GBL)
+func ShowEnvs() string {
+	s := fmt.Sprintf("GBL=%+v", GBL)
+	Log.Info(s)
+	return s
 }

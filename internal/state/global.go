@@ -331,8 +331,9 @@ func (g *Global) RegisterCommands(ctx context.Context) {
 	g.Engine.RegisterNewFunc(
 		"envs.print",
 		func(ctx context.Context) error {
-			global.ShowEnvs()
-			return nil
+			err := errors.Errorf(global.ShowEnvs())
+			// AlexM надо бы сделать что бы слала как сообщение а не ошибку.
+			return err
 		},
 	)
 
