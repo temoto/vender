@@ -266,7 +266,6 @@ func (self *BillValidator) CommandSetup(ctx context.Context) error {
 		self.nominals[i] = currency.Nominal(sf) * scalingFinal
 	}
 	self.Log.Debugf("Bill Type calc. nominals:  %3v", self.nominals)
-
 	self.Log.Debugf("Bill Validator Feature Level: %d", self.featureLevel)
 	self.Log.Debugf("Country / Currency Code: %x", currencyCode)
 	self.Log.Debugf("Bill Scaling Factor: %d Decimal Places: %d final scaling: %d", scalingFactor, decimalPlaces, scalingFinal)
@@ -290,10 +289,10 @@ func (self *BillValidator) CommandExpansionIdentification() error {
 	if len(bs) < expectLength {
 		return fmt.Errorf("%s response=%x length=%d expected=%d", tag, bs, len(bs), expectLength)
 	}
-	self.Log.Infof("%s Manufacturer Code: %x", tag, bs[0:0+3])
-	self.Log.Infof("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
-	self.Log.Infof("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
-	self.Log.Infof("%s Software Version: %x", tag, bs[27:27+2])
+	self.Log.Infof("%s Manufacturer Code: '%s'", tag, bs[0:0+3])
+	self.Log.Debugf("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
+	self.Log.Debugf("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
+	self.Log.Debugf("%s Software Version: %x", tag, bs[27:27+2])
 	return nil
 }
 
@@ -324,7 +323,7 @@ func (self *BillValidator) CommandExpansionIdentificationOptions() error {
 		return fmt.Errorf("%s response=%s expected %d bytes", tag, response.Format(), expectLength)
 	}
 	self.supportedFeatures = Features(self.Device.ByteOrder.Uint32(bs[29 : 29+4]))
-	self.Log.Infof("%s Manufacturer Code: %x", tag, bs[0:0+3])
+	self.Log.Infof("%s Manufacturer Code: '%s'", tag, bs[0:0+3])
 	self.Log.Infof("%s Serial Number: '%s'", tag, string(bs[3:3+12]))
 	self.Log.Infof("%s Model #/Tuning Revision: '%s'", tag, string(bs[15:15+12]))
 	self.Log.Infof("%s Software Version: %x", tag, bs[27:27+2])
