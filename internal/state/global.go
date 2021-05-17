@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -71,18 +73,20 @@ func CheckClientWorking() error {
 	return nil
 }
 
-func (g *Global) VmcReload(ctx context.Context) {
+func (g *Global) VmcStop(ctx context.Context) {
+	global.Log.Infof("--- vmc stop ---")
 	if global.GBL.Client.Working {
-		global.Log.Infof("reload fail. processing client")
+		global.Log.Infof("stop fail. processing client")
 		return
 	}
 	td := g.MustTextDisplay()
-	td.SetLines("reboot", "in progress") // FIXME extract message string
+	td.SetLines("ABTOMAT", "HE ABTOMAT! :(") // FIXME extract message string
 	g.Tele.State(tele_api.State_Boot)
 	_ = g.Engine.ExecList(ctx, "reboot", []string{"evend.cup.light_off evend.valve.set_temp_hot(0)"})
 
 	go func() {
 		time.Sleep(2 * time.Second)
+		g.Tele.Close()
 		g.Stop()
 	}()
 }
@@ -143,6 +147,17 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	wg := sync.WaitGroup{}
 	wg.Add(initTasks)
 	errch := make(chan error, initTasks)
+
+	// working term signal
+    sigs := make(chan os.Signal, 1)
+    // done := make(chan bool, 1)
+    signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+    go func() {
+        _ = <-sigs
+        g.VmcStop(ctx)
+    }()
+
+
 
 	go helpers.WrapErrChan(&wg, errch, g.initDisplay)
 	go helpers.WrapErrChan(&wg, errch, g.initInput)
@@ -306,9 +321,9 @@ func (g *Global) RegisterCommands(ctx context.Context) {
 	)
 
 	g.Engine.RegisterNewFunc(
-		"vmc.reload!",
+		"vmc.stop!",
 		func(ctx context.Context) error {
-			g.VmcReload(ctx)
+			g.VmcStop(ctx)
 			return nil
 		},
 	)

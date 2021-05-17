@@ -18,6 +18,7 @@ type Transporter interface {
 	SendState(payload []byte) bool
 	SendTelemetry(payload []byte) bool
 	SendCommandResponse(topicSuffix string, payload []byte) bool
+	CloseTele()
 }
 
 type CommandCallback func(context.Context, []byte) bool

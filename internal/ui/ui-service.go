@@ -331,7 +331,7 @@ func (self *UI) onServiceReboot(ctx context.Context) State {
 	switch {
 	case e.Key == '1':
 		self.display.SetLines("reboot", "in progress") // FIXME extract message string
-		self.g.VmcReload(ctx)
+		self.g.VmcStop(ctx)
 		return StateStop
 	}
 	return StateServiceMenu

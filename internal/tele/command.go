@@ -90,6 +90,7 @@ func (self *tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_
 func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgExec) error {
 	if arg.Scenario[:1] == "_" { // If the command contains the "_" prefix, then you ignore the client lock flag
 		arg.Scenario = arg.Scenario[1:]
+		global.GBL.Client.Working = false
 	} else if err := state.CheckClientWorking(); err != nil {
 		return err
 	}

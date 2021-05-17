@@ -95,6 +95,15 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 	return nil
 }
 
+func (self *transportMqtt) CloseTele() {
+	global.Log.Infof("mqtt unsubscribe")
+	if token := self.m.Unsubscribe(self.topicCommand); token.Wait() && token.Error() != nil {
+		global.Log.Infof("mqtt unsubscribe error")
+		// fmt.Println(token.Error())
+		// os.Exit(1)
+	}
+}
+
 func (self *transportMqtt) SendState(payload []byte) bool {
 	self.log.Infof("transport sendstate payload=%x", payload)
 	self.m.Publish(self.topicState, 1, false, payload)
