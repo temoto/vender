@@ -213,10 +213,11 @@ tele {
 
 ui {
   front {
-    msg_intro  = "TODO_EDIT showed after successful boot"
-    msg_broken = "TODO_EDIT showed after critical error"
-    msg_locked = "remotely locked"
-    msg_wait   = "please wait"
+    msg_intro     = "TODO_EDIT showed after successful boot"
+    msg_broken_l1 = "TODO_EDIT showed after critical error line2 (recomended <17 symbol)"
+    msg_broken_l1 = "TODO_EDIT showed after critical error line2 (recomended <17 symbol)" 
+    msg_locked    = "remotely locked"
+    msg_wait      = "please wait"
 
     msg_menu_code_empty          = "Code empty"
     msg_menu_code_invalid        = "Code invalid"

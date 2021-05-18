@@ -2,7 +2,6 @@ package tele
 
 import (
 	"context"
-	"time"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	"github.com/temoto/spq"
@@ -10,6 +9,7 @@ import (
 	"github.com/temoto/vender/log2"
 	tele_api "github.com/temoto/vender/tele"
 	tele_config "github.com/temoto/vender/tele/config"
+	"time"
 )
 
 const (

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"syscall"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/juju/errors"
@@ -80,8 +80,8 @@ func (g *Global) VmcStop(ctx context.Context) {
 		return
 	}
 	td := g.MustTextDisplay()
-	td.SetLines("ABTOMAT", "HE ABTOMAT! :(") // FIXME extract message string
-	g.Tele.State(tele_api.State_Boot)
+	td.SetLines(g.Config.UI.Front.MsgBrokenL1, g.Config.UI.Front.MsgBrokenL2)
+	g.Tele.State(tele_api.State_Shutdown)
 	_ = g.Engine.ExecList(ctx, "reboot", []string{"evend.cup.light_off evend.valve.set_temp_hot(0)"})
 
 	go func() {
@@ -149,15 +149,12 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	errch := make(chan error, initTasks)
 
 	// working term signal
-    sigs := make(chan os.Signal, 1)
-    // done := make(chan bool, 1)
-    signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-    go func() {
-        _ = <-sigs
-        g.VmcStop(ctx)
-    }()
-
-
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		_ = <-sigs
+		g.VmcStop(ctx)
+	}()
 
 	go helpers.WrapErrChan(&wg, errch, g.initDisplay)
 	go helpers.WrapErrChan(&wg, errch, g.initInput)

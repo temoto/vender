@@ -29,6 +29,7 @@ enum State {
   Lock = 6;
   Client = 7;
   TempProblem = 8;
+  Shutdown = 9;
 }
 
 // Optimising for rare, bulk delivery on cell network.

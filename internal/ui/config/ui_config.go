@@ -6,6 +6,8 @@ type Config struct { //nolint:maligned
 		MsgError       string `hcl:"msg_error"`
 		MsgMenuError   string `hcl:"msg_menu_error"`
 		MsgStateBroken string `hcl:"msg_broken"`
+		MsgBrokenL1    string `hcl:"msg_broken_l1"`
+		MsgBrokenL2    string `hcl:"msg_broken_l2"`
 		MsgStateLocked string `hcl:"msg_locked"`
 		MsgStateIntro  string `hcl:"msg_intro"`
 		MsgWait        string `hcl:"msg_wait"`

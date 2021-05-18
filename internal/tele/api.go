@@ -37,7 +37,7 @@ func (self *tele) Error(e error) {
 
 	self.log.Debugf("tele.Error: " + errors.ErrorStack(e))
 	tm := &tele_api.Telemetry{
-		Error:        &tele_api.Telemetry_Error{Message: e.Error()},
+		Error: &tele_api.Telemetry_Error{Message: e.Error()},
 		// BuildVersion: self.config.BuildVersion,
 	}
 	if err := self.qpushTelemetry(tm); err != nil {

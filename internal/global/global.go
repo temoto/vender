@@ -1,10 +1,10 @@
 package global
 
 import (
+	"fmt"
 	"github.com/temoto/vender/log2"
 	"sync"
 	"time"
-"fmt"
 )
 
 var Log = *log2.NewStderr(log2.LDebug)

@@ -124,7 +124,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 			_ = moneysys.SetAcceptMax(ctx, 0)
 		}
 		self.broken = true
-		self.display.SetLines(self.g.Config.UI.Front.MsgStateBroken, "")
+		self.display.SetLines(self.g.Config.UI.Front.MsgBrokenL1, self.g.Config.UI.Front.MsgBrokenL2)
 		if d, _ := self.g.Display(); d != nil {
 			_ = d.Clear()
 		}
