@@ -169,7 +169,7 @@ func (self *tele) qhandle(b []byte) (bool, error) {
 func (self *tele) qpushCommandResponse(c *tele_api.Command, r *tele_api.Response) error {
 	if c.ReplyTopic == "" {
 		err := errors.Errorf("command with reply_topic=empty")
-		self.Error(err)
+		self.log.Error(err)
 		return err
 	}
 	r.INTERNALTopic = c.ReplyTopic

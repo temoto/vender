@@ -167,5 +167,6 @@ func (self *tele) cmdShowQR(ctx context.Context, cmd *tele_api.Command, arg *tel
 	}
 	// TODO display.Layout(arg.Layout)
 	// TODO border,redundancy from layout/config
+	global.Log.Infof("show QR:'%v'", arg.QrText)
 	return display.QR(arg.QrText, true, qrcode.High)
 }
