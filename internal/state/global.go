@@ -75,18 +75,16 @@ func CheckClientWorking() error {
 
 func (g *Global) VmcStop(ctx context.Context) {
 	global.Log.Infof("--- vmc stop ---")
-	if global.GBL.Client.Working {
-		global.Log.Infof("stop fail. processing client")
-		return
+	if errs := g.Engine.ExecList(ctx, "on_shutdown", g.Config.Engine.OnBroken); len(errs) != 0 {
+		g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_shutdown"))
 	}
-	td := g.MustTextDisplay()
-	td.SetLines(g.Config.UI.Front.MsgBrokenL1, g.Config.UI.Front.MsgBrokenL2)
-	g.Tele.State(tele_api.State_Shutdown)
-	_ = g.Engine.ExecList(ctx, "reboot", []string{"evend.cup.light_off evend.valve.set_temp_hot(0)"})
-
+	// _ = g.Engine.ExecList(ctx, "reboot", []string{"money.abort evend.cup.light_off evend.valve.set_temp_hot(0)"})
 	go func() {
-		time.Sleep(2 * time.Second)
 		g.Tele.Close()
+		td := g.MustTextDisplay()
+		td.SetLines(g.Config.UI.Front.MsgBrokenL1, g.Config.UI.Front.MsgBrokenL2)
+		g.Tele.State(tele_api.State_Shutdown)
+		time.Sleep(2 * time.Second)
 		g.Stop()
 	}()
 }

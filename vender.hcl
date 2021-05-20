@@ -50,11 +50,11 @@ engine {
   }
 
   // on_boot = ["mixer_move_top", "cup_serve", "conveyor_move_cup"]
-  // on_broken = []
+  // on_broken = ["money.abort evend.cup.light_off evend.valve.set_temp_hot(0)"]
   // on_front_begin = []
   // on_menu_error = ["money.abort", "cup_serve"]
   // on_service_begin = []
-
+  
   profile {
     // additional escape of \ is required
     regexp     = "^(cup_|money\\.)"
