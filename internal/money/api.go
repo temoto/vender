@@ -171,6 +171,10 @@ func (self *MoneySystem) Abort(ctx context.Context) error {
 }
 
 func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amount) error {
+	if amount == 0 {
+		return nil
+	}
+
 	const tag = "money.payout"
 	var err error
 	g := state.GetGlobal(ctx)
