@@ -243,7 +243,7 @@ func (self *Client) ioLoop() {
 
 				default:
 					// So far this always has been a symptom of critical protocol error
-					self.Log.Errorf("%s stray packet %s", modName, bgrecv.ResponseString())
+					self.Log.Infof("%s stray packet %s", modName, bgrecv.ResponseString())
 				}
 			case ErrResponseEmpty:
 				// XXX TODO FIXME error is still present, it only wastes time, not critical
