@@ -210,6 +210,9 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		case types.EventService:
 			return StateServiceBegin
 
+		case types.EventUiTimerStop:
+			goto refresh
+
 		case types.EventTime:
 			if self.State() == StateFrontTune { // XXX onFrontTune
 				return StateFrontSelect // "return to previous mode"
@@ -217,7 +220,6 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			return StateFrontTimeout
 
 		case types.EventFrontLock:
-			fmt.Printf("\n\033[41m eventlock \033[0m\n\n")
 			return StateFrontLock
 
 		case types.EventLock, types.EventStop:

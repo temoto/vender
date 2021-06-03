@@ -18,6 +18,7 @@ const (
 	EventService
 	EventStop
 	EventFrontLock
+	EventUiTimerStop
 )
 
 type Event struct {

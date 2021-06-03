@@ -34,6 +34,7 @@ type Global struct {
 	Log          *log2.Log
 	Tele         tele_api.Teler
 	LockCh       chan struct{}
+	TimerUIStop  chan struct{}
 	// TODO UI           types.UIer
 
 	XXX_money atomic.Value // *money.MoneySystem crutch to import cycle
@@ -47,6 +48,7 @@ const ContextKey = "run/state-global"
 func (g *Global) ClientBegin() {
 	gg := &global.GBL.Client
 	if !gg.Working {
+		g.TimerUIStop <- struct{}{}
 		gg.Working = true
 		gg.WorkTime = time.Now()
 		global.Log.Infof("--- client activity begin ---")

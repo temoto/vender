@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
@@ -60,7 +59,7 @@ func (self *UI) Init(ctx context.Context) error {
 
 	// self.lock.ch = make(chan struct{}, 1)
 	self.g.LockCh = make(chan struct{}, 1)
-
+	self.g.TimerUIStop = make(chan struct{}, 1)
 	self.Service.Init(ctx)
 	self.g.XXX_uier.Store(types.UIer(self)) // FIXME import cycle traded for pointer cycle
 	return nil
@@ -79,6 +78,10 @@ func (self *UI) wait(timeout time.Duration) types.Event {
 	defer tmr.Stop()
 again:
 	select {
+
+	case <-self.g.TimerUIStop:
+		return types.Event{Kind: types.EventUiTimerStop}
+
 	case e := <-self.eventch:
 		if e.Kind != types.EventInvalid {
 		}
@@ -93,7 +96,6 @@ again:
 		return types.Event{Kind: types.EventInput, Input: e}
 
 	case <-self.g.LockCh:
-		fmt.Printf("\n\033[41m uilockChevent \033[0m\n\n")
 		return types.Event{Kind: types.EventFrontLock}
 
 	case <-self.lock.ch:
