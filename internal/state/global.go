@@ -77,10 +77,7 @@ func CheckClientWorking() error {
 
 func (g *Global) VmcStop(ctx context.Context) {
 	global.Log.Infof("--- vmc stop ---")
-	if errs := g.Engine.ExecList(ctx, "on_shutdown", g.Config.Engine.OnBroken); len(errs) != 0 {
-		g.Error(errors.Annotate(helpers.FoldErrors(errs), "on_shutdown"))
-	}
-	// _ = g.Engine.ExecList(ctx, "reboot", []string{"money.abort evend.cup.light_off evend.valve.set_temp_hot(0)"})
+	_ = g.Engine.ExecList(ctx, "on_shutdown", g.Config.Engine.OnBroken)
 	go func() {
 		g.Tele.Close()
 		td := g.MustTextDisplay()
