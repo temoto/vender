@@ -78,6 +78,12 @@ func CheckClientWorking() error {
 
 func (g *Global) VmcStop(ctx context.Context) {
 	global.Log.Infof("--- vmc stop command---")
+	go func() {
+		time.Sleep(30 * time.Second)
+		global.Log.Infof("--- vmc EXIT ---")
+		os.Exit(1)
+	}()
+
 	g.LockCh <- struct{}{}
 	_ = g.Engine.ExecList(ctx, "on_broken", g.Config.Engine.OnBroken)
 	go func() {
@@ -89,9 +95,6 @@ func (g *Global) VmcStop(ctx context.Context) {
 		global.Log.Infof("--- vmc stop ---")
 		g.Stop()
 	}()
-	time.Sleep(10 * time.Second)
-	global.Log.Infof("--- vmc EXIT ---")
-	os.Exit(1)
 }
 
 func GetGlobal(ctx context.Context) *Global {
