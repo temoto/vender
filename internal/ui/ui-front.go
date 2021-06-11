@@ -382,6 +382,7 @@ func (self *UI) onFrontTimeout(ctx context.Context) State {
 
 func (self *UI) onFrontLock() State {
 	self.g.Hardware.Input.Enable(false)
+	global.GBL.Lock = true
 	self.display.SetLines(self.g.Config.UI.Front.MsgStateLocked, "")
 	timeout := self.frontResetTimeout
 	e := self.wait(timeout)
@@ -394,6 +395,7 @@ func (self *UI) onFrontLock() State {
 		}
 		return StateFrontTimeout
 	case types.EventFrontLock:
+		global.GBL.Lock = false
 		return StateFrontSelect
 	}
 	return StateFrontEnd

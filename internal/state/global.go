@@ -59,6 +59,7 @@ func (g *Global) ClientBegin() {
 func (g *Global) ClientEnd() {
 	gg := &global.GBL.Client
 	g.Hardware.Input.Enable(true)
+	global.GBL.Lock = false
 	if gg.Working {
 		gg.Working = false
 		gg.WorkTime = time.Now()
@@ -76,16 +77,21 @@ func CheckClientWorking() error {
 }
 
 func (g *Global) VmcStop(ctx context.Context) {
-	global.Log.Infof("--- vmc stop ---")
-	_ = g.Engine.ExecList(ctx, "on_shutdown", g.Config.Engine.OnBroken)
+	global.Log.Infof("--- vmc stop command---")
+	g.LockCh <- struct{}{}
+	_ = g.Engine.ExecList(ctx, "on_broken", g.Config.Engine.OnBroken)
 	go func() {
-		g.Tele.Close()
 		td := g.MustTextDisplay()
 		td.SetLines(g.Config.UI.Front.MsgBrokenL1, g.Config.UI.Front.MsgBrokenL2)
 		g.Tele.State(tele_api.State_Shutdown)
+		g.Tele.Close()
 		time.Sleep(2 * time.Second)
+		global.Log.Infof("--- vmc stop ---")
 		g.Stop()
 	}()
+	time.Sleep(10 * time.Second)
+	global.Log.Infof("--- vmc EXIT ---")
+	os.Exit(1)
 }
 
 func GetGlobal(ctx context.Context) *Global {
@@ -309,7 +315,19 @@ func (g *Global) RegisterCommands(ctx context.Context) {
 	g.Engine.RegisterNewFunc(
 		"vmc.lock!",
 		func(ctx context.Context) error {
-			g.LockCh <- struct{}{}
+			if !global.GBL.Lock {
+				g.LockCh <- struct{}{}
+			}
+			return nil
+		},
+	)
+
+	g.Engine.RegisterNewFunc(
+		"vmc.unlock!",
+		func(ctx context.Context) error {
+			if global.GBL.Lock {
+				g.LockCh <- struct{}{}
+			}
 			return nil
 		},
 	)

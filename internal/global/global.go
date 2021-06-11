@@ -11,6 +11,7 @@ var Log = *log2.NewStderr(log2.LDebug)
 var GBL *globalStruct = nil
 
 type globalStruct struct {
+	Lock    bool
 	Version string
 	State   string
 	Client  cliStruct
