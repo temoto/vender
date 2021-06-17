@@ -5,7 +5,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	"github.com/temoto/spq"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 	tele_api "github.com/temoto/vender/tele"
 	tele_config "github.com/temoto/vender/tele/config"
@@ -25,16 +24,15 @@ const (
 // - Telemetry/Response messages delivered at least once
 // - Status messages may be lost
 type tele struct { //nolint:maligned
-	config        tele_config.Config
-	log           *log2.Log
-	transport     Transporter
-	q             *spq.Queue
-	stateCh       chan tele_api.State
-	stopCh        chan struct{}
-	vmId          int32
-	stateInterval time.Duration
-	stat          tele_api.Stat
-	currentState  tele_api.State
+	config       tele_config.Config
+	log          *log2.Log
+	transport    Transporter
+	q            *spq.Queue
+	stateCh      chan tele_api.State
+	stopCh       chan struct{}
+	vmId         int32
+	stat         tele_api.Stat
+	currentState tele_api.State
 }
 
 func New() tele_api.Teler {
@@ -54,7 +52,6 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	self.stopCh = make(chan struct{})
 	self.stateCh = make(chan tele_api.State)
 	self.vmId = int32(self.config.VmId)
-	self.stateInterval = helpers.IntSecondDefault(self.config.StateIntervalSec, defaultStateInterval)
 	self.stat.Locked_Reset()
 
 	willPayload := []byte{byte(tele_api.State_Disconnected)}
@@ -167,11 +164,7 @@ func (self *tele) qhandle(b []byte) (bool, error) {
 }
 
 func (self *tele) qpushCommandResponse(c *tele_api.Command, r *tele_api.Response) error {
-	if c.ReplyTopic == "" {
-		err := errors.Errorf("command with reply_topic=empty")
-		self.log.Error(err)
-		return err
-	}
+	c.ReplyTopic = "cr"
 	r.INTERNALTopic = c.ReplyTopic
 	return self.qpushTagProto(qCommandResponse, r)
 }

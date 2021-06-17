@@ -379,8 +379,13 @@ func (c *client) attemptConnection() (net.Conn, byte, bool, error) {
 		cm := newConnectMsgFromOptions(&c.options, broker)
 		DEBUG.Println(CLI, "about to write new connect msg")
 	CONN:
+		tlsCfg := c.options.TLSConfig
+		if c.options.OnConnectAttempt != nil {
+			DEBUG.Println(CLI, "using custom onConnectAttempt handler...")
+			tlsCfg = c.options.OnConnectAttempt(broker, c.options.TLSConfig)
+		}
 		// Start by opening the network connection (tcp, tls, ws) etc
-		conn, err = openConnection(broker, c.options.TLSConfig, c.options.ConnectTimeout, c.options.HTTPHeaders, c.options.WebsocketOptions)
+		conn, err = openConnection(broker, tlsCfg, c.options.ConnectTimeout, c.options.HTTPHeaders, c.options.WebsocketOptions)
 		if err != nil {
 			ERROR.Println(CLI, err.Error())
 			WARN.Println(CLI, "failed to connect to broker, trying next")
@@ -397,7 +402,7 @@ func (c *client) attemptConnection() (net.Conn, byte, bool, error) {
 
 		// We may be have to attempt the connection with MQTT 3.1
 		if conn != nil {
-			conn.Close()
+			_ = conn.Close()
 		}
 		if !c.options.protocolVersionExplicit && protocolVersion == 4 { // try falling back to 3.1?
 			DEBUG.Println(CLI, "Trying reconnect using MQTT 3.1 protocol")
@@ -434,12 +439,22 @@ func (c *client) Disconnect(quiesce uint) {
 
 		dm := packets.NewControlPacket(packets.Disconnect).(*packets.DisconnectPacket)
 		dt := newToken(packets.Disconnect)
-		c.oboundP <- &PacketAndToken{p: dm, t: dt}
+		disconnectSent := false
+		select {
+		case c.oboundP <- &PacketAndToken{p: dm, t: dt}:
+			disconnectSent = true
+		case <-c.commsStopped:
+			WARN.Println("Disconnect packet could not be sent because comms stopped")
+		case <-time.After(time.Duration(quiesce) * time.Millisecond):
+			WARN.Println("Disconnect packet not sent due to timeout")
+		}
 
 		// wait for work to finish, or quiesce time consumed
-		DEBUG.Println(CLI, "calling WaitTimeout")
-		dt.WaitTimeout(time.Duration(quiesce) * time.Millisecond)
-		DEBUG.Println(CLI, "WaitTimeout done")
+		if disconnectSent {
+			DEBUG.Println(CLI, "calling WaitTimeout")
+			dt.WaitTimeout(time.Duration(quiesce) * time.Millisecond)
+			DEBUG.Println(CLI, "WaitTimeout done")
+		}
 	} else {
 		WARN.Println(CLI, "Disconnect() called but not connected (disconnected/reconnecting)")
 		c.setConnected(disconnected)
@@ -484,10 +499,13 @@ func (c *client) internalConnLost(err error) {
 			DEBUG.Println(CLI, "internalConnLost waiting on workers")
 			<-stopDone
 			DEBUG.Println(CLI, "internalConnLost workers stopped")
-			if c.options.CleanSession && !c.options.AutoReconnect {
+			// It is possible that Disconnect was called which led to this error so reconnection depends upon status
+			reconnect := c.options.AutoReconnect && c.connectionStatus() > connecting
+
+			if c.options.CleanSession && !reconnect {
 				c.messageIds.cleanUp()
 			}
-			if c.options.AutoReconnect {
+			if reconnect {
 				c.setConnected(reconnecting)
 				go c.reconnect()
 			} else {
@@ -501,8 +519,8 @@ func (c *client) internalConnLost(err error) {
 	}
 }
 
-// startCommsWorkers is called when the connection is up. It starts off all of the routines needed to process incoming and
-// outgoing messages.
+// startCommsWorkers is called when the connection is up.
+// It starts off all of the routines needed to process incoming and outgoing messages.
 // Returns true if the comms workers were started (i.e. they were not already running)
 func (c *client) startCommsWorkers(conn net.Conn, inboundFromStore <-chan packets.ControlPacket) bool {
 	DEBUG.Println(CLI, "startCommsWorkers called")
@@ -589,7 +607,22 @@ func (c *client) startCommsWorkers(conn net.Conn, inboundFromStore <-chan packet
 					commsIncomingPub = nil
 					continue
 				}
-				incomingPubChan <- pub
+				// Care is needed here because an error elsewhere could trigger a deadlock
+			sendPubLoop:
+				for {
+					select {
+					case incomingPubChan <- pub:
+						break sendPubLoop
+					case err, ok := <-commsErrors:
+						if !ok { // commsErrors has been closed so we can ignore it
+							commsErrors = nil
+							continue
+						}
+						ERROR.Println(CLI, "Connect comms goroutine - error triggered during send Pub", err)
+						c.internalConnLost(err) // no harm in calling this if the connection is already down (or shutdown is in progress)
+						continue
+					}
+				}
 			case err, ok := <-commsErrors:
 				if !ok {
 					commsErrors = nil
@@ -899,7 +932,7 @@ func (c *client) resume(subscription bool, ibound chan packets.ControlPacket) {
 		}
 		details := packet.Details()
 		if isKeyOutbound(key) {
-			switch packet.(type) {
+			switch p := packet.(type) {
 			case *packets.SubscribePacket:
 				if subscription {
 					DEBUG.Println(STR, fmt.Sprintf("loaded pending subscribe (%d)", details.MessageID))
@@ -939,13 +972,22 @@ func (c *client) resume(subscription bool, ibound chan packets.ControlPacket) {
 					return
 				}
 			case *packets.PublishPacket:
+				// spec: If the DUP flag is set to 0, it indicates that this is the first occasion that the Client or
+				// Server has attempted to send this MQTT PUBLISH Packet. If the DUP flag is set to 1, it indicates that
+				// this might be re-delivery of an earlier attempt to send the Packet.
+				//
+				// If the message is in the store than an attempt at delivery has been made (note that the message may
+				// never have made it onto the wire but tracking that would be complicated!).
+				if p.Qos != 0 { // spec: The DUP flag MUST be set to 0 for all QoS 0 messages
+					p.Dup = true
+				}
 				token := newToken(packets.Publish).(*PublishToken)
 				token.messageID = details.MessageID
 				c.claimID(token, details.MessageID)
 				DEBUG.Println(STR, fmt.Sprintf("loaded pending publish (%d)", details.MessageID))
 				DEBUG.Println(STR, details)
 				select {
-				case c.obound <- &PacketAndToken{p: packet, t: token}:
+				case c.obound <- &PacketAndToken{p: p, t: token}:
 				case <-c.stop:
 					DEBUG.Println(STR, "resume exiting due to stop")
 					return
