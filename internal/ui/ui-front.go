@@ -140,9 +140,11 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 			if input.IsMoneyAbort(&e.Input) {
 				global.Log.Infof("money abort event.")
 				credit := moneysys.Credit(ctx) / 100
-				self.display.SetLines("  :-(", fmt.Sprintf(" -%v", credit))
-				self.g.Hardware.Input.Enable(false)
-				self.g.Error(errors.Trace(moneysys.Abort(ctx)))
+				if credit > 0 {
+					self.display.SetLines("  :-(", fmt.Sprintf(" -%v", credit))
+					self.g.Hardware.Input.Enable(false)
+					self.g.Error(errors.Trace(moneysys.Abort(ctx)))
+				}
 				return StateFrontEnd
 			}
 			self.g.ClientBegin()

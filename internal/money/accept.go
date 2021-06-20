@@ -103,7 +103,6 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 		})
 	}
 	go self.coin.Run(ctx, alive, func(pi money.PollItem) bool {
-		g.ClientBegin()
 		self.lk.Lock()
 		defer self.lk.Unlock()
 
@@ -123,6 +122,7 @@ func (self *MoneySystem) AcceptCredit(ctx context.Context, maxPrice currency.Amo
 			})
 
 		case money.StatusCredit:
+			g.ClientBegin()
 			if pi.DataCashbox {
 				if err := self.coinCashbox.Add(pi.DataNominal, uint(pi.DataCount)); err != nil {
 					g.Error(errors.Annotatef(err, "%s cashbox.Add n=%v c=%d", tag, pi.DataNominal, pi.DataCount))
