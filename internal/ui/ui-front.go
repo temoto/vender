@@ -398,7 +398,7 @@ func (self *UI) onFrontLock() State {
 		return StateFrontTimeout
 	case types.EventFrontLock:
 		global.GBL.Lock = false
-		return StateFrontSelect
+		return StateFrontEnd
 	}
 	return StateFrontEnd
 }
