@@ -174,7 +174,6 @@ func (self *UI) enter(ctx context.Context, s State) State {
 		return StateFrontBegin
 
 	case StateFrontLock:
-		fmt.Printf("\n\033[41m statefrontlock \033[0m\n\n")
 		return self.onFrontLock()
 
 	case StateServiceBegin:
