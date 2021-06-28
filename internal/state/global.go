@@ -86,15 +86,13 @@ func (g *Global) VmcStop(ctx context.Context) {
 
 	g.LockCh <- struct{}{}
 	_ = g.Engine.ExecList(ctx, "on_broken", g.Config.Engine.OnBroken)
-	go func() {
-		td := g.MustTextDisplay()
-		td.SetLines(g.Config.UI.Front.MsgBrokenL1, g.Config.UI.Front.MsgBrokenL2)
-		g.Tele.State(tele_api.State_Shutdown)
-		g.Tele.Close()
-		time.Sleep(2 * time.Second)
-		global.Log.Infof("--- vmc stop ---")
-		g.Stop()
-	}()
+	td := g.MustTextDisplay()
+	td.SetLines(g.Config.UI.Front.MsgBrokenL1, g.Config.UI.Front.MsgBrokenL2)
+	g.Tele.State(tele_api.State_Shutdown)
+	g.Tele.Close()
+	time.Sleep(2 * time.Second)
+	global.Log.Infof("--- vmc stop ---")
+	g.Stop()
 }
 
 func GetGlobal(ctx context.Context) *Global {

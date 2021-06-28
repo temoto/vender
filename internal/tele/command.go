@@ -20,6 +20,9 @@ var (
 )
 
 func (self *tele) onCommandMessage(ctx context.Context, payload []byte) bool {
+	if self.currentState == tele_api.State_Invalid || self.currentState == tele_api.State_Boot {
+		return true
+	}
 	cmd := new(tele_api.Command)
 	err := proto.Unmarshal(payload, cmd)
 	if err != nil {
