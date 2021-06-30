@@ -20,7 +20,7 @@ type transportMqtt struct {
 	onCommand func([]byte) bool
 	m         mqtt.Client
 	mopt      *mqtt.ClientOptions
-	stopCh    chan struct{}
+	// stopCh    chan struct{}
 
 	topicPrefix    string
 	topicConnect   string

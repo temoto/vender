@@ -24,11 +24,11 @@ const (
 // - Telemetry/Response messages delivered at least once
 // - Status messages may be lost
 type tele struct { //nolint:maligned
-	config       tele_config.Config
-	log          *log2.Log
-	transport    Transporter
-	q            *spq.Queue
-	stateCh      chan tele_api.State
+	config    tele_config.Config
+	log       *log2.Log
+	transport Transporter
+	q         *spq.Queue
+	// stateCh      chan tele_api.State
 	stopCh       chan struct{}
 	vmId         int32
 	stat         tele_api.Stat
@@ -49,8 +49,8 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 		self.log.SetLevel(log2.LDebug)
 	}
 
-	self.stopCh = make(chan struct{})
-	self.stateCh = make(chan tele_api.State)
+	// self.stopCh = make(chan struct{})
+	// self.stateCh = make(chan tele_api.State)
 	self.vmId = int32(self.config.VmId)
 	self.stat.Locked_Reset()
 
