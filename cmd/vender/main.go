@@ -4,14 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	// "net"
-	// "net/http"
-	// _ "net/http/pprof" //#nosec G108
+
 	"os"
 	"regexp"
 	"strings"
 
-	// "github.com/juju/errors"
 	cmd_engine "github.com/temoto/vender/cmd/vender/engine"
 	"github.com/temoto/vender/cmd/vender/mdb"
 	"github.com/temoto/vender/cmd/vender/subcmd"
@@ -32,7 +29,7 @@ var modules = []subcmd.Mod{
 	cmd_tele.Mod,
 	ui.Mod,
 	vmc.VmcMod,
-	subcmd.Mod{Name: "version", Main: versionMain},
+	{Name: "version", Main: versionMain},
 }
 
 var BuildVersion string = "unknown" // set by ldflags -X

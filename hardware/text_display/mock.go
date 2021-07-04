@@ -12,7 +12,7 @@ func NewMockTextDisplay(opt *TextDisplayConfig) *TextDisplay {
 }
 
 type MockDevicer struct {
-	c uint32
+	// c uint32
 }
 
 func (self *MockDevicer) Clear() {}

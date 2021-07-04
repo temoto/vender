@@ -28,10 +28,10 @@ func TestWrap(t *testing.T) {
 		input string
 	}
 	cases := []Case{
-		Case{"short", "foobar"},
-		Case{"full", "full-length-line"},
-		Case{"long1", "too-much-very-long-line"},
-		Case{"long2", "too-much-very-long-line1;too-much-very-long-line2"},
+		{"short", "foobar"},
+		{"full", "full-length-line"},
+		{"long1", "too-much-very-long-line"},
+		{"long2", "too-much-very-long-line1;too-much-very-long-line2"},
 	}
 	for _, c := range cases {
 		c := c

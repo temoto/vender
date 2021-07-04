@@ -2,13 +2,14 @@ package tele
 
 import (
 	"context"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	"github.com/temoto/spq"
 	"github.com/temoto/vender/log2"
 	tele_api "github.com/temoto/vender/tele"
 	tele_config "github.com/temoto/vender/tele/config"
-	"time"
 )
 
 const (
@@ -86,7 +87,7 @@ func (self *tele) Close() {
 	if self.q != nil {
 		self.q.Close()
 	}
-	self.transport.CloseTele()
+	self.transport.Close()
 }
 
 // denote value type in persistent queue bytes form
