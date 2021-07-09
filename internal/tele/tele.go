@@ -2,6 +2,7 @@ package tele
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -83,11 +84,11 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 }
 
 func (self *tele) Close() {
-	close(self.stopCh)
+	// close(self.stopCh)
 	if self.q != nil {
 		self.q.Close()
 	}
-	self.transport.Close()
+	self.transport.CloseTele()
 }
 
 // denote value type in persistent queue bytes form
@@ -165,8 +166,11 @@ func (self *tele) qhandle(b []byte) (bool, error) {
 }
 
 func (self *tele) qpushCommandResponse(c *tele_api.Command, r *tele_api.Response) error {
-	c.ReplyTopic = "cr"
-	r.INTERNALTopic = c.ReplyTopic
+	// c.ReplyTopic = "cr"
+	// r.INTERNALTopic = c.ReplyTopic
+	r.INTERNALTopic = "cr"
+	fmt.Printf("\n\033[41m qpushCommandResponseqpushCommandResponse (%v) \033[0m\n\n", c.Id)
+
 	return self.qpushTagProto(qCommandResponse, r)
 }
 

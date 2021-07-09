@@ -1,0 +1,6 @@
+#!/bin/bash
+set -eu
+
+base="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+
+protoc -I=$base/tele/ --go_out=$base/tele tele.proto

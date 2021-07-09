@@ -2,6 +2,8 @@ package tele
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/juju/errors"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
@@ -27,6 +29,31 @@ func (self *tele) CommandReplyErr(c *tele_api.Command, e error) {
 	if err != nil {
 		self.log.Error(errors.Annotatef(err, "CRITICAL command=%#v response=%#v", c, r))
 	}
+}
+
+func (self *tele) CommandReply(c *tele_api.Command, cr tele_api.CmdReplay) {
+	if te := self.teleEnable(); te {
+		return
+	}
+	fmt.Printf("\n\033[41m  CommandReplyCommandReply (%v) \033[0m\n\n", c.Executer)
+	r := tele_api.Response{
+		Executer: c.Executer,
+		// CommandId: c.Id,
+		CmdReplay: cr,
+	}
+	err := self.qpushCommandResponse(c, &r)
+	if err != nil {
+		// s.log.Error(errors.Annotatef(err, "CRITICAL command=%#v response=%#v", c, r))
+		fmt.Printf("\n\033[41m error \033[0m\n\n")
+	}
+}
+
+func (s *tele) teleEnable() bool {
+	if !s.config.Enabled {
+		s.log.Infof(logMsgDisabled)
+		return true
+	}
+	return false
 }
 
 func (self *tele) Error(e error) {

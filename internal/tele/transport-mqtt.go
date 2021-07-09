@@ -95,7 +95,7 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 	return nil
 }
 
-func (self *transportMqtt) Close() {
+func (self *transportMqtt) CloseTele() {
 	global.Log.Infof("mqtt unsubscribe")
 	if token := self.m.Unsubscribe(self.topicCommand); token.Wait() && token.Error() != nil {
 		global.Log.Infof("mqtt unsubscribe error")

@@ -32,15 +32,17 @@ func (self *tele) onCommandMessage(ctx context.Context, payload []byte) bool {
 	}
 	self.log.Debugf("tele command raw=%x task=%#v", payload, cmd.String())
 
-	now := time.Now().UnixNano()
-	if cmd.Deadline != 0 && now > cmd.Deadline {
-		self.CommandReplyErr(cmd, fmt.Errorf("deadline"))
-	} else {
-		// TODO store command in persistent queue, acknowledge now, execute later
-		err = self.dispatchCommand(ctx, cmd)
+	// now := time.Now().UnixNano()
+	// if cmd.Deadline != 0 && now > cmd.Deadline {
+	// 	self.CommandReplyErr(cmd, fmt.Errorf("deadline"))
+	// } else {
+	// 	// TODO store command in persistent queue, acknowledge now, execute later
+	if err = self.dispatchCommand(ctx, cmd); err != nil {
+		fmt.Printf("\n\033[41m cmdreplayERR \033[0m\n\n")
 		self.CommandReplyErr(cmd, err)
+		return true
 	}
-
+	self.CommandReply(cmd, tele_api.CmdReplay_done)
 	return true
 }
 
@@ -97,6 +99,13 @@ func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 	} else if err := state.CheckClientWorking(); err != nil {
 		return err
 	}
+	fmt.Printf("\n\033[41m cmd.Executercmd.Executer (%v) \033[0m\n\n", cmd.Executer)
+	if !global.GBL.Client.Working {
+		fmt.Printf("\n\033[41m cmd.Executercmd.Executer11111111111111 (%v) \033[0m\n\n", cmd.Executer)
+		self.CommandReply(cmd, tele_api.CmdReplay_busy)
+		return nil
+	}
+
 	g := state.GetGlobal(ctx)
 	doer, err := g.Engine.ParseText("tele-exec", arg.Scenario)
 	if err != nil {
@@ -107,6 +116,10 @@ func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 	if err != nil {
 		err = errors.Annotate(err, "validate")
 		return err
+	}
+	if cmd.Executer > 0 {
+		fmt.Printf("\n\033[41m cmd.Executercmd.Executer0000000000000 (%v) \033[0m\n\n", cmd.Executer)
+		self.CommandReply(cmd, tele_api.CmdReplay_accepted)
 	}
 
 	err = g.ScheduleSync(ctx, cmd.Priority, doer.Do)

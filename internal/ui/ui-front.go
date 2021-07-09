@@ -110,7 +110,7 @@ func menuMaxPrice(ctx context.Context, m Menu) (currency.Amount, error) {
 
 func (self *UI) onFrontSelect(ctx context.Context) State {
 	moneysys := money.GetGlobal(ctx)
-
+	fmt.Printf("\n\033[41m  onFrontSelectonFrontSelectonFrontSelect\033[0m\n\n")
 	alive := alive.NewAlive()
 	defer func() {
 		alive.Stop() // stop pending AcceptCredit

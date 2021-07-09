@@ -87,9 +87,10 @@ enum PaymentMethod {
 
 message Command {
   uint32 id = 1;
-  string reply_topic = 2;
-  int64 deadline = 3;
+//  string reply_topic = 2;
+//  int64 deadline = 3;
   Priority priority = 4;
+  uint32 executer = 5;
   oneof task {
     ArgReport report = 16;
     ArgLock lock = 17;
@@ -118,9 +119,18 @@ message Command {
     string qr_text = 2;
   }
 }
+
+enum CmdReplay {
+  nothing = 0;
+  accepted = 1;
+  done = 2;
+  busy = 3;
+}
 message Response {
   uint32 command_id = 1;
   string error = 2;
   string data = 3;
+  uint32 executer = 4;
+  CmdReplay cmd_replay = 5;
   string INTERNAL_topic = 2048; // convenience
 }
