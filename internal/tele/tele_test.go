@@ -54,9 +54,9 @@ func TestCommand(t *testing.T) {
   stock "rock" {}
 }}`,
 			cmd: tele_api.Command{
-				Id:         rand.Uint32(),
-				Task:       &tele_api.Command_Report{Report: &tele_api.Command_ArgReport{}},
-				ReplyTopic: "t",
+				Id:   rand.Uint32(),
+				Task: &tele_api.Command_Report{Report: &tele_api.Command_ArgReport{}},
+				// ReplyTopic: "t",
 			},
 			before: func(t testing.TB, env *tenv) {
 				require.NoError(t, hardware.Enum(env.ctx))
@@ -85,9 +85,9 @@ func TestCommand(t *testing.T) {
 			}},
 		{name: "exec",
 			cmd: tele_api.Command{
-				Id:         rand.Uint32(),
-				Task:       &tele_api.Command_Exec{Exec: &tele_api.Command_ArgExec{Scenario: "action_stub"}},
-				ReplyTopic: "t",
+				Id:   rand.Uint32(),
+				Task: &tele_api.Command_Exec{Exec: &tele_api.Command_ArgExec{Scenario: "action_stub"}},
+				// ReplyTopic: "t",
 			},
 			before: func(t testing.TB, env *tenv) {
 				env.flag = false
@@ -114,10 +114,10 @@ func TestCommand(t *testing.T) {
 				Id: rand.Uint32(),
 				Task: &tele_api.Command_SetInventory{SetInventory: &tele_api.Command_ArgSetInventory{
 					New: &tele_api.Inventory{Stocks: []*tele_api.Inventory_StockItem{
-						&tele_api.Inventory_StockItem{Name: "paper", Valuef: 3.14},
+						{Name: "paper", Valuef: 3.14},
 					}},
 				}},
-				ReplyTopic: "t",
+				// ReplyTopic: "t",
 			},
 			check: func(t testing.TB, env *tenv) {
 				b := <-env.trans.outResponse
@@ -134,9 +134,9 @@ func TestCommand(t *testing.T) {
 			config: `engine { menu { item "1" { price=0 scenario="" } } }
 			ui { front { reset_sec=5 } }`,
 			cmd: tele_api.Command{
-				Id:         rand.Uint32(),
-				Task:       &tele_api.Command_Stop{Stop: &tele_api.Command_ArgStop{}},
-				ReplyTopic: "t",
+				Id:   rand.Uint32(),
+				Task: &tele_api.Command_Stop{Stop: &tele_api.Command_ArgStop{}},
+				// ReplyTopic: "t",
 			},
 			before: func(t testing.TB, env *tenv) {
 				g := state.GetGlobal(env.ctx)

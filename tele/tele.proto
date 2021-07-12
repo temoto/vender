@@ -86,7 +86,7 @@ enum PaymentMethod {
 }
 
 message Command {
-  uint32 id = 1;
+//  uint32 id = 1;
 //  string reply_topic = 2;
 //  int64 deadline = 3;
   Priority priority = 4;
