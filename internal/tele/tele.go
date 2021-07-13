@@ -2,7 +2,6 @@ package tele
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -56,12 +55,12 @@ func (self *tele) Init(ctx context.Context, log *log2.Log, teleConfig tele_confi
 	self.vmId = int32(self.config.VmId)
 	self.stat.Locked_Reset()
 
-	willPayload := []byte{byte(tele_api.State_Disconnected)}
+	// willPayload := []byte{byte(tele_api.State_Disconnected)}
 	// test code sets .transport
 	if self.transport == nil { // production path
 		self.transport = &transportMqtt{}
 	}
-	if err := self.transport.Init(ctx, log, teleConfig, self.onCommandMessage, willPayload); err != nil {
+	if err := self.transport.Init(ctx, log, teleConfig, self.onCommandMessage); err != nil {
 		return errors.Annotate(err, "tele transport")
 	}
 	if !self.config.Enabled {
@@ -169,7 +168,6 @@ func (self *tele) qpushCommandResponse(c *tele_api.Command, r *tele_api.Response
 	// c.ReplyTopic = "cr"
 	// r.INTERNALTopic = c.ReplyTopic
 	r.INTERNALTopic = "cr"
-	fmt.Printf("\n\033[41m qpushCommandResponseqpushCommandResponse (%v) \033[0m\n\n", c.Id)
 
 	return self.qpushTagProto(qCommandResponse, r)
 }

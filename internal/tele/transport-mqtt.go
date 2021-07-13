@@ -29,7 +29,7 @@ type transportMqtt struct {
 	topicCommand   string
 }
 
-func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback, willPayload []byte) error {
+func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig tele_config.Config, onCommand CommandCallback) error {
 	self.log = log
 	// FIXME add loglevel to config
 	mqtt.ERROR = log

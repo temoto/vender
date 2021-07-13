@@ -7,6 +7,10 @@ import (
 	tele_config "github.com/temoto/vender/tele/config"
 )
 
+// alexm (install protobuf)
+// go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+// sudo apt-get install golang-goprotobuf-dev
+
 //go:generate protoc --go_out=./ tele.proto
 
 // Telemetry client, vending machine side.

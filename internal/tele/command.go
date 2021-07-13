@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	// "google.golang.org/protobuf/proto"
+
 	"github.com/juju/errors"
 	"github.com/skip2/go-qrcode"
 	"github.com/temoto/vender/helpers"

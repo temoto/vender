@@ -27,5 +27,6 @@ require (
 	github.com/temoto/spq v0.10.0
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect
 	golang.org/x/sys v0.0.0-20210423082822-04245dca01da
+	google.golang.org/protobuf v1.27.1 // indirect
 	periph.io/x/periph v3.6.4+incompatible
 )

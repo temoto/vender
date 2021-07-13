@@ -21,15 +21,14 @@ enum Priority {
 
 enum State {
   Invalid = 0;
-  Boot = 1;
-  Nominal = 2;
-  Disconnected = 3;
-  Problem = 4;
+  Shutdown = 1;
+  Boot = 2;
+  Problem = 3;
+  TempProblem = 4;
   Service = 5;
-  Lock = 6;
+  RemoteControl = 6;
   Client = 7;
-  TempProblem = 8;
-  Shutdown = 9;
+  Nominal = 8;
 }
 
 // Optimising for rare, bulk delivery on cell network.

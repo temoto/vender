@@ -22,8 +22,8 @@ func (self *tele) CommandReplyErr(c *tele_api.Command, e error) {
 		errText = e.Error()
 	}
 	r := tele_api.Response{
-		CommandId: c.Id,
-		Error:     errText,
+		// CommandId: c.Id,
+		Error: errText,
 	}
 	err := self.qpushCommandResponse(c, &r)
 	if err != nil {

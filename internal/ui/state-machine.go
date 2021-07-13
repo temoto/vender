@@ -10,6 +10,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
+
 	// "github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
@@ -139,7 +140,7 @@ func (self *UI) enter(ctx context.Context, s State) State {
 
 	case StateLocked:
 		self.display.SetLines(self.g.Config.UI.Front.MsgStateLocked, "")
-		self.g.Tele.State(tele_api.State_Lock)
+		// self.g.Tele.State(tele_api.State_Lock)
 		for self.g.Alive.IsRunning() {
 			e := self.wait(lockPoll)
 			// TODO receive tele command to reboot or change state
