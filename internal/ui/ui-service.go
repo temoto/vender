@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"hash/fnv"
+
 	// "net"
 	"os/exec"
 	"sort"
@@ -77,6 +78,7 @@ func (self *uiService) Init(ctx context.Context) {
 }
 
 func (self *UI) onServiceBegin(ctx context.Context) State {
+	self.g.Hardware.Input.Enable(true)
 	self.inputBuf = self.inputBuf[:0]
 	self.Service.askReport = false
 	self.Service.menuIdx = 0

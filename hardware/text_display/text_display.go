@@ -3,6 +3,7 @@ package text_display
 import (
 	"bytes"
 	"fmt"
+
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,6 +13,7 @@ import (
 	_ "github.com/paulrosania/go-charset/data"
 	"github.com/temoto/alive/v2"
 	"github.com/temoto/vender/internal/global"
+	"github.com/temoto/vender/internal/types"
 )
 
 const MaxWidth = 40
@@ -137,12 +139,12 @@ func (self *TextDisplay) SetLines(line1, line2 string) {
 	self.SetLinesBytes(
 		self.Translate(line1),
 		self.Translate(line2))
-	if global.GBL.Display.L1 != line1 {
-		global.GBL.Display.L1 = line1
+	if types.VMC.HW.Display.L1 != line1 {
+		types.VMC.HW.Display.L1 = line1
 		global.Log.Infof("Display.L1=%s", line1)
 	}
-	if global.GBL.Display.L2 != line2 {
-		global.GBL.Display.L2 = line2
+	if types.VMC.HW.Display.L2 != line2 {
+		types.VMC.HW.Display.L2 = line2
 		global.Log.Infof("Display.L2=%s", line2)
 	}
 }

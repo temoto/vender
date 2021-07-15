@@ -10,6 +10,7 @@ import (
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
+	"github.com/temoto/vender/internal/types"
 )
 
 type DeviceElevator struct { //nolint:maligned
@@ -32,13 +33,13 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 			return g.Engine.Exec(ctx, self.move(uint8(arg)))
 		}})
 
-	g.Engine.RegisterNewFunc(
-		"elevator.status",
-		func(ctx context.Context) error {
-			g.Log.Infof("position:%d", global.GBL.HW.Elevator)
-			return nil
-		},
-	)
+	// g.Engine.RegisterNewFunc(
+	// 	"elevator.status",
+	// 	func(ctx context.Context) error {
+	// 		g.Log.Infof("position:%d", global.GBL.HW.Elevator)
+	// 		return nil
+	// 	},
+	// )
 
 	err := self.Generic.FIXME_initIO(ctx)
 	if keepaliveInterval > 0 {
@@ -49,8 +50,8 @@ func (self *DeviceElevator) init(ctx context.Context) error {
 
 func (self *DeviceElevator) move(position uint8) engine.Doer {
 	// cp := global.GetEnv(self.name + ".position")
-	cp := global.GBL.HW.Elevator
-	global.GBL.HW.Elevator = 255
+	cp := types.VMC.HW.Elevator.Position
+	types.VMC.HW.Elevator.Position = 255
 	mp := fmt.Sprintf("%d->%d", cp, position)
 	global.Log.Infof(self.name+".position = %s", mp)
 	tag := fmt.Sprintf("%s.move:%s", self.name, mp)
@@ -58,5 +59,5 @@ func (self *DeviceElevator) move(position uint8) engine.Doer {
 		Append(self.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x03, position, 0x64)).
 		Append(self.NewWaitDone(tag, self.moveTimeout)).
-		Append(engine.Func0{F: func() error { global.GBL.HW.Elevator = position; return nil }})
+		Append(engine.Func0{F: func() error { types.VMC.HW.Elevator.Position = position; return nil }})
 }

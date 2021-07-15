@@ -35,7 +35,6 @@ func (self *tele) CommandReply(c *tele_api.Command, cr tele_api.CmdReplay) {
 	if te := self.teleEnable(); te {
 		return
 	}
-	fmt.Printf("\n\033[41m  CommandReplyCommandReply (%v) \033[0m\n\n", c.Executer)
 	r := tele_api.Response{
 		Executer: c.Executer,
 		// CommandId: c.Id,

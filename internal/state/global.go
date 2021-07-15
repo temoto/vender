@@ -46,34 +46,25 @@ type Global struct {
 const ContextKey = "run/state-global"
 
 func (g *Global) ClientBegin() {
-	gg := &global.GBL.Client
-	if !gg.Working {
+	gg := *types.VMC
+	if !gg.Lock {
 		g.TimerUIStop <- struct{}{}
-		gg.Working = true
-		gg.WorkTime = time.Now()
+		gg.Lock = true
+		gg.Client.WorkTime = time.Now()
 		global.Log.Infof("--- client activity begin ---")
 		g.Tele.State(tele_api.State_Client)
 	}
 }
 
 func (g *Global) ClientEnd() {
-	gg := &global.GBL.Client
+	gg := *types.VMC
 	g.Hardware.Input.Enable(true)
-	global.GBL.Lock = false
-	if gg.Working {
-		gg.Working = false
-		gg.WorkTime = time.Now()
+	if gg.Lock {
+		gg.Lock = false
+		gg.Client.WorkTime = time.Now()
 		global.Log.Infof("--- client activity end ---")
 		// g.Tele.State(tele_api.State_Nominal)
 	}
-}
-
-func CheckClientWorking() error {
-	if global.GBL.Client.Working {
-		global.Log.Errorf("execute imposible. processing the client.")
-		return errors.Errorf("Processing the client")
-	}
-	return nil
 }
 
 func (g *Global) VmcStop(ctx context.Context) {
@@ -111,7 +102,7 @@ func (g *Global) Init(ctx context.Context, cfg *Config) error {
 	g.Config = cfg
 
 	g.Log.Infof("build version=%s", g.BuildVersion)
-	global.GBL.Version = g.BuildVersion
+	types.VMC.Version = g.BuildVersion
 
 	if g.Config.Persist.Root == "" {
 		g.Config.Persist.Root = "./tmp-vender-db"
@@ -312,13 +303,25 @@ func (g *Global) initInventory(ctx context.Context) error {
 	return errors.Annotate(err, "initInventory")
 }
 
+func VmcLock(ctx context.Context) {
+	if !types.VMC.Lock {
+		g := GetGlobal(ctx)
+		g.LockCh <- struct{}{}
+	}
+}
+
+func VmcUnLock(ctx context.Context) {
+	if types.VMC.Lock {
+		g := GetGlobal(ctx)
+		g.LockCh <- struct{}{}
+	}
+}
+
 func (g *Global) RegisterCommands(ctx context.Context) {
 	g.Engine.RegisterNewFunc(
 		"vmc.lock!",
 		func(ctx context.Context) error {
-			if !global.GBL.Lock {
-				g.LockCh <- struct{}{}
-			}
+			VmcLock(ctx)
 			return nil
 		},
 	)
@@ -326,7 +329,7 @@ func (g *Global) RegisterCommands(ctx context.Context) {
 	g.Engine.RegisterNewFunc(
 		"vmc.unlock!",
 		func(ctx context.Context) error {
-			if global.GBL.Lock {
+			if types.VMC.Lock {
 				g.LockCh <- struct{}{}
 			}
 			return nil
@@ -359,7 +362,7 @@ func (g *Global) RegisterCommands(ctx context.Context) {
 	g.Engine.RegisterNewFunc(
 		"envs.print",
 		func(ctx context.Context) error {
-			err := errors.Errorf(global.ShowEnvs())
+			err := errors.Errorf(types.ShowEnvs())
 			// AlexM надо бы сделать что бы слала как сообщение а не ошибку.
 			return err
 		},

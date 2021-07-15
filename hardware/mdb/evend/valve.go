@@ -11,8 +11,8 @@ import (
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/helpers/cacheval"
 	"github.com/temoto/vender/internal/engine"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
+	"github.com/temoto/vender/internal/types"
 )
 
 const (
@@ -285,7 +285,7 @@ func (self *DeviceValve) newCheckTempHotValidate(ctx context.Context) func() err
 				self.dev.Log.Error(getErr)
 			}
 		})
-		global.GBL.HW.Temperature = int(temp)
+		types.VMC.HW.Temperature = int(temp)
 		if getErr != nil {
 			if doSetZero, _, _ := engine.ArgApply(self.DoSetTempHot, 0); doSetZero != nil {
 				_ = g.Engine.Exec(ctx, doSetZero)

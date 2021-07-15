@@ -14,6 +14,7 @@ import (
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
+	"github.com/temoto/vender/internal/types"
 	tele_api "github.com/temoto/vender/tele"
 )
 
@@ -40,11 +41,12 @@ func (self *tele) onCommandMessage(ctx context.Context, payload []byte) bool {
 	// } else {
 	// 	// TODO store command in persistent queue, acknowledge now, execute later
 	if err = self.dispatchCommand(ctx, cmd); err != nil {
-		fmt.Printf("\n\033[41m cmdreplayERR \033[0m\n\n")
 		self.CommandReplyErr(cmd, err)
 		return true
 	}
 	self.CommandReply(cmd, tele_api.CmdReplay_done)
+	state.VmcUnLock(ctx)
+
 	return true
 }
 
@@ -53,8 +55,8 @@ func (self *tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) er
 	case *tele_api.Command_Report:
 		return self.cmdReport(ctx, cmd)
 
-	case *tele_api.Command_Lock:
-		return self.cmdLock(ctx, cmd, task.Lock)
+	// case *tele_api.Command_Lock:
+	// 	return self.cmdLock(ctx, cmd, task.Lock)
 
 	case *tele_api.Command_Exec:
 		return self.cmdExec(ctx, cmd, task.Exec)
@@ -79,35 +81,32 @@ func (self *tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
 	return errors.Annotate(self.Report(ctx, false), "cmdReport")
 }
 
-func (self *tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgLock) error {
-	if err := state.CheckClientWorking(); err != nil {
-		return err
-	}
-	g := state.GetGlobal(ctx)
-	global.Log.Infof("precessing lock command")
-	g.Hardware.Input.Enable(false)
-	return g.ScheduleSync(ctx, cmd.Priority, func(context.Context) error {
-		time.Sleep(time.Duration(arg.Duration) * time.Second)
-		fmt.Printf("\n\033[41m lockenddd \033[0m\n\n")
-		g.Hardware.Input.Enable(true)
-		return nil
-	})
-}
+// func (self *tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgLock) error {
+// 	if err := state.CheckClientWorking(); err != nil {
+// 		return err
+// 	}
+// 	g := state.GetGlobal(ctx)
+// 	global.Log.Infof("precessing lock command")
+// 	g.Hardware.Input.Enable(false)
+// 	return g.ScheduleSync(ctx, cmd.Priority, func(context.Context) error {
+// 		time.Sleep(time.Duration(arg.Duration) * time.Second)
+// 		fmt.Printf("\n\033[41m lockenddd \033[0m\n\n")
+// 		g.Hardware.Input.Enable(true)
+// 		return nil
+// 	})
+// }
 
 func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgExec) error {
 	if arg.Scenario[:1] == "_" { // If the command contains the "_" prefix, then you ignore the client lock flag
 		arg.Scenario = arg.Scenario[1:]
-		global.GBL.Client.Working = false
-	} else if err := state.CheckClientWorking(); err != nil {
-		return err
+		types.VMC.Lock = false
 	}
-	fmt.Printf("\n\033[41m cmd.Executercmd.Executer (%v) \033[0m\n\n", cmd.Executer)
-	if !global.GBL.Client.Working {
-		fmt.Printf("\n\033[41m cmd.Executercmd.Executer11111111111111 (%v) \033[0m\n\n", cmd.Executer)
+	if types.VMC.Lock {
+		global.Log.Infof("ignore income remove command (locked) from: (%v) scenario: (%s)", cmd.Executer, arg.Scenario)
 		self.CommandReply(cmd, tele_api.CmdReplay_busy)
 		return nil
 	}
-
+	global.Log.Infof("income remove command from: (%v) scenario: (%s)", cmd.Executer, arg.Scenario)
 	g := state.GetGlobal(ctx)
 	doer, err := g.Engine.ParseText("tele-exec", arg.Scenario)
 	if err != nil {
@@ -119,8 +118,10 @@ func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 		err = errors.Annotate(err, "validate")
 		return err
 	}
+	// if arg.Scenario {
+	state.VmcLock(ctx)
+	// }
 	if cmd.Executer > 0 {
-		fmt.Printf("\n\033[41m cmd.Executercmd.Executer0000000000000 (%v) \033[0m\n\n", cmd.Executer)
 		self.CommandReply(cmd, tele_api.CmdReplay_accepted)
 	}
 

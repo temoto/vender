@@ -52,8 +52,8 @@ func NewDispatch(log *log2.Log, stop <-chan struct{}) *Dispatch {
 }
 
 func (self *Dispatch) Enable(e bool) {
-	if global.GBL.HW.EvendInput != e {
-		global.GBL.HW.EvendInput = e
+	if types.VMC.HW.Input != e {
+		types.VMC.HW.Input = e
 		global.Log.Infof("evendInput = %v", e)
 	}
 }
@@ -178,7 +178,7 @@ func (self *Dispatch) readSource(source Source) {
 			err = errors.Annotatef(err, "input source=%s", tag)
 			self.Log.Fatal(errors.ErrorStack(err))
 		}
-		if global.GBL.HW.EvendInput || event.Source == "dev-input-event" {
+		if types.VMC.HW.Input || event.Source == "dev-input-event" {
 			self.Emit(event)
 		} else {
 			self.Log.Debugf("keyboard disable. ignore event =%#v", event)

@@ -52,11 +52,10 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		err := doCheckTempHot.Validate()
 		if errtemp, ok := err.(*evend.ErrWaterTemperature); ok {
 			line1 := fmt.Sprintf(self.g.Config.UI.Front.MsgWaterTemp, errtemp.Current)
-			if global.GBL.Client.Light {
-				global.SetLight(false)
+			if types.VMC.Client.Light {
 				_ = self.g.Engine.ExecList(ctx, "water-temp", []string{"evend.cup.light_off"})
 			}
-			if global.GBL.Display.L1 != line1 {
+			if types.VMC.HW.Display.L1 != line1 {
 				self.display.SetLines(line1, self.g.Config.UI.Front.MsgWait)
 				self.g.Tele.State(tele_api.State_TempProblem)
 			}
@@ -110,7 +109,6 @@ func menuMaxPrice(ctx context.Context, m Menu) (currency.Amount, error) {
 
 func (self *UI) onFrontSelect(ctx context.Context) State {
 	moneysys := money.GetGlobal(ctx)
-	fmt.Printf("\n\033[41m  onFrontSelectonFrontSelectonFrontSelect\033[0m\n\n")
 	alive := alive.NewAlive()
 	defer func() {
 		alive.Stop() // stop pending AcceptCredit
@@ -120,7 +118,6 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 
 	for {
 	refresh:
-		global.GBL.Client.Input = fmt.Sprintf("%s", self.inputBuf)
 		// step 1: refresh display
 		credit := moneysys.Credit(ctx)
 		if self.State() == StateFrontTune { // XXX onFrontTune
@@ -186,7 +183,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 				if mitem.Price > credit {
 					// self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuInsufficientCredit)
 					// ALexM-FIX (вынести в конфиг текст. сделать scale )
-					dl2 := fmt.Sprintf("credit=%v prise(%v)=%v", credit, mitem.Code, (mitem.Price / 100))
+					dl2 := fmt.Sprintf("credit=%v price(%v)=%v", credit, mitem.Code, (mitem.Price / 100))
 					self.display.SetLines(self.g.Config.UI.Front.MsgMenuInsufficientCredit, dl2)
 					goto wait
 				}
@@ -384,7 +381,7 @@ func (self *UI) onFrontTimeout(ctx context.Context) State {
 
 func (self *UI) onFrontLock() State {
 	self.g.Hardware.Input.Enable(false)
-	global.GBL.Lock = true
+	types.VMC.Lock = true
 	self.display.SetLines(self.g.Config.UI.Front.MsgStateLocked, "")
 	timeout := self.frontResetTimeout
 	e := self.wait(timeout)
@@ -397,7 +394,7 @@ func (self *UI) onFrontLock() State {
 		}
 		return StateFrontTimeout
 	case types.EventFrontLock:
-		global.GBL.Lock = false
+		types.VMC.Lock = false
 		return StateFrontEnd
 	}
 	return StateFrontEnd

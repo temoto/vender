@@ -129,12 +129,10 @@ func (self *transportMqtt) messageHandler(c mqtt.Client, msg mqtt.Message) {
 }
 
 func (self *transportMqtt) connectLostHandler(c mqtt.Client, err error) {
-	global.GBL.Tele.Working = false
 	global.Log.Infof("mqtt disconnect")
 }
 
 func (self *transportMqtt) onConnectHandler(c mqtt.Client) {
-	global.GBL.Tele.Working = true
 	global.Log.Infof("mqtt connect")
 	if token := c.Subscribe(self.topicCommand, 1, nil); token.Wait() && token.Error() != nil {
 		global.Log.Infof("mqtt subscribe error")

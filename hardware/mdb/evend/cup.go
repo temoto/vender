@@ -3,6 +3,8 @@ package evend
 import (
 	"context"
 	"fmt"
+
+	// "go/types"
 	"time"
 
 	"github.com/juju/errors"
@@ -11,6 +13,7 @@ import (
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
+	"github.com/temoto/vender/internal/types"
 )
 
 const DefaultCupAssertBusyDelay = 30 * time.Millisecond
@@ -76,16 +79,17 @@ func (self *DeviceCup) NewDispense() engine.Doer {
 		})
 }
 
-func (self *DeviceCup) NewLight(on bool) engine.Doer {
-	tag := fmt.Sprintf("%s.light:%t", self.name, on)
+func (self *DeviceCup) NewLight(v bool) engine.Doer {
+	tag := fmt.Sprintf("%s.light:%t", self.name, v)
 	arg := byte(0x02)
-	if !on {
+	if !v {
 		arg = 0x03
 	}
-	// return { self.Generic.NewAction(tag, arg)}
-	return engine.NewSeq(tag).
-		Append(self.Generic.NewAction(tag, arg)).
-		Append(engine.Func0{F: func() error { global.SetLight(on); return nil }})
+	types.SetLight(v)
+	return self.Generic.NewAction(tag, arg)
+	// return engine.NewSeq(tag).
+	// 	Append(self.Generic.NewAction(tag, arg)).
+	// 	Append(engine.Func0{F: func() error { global.SetLight(on); return nil }})
 
 }
 
