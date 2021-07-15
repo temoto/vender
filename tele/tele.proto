@@ -91,31 +91,31 @@ message Command {
 //  uint32 id = 1;
 //  string reply_topic = 2;
 //  int64 deadline = 3;
-  Priority priority = 4;
+//  Priority priority = 4;
   uint32 executer = 5;
   oneof task {
     ArgReport report = 16;
-    ArgLock lock = 17;
+//    ArgLock lock = 17;
     ArgExec exec = 18;
     ArgSetInventory set_inventory = 19;
     ArgSetConfig set_config = 20;
-    ArgStop stop = 21;
+//    ArgStop stop = 21;
     ArgShowQR show_QR = 22;
   }
 
   message ArgReport {}
-  message ArgLock { int32 duration = 1; }
+//  message ArgLock { int32 duration = 1; }
   message ArgExec {
     string scenario = 1;
     uint32 executer = 2;
-//    bool lock = 2;
+    bool lock = 3;
   }
   message ArgSetInventory { Inventory new = 1; }
   message ArgSetConfig {
     string name = 1;
     bytes new = 2;
   }
-  message ArgStop { int32 timeout = 1; }
+//  message ArgStop { int32 timeout = 1; }
   message ArgShowQR {
     string layout = 1;
     string qr_text = 2;

@@ -64,8 +64,8 @@ func (self *tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) er
 	case *tele_api.Command_SetInventory:
 		return self.cmdSetInventory(ctx, cmd, task.SetInventory)
 
-	case *tele_api.Command_Stop:
-		return self.cmdStop(ctx, cmd, task.Stop)
+	// case *tele_api.Command_Stop:
+	// 	return self.cmdStop(ctx, cmd, task.Stop)
 
 	case *tele_api.Command_Show_QR:
 		return self.cmdShowQR(ctx, cmd, task.Show_QR)
@@ -118,9 +118,10 @@ func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 		err = errors.Annotate(err, "validate")
 		return err
 	}
-	// if arg.Scenario {
-	state.VmcLock(ctx)
-	// }
+
+	if arg.Lock {
+		state.VmcLock(ctx)
+	}
 	if cmd.Executer > 0 {
 		self.CommandReply(cmd, tele_api.CmdReplay_accepted)
 	}
