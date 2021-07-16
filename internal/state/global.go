@@ -46,22 +46,20 @@ type Global struct {
 const ContextKey = "run/state-global"
 
 func (g *Global) ClientBegin() {
-	gg := *types.VMC
-	if !gg.Lock {
+	if !types.VMC.Lock {
 		g.TimerUIStop <- struct{}{}
-		gg.Lock = true
-		gg.Client.WorkTime = time.Now()
+		types.VMC.Lock = true
+		types.VMC.Client.WorkTime = time.Now()
 		global.Log.Infof("--- client activity begin ---")
 		g.Tele.State(tele_api.State_Client)
 	}
 }
 
 func (g *Global) ClientEnd() {
-	gg := *types.VMC
 	g.Hardware.Input.Enable(true)
-	if gg.Lock {
-		gg.Lock = false
-		gg.Client.WorkTime = time.Now()
+	if types.VMC.Lock {
+		types.VMC.Lock = false
+		types.VMC.Client.WorkTime = time.Now()
 		global.Log.Infof("--- client activity end ---")
 		// g.Tele.State(tele_api.State_Nominal)
 	}
@@ -193,27 +191,28 @@ func (g *Global) Fatal(err error, args ...interface{}) {
 	}
 }
 
-func (g *Global) ScheduleSync(ctx context.Context, priority tele_api.Priority, fun types.TaskFunc) error {
+func (g *Global) ScheduleSync(ctx context.Context, fun types.TaskFunc) error {
 	// TODO task := g.Schedule(ctx, priority, fun)
 	// return task.wait()
 
 	g.Alive.Add(1)
 	defer g.Alive.Done()
+	return fun(ctx)
 
-	switch priority {
-	case tele_api.Priority_Default, tele_api.Priority_Now:
-		return fun(ctx)
+	// switch priority {
+	// case tele_api.Priority_Default, tele_api.Priority_Now:
+	// 	return fun(ctx)
 
-	case tele_api.Priority_IdleEngine:
-		// TODO return g.Engine.Schedule(ctx, priority, fun)
-		return fun(ctx)
+	// case tele_api.Priority_IdleEngine:
+	// 	// TODO return g.Engine.Schedule(ctx, priority, fun)
+	// 	return fun(ctx)
 
-	case tele_api.Priority_IdleUser:
-		return g.UI().ScheduleSync(ctx, priority, fun)
+	// case tele_api.Priority_IdleUser:
+	// 	return g.UI().ScheduleSync(ctx, priority, fun)
 
-	default:
-		return errors.Errorf("code error ScheduleSync invalid priority=(%d)%s", priority, priority.String())
-	}
+	// default:
+	// 	return errors.Errorf("code error ScheduleSync invalid priority=(%d)%s", priority, priority.String())
+	// }
 }
 
 func (g *Global) Stop() {

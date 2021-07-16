@@ -3,15 +3,12 @@ package tele
 import (
 	"context"
 	"fmt"
-	"os"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	// "google.golang.org/protobuf/proto"
 
 	"github.com/juju/errors"
 	"github.com/skip2/go-qrcode"
-	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
@@ -44,8 +41,6 @@ func (self *tele) onCommandMessage(ctx context.Context, payload []byte) bool {
 		self.CommandReplyErr(cmd, err)
 		return true
 	}
-	self.CommandReply(cmd, tele_api.CmdReplay_done)
-	state.VmcUnLock(ctx)
 
 	return true
 }
@@ -104,7 +99,7 @@ func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 	if types.VMC.Lock {
 		global.Log.Infof("ignore income remove command (locked) from: (%v) scenario: (%s)", cmd.Executer, arg.Scenario)
 		self.CommandReply(cmd, tele_api.CmdReplay_busy)
-		return nil
+		return errors.New("locked")
 	}
 	global.Log.Infof("income remove command from: (%v) scenario: (%s)", cmd.Executer, arg.Scenario)
 	g := state.GetGlobal(ctx)
@@ -121,12 +116,19 @@ func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 
 	if arg.Lock {
 		state.VmcLock(ctx)
+		defer state.VmcUnLock(ctx)
 	}
 	if cmd.Executer > 0 {
 		self.CommandReply(cmd, tele_api.CmdReplay_accepted)
 	}
 
-	err = g.ScheduleSync(ctx, cmd.Priority, doer.Do)
+	// err = g.ScheduleSync(ctx, cmd.Priority, doer.Do)
+	err = g.ScheduleSync(ctx, doer.Do)
+	if err == nil {
+		self.CommandReply(cmd, tele_api.CmdReplay_done)
+		return nil
+	}
+	self.CommandReply(cmd, tele_api.CmdReplay_error)
 	err = errors.Annotate(err, "schedule")
 	return err
 }
@@ -141,36 +143,36 @@ func (self *tele) cmdSetInventory(ctx context.Context, cmd *tele_api.Command, ar
 	return err
 }
 
-func (self *tele) cmdStop(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgStop) error {
-	if arg == nil {
-		return errInvalidArg
-	}
+// func (self *tele) cmdStop(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgStop) error {
+// 	if arg == nil {
+// 		return errInvalidArg
+// 	}
 
-	g := state.GetGlobal(ctx)
-	// go+delay to send transport ack before process exits
-	// TODO store command in persistent queue, send MQTT ack, execute later
-	go func() {
-		delay := helpers.IntSecondDefault(g.Config.Tele.FIXME_stopDelaySec, 7*time.Second)
-		g.Log.Debugf("cmdStop arg=%s crutch delay=%v", proto.MarshalTextString(arg), delay)
-		time.Sleep(delay)
+// 	g := state.GetGlobal(ctx)
+// 	// go+delay to send transport ack before process exits
+// 	// TODO store command in persistent queue, send MQTT ack, execute later
+// 	go func() {
+// 		delay := helpers.IntSecondDefault(g.Config.Tele.FIXME_stopDelaySec, 7*time.Second)
+// 		g.Log.Debugf("cmdStop arg=%s crutch delay=%v", proto.MarshalTextString(arg), delay)
+// 		time.Sleep(delay)
 
-		g.ScheduleSync(ctx, cmd.Priority, func(context.Context) error {
-			g.Stop()
+// 		g.ScheduleSync(ctx, cmd.Priority, func(context.Context) error {
+// 			g.Stop()
 
-			if arg.Timeout > 0 {
-				timeout := time.Duration(arg.Timeout) * time.Second
-				time.AfterFunc(timeout, func() {
-					if !g.StopWait(timeout) {
-						g.Log.Errorf("cmdStop timeout")
-						os.Exit(1)
-					}
-				})
-			}
-			return nil
-		})
-	}()
-	return nil
-}
+// 			if arg.Timeout > 0 {
+// 				timeout := time.Duration(arg.Timeout) * time.Second
+// 				time.AfterFunc(timeout, func() {
+// 					if !g.StopWait(timeout) {
+// 						g.Log.Errorf("cmdStop timeout")
+// 						os.Exit(1)
+// 					}
+// 				})
+// 			}
+// 			return nil
+// 		})
+// 	}()
+// 	return nil
+// }
 
 func (self *tele) cmdShowQR(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgShowQR) error {
 	if arg == nil {

@@ -86,10 +86,10 @@ func (self *DeviceCup) NewLight(v bool) engine.Doer {
 		arg = 0x03
 	}
 	types.SetLight(v)
-	return self.Generic.NewAction(tag, arg)
-	// return engine.NewSeq(tag).
-	// 	Append(self.Generic.NewAction(tag, arg)).
-	// 	Append(engine.Func0{F: func() error { global.SetLight(on); return nil }})
+	// return self.Generic.NewAction(tag, arg)
+	return engine.NewSeq(tag).
+		Append(self.Generic.NewAction(tag, arg)).
+		Append(engine.Func0{F: func() error { types.SetLight(v); return nil }})
 
 }
 

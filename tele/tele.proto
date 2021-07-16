@@ -127,6 +127,7 @@ enum CmdReplay {
   accepted = 1;
   done = 2;
   busy = 3;
+  error = 4;
 }
 message Response {
   uint32 command_id = 1;

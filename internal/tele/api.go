@@ -31,25 +31,25 @@ func (self *tele) CommandReplyErr(c *tele_api.Command, e error) {
 	}
 }
 
-func (self *tele) CommandReply(c *tele_api.Command, cr tele_api.CmdReplay) {
-	if te := self.teleEnable(); te {
+func (t *tele) CommandReply(c *tele_api.Command, cr tele_api.CmdReplay) {
+	if te := t.teleEnable(); te {
 		return
 	}
+	t.log.Infof("command replay (%v) executer Id(%d)", cr, c.Executer)
 	r := tele_api.Response{
-		Executer: c.Executer,
-		// CommandId: c.Id,
+		Executer:  c.Executer,
 		CmdReplay: cr,
 	}
-	err := self.qpushCommandResponse(c, &r)
+	err := t.qpushCommandResponse(c, &r)
 	if err != nil {
 		// s.log.Error(errors.Annotatef(err, "CRITICAL command=%#v response=%#v", c, r))
 		fmt.Printf("\n\033[41m error \033[0m\n\n")
 	}
 }
 
-func (s *tele) teleEnable() bool {
-	if !s.config.Enabled {
-		s.log.Infof(logMsgDisabled)
+func (t *tele) teleEnable() bool {
+	if !t.config.Enabled {
+		t.log.Infof(logMsgDisabled)
 		return true
 	}
 	return false
