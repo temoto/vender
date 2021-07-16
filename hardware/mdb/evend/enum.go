@@ -9,7 +9,7 @@ import (
 	"github.com/temoto/vender/internal/state"
 )
 
-// Register devices
+// Enum Register devices
 func Enum(ctx context.Context) error {
 	const Nhoppers = 8
 	const N = 7 + Nhoppers

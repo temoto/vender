@@ -70,7 +70,7 @@ func (self *Generic) Init(ctx context.Context, address uint8, name string, proto
 	self.dev.Init(mdbus, address, self.name, binary.BigEndian)
 }
 
-// FIXME Enum, remove IO from Init
+// FIXME_initIO Enum, remove IO from Init
 func (self *Generic) FIXME_initIO(ctx context.Context) error {
 	tag := self.logPrefix + ".initIO"
 	g := state.GetGlobal(ctx)
@@ -137,7 +137,7 @@ func (self *Generic) Diagnostic() (byte, error) {
 	return rs[0], nil
 }
 
-// proto1/2 agnostic, use it before action
+// NewWaitReady proto1/2 agnostic, use it before action
 func (self *Generic) NewWaitReady(tag string) engine.Doer {
 	tag += "/wait-ready"
 	switch self.proto {
@@ -203,7 +203,7 @@ func (self *Generic) NewWaitReady(tag string) engine.Doer {
 	}
 }
 
-// proto1/2 agnostic, use it after action
+// NewWaitDone proto1/2 agnostic, use it after action
 func (self *Generic) NewWaitDone(tag string, timeout time.Duration) engine.Doer {
 	tag += "/wait-done"
 

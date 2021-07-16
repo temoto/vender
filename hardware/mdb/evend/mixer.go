@@ -16,7 +16,6 @@ const DefaultShakeSpeed uint8 = 100
 type DeviceMixer struct { //nolint:maligned
 	Generic
 
-	earlyPos     int16 // estimated
 	currentPos   int16 // estimated
 	moveTimeout  time.Duration
 	shakeTimeout time.Duration
