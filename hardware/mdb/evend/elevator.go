@@ -8,7 +8,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
 )
@@ -53,7 +52,7 @@ func (self *DeviceElevator) move(position uint8) engine.Doer {
 	cp := types.VMC.HW.Elevator.Position
 	types.VMC.HW.Elevator.Position = 255
 	mp := fmt.Sprintf("%d->%d", cp, position)
-	global.Log.Infof(self.name+".position = %s", mp)
+	types.Log.Infof(self.name+".position = %s", mp)
 	tag := fmt.Sprintf("%s.move:%s", self.name, mp)
 	return engine.NewSeq(tag).
 		Append(self.NewWaitReady(tag)).

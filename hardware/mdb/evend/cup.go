@@ -11,7 +11,6 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
 )
@@ -51,7 +50,7 @@ func (self *DeviceCup) NewDispenseProper() engine.Doer {
 func (self *DeviceCup) NewDispense() engine.Doer {
 	tag := self.name + ".dispense"
 	return engine.NewSeq(tag).
-		Append(engine.Func0{F: func() error { global.Log.Info("cup dispence"); return nil }}).
+		Append(engine.Func0{F: func() error { types.Log.Info("cup dispence"); return nil }}).
 		Append(self.Generic.NewWaitReady(tag)).
 		Append(self.Generic.NewAction(tag, 0x01)).
 		Append(engine.Func{Name: tag + "/assert-busy", F: func(ctx context.Context) error {

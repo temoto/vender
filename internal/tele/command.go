@@ -9,7 +9,6 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/skip2/go-qrcode"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
 	tele_api "github.com/temoto/vender/tele"
@@ -97,11 +96,11 @@ func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 		types.VMC.Lock = false
 	}
 	if types.VMC.Lock {
-		global.Log.Infof("ignore income remove command (locked) from: (%v) scenario: (%s)", cmd.Executer, arg.Scenario)
+		self.log.Infof("ignore income remove command (locked) from: (%v) scenario: (%s)", cmd.Executer, arg.Scenario)
 		self.CommandReply(cmd, tele_api.CmdReplay_busy)
 		return errors.New("locked")
 	}
-	global.Log.Infof("income remove command from: (%v) scenario: (%s)", cmd.Executer, arg.Scenario)
+	self.log.Infof("income remove command from: (%v) scenario: (%s)", cmd.Executer, arg.Scenario)
 	g := state.GetGlobal(ctx)
 	doer, err := g.Engine.ParseText("tele-exec", arg.Scenario)
 	if err != nil {
@@ -189,6 +188,6 @@ func (self *tele) cmdShowQR(ctx context.Context, cmd *tele_api.Command, arg *tel
 	}
 	// TODO display.Layout(arg.Layout)
 	// TODO border,redundancy from layout/config
-	global.Log.Infof("show QR:'%v'", arg.QrText)
+	self.log.Infof("show QR:'%v'", arg.QrText)
 	return display.QR(arg.QrText, true, qrcode.High)
 }

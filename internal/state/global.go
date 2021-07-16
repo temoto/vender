@@ -18,7 +18,6 @@ import (
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/engine/inventory"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 	tele_api "github.com/temoto/vender/tele"
@@ -50,7 +49,7 @@ func (g *Global) ClientBegin() {
 		g.TimerUIStop <- struct{}{}
 		types.VMC.Lock = true
 		types.VMC.Client.WorkTime = time.Now()
-		global.Log.Infof("--- client activity begin ---")
+		g.Log.Infof("--- client activity begin ---")
 		g.Tele.State(tele_api.State_Client)
 	}
 }
@@ -60,16 +59,16 @@ func (g *Global) ClientEnd() {
 	if types.VMC.Lock {
 		types.VMC.Lock = false
 		types.VMC.Client.WorkTime = time.Now()
-		global.Log.Infof("--- client activity end ---")
+		g.Log.Infof("--- client activity end ---")
 		// g.Tele.State(tele_api.State_Nominal)
 	}
 }
 
 func (g *Global) VmcStop(ctx context.Context) {
-	global.Log.Infof("--- vmc stop command---")
+	g.Log.Infof("--- vmc stop command---")
 	go func() {
 		time.Sleep(30 * time.Second)
-		global.Log.Infof("--- vmc EXIT ---")
+		g.Log.Infof("--- vmc EXIT ---")
 		os.Exit(1)
 	}()
 
@@ -80,7 +79,7 @@ func (g *Global) VmcStop(ctx context.Context) {
 	g.Tele.State(tele_api.State_Shutdown)
 	g.Tele.Close()
 	time.Sleep(2 * time.Second)
-	global.Log.Infof("--- vmc stop ---")
+	g.Log.Infof("--- vmc stop ---")
 	g.Stop()
 }
 
@@ -178,7 +177,7 @@ func (g *Global) Error(err error, args ...interface{}) {
 			err = errors.Annotatef(err, msg, args...)
 		}
 		g.Tele.Error(err)
-		global.Log.Error(err)
+		g.Log.Error(err)
 	}
 }
 

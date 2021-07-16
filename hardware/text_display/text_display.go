@@ -12,7 +12,6 @@ import (
 	"github.com/paulrosania/go-charset/charset"
 	_ "github.com/paulrosania/go-charset/data"
 	"github.com/temoto/alive/v2"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/types"
 )
 
@@ -141,11 +140,11 @@ func (self *TextDisplay) SetLines(line1, line2 string) {
 		self.Translate(line2))
 	if types.VMC.HW.Display.L1 != line1 {
 		types.VMC.HW.Display.L1 = line1
-		global.Log.Infof("Display.L1=%s", line1)
+		types.Log.Infof("Display.L1=%s", line1)
 	}
 	if types.VMC.HW.Display.L2 != line2 {
 		types.VMC.HW.Display.L2 = line2
-		global.Log.Infof("Display.L2=%s", line2)
+		types.Log.Infof("Display.L2=%s", line2)
 	}
 }
 

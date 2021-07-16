@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )
@@ -54,7 +53,7 @@ func NewDispatch(log *log2.Log, stop <-chan struct{}) *Dispatch {
 func (self *Dispatch) Enable(e bool) {
 	if types.VMC.HW.Input != e {
 		types.VMC.HW.Input = e
-		global.Log.Infof("evendInput = %v", e)
+		types.Log.Infof("evendInput = %v", e)
 	}
 }
 

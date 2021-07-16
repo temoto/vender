@@ -13,7 +13,6 @@ import (
 	"github.com/temoto/vender/hardware/text_display"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
@@ -135,7 +134,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 		switch e.Kind {
 		case types.EventInput:
 			if input.IsMoneyAbort(&e.Input) {
-				global.Log.Infof("money abort event.")
+				self.g.Log.Infof("money abort event.")
 				credit := moneysys.Credit(ctx) / 100
 				if credit > 0 {
 					self.display.SetLines("  :-(", fmt.Sprintf(" -%v", credit))
@@ -249,7 +248,7 @@ func (self *UI) onFrontTune(ctx context.Context) State {
 func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 	switch e.Key {
 	case input.EvendKeyCreamLess:
-		global.Log.Infof("key.cream-")
+		self.g.Log.Infof("key.cream-")
 		if self.FrontResult.Cream > 0 {
 			self.FrontResult.Cream--
 			//lint:ignore SA9003 empty branch
@@ -257,7 +256,7 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 			// TODO notify "impossible input" (sound?)
 		}
 	case input.EvendKeyCreamMore:
-		global.Log.Infof("key.cream+")
+		self.g.Log.Infof("key.cream+")
 		if self.FrontResult.Cream < MaxCream {
 			self.FrontResult.Cream++
 			//lint:ignore SA9003 empty branch
@@ -265,7 +264,7 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 			// TODO notify "impossible input" (sound?)
 		}
 	case input.EvendKeySugarLess:
-		global.Log.Infof("key.sugar-")
+		self.g.Log.Infof("key.sugar-")
 		if self.FrontResult.Sugar > 0 {
 			self.FrontResult.Sugar--
 			//lint:ignore SA9003 empty branch
@@ -273,7 +272,7 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 			// TODO notify "impossible input" (sound?)
 		}
 	case input.EvendKeySugarMore:
-		global.Log.Infof("key.sugar+")
+		self.g.Log.Infof("key.sugar+")
 		if self.FrontResult.Sugar < MaxSugar {
 			self.FrontResult.Sugar++
 			//lint:ignore SA9003 empty branch

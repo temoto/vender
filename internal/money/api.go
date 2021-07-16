@@ -9,9 +9,9 @@ package money
 
 import (
 	"context"
+
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
 )
 
@@ -193,16 +193,16 @@ func (self *MoneySystem) locked_payout(ctx context.Context, amount currency.Amou
 	// TODO bill.recycler-release
 
 	tubeBefore := self.coin.Tubes()
-	global.Log.Infof("tubes before dispense (%v)", tubeBefore)
+	self.Log.Infof("tubes before dispense (%v)", tubeBefore)
 	dispensed := new(currency.NominalGroup)
 	err = g.Engine.Exec(ctx, self.coin.NewGive(amount, true, dispensed))
 	// Warning: `dispensedAmount` may be more or less than `amount`
 	dispensedAmount := dispensed.Total()
 	// self.Log.Debugf("%s coin total dispensed=%s", tag, dispensedAmount.FormatCtx(ctx))
-	global.Log.Infof("coin total dispensed=%s", dispensedAmount.FormatCtx(ctx))
+	self.Log.Infof("coin total dispensed=%s", dispensedAmount.FormatCtx(ctx))
 	self.coin.TubeStatus()
 	tubeAfter := self.coin.Tubes()
-	global.Log.Infof("tubes after dispense  (%v)", tubeAfter)
+	self.Log.Infof("tubes after dispense  (%v)", tubeAfter)
 	// AlexM add check  if (tubeBefore - dispensed != tubeAfter) send tele error
 	// self.g.Error(errors.Errorf("money timeout lost (%v)", credit))
 	if dispensedAmount < amount {

@@ -9,7 +9,6 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/temoto/vender/helpers"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/log2"
 	tele_config "github.com/temoto/vender/tele/config"
 	// "time"
@@ -96,9 +95,9 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 }
 
 func (self *transportMqtt) CloseTele() {
-	global.Log.Infof("mqtt unsubscribe")
+	self.log.Infof("mqtt unsubscribe")
 	if token := self.m.Unsubscribe(self.topicCommand); token.Wait() && token.Error() != nil {
-		global.Log.Infof("mqtt unsubscribe error")
+		self.log.Infof("mqtt unsubscribe error")
 		// fmt.Println(token.Error())
 		// os.Exit(1)
 	}
@@ -117,27 +116,27 @@ func (self *transportMqtt) SendTelemetry(payload []byte) bool {
 
 func (self *transportMqtt) SendCommandResponse(topicSuffix string, payload []byte) bool {
 	topic := fmt.Sprintf("%s/%s", self.topicPrefix, topicSuffix)
-	global.Log.Infof("mqtt publish command response to topic=%s", topic)
+	self.log.Infof("mqtt publish command response to topic=%s", topic)
 	self.m.Publish(topic, 1, false, payload)
 	return true
 }
 
 func (self *transportMqtt) messageHandler(c mqtt.Client, msg mqtt.Message) {
 	payload := msg.Payload()
-	global.Log.Infof("mqtt income message (%x)", payload)
+	self.log.Infof("mqtt income message (%x)", payload)
 	self.onCommand(payload)
 }
 
 func (self *transportMqtt) connectLostHandler(c mqtt.Client, err error) {
-	global.Log.Infof("mqtt disconnect")
+	self.log.Infof("mqtt disconnect")
 }
 
 func (self *transportMqtt) onConnectHandler(c mqtt.Client) {
-	global.Log.Infof("mqtt connect")
+	self.log.Infof("mqtt connect")
 	if token := c.Subscribe(self.topicCommand, 1, nil); token.Wait() && token.Error() != nil {
-		global.Log.Infof("mqtt subscribe error")
+		self.log.Infof("mqtt subscribe error")
 	} else {
-		global.Log.Infof("mqtt subscribe Ok")
+		self.log.Infof("mqtt subscribe Ok")
 		c.Publish(self.topicConnect, 1, true, []byte{0x01})
 	}
 }

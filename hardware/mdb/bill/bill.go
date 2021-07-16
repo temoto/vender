@@ -15,7 +15,6 @@ import (
 	"github.com/temoto/vender/hardware/mdb"
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/internal/engine"
-	"github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/state"
 )
 
@@ -349,7 +348,7 @@ func (self *BillValidator) newEscrow(accept bool) engine.Func {
 
 	return engine.Func{Name: tag, F: func(ctx context.Context) error {
 		if self.escrowBill == 0 {
-			global.Log.Errorf("escrow (%v) not possilbe. no bills.", accept)
+			self.Log.Errorf("escrow (%v) not possilbe. no bills.", accept)
 			return nil
 		}
 		self.pollmu.Lock()
@@ -485,7 +484,7 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 		}
 		switch status {
 		case StatusRoutingBillStacked:
-			global.Log.Infof("stacked bill:%v", result.DataNominal/100)
+			self.Log.Infof("stacked bill:%v", result.DataNominal/100)
 			self.setEscrowBill(0)
 			result.DataCashbox = true
 			result.Status = money.StatusCredit
@@ -495,7 +494,7 @@ func (self *BillValidator) parsePollItem(b byte) money.PollItem {
 			}
 			dn := result.DataNominal
 			// global.Log.Infof("escrow bill:%v",dn)
-			global.Log.Infof("escrow bill:%v", dn/100)
+			self.Log.Infof("escrow bill:%v", dn/100)
 
 			self.setEscrowBill(dn)
 			result.Status = money.StatusEscrow
