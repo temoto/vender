@@ -16,6 +16,7 @@ import (
 	"github.com/temoto/vender/hardware/money"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/state"
+	"github.com/temoto/vender/internal/types"
 )
 
 const (
@@ -133,6 +134,7 @@ func (self *BillValidator) SupportedNominals() []currency.Nominal {
 
 func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func(money.PollItem) bool) {
 	var stopch <-chan struct{}
+	types.VMC.MonSys.BillOn = true
 	if alive != nil {
 		defer alive.Done()
 		stopch = alive.StopChan()
@@ -141,20 +143,24 @@ func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func
 	parse := self.pollFun(fun)
 	var active bool
 	var err error
+
 	again := true
 	for again {
 		response := mdb.Packet{}
 		self.pollmu.Lock()
 		err = self.Device.TxKnown(self.Device.PacketPoll, &response)
-		self.pollmu.Unlock()
 		if err == nil {
 			active, err = parse(response)
+			types.VMC.MonSys.BillRun = !active
 		}
+		self.pollmu.Unlock()
+		// AlexM разобраться.
+		// сейчас пуд идет 0.2 0.7 0.2 0.7
+		// после собития (подсунуть и забрать купюру) пул идет каждые 0.2
 		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.Device, active, err != nil, stopch)
-		// self.Log.Debugf("bill.Run r.E=%v perr=%v pactive=%t alive_not_nil=%t alive_running=%t -> again=%t",
-		// 	r.E, err, active, alive != nil, (alive != nil) && alive.IsRunning(), again)
-		// TODO try pollmu.Unlock() here
 	}
+	self.setEscrowBill(0)
+	types.VMC.MonSys.BillOn = false
 }
 func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollRequestFunc {
 	const tag = deviceName + ".poll"
@@ -177,10 +183,14 @@ func (self *BillValidator) pollFun(fun func(money.PollItem) bool) mdb.PollReques
 				self.Device.TeleError(errors.Annotate(pi.Error, tag))
 			case money.StatusBusy:
 			case money.StatusDisabled:
+			case money.StatusRejected:
+			case money.StatusWasReset:
+				self.Log.Infof("bill was reset ")
 			default:
-				if fun(pi) {
-					return true, nil
-				}
+				fun(pi)
+				// if fun(pi) {
+				// 	return true, nil
+				// }
 			}
 		}
 		return true, nil

@@ -11,7 +11,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/atomic_clock"
 	"github.com/temoto/vender/internal/engine"
-	// "github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/types"
 	"github.com/temoto/vender/log2"
 )

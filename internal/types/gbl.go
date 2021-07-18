@@ -30,6 +30,10 @@ type VMCType struct {
 		}
 		Temperature int
 	}
+	MonSys struct {
+		BillOn  bool
+		BillRun bool
+	}
 }
 
 func init() {
