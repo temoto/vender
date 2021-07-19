@@ -161,7 +161,7 @@ func (self *MoneySystem) Stop(ctx context.Context) error {
 	return errors.Annotate(helpers.FoldErrors(errs), tag)
 }
 
-// Stored in one-way cashbox Telemetry_Money
+// TeleCashbox Stored in one-way cashbox Telemetry_Money
 func (self *MoneySystem) TeleCashbox(ctx context.Context) *tele_api.Telemetry_Money {
 	pb := &tele_api.Telemetry_Money{
 		Bills: make(map[uint32]uint32, bill.TypeCount),
@@ -175,7 +175,7 @@ func (self *MoneySystem) TeleCashbox(ctx context.Context) *tele_api.Telemetry_Mo
 	return pb
 }
 
-// Dispensable Telemetry_Money
+// TeleChange Dispensable Telemetry_Money
 func (self *MoneySystem) TeleChange(ctx context.Context) *tele_api.Telemetry_Money {
 	pb := &tele_api.Telemetry_Money{
 		// TODO support bill recycler Bills: make(map[uint32]uint32, bill.TypeCount),

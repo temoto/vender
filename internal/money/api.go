@@ -55,7 +55,7 @@ func (self *MoneySystem) Credit(ctx context.Context) currency.Amount {
 	return self.locked_credit(creditAll)
 }
 
-// TODO replace with WithdrawPrepare() -> []Spending{Cash: ..., Gift: ...}
+// GetGiftCredit TODO replace with WithdrawPrepare() -> []Spending{Cash: ..., Gift: ...}
 func (self *MoneySystem) GetGiftCredit() currency.Amount {
 	self.lk.RLock()
 	c := self.giftCredit
@@ -125,7 +125,7 @@ func (self *MoneySystem) WithdrawPrepare(ctx context.Context, amount currency.Am
 	return nil
 }
 
-// Store spending to durable memory, no user initiated return after this point.
+// WithdrawCommit Store spending to durable memory, no user initiated return after this point.
 func (self *MoneySystem) WithdrawCommit(ctx context.Context, amount currency.Amount) error {
 	const tag = "money.withdraw-commit"
 
@@ -141,7 +141,7 @@ func (self *MoneySystem) WithdrawCommit(ctx context.Context, amount currency.Amo
 	return nil
 }
 
-// Release bill escrow + inserted coins
+// Abort Release bill escrow + inserted coins
 // returns error *only* if unable to return all money
 func (self *MoneySystem) Abort(ctx context.Context) error {
 	const tag = "money-abort"

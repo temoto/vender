@@ -108,15 +108,15 @@ func TestBillPoll(t *testing.T) {
 	cases := []Case{
 		{"empty", "", []_PI{}},
 		{"disabled", "09", []_PI{
-			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
+			{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
 		{"reset,disabled", "0609", []_PI{
-			_PI{HardwareCode: 0x06, Status: money.StatusWasReset},
-			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
+			{HardwareCode: 0x06, Status: money.StatusWasReset},
+			{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
 		{"escrow", "9209", []_PI{
-			_PI{HardwareCode: 0x90, Status: money.StatusEscrow, DataNominal: 10 * devScaling * testScalingFactor, DataCount: 1},
-			_PI{HardwareCode: 0x09, Status: money.StatusDisabled},
+			{HardwareCode: 0x90, Status: money.StatusEscrow, DataNominal: 10 * devScaling * testScalingFactor, DataCount: 1},
+			{HardwareCode: 0x09, Status: money.StatusDisabled},
 		}},
 	}
 	helpers.RandUnix().Shuffle(len(cases), func(i int, j int) { cases[i], cases[j] = cases[j], cases[i] })

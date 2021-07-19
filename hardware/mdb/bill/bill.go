@@ -149,14 +149,14 @@ func (self *BillValidator) Run(ctx context.Context, alive *alive.Alive, fun func
 		response := mdb.Packet{}
 		self.pollmu.Lock()
 		err = self.Device.TxKnown(self.Device.PacketPoll, &response)
+		self.pollmu.Unlock()
 		if err == nil {
 			active, err = parse(response)
 			types.VMC.MonSys.BillRun = !active
 		}
-		self.pollmu.Unlock()
 		// AlexM разобраться.
-		// сейчас пуд идет 0.2 0.7 0.2 0.7
-		// после собития (подсунуть и забрать купюру) пул идет каждые 0.2
+		// сейчас пул идет 0.2с 0.7с 0.2с 0.7с
+		// после собития (подсунуть и забрать купюру) пул идет каждые 0.2с
 		again = (alive != nil) && (alive.IsRunning()) && pd.Delay(&self.Device, active, err != nil, stopch)
 	}
 	self.setEscrowBill(0)

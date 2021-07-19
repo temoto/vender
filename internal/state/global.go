@@ -67,7 +67,7 @@ func (g *Global) ClientEnd() {
 func (g *Global) VmcStop(ctx context.Context) {
 	g.Log.Infof("--- vmc stop command---")
 	go func() {
-		time.Sleep(30 * time.Second)
+		time.Sleep(10 * time.Second)
 		g.Log.Infof("--- vmc EXIT ---")
 		os.Exit(1)
 	}()

@@ -117,7 +117,8 @@ func (self *Dispatch) Run(sources []Source) {
 func (self *Dispatch) Emit(event types.InputEvent) {
 	select {
 	case self.bus <- event:
-		self.Log.Debugf("input emit=%#v", event)
+		// self.Log.Debugf("input emit=%#v", event)
+		self.Log.Infof("key press code(%d) ", event.Key)
 	case <-self.stop:
 		return
 	}
