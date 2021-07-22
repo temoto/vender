@@ -107,7 +107,7 @@ message Command {
 //  message ArgLock { int32 duration = 1; }
   message ArgExec {
     string scenario = 1;
-    uint32 executer = 2;
+//    uint32 executer = 2;
     bool lock = 3;
   }
   message ArgSetInventory { Inventory new = 1; }
