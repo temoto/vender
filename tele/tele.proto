@@ -95,14 +95,13 @@ message Command {
 //  Priority priority = 4;
   uint32 executer = 5;
   bool lock = 6;
-  bool send_status = 7;
   oneof task {
     ArgReport report = 16;
 //    ArgLock lock = 17;
     ArgExec exec = 18;
     ArgSetInventory set_inventory = 19;
     ArgSetConfig set_config = 20;
-//    ArgStop stop = 21;
+    ArgSendStatus stop = 21;
     ArgShowQR show_QR = 22;
     ArgValidateCode validate_code = 23;
     ArgCook cook = 24;
@@ -121,7 +120,7 @@ message Command {
     string name = 1;
     bytes new = 2;
   }
-//  message ArgStop { int32 timeout = 1; }
+  message ArgSendStatus { }
   message ArgShowQR {
     string layout = 1;
     string qr_text = 2;
