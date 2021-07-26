@@ -7,7 +7,7 @@ import (
 	tele_config "github.com/temoto/vender/tele/config"
 )
 
-// Tele transport contract:
+// Transporter  Tele transport contract:
 // - Init fails only with invalid config, ignores network errors
 // - Send* deliver (with retries) within timeout or fail; success includes ack from receiver
 // - hide "connection" concept from upstream API or errors; transport delivers messages at least once

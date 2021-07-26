@@ -1,3 +1,4 @@
+//go:generate protoc --go_out=./ tele.proto
 syntax = "proto3";
 package tele;
 
@@ -93,6 +94,8 @@ message Command {
 //  int64 deadline = 3;
 //  Priority priority = 4;
   uint32 executer = 5;
+  bool lock = 6;
+  bool send_status = 7;
   oneof task {
     ArgReport report = 16;
 //    ArgLock lock = 17;
@@ -101,6 +104,9 @@ message Command {
     ArgSetConfig set_config = 20;
 //    ArgStop stop = 21;
     ArgShowQR show_QR = 22;
+    ArgValidateCode validate_code = 23;
+    ArgCook cook = 24;
+
   }
 
   message ArgReport {}
@@ -108,7 +114,7 @@ message Command {
   message ArgExec {
     string scenario = 1;
 //    uint32 executer = 2;
-    bool lock = 3;
+//    bool lock = 3;
   }
   message ArgSetInventory { Inventory new = 1; }
   message ArgSetConfig {
@@ -120,6 +126,14 @@ message Command {
     string layout = 1;
     string qr_text = 2;
   }
+  message ArgValidateCode {string code = 1; }
+  message ArgCook {
+    string menucode  = 1;
+    bytes cream = 2;
+    bytes sugar = 3;
+    uint32 credit = 4;
+    PaymentMethod payment_method = 5;
+  }
 }
 
 enum CmdReplay {
@@ -129,11 +143,19 @@ enum CmdReplay {
   busy = 3;
   error = 4;
 }
+enum CookReplay {
+  hz = 0;
+  cooking = 1;
+  finish = 2;
+  cookError = 3;
+}
 message Response {
   uint32 command_id = 1;
   string error = 2;
   string data = 3;
   uint32 executer = 4;
   CmdReplay cmd_replay = 5;
+  uint32 validateReplay = 6;
+  CookReplay cook_replay = 7;
   string INTERNAL_topic = 2048; // convenience
 }

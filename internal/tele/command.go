@@ -5,8 +5,6 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-	// "google.golang.org/protobuf/proto"
-
 	"github.com/juju/errors"
 	"github.com/skip2/go-qrcode"
 	"github.com/temoto/vender/internal/state"
@@ -49,17 +47,14 @@ func (self *tele) dispatchCommand(ctx context.Context, cmd *tele_api.Command) er
 	case *tele_api.Command_Report:
 		return self.cmdReport(ctx, cmd)
 
-	// case *tele_api.Command_Lock:
-	// 	return self.cmdLock(ctx, cmd, task.Lock)
-
 	case *tele_api.Command_Exec:
 		return self.cmdExec(ctx, cmd, task.Exec)
 
 	case *tele_api.Command_SetInventory:
 		return self.cmdSetInventory(ctx, cmd, task.SetInventory)
 
-	// case *tele_api.Command_Stop:
-	// 	return self.cmdStop(ctx, cmd, task.Stop)
+	case *tele_api.Command_Cook:
+		return self.cmdCook(ctx, cmd, task.Cook)
 
 	case *tele_api.Command_Show_QR:
 		return self.cmdShowQR(ctx, cmd, task.Show_QR)
@@ -75,20 +70,14 @@ func (self *tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
 	return errors.Annotate(self.Report(ctx, false), "cmdReport")
 }
 
-// func (self *tele) cmdLock(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgLock) error {
-// 	if err := state.CheckClientWorking(); err != nil {
-// 		return err
-// 	}
-// 	g := state.GetGlobal(ctx)
-// 	global.Log.Infof("precessing lock command")
-// 	g.Hardware.Input.Enable(false)
-// 	return g.ScheduleSync(ctx, cmd.Priority, func(context.Context) error {
-// 		time.Sleep(time.Duration(arg.Duration) * time.Second)
-// 		fmt.Printf("\n\033[41m lockenddd \033[0m\n\n")
-// 		g.Hardware.Input.Enable(true)
-// 		return nil
-// 	})
-// }
+func (self *tele) cmdCook(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgCook) error {
+	if types.VMC.Lock {
+		self.log.Infof("ignore remote make command (locked) from: (%v) scenario: (%s)", cmd.Executer, arg.Menucode)
+		self.CommandReply(cmd, tele_api.CmdReplay_busy)
+		return errors.New("locked")
+	}
+	return nil
+}
 
 func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgExec) error {
 	if arg.Scenario[:1] == "_" { // If the command contains the "_" prefix, then you ignore the client lock flag
@@ -113,10 +102,10 @@ func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_
 		return err
 	}
 
-	if arg.Lock {
-		state.VmcLock(ctx)
-		defer state.VmcUnLock(ctx)
-	}
+	// if arg.Lock {
+	// 	state.VmcLock(ctx)
+	// 	defer state.VmcUnLock(ctx)
+	// }
 	if cmd.Executer > 0 {
 		self.CommandReply(cmd, tele_api.CmdReplay_accepted)
 	}

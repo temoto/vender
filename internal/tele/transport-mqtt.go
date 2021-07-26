@@ -2,16 +2,12 @@ package tele
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/log2"
 	tele_config "github.com/temoto/vender/tele/config"
-	// "time"
 )
 
 type transportMqtt struct {
@@ -56,18 +52,18 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 	if teleConfig.StorePath == "" {
 		storePath = "/home/vmc/telemessages"
 	}
-	tlsconf := new(tls.Config)
-	if teleConfig.TlsCaFile != "" {
-		tlsconf.RootCAs = x509.NewCertPool()
-		cabytes, err := ioutil.ReadFile(teleConfig.TlsCaFile)
-		if err != nil {
-			self.log.Errorf("tls not possible. certivicate file - not found")
-		}
-		tlsconf.RootCAs.AppendCertsFromPEM(cabytes)
-	}
-	if teleConfig.TlsPsk != "" {
-		copy(tlsconf.SessionTicketKey[:], helpers.MustHex(teleConfig.TlsPsk))
-	}
+	// tlsconf := new(tls.Config)
+	// if teleConfig.TlsCaFile != "" {
+	// 	tlsconf.RootCAs = x509.NewCertPool()
+	// 	cabytes, err := ioutil.ReadFile(teleConfig.TlsCaFile)
+	// 	if err != nil {
+	// 		self.log.Errorf("tls not possible. certivicate file - not found")
+	// 	}
+	// 	tlsconf.RootCAs.AppendCertsFromPEM(cabytes)
+	// }
+	// if teleConfig.TlsPsk != "" {
+	// 	copy(tlsconf.SessionTicketKey[:], helpers.MustHex(teleConfig.TlsPsk))
+	// }
 	self.mopt = mqtt.NewClientOptions().
 		AddBroker(teleConfig.MqttBroker).
 		SetBinaryWill(self.topicConnect, []byte{0x00}, 1, true).
@@ -78,7 +74,7 @@ func (self *transportMqtt) Init(ctx context.Context, log *log2.Log, teleConfig t
 		SetKeepAlive(keepAlive).
 		SetPingTimeout(pingTimeout).
 		SetOrderMatters(false).
-		SetTLSConfig(tlsconf).
+		// SetTLSConfig(tlsconf).
 		SetResumeSubs(true).SetCleanSession(false).
 		SetStore(mqtt.NewFileStore(storePath)).
 		SetConnectRetryInterval(retryInterval).
