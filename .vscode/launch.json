@@ -11,7 +11,11 @@
             "mode": "auto",
             // "program": "${fileDirname}",
             "program": "${workspaceFolder}/cmd/vender/main.go",
-            "args": ["-config","/home/vmc/local.hcl","vmc"]
+            "args": ["-config","/home/vmc/local.hcl","vmc"],
+            // "env": {
+			// 	"DEBUG_AS_ROOT": "true",
+			// },
+            // "debugAdapter": "dlv-dap"
         }
     ]
 }
