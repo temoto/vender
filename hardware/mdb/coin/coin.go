@@ -19,7 +19,7 @@ import (
 
 const (
 	TypeCount              = 16
-	defaultDispenseTimeout = 5 * time.Second
+	defaultDispenseTimeout = 15 * time.Second
 )
 
 //go:generate stringer -type=CoinRouting -trimprefix=Routing
