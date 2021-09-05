@@ -14,7 +14,7 @@ import (
 )
 
 type Framebuffer struct {
-	buf   []byte
+	Buf   []byte
 	dev   *os.File
 	finfo fixedScreenInfo
 	vinfo variableScreenInfo
@@ -38,7 +38,7 @@ func New(dev string) (*Framebuffer, error) {
 		return nil, errors.Annotate(err, "getVariableScreenInfo")
 	}
 
-	fb.buf = make([]byte, fb.vinfo.Xres*fb.vinfo.Yres*(fb.vinfo.Bits_per_pixel/8))
+	fb.Buf = make([]byte, fb.vinfo.Xres*fb.vinfo.Yres*(fb.vinfo.Bits_per_pixel/8))
 
 	return fb, nil
 }
@@ -48,7 +48,7 @@ func (fb *Framebuffer) Close() {
 }
 
 func (fb *Framebuffer) Flush() error {
-	_, err := fb.dev.WriteAt(fb.buf, 0)
+	_, err := fb.dev.WriteAt(fb.Buf, 0)
 	return err
 }
 
@@ -65,7 +65,7 @@ func (fb *Framebuffer) Update(cs []color.RGBA) error {
 		for i, c := range cs {
 			offset := uint32(i) * wordSize
 			word := encode565(c)
-			binary.BigEndian.PutUint16(fb.buf[offset:], uint16(word))
+			binary.BigEndian.PutUint16(fb.Buf[offset:], uint16(word))
 		}
 		return nil
 

@@ -3,6 +3,7 @@ package display
 import (
 	"image"
 	"image/color"
+	"os"
 	"strings"
 
 	"github.com/juju/errors"
@@ -46,6 +47,17 @@ func (d *Display) Clear() error {
 	return d.Flush()
 }
 
+func (d *Display) ClearFB() {
+	if d.fb == nil {
+		return
+	}
+	for y := 0; y < d.size.Y; y++ {
+		for x := 0; x < d.size.X; x++ {
+			d.set(x, y, color.RGBA{0, 0, 0, 0xff})
+		}
+	}
+}
+
 func (d *Display) Flush() error {
 	if d.fb != nil {
 		if err := d.fb.Update(d.pix); err != nil {
@@ -72,6 +84,15 @@ func (d *Display) QR(text string, border bool, level qrcode.RecoveryLevel) error
 	return d.Flush()
 }
 
+func (d *Display) ShowPic() error {
+	p, _ := os.ReadFile("/home/vmc/coffe-pic")
+	if len(p) == 0 {
+		d.ClearFB()
+	} else {
+		d.fb.Buf = p
+	}
+	return d.fb.Flush()
+}
 func (d *Display) String2() string {
 	b := strings.Builder{}
 	b.Grow((d.size.X + 1) * d.size.Y) // +1 for \n

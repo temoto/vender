@@ -242,7 +242,8 @@ func (g *Global) UI() types.UIer {
 func (g *Global) initDisplay() error {
 	d, err := g.Display()
 	if d != nil {
-		d.Clear()
+		// d.Clear()
+		_ = d.ShowPic()
 	}
 	return err
 }
