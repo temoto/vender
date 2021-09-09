@@ -368,9 +368,25 @@ func (g *Global) RegisterCommands(ctx context.Context) {
 	)
 
 	doEmuKey := engine.FuncArg{
+		// keys 0-9, 10 = C, 11 = Ok,
+		// 12-13 cream- cream+, 14-15 sugar- sugar+, 16 dot
 		Name: "emulate.key(?)",
 		F: func(ctx context.Context, arg engine.Arg) error {
-			event := types.InputEvent{Source: "evend-keyboard", Key: types.InputKey(arg), Up: true}
+			var key uint16
+			switch arg {
+			case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9:
+				key = uint16(arg) + 48
+			case 10:
+				key = 27
+			case 11:
+				key = 13
+			case 12, 13, 14, 15:
+				key = uint16(arg) + 53
+			case 16:
+				key = 46
+			}
+			// event := types.InputEvent{Source: "evend-keyboard", Key: types.InputKey(arg), Up: true}
+			event := types.InputEvent{Source: "evend-keyboard", Key: types.InputKey(key), Up: true}
 			g.Hardware.Input.Emit(event)
 			return nil
 		}}
