@@ -65,7 +65,7 @@ func (self *UI) LockDecrementWait() {
 	}
 }
 
-// Stop locked state ignoring call balance
+// LockEnd Stop locked state ignoring call balance
 func (self *UI) LockEnd() {
 	self.g.Log.Debugf("LockEnd")
 	atomic.StoreInt32(&self.lock.sem, 0)

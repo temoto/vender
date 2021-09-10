@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -13,7 +14,6 @@ var VMC *VMCType = nil
 type VMCType struct {
 	Version string
 	Lock    bool
-	Atest   string
 	Client  struct {
 		WorkTime time.Time
 		Input    string
@@ -34,6 +34,20 @@ type VMCType struct {
 		BillOn  bool
 		BillRun bool
 	}
+	Menu map[string]MenuItem
+}
+
+type MenuItem struct {
+	Name  string
+	D     Doer
+	Price uint32
+	Code  string
+}
+
+type Doer interface {
+	Validate() error
+	Do(context.Context) error
+	String() string // for logs
 }
 
 func init() {

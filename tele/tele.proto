@@ -1,4 +1,4 @@
-//go:generate protoc --go_out=./ tele.proto
+// go:generate protoc --go_out=./ tele.proto
 syntax = "proto3";
 package tele;
 
@@ -130,7 +130,7 @@ message Command {
     string menucode  = 1;
     bytes cream = 2;
     bytes sugar = 3;
-    uint32 credit = 4;
+    uint32 balance = 4;
     PaymentMethod payment_method = 5;
   }
 }

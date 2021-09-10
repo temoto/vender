@@ -2,9 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
-	"os/exec"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -249,24 +246,25 @@ func removeOptionalOffline(g *state.Global, errs []error) []error {
 	}
 	return filterErrors(errs, take)
 }
-func executeScript(ctx context.Context, onstate string, data string) {
-	g := state.GetGlobal(ctx)
-	g.Log.Debugf("execute script (%s)", onstate)
-	if g.Config.Engine.Profile.StateScript != "" {
-		cmd := exec.Command(g.Config.Engine.Profile.StateScript) //nolint:gosec
-		cmd.Env = []string{
-			fmt.Sprintf("state=%s", onstate),
-			fmt.Sprintf("data=%s", data),
-		}
-		g.Alive.Add(1)
-		go func() {
-			defer g.Alive.Done()
-			execOutput, execErr := cmd.CombinedOutput()
-			prettyEnv := strings.Join(cmd.Env, " ")
-			if execErr != nil {
-				execErr = errors.Annotatef(execErr, "state_script %s (%s) output=%s", cmd.Path, prettyEnv, execOutput)
-				g.Log.Error(execErr)
-			}
-		}()
-	}
-}
+
+// func executeScript(ctx context.Context, onstate string, data string) {
+// 	g := state.GetGlobal(ctx)
+// 	g.Log.Debugf("execute script (%s)", onstate)
+// 	if g.Config.Engine.Profile.StateScript != "" {
+// 		cmd := exec.Command(g.Config.Engine.Profile.StateScript) //nolint:gosec
+// 		cmd.Env = []string{
+// 			fmt.Sprintf("state=%s", onstate),
+// 			fmt.Sprintf("data=%s", data),
+// 		}
+// 		g.Alive.Add(1)
+// 		go func() {
+// 			defer g.Alive.Done()
+// 			execOutput, execErr := cmd.CombinedOutput()
+// 			prettyEnv := strings.Join(cmd.Env, " ")
+// 			if execErr != nil {
+// 				execErr = errors.Annotatef(execErr, "state_script %s (%s) output=%s", cmd.Path, prettyEnv, execOutput)
+// 				g.Log.Error(execErr)
+// 			}
+// 		}()
+// 	}
+// }

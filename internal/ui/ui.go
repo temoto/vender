@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"time"
+
 	"github.com/juju/errors"
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/hardware/input"
@@ -11,7 +13,6 @@ import (
 	"github.com/temoto/vender/internal/types"
 	ui_config "github.com/temoto/vender/internal/ui/config"
 	tele_api "github.com/temoto/vender/tele"
-	"time"
 )
 
 type UI struct { //nolint:maligned

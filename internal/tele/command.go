@@ -70,21 +70,28 @@ func (self *tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
 	return errors.Annotate(self.Report(ctx, false), "cmdReport")
 }
 
-func (self *tele) cmdCook(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgCook) error {
+func (t *tele) cmdCook(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgCook) error {
 	if types.VMC.Lock {
-		self.log.Infof("ignore remote make command (locked) from: (%v) scenario: (%s)", cmd.Executer, arg.Menucode)
-		self.CommandReply(cmd, tele_api.CmdReplay_busy)
+		t.log.Infof("ignore remote make command (locked) from: (%v) scenario: (%s)", cmd.Executer, arg.Menucode)
+		t.CommandReply(cmd, tele_api.CmdReplay_busy)
 		return errors.New("locked")
 	}
+	t.log.Infof("remote coocing (%v) (%v)", cmd, arg)
+
+	// g := state.GetGlobal(ctx)
+	// ui.Cook(ctx, "10", 4, 4, tele_api.PaymentMethod_Balance)
+	// return nil
+	// g := state.GetGlobal(ctx)
+	// selmenu.Code = cmd
+	// g.UI.Cook(ctx, cmd, arg.Cream, arg.Sugar, tele_api.PaymentMethod_Balance)
+	t.CommandReply(cmd, tele_api.CmdReplay_done)
 	return nil
 }
 
 func (self *tele) cmdExec(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgExec) error {
 	if arg.Scenario[:1] == "_" { // If the command contains the "_" prefix, then you ignore the client lock flag
 		arg.Scenario = arg.Scenario[1:]
-		types.VMC.Lock = false
-	}
-	if types.VMC.Lock {
+	} else if types.VMC.Lock {
 		self.log.Infof("ignore income remove command (locked) from: (%v) scenario: (%s)", cmd.Executer, arg.Scenario)
 		self.CommandReply(cmd, tele_api.CmdReplay_busy)
 		return errors.New("locked")

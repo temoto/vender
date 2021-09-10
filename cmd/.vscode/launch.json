@@ -9,6 +9,7 @@
             "type": "go",
             "request": "launch",
             "mode": "debug",
+            // "buildFlags": "-tags 'main.BuildVersion=v0.00000000.0'",
             "program": "${workspaceFolder}/vender/main.go",
             "args": ["-config","/home/vmc/local.hcl","vmc"]
 

@@ -385,7 +385,6 @@ func (g *Global) RegisterCommands(ctx context.Context) {
 			case 16:
 				key = 46
 			}
-			// event := types.InputEvent{Source: "evend-keyboard", Key: types.InputKey(arg), Up: true}
 			event := types.InputEvent{Source: "evend-keyboard", Key: types.InputKey(key), Up: true}
 			g.Hardware.Input.Emit(event)
 			return nil
