@@ -8,10 +8,10 @@ import (
 	"github.com/juju/errors"
 	"github.com/temoto/vender/helpers"
 
-	// "github.com/temoto/vender/internal/global"
 	"github.com/temoto/vender/internal/money"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
+
 	tele_api "github.com/temoto/vender/tele"
 )
 
@@ -58,6 +58,7 @@ func (self *UI) Loop(ctx context.Context) {
 	next := StateDefault
 	for next != StateStop && self.g.Alive.IsRunning() {
 		current := self.State()
+		types.VMC.State = uint32(current)
 		next = self.enter(ctx, current)
 		if next == StateDefault {
 			self.g.Log.Fatalf("ui state=%s next=default", current.String())

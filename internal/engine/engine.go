@@ -257,7 +257,7 @@ func (self *Engine) exec(ctx context.Context, d Doer, validate, enableProfile bo
 	return err
 }
 
-// Test `error` or `Doer` against ErrNotResolved
+// IsNotResolved Test `error` or `Doer` against ErrNotResolved
 func IsNotResolved(x interface{}) bool {
 	if x == nil {
 		return false

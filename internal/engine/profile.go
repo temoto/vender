@@ -8,7 +8,7 @@ import (
 
 type ProfileFunc func(Doer, time.Duration)
 
-// re=nil or fun=nil to disable profiling.
+// SetProfile re=nil or fun=nil to disable profiling.
 func (self *Engine) SetProfile(re *regexp.Regexp, min time.Duration, fun ProfileFunc) {
 	fast := uint32(0)
 	if re != nil || fun != nil {

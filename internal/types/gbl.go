@@ -1,7 +1,6 @@
 package types
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -14,6 +13,7 @@ var VMC *VMCType = nil
 type VMCType struct {
 	Version string
 	Lock    bool
+	State   uint32
 	Client  struct {
 		WorkTime time.Time
 		Input    string
@@ -34,21 +34,34 @@ type VMCType struct {
 		BillOn  bool
 		BillRun bool
 	}
-	Menu map[string]MenuItem
 }
 
-type MenuItem struct {
-	Name  string
-	D     Doer
-	Price uint32
-	Code  string
-}
+// Amount is integer counting lowest currency unit, e.g. $1.20 = 120
+// type Amount uint32
 
-type Doer interface {
-	Validate() error
-	Do(context.Context) error
-	String() string // for logs
-}
+// type UI struct { //nolint:maligned
+// 	FrontMaxPrice Amount
+// 	FrontResult   UIMenuResult
+// }
+
+// type UIMenuResult struct {
+// 	Item  MenuItem
+// 	Cream uint8
+// 	Sugar uint8
+// }
+
+// type MenuItem struct {
+// 	Name  string
+// 	D     Doer
+// 	Price Amount
+// 	Code  string
+// }
+
+// type Doer interface {
+// 	Validate() error
+// 	Do(context.Context) error
+// 	String() string // for logs
+// }
 
 func init() {
 	Log.SetFlags(0)

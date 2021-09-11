@@ -57,7 +57,8 @@ func TestArg(t *testing.T) {
 			require.NoError(t, new.Validate())
 			assert.True(t, applied)
 			var result Arg
-			outctx := context.WithValue(ctx, "result", &result)
+			// outctx := context.WithValue(ctx, "result", &result)
+			outctx := context.WithValue(ctx, result, &result)
 			require.NoError(t, new.Do(outctx), d.String())
 			assert.Equal(t, arg+1, result)
 		})
