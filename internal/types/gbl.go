@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -78,11 +79,11 @@ type MenuItemType struct {
 // 	Code  string
 // }
 
-// type Doer interface {
-// 	Validate() error
-// 	Do(context.Context) error
-// 	String() string // for logs
-// }
+type Doer interface {
+	Validate() error
+	Do(context.Context) error
+	String() string // for logs
+}
 
 func init() {
 	Log.SetFlags(0)
