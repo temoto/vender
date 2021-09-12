@@ -17,14 +17,14 @@ import (
 
 type UI struct { //nolint:maligned
 	FrontMaxPrice currency.Amount
-	FrontResult   UIMenuResult
-	Service       uiService
+	// FrontResult   UIMenuResult
+	Service uiService
 
-	config   *ui_config.Config
-	g        *state.Global
-	state    State
-	broken   bool
-	menu     Menu
+	config *ui_config.Config
+	g      *state.Global
+	state  State
+	broken bool
+	// menu     Menu
 	display  *text_display.TextDisplay // FIXME
 	inputBuf []byte
 	eventch  chan types.Event
@@ -39,16 +39,20 @@ type UI struct { //nolint:maligned
 var _ types.UIer = &UI{} // compile-time interface test
 
 func (self *UI) Init(ctx context.Context) error {
+	// func (self *types.UI) Init(ctx context.Context) error {
 	self.g = state.GetGlobal(ctx)
 	self.config = &self.g.Config.UI
 	self.setState(StateBoot)
 
-	self.menu = make(Menu)
-	if err := self.menu.Init(ctx); err != nil {
-		err = errors.Annotate(err, "ui.menu.Init")
-		return err
-	}
-	self.g.Log.Debugf("menu len=%d", len(self.menu))
+	// self.menu = make(Menu)
+	types.UI.Menu = make(map[string]types.MenuItemType)
+	FillMenu(ctx)
+	// if err := self.menu.Init(ctx); err != nil {
+	// 	err = errors.Annotate(err, "ui.menu.Init")
+	// 	return err
+	// }
+	// self.g.Log.Debugf("menu len=%d", len(self.menu))
+	self.g.Log.Debugf("menu len=%d", len(types.UI.Menu))
 
 	self.display = self.g.MustTextDisplay()
 	self.eventch = make(chan types.Event)
@@ -84,13 +88,13 @@ again:
 		return types.Event{Kind: types.EventUiTimerStop}
 
 	case e := <-self.eventch:
-		if e.Kind != types.EventInvalid {
-		}
+		// if e.Kind != types.EventInvalid {
+		// }
 		return e
 
 	case e := <-self.inputch:
-		if e.Source != "" {
-		}
+		// if e.Source != "" {
+		// }
 		if e.Source == input.DevInputEventTag && e.Up {
 			return types.Event{Kind: types.EventService}
 		}

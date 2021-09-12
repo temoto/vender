@@ -14,16 +14,15 @@ import (
 	"github.com/temoto/vender/helpers"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/money"
-	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
 	tele_api "github.com/temoto/vender/tele"
 )
 
-type UIMenuResult struct {
-	Item  MenuItem
-	Cream uint8
-	Sugar uint8
-}
+// type UIMenuResult struct {
+// 	Item  MenuItem
+// 	Cream uint8
+// 	Sugar uint8
+// }
 
 func (self *UI) onFrontBegin(ctx context.Context) State {
 	ms := money.GetGlobal(ctx)
@@ -32,8 +31,8 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 		self.g.Error(errors.Errorf("money timeout lost (%v)", credit))
 	}
 	ms.ResetMoney()
-	// if available != 0 {}
-	self.FrontResult = UIMenuResult{
+	// self.FrontResult = UIMenuResult{
+	types.UI.FrontResult = types.UIMenuResult{
 		// TODO read config
 		Cream: DefaultCream,
 		Sugar: DefaultSugar,
@@ -74,7 +73,8 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	self.g.ClientEnd()
 
 	var err error
-	self.FrontMaxPrice, err = menuMaxPrice(ctx, self.menu)
+	// self.FrontMaxPrice, err = menuMaxPrice(ctx, self.menu)
+	// self.FrontMaxPrice, err = menuMaxPrice(ctx, types.UI.Menu)
 	if err != nil {
 		self.g.Error(err)
 		return StateBroken
@@ -83,28 +83,28 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	return StateFrontSelect
 }
 
-func menuMaxPrice(ctx context.Context, m Menu) (currency.Amount, error) {
-	g := state.GetGlobal(ctx)
-	max := currency.Amount(0)
-	empty := true
-	for _, item := range m {
-		valErr := item.D.Validate()
-		if valErr == nil {
-			empty = false
-			if item.Price > max {
-				max = item.Price
-			}
-		} else {
-			// TODO report menu errors once or less often than every ui cycle
-			valErr = errors.Annotate(valErr, item.String())
-			g.Log.Debug(valErr)
-		}
-	}
-	if empty {
-		return 0, errors.Errorf("menu len=%d no valid items", len(m))
-	}
-	return max, nil
-}
+// func menuMaxPrice(ctx context.Context, m types.UItype.Menu) (currency.Amount, error) {
+// 	g := state.GetGlobal(ctx)
+// 	max := currency.Amount(0)
+// 	empty := true
+// 	for _, item := range m {
+// 		valErr := item.D.Validate()
+// 		if valErr == nil {
+// 			empty = false
+// 			if item.Price > max {
+// 				max = item.Price
+// 			}
+// 		} else {
+// 			// TODO report menu errors once or less often than every ui cycle
+// 			valErr = errors.Annotate(valErr, item.String())
+// 			g.Log.Debug(valErr)
+// 		}
+// 	}
+// 	if empty {
+// 		return 0, errors.Errorf("menu len=%d no valid items", len(m))
+// 	}
+// 	return max, nil
+// }
 
 func (self *UI) onFrontSelect(ctx context.Context) State {
 	moneysys := money.GetGlobal(ctx)
@@ -172,7 +172,8 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 					goto wait
 				}
 
-				mitem, ok := self.menu[string(self.inputBuf)]
+				// mitem, ok := self.menu[string(self.inputBuf)]
+				mitem, ok := types.UI.Menu[string(self.inputBuf)]
 				if !ok {
 					self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuCodeInvalid)
 					goto wait
@@ -193,7 +194,8 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 					goto wait
 				}
 
-				self.FrontResult.Item = mitem
+				// self.FrontResult.Item = mitem
+				types.UI.FrontResult.Item = mitem
 				return StateFrontAccept // success path
 
 			default:
@@ -249,32 +251,32 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 	switch e.Key {
 	case input.EvendKeyCreamLess:
 		self.g.Log.Infof("key.cream-")
-		if self.FrontResult.Cream > 0 {
-			self.FrontResult.Cream--
+		if types.UI.FrontResult.Cream > 0 {
+			types.UI.FrontResult.Cream--
 			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
 	case input.EvendKeyCreamMore:
 		self.g.Log.Infof("key.cream+")
-		if self.FrontResult.Cream < MaxCream {
-			self.FrontResult.Cream++
+		if types.UI.FrontResult.Cream < MaxCream {
+			types.UI.FrontResult.Cream++
 			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
 	case input.EvendKeySugarLess:
 		self.g.Log.Infof("key.sugar-")
-		if self.FrontResult.Sugar > 0 {
-			self.FrontResult.Sugar--
+		if types.UI.FrontResult.Sugar > 0 {
+			types.UI.FrontResult.Sugar--
 			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
 		}
 	case input.EvendKeySugarMore:
 		self.g.Log.Infof("key.sugar+")
-		if self.FrontResult.Sugar < MaxSugar {
-			self.FrontResult.Sugar++
+		if types.UI.FrontResult.Sugar < MaxSugar {
+			types.UI.FrontResult.Sugar++
 			//lint:ignore SA9003 empty branch
 		} else {
 			// TODO notify "impossible input" (sound?)
@@ -287,12 +289,12 @@ func (self *UI) onFrontTuneInput(e types.InputEvent) State {
 	next := StateFrontSelect
 	switch e.Key {
 	case input.EvendKeyCreamLess, input.EvendKeyCreamMore:
-		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", self.g.Config.UI.Front.MsgCream, self.FrontResult.Cream))
-		t2 = formatScale(self.FrontResult.Cream, 0, MaxCream, ScaleAlpha)
+		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", self.g.Config.UI.Front.MsgCream, types.UI.FrontResult.Cream))
+		t2 = formatScale(types.UI.FrontResult.Cream, 0, MaxCream, ScaleAlpha)
 		next = StateFrontTune
 	case input.EvendKeySugarLess, input.EvendKeySugarMore:
-		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", self.g.Config.UI.Front.MsgSugar, self.FrontResult.Sugar))
-		t2 = formatScale(self.FrontResult.Sugar, 0, MaxSugar, ScaleAlpha)
+		t1 = self.display.Translate(fmt.Sprintf("%s  /%d", self.g.Config.UI.Front.MsgSugar, types.UI.FrontResult.Sugar))
+		t2 = formatScale(types.UI.FrontResult.Sugar, 0, MaxSugar, ScaleAlpha)
 		next = StateFrontTune
 	default:
 		fmt.Printf("\n\033[41m как он может сработать2? \033[0m\n\n")
@@ -310,11 +312,11 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	self.g.Hardware.Input.Enable(false)
 	moneysys := money.GetGlobal(ctx)
 	uiConfig := &self.g.Config.UI
-	selected := &self.FrontResult.Item
+	selected := &types.UI.FrontResult.Item
 	teletx := &tele_api.Telemetry_Transaction{
 		Code:    selected.Code,
 		Price:   uint32(selected.Price),
-		Options: []int32{int32(self.FrontResult.Cream), int32(self.FrontResult.Sugar)},
+		Options: []int32{int32(types.UI.FrontResult.Cream), int32(types.UI.FrontResult.Sugar)},
 		// TODO bills, coins
 	}
 
@@ -330,7 +332,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 		self.g.Log.Errorf("ui-front CRITICAL error while return change")
 	}
 	itemCtx := money.SetCurrentPrice(ctx, selected.Price)
-	if tuneCream := ScaleTuneRate(self.FrontResult.Cream, MaxCream, DefaultCream); tuneCream != 1 {
+	if tuneCream := ScaleTuneRate(types.UI.FrontResult.Cream, MaxCream, DefaultCream); tuneCream != 1 {
 		const name = "cream"
 		var err error
 		self.g.Log.Debugf("ui-front tuning stock=%s tune=%v", name, tuneCream)
@@ -338,7 +340,7 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
 		}
 	}
-	if tuneSugar := ScaleTuneRate(self.FrontResult.Sugar, MaxSugar, DefaultSugar); tuneSugar != 1 {
+	if tuneSugar := ScaleTuneRate(types.UI.FrontResult.Sugar, MaxSugar, DefaultSugar); tuneSugar != 1 {
 		const name = "sugar"
 		var err error
 		self.g.Log.Debugf("ui-front tuning stock=%s tune=%v", name, tuneSugar)

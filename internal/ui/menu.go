@@ -7,6 +7,7 @@ import (
 	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/internal/engine"
 	"github.com/temoto/vender/internal/state"
+	"github.com/temoto/vender/internal/types"
 	tele_api "github.com/temoto/vender/tele"
 )
 
@@ -23,23 +24,42 @@ func (self *MenuItem) String() string {
 	return fmt.Sprintf("menu code=%s price=%d(raw) name='%s'", self.Code, self.Price, self.Name)
 }
 
+func FillMenu(ctx context.Context) {
+	config := state.GetGlobal(ctx).Config
+
+	for _, x := range config.Engine.Menu.Items {
+		// self.Add(x.Code, x.Name, x.Price, x.Doer)
+		types.UI.Menu[x.Code] = types.MenuItemType{
+			Name:  x.Name,
+			D:     x.Doer,
+			Price: x.Price,
+			Code:  x.Code,
+		}
+	}
+}
 func (self Menu) Init(ctx context.Context) error {
 	config := state.GetGlobal(ctx).Config
 
 	for _, x := range config.Engine.Menu.Items {
-		self.Add(x.Code, x.Name, x.Price, x.Doer)
+		// self.Add(x.Code, x.Name, x.Price, x.Doer)
+		types.UI.Menu[x.Code] = types.MenuItemType{
+			Name:  x.Name,
+			D:     x.Doer,
+			Price: x.Price,
+			Code:  x.Code,
+		}
 	}
 	return nil
 }
 
-func (self Menu) Add(code string, name string, price currency.Amount, d engine.Doer) {
-	self[code] = MenuItem{
-		Code:  code,
-		Name:  name,
-		Price: price,
-		D:     d,
-	}
-}
+// func (self Menu) Add(code string, name string, price currency.Amount, d engine.Doer) {
+// 	self[code] = MenuItem{
+// 		Code:  code,
+// 		Name:  name,
+// 		Price: price,
+// 		D:     d,
+// 	}
+// }
 
 func (self *UI) Cook(ctx context.Context, code string, Cream uint8, Sugar uint8, payMethod tele_api.PaymentMethod) error {
 	// g := state.GetGlobal(ctx)

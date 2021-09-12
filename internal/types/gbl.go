@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/temoto/vender/currency"
 	"github.com/temoto/vender/log2"
 )
 
 var Log = *log2.NewStderr(log2.LDebug)
 var VMC *VMCType = nil
+var UI *UItype
 
 type VMCType struct {
 	Version string
@@ -34,13 +36,27 @@ type VMCType struct {
 		BillOn  bool
 		BillRun bool
 	}
-	Menu map[string]MenuItem
 }
 
-type MenuItem struct {
+type UItype struct { //nolint:maligned
+	FrontResult UIMenuResult
+	Menu        map[string]MenuItemType
+}
+
+type UIMenuResult struct {
+	Item  MenuItemType
+	Cream uint8
+	Sugar uint8
+}
+
+func (self *MenuItemType) String() string {
+	return fmt.Sprintf("menu code=%s price=%d(raw) name='%s'", self.Code, self.Price, self.Name)
+}
+
+type MenuItemType struct {
 	Name  string
 	D     Doer
-	Price uint32
+	Price currency.Amount
 	Code  string
 }
 
