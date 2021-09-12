@@ -1,7 +1,6 @@
 package types
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -16,6 +15,7 @@ var UI *UItype
 type VMCType struct {
 	Version string
 	Lock    bool
+	State   uint32
 	Client  struct {
 		WorkTime time.Time
 		Input    string
@@ -60,11 +60,29 @@ type MenuItemType struct {
 	Code  string
 }
 
-type Doer interface {
-	Validate() error
-	Do(context.Context) error
-	String() string // for logs
-}
+// type UI struct { //nolint:maligned
+// 	FrontMaxPrice Amount
+// 	FrontResult   UIMenuResult
+// }
+
+// type UIMenuResult struct {
+// 	Item  MenuItem
+// 	Cream uint8
+// 	Sugar uint8
+// }
+
+// type MenuItem struct {
+// 	Name  string
+// 	D     Doer
+// 	Price Amount
+// 	Code  string
+// }
+
+// type Doer interface {
+// 	Validate() error
+// 	Do(context.Context) error
+// 	String() string // for logs
+// }
 
 func init() {
 	Log.SetFlags(0)

@@ -63,9 +63,9 @@ func (self Menu) Init(ctx context.Context) error {
 
 func (self *UI) Cook(ctx context.Context, code string, Cream uint8, Sugar uint8, payMethod tele_api.PaymentMethod) error {
 	// g := state.GetGlobal(ctx)
-	// cmenu := ui.menu[code]
+	// cmenu := types.VMC.Menu[code]
 
-	// // moneysys := money.GetGlobal(ctx)
+	// moneysys := money.GetGlobal(ctx)
 	// teletx := &tele_api.Telemetry_Transaction{
 	// 	Code:          cmenu.Code,
 	// 	Options:       []int32{int32(Cream), int32(Sugar)},
@@ -77,7 +77,12 @@ func (self *UI) Cook(ctx context.Context, code string, Cream uint8, Sugar uint8,
 	// 	return err
 	// }
 
-	// itemCtx := context.WithValue(ctx, "run/current-price", cmenu.Price)
+	// if err := moneysys.WithdrawPrepare(ctx, currency.Amount(cmenu.Price)); err != nil {
+	// 	g.Log.Errorf("ui-front CRITICAL error while return change")
+	// }
+
+	// // itemCtx := context.WithValue(ctx, "run/current-price", cmenu.Price)
+	// itemCtx := money.SetCurrentPrice(ctx, currency.Amount(cmenu.Price))
 
 	// if tuneCream := ScaleTuneRate(Cream, MaxCream, DefaultCream); tuneCream != 1 {
 	// 	const name = "cream"
@@ -96,8 +101,11 @@ func (self *UI) Cook(ctx context.Context, code string, Cream uint8, Sugar uint8,
 	// 	}
 	// }
 	// g.Hardware.HD44780.Display.SetLines(g.Config.UI.Front.MsgMaking1, g.Config.UI.Front.MsgMaking2)
-
 	// err := g.Engine.Exec(itemCtx, cmenu.D)
+	// if invErr := g.Inventory.Persist.Store(); invErr != nil {
+	// 	g.Error(errors.Annotate(invErr, "critical inventory persist"))
+	// }
+
 	// if err != nil {
 	// 	return err
 	// }
