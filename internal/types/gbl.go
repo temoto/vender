@@ -11,7 +11,7 @@ import (
 
 var Log = *log2.NewStderr(log2.LDebug)
 var VMC *VMCType = nil
-var UI *UItype
+var UI *UItype = nil
 
 type VMCType struct {
 	Version string
@@ -61,24 +61,6 @@ type MenuItemType struct {
 	Code  string
 }
 
-// type UI struct { //nolint:maligned
-// 	FrontMaxPrice Amount
-// 	FrontResult   UIMenuResult
-// }
-
-// type UIMenuResult struct {
-// 	Item  MenuItem
-// 	Cream uint8
-// 	Sugar uint8
-// }
-
-// type MenuItem struct {
-// 	Name  string
-// 	D     Doer
-// 	Price Amount
-// 	Code  string
-// }
-
 type Doer interface {
 	Validate() error
 	Do(context.Context) error
@@ -88,6 +70,7 @@ type Doer interface {
 func init() {
 	Log.SetFlags(0)
 	VMC = new(VMCType)
+	UI = new(UItype)
 }
 
 func SetLight(v bool) {

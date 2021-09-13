@@ -73,8 +73,7 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	self.g.ClientEnd()
 
 	var err error
-	// self.FrontMaxPrice, err = menuMaxPrice(ctx, self.menu)
-	// self.FrontMaxPrice, err = menuMaxPrice(ctx, types.UI.Menu)
+	self.FrontMaxPrice, err = menuMaxPrice()
 	if err != nil {
 		self.g.Error(err)
 		return StateBroken
@@ -83,28 +82,27 @@ func (self *UI) onFrontBegin(ctx context.Context) State {
 	return StateFrontSelect
 }
 
-// func menuMaxPrice(ctx context.Context, m types.UItype.Menu) (currency.Amount, error) {
-// 	g := state.GetGlobal(ctx)
-// 	max := currency.Amount(0)
-// 	empty := true
-// 	for _, item := range m {
-// 		valErr := item.D.Validate()
-// 		if valErr == nil {
-// 			empty = false
-// 			if item.Price > max {
-// 				max = item.Price
-// 			}
-// 		} else {
-// 			// TODO report menu errors once or less often than every ui cycle
-// 			valErr = errors.Annotate(valErr, item.String())
-// 			g.Log.Debug(valErr)
-// 		}
-// 	}
-// 	if empty {
-// 		return 0, errors.Errorf("menu len=%d no valid items", len(m))
-// 	}
-// 	return max, nil
-// }
+func menuMaxPrice() (currency.Amount, error) {
+	max := currency.Amount(0)
+	empty := true
+	for _, item := range types.UI.Menu {
+		valErr := item.D.Validate()
+		if valErr == nil {
+			empty = false
+			if item.Price > max {
+				max = item.Price
+			}
+		} else {
+			// TODO report menu errors once or less often than every ui cycle
+			valErr = errors.Annotate(valErr, item.String())
+			types.Log.Debug(valErr)
+		}
+	}
+	if empty {
+		return 0, errors.Errorf("menu len=%d no valid items", len(types.UI.Menu))
+	}
+	return max, nil
+}
 
 func (self *UI) onFrontSelect(ctx context.Context) State {
 	moneysys := money.GetGlobal(ctx)
