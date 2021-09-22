@@ -9,6 +9,7 @@ import (
 	"github.com/skip2/go-qrcode"
 	"github.com/temoto/vender/internal/state"
 	"github.com/temoto/vender/internal/types"
+	"github.com/temoto/vender/internal/ui"
 	tele_api "github.com/temoto/vender/tele"
 )
 
@@ -71,20 +72,59 @@ func (self *tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
 }
 
 func (t *tele) cmdCook(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgCook) error {
+	state.VmcLock(ctx)
+	// defer state.VmcUnLock(ctx)
+	g := state.GetGlobal(ctx)
+
+	arg = &tele_api.Command_ArgCook{
+		Menucode: "10",
+		Cream:    []byte{0x2},
+		Balance:  10,
+	}
 	if types.VMC.Lock {
 		t.log.Infof("ignore remote make command (locked) from: (%v) scenario: (%s)", cmd.Executer, arg.Menucode)
 		t.CommandReply(cmd, tele_api.CmdReplay_busy)
-		return errors.New("locked")
+		return errors.New("remote cook error: VMC locked")
 	}
 	t.log.Infof("remote coocing (%v) (%v)", cmd, arg)
 
-	// g := state.GetGlobal(ctx)
+	mitem, ok := types.UI.Menu[arg.Menucode]
+	if !ok {
+		t.CommandReply(cmd, tele_api.CmdReplay_cookInaccessible)
+		return errors.New("remote cook error: code inaccessible")
+	}
+	credit := g.Config.ScaleU(uint32(arg.Balance))
+	if mitem.Price > credit {
+		t.CommandReply(cmd, tele_api.CmdReplay_cookOverdraft)
+		return errors.Errorf("remote cook error: ovedraft balance=%d price=%d", mitem.Price, credit)
+	}
+	if err := mitem.D.Validate(); err != nil {
+		t.CommandReply(cmd, tele_api.CmdReplay_cookInaccessible)
+		return errors.New("remote cook error: code inaccessible")
+	}
+	t.CommandReply(cmd, tele_api.CmdReplay_cookBegin)
+	types.UI.FrontResult.Item = mitem
+
+	if len(arg.Sugar) == 0 {
+		types.UI.FrontResult.Sugar = 4
+	} else {
+		types.UI.FrontResult.Sugar = arg.Sugar[0]
+	}
+	if len(arg.Cream) == 0 {
+		types.UI.FrontResult.Cream = 4
+	} else {
+		types.UI.FrontResult.Sugar = arg.Cream[0]
+	}
+
+	ui.Cook(ctx)
 	// ui.Cook(ctx, "10", 4, 4, tele_api.PaymentMethod_Balance)
 	// return nil
 	// g := state.GetGlobal(ctx)
 	// selmenu.Code = cmd
 	// g.UI.Cook(ctx, cmd, arg.Cream, arg.Sugar, tele_api.PaymentMethod_Balance)
-	t.CommandReply(cmd, tele_api.CmdReplay_done)
+	t.CommandReply(cmd, tele_api.CmdReplay_cookFinish)
+	state.VmcUnLock(ctx)
+
 	return nil
 }
 

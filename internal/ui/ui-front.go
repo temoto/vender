@@ -181,7 +181,7 @@ func (self *UI) onFrontSelect(ctx context.Context) State {
 				if mitem.Price > credit {
 					// self.display.SetLines(self.g.Config.UI.Front.MsgError, self.g.Config.UI.Front.MsgMenuInsufficientCredit)
 					// ALexM-FIX (вынести в конфиг текст. сделать scale )
-					dl2 := fmt.Sprintf("credit=%v price(%v)=%v", credit, mitem.Code, (mitem.Price / 100))
+					dl2 := fmt.Sprintf("credit=%v price(%v)=%v р.", credit, mitem.Code, (mitem.Price / 100))
 					self.display.SetLines(self.g.Config.UI.Front.MsgMenuInsufficientCredit, dl2)
 					goto wait
 				}
@@ -310,7 +310,8 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	self.g.Hardware.Input.Enable(false)
 	moneysys := money.GetGlobal(ctx)
 	uiConfig := &self.g.Config.UI
-	selected := &types.UI.FrontResult.Item
+	// selected := &types.UI.FrontResult.Item
+	selected := types.UI.FrontResult.Item
 	teletx := &tele_api.Telemetry_Transaction{
 		Code:    selected.Code,
 		Price:   uint32(selected.Price),
@@ -329,32 +330,32 @@ func (self *UI) onFrontAccept(ctx context.Context) State {
 	if err := moneysys.WithdrawPrepare(ctx, selected.Price); err != nil {
 		self.g.Log.Errorf("ui-front CRITICAL error while return change")
 	}
-	itemCtx := money.SetCurrentPrice(ctx, selected.Price)
-	if tuneCream := ScaleTuneRate(types.UI.FrontResult.Cream, MaxCream, DefaultCream); tuneCream != 1 {
-		const name = "cream"
-		var err error
-		self.g.Log.Debugf("ui-front tuning stock=%s tune=%v", name, tuneCream)
-		if itemCtx, err = self.g.Inventory.WithTuning(itemCtx, name, tuneCream); err != nil {
-			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
-		}
-	}
-	if tuneSugar := ScaleTuneRate(types.UI.FrontResult.Sugar, MaxSugar, DefaultSugar); tuneSugar != 1 {
-		const name = "sugar"
-		var err error
-		self.g.Log.Debugf("ui-front tuning stock=%s tune=%v", name, tuneSugar)
-		if itemCtx, err = self.g.Inventory.WithTuning(itemCtx, name, tuneSugar); err != nil {
-			self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
-		}
-	}
-	self.display.SetLines(self.g.Config.UI.Front.MsgMaking1, self.g.Config.UI.Front.MsgMaking2)
+	err := Cook(ctx)
+	// itemCtx := money.SetCurrentPrice(ctx, selected.Price)
+	// if tuneCream := ScaleTuneRate(types.UI.FrontResult.Cream, MaxCream, DefaultCream); tuneCream != 1 {
+	// 	const name = "cream"
+	// 	var err error
+	// 	self.g.Log.Debugf("ui-front tuning stock=%s tune=%v", name, tuneCream)
+	// 	if itemCtx, err = self.g.Inventory.WithTuning(itemCtx, name, tuneCream); err != nil {
+	// 		self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
+	// 	}
+	// }
+	// if tuneSugar := ScaleTuneRate(types.UI.FrontResult.Sugar, MaxSugar, DefaultSugar); tuneSugar != 1 {
+	// 	const name = "sugar"
+	// 	var err error
+	// 	self.g.Log.Debugf("ui-front tuning stock=%s tune=%v", name, tuneSugar)
+	// 	if itemCtx, err = self.g.Inventory.WithTuning(itemCtx, name, tuneSugar); err != nil {
+	// 		self.g.Log.Errorf("ui-front tuning stock=%s err=%v", name, err)
+	// 	}
+	// }
+	// self.display.SetLines(self.g.Config.UI.Front.MsgMaking1, self.g.Config.UI.Front.MsgMaking2)
 
-	err := self.g.Engine.Exec(itemCtx, selected.D)
-	if invErr := self.g.Inventory.Persist.Store(); invErr != nil {
-		self.g.Error(errors.Annotate(invErr, "critical inventory persist"))
-	}
-	self.g.Log.Debugf("ui-front selected=%s end err=%v", selected.String(), err)
+	// err := self.g.Engine.Exec(itemCtx, selected.D)
+	// if invErr := self.g.Inventory.Persist.Store(); invErr != nil {
+	// 	self.g.Error(errors.Annotate(invErr, "critical inventory persist"))
+	// }
+	// self.g.Log.Debugf("ui-front selected=%s end err=%v", selected.String(), err)
 	if err == nil { // success path
-		// executeScript(ctx, "EndProcess", selected.String())
 		self.g.Tele.Transaction(teletx)
 		return StateFrontEnd
 	}
