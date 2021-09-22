@@ -72,7 +72,6 @@ func (self *tele) cmdReport(ctx context.Context, cmd *tele_api.Command) error {
 }
 
 func (t *tele) cmdCook(ctx context.Context, cmd *tele_api.Command, arg *tele_api.Command_ArgCook) error {
-	state.VmcLock(ctx)
 	// defer state.VmcUnLock(ctx)
 	g := state.GetGlobal(ctx)
 
@@ -86,23 +85,24 @@ func (t *tele) cmdCook(ctx context.Context, cmd *tele_api.Command, arg *tele_api
 		t.CommandReply(cmd, tele_api.CmdReplay_busy)
 		return errors.New("remote cook error: VMC locked")
 	}
+	state.VmcLock(ctx)
 	t.log.Infof("remote coocing (%v) (%v)", cmd, arg)
 
 	mitem, ok := types.UI.Menu[arg.Menucode]
 	if !ok {
-		t.CommandReply(cmd, tele_api.CmdReplay_cookInaccessible)
+		t.CookReply(cmd, tele_api.CookReplay_cookInaccessible)
 		return errors.New("remote cook error: code inaccessible")
 	}
 	credit := g.Config.ScaleU(uint32(arg.Balance))
 	if mitem.Price > credit {
-		t.CommandReply(cmd, tele_api.CmdReplay_cookOverdraft)
+		t.CookReply(cmd, tele_api.CookReplay_cookOverdraft)
 		return errors.Errorf("remote cook error: ovedraft balance=%d price=%d", mitem.Price, credit)
 	}
 	if err := mitem.D.Validate(); err != nil {
-		t.CommandReply(cmd, tele_api.CmdReplay_cookInaccessible)
+		t.CookReply(cmd, tele_api.CookReplay_cookInaccessible)
 		return errors.New("remote cook error: code inaccessible")
 	}
-	t.CommandReply(cmd, tele_api.CmdReplay_cookBegin)
+	t.CookReply(cmd, tele_api.CookReplay_cookStart)
 	types.UI.FrontResult.Item = mitem
 
 	if len(arg.Sugar) == 0 {
@@ -122,7 +122,7 @@ func (t *tele) cmdCook(ctx context.Context, cmd *tele_api.Command, arg *tele_api
 	// g := state.GetGlobal(ctx)
 	// selmenu.Code = cmd
 	// g.UI.Cook(ctx, cmd, arg.Cream, arg.Sugar, tele_api.PaymentMethod_Balance)
-	t.CommandReply(cmd, tele_api.CmdReplay_cookFinish)
+	t.CookReply(cmd, tele_api.CookReplay_cookFinish)
 	state.VmcUnLock(ctx)
 
 	return nil

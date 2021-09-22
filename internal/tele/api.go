@@ -47,6 +47,21 @@ func (t *tele) CommandReply(c *tele_api.Command, cr tele_api.CmdReplay) {
 	}
 }
 
+func (t *tele) CookReply(c *tele_api.Command, cr tele_api.CookReplay) {
+	if te := t.teleEnable(); te {
+		return
+	}
+	t.log.Infof("command replay (%v) executer Id(%d)", cr, c.Executer)
+	r := tele_api.Response{
+		Executer:   c.Executer,
+		CookReplay: cr,
+	}
+	err := t.qpushCommandResponse(c, &r)
+	if err != nil {
+		fmt.Printf("\n\033[41m error \033[0m\n\n")
+	}
+}
+
 func (t *tele) teleEnable() bool {
 	if !t.config.Enabled {
 		t.log.Infof(logMsgDisabled)

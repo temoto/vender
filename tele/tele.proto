@@ -141,19 +141,24 @@ enum CmdReplay {
   done = 2;
   busy = 3;
   error = 4;
-  cookBegin = 5;
-  cookFinish = 6;
-  cookInaccessible = 7;
-  cookOverdraft = 8;
-  cookError = 9;
-
 }
+
+enum CookReplay {
+  hz = 0;
+  cookStart = 1;
+  cookFinish = 2;
+  cookInaccessible = 3;
+  cookOverdraft = 4;
+  cookError = 5;
+}
+
 message Response {
   uint32 command_id = 1;
   string error = 2;
   string data = 3;
   uint32 executer = 4;
   CmdReplay cmd_replay = 5;
-  uint32 validateReplay = 6;
+  CookReplay cook_replay = 6;
+  uint32 validateReplay = 7;
   string INTERNAL_topic = 2048; // convenience
 }
