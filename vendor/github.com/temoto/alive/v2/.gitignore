@@ -1,0 +1,12 @@
+*.dll
+*.dylib
+*.exe
+*.exe~
+*.out
+*.so
+*.sublime-*
+*.test
+.DS_Store
+bench-new
+bench-old
+coverage*.txt

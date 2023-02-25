@@ -1,0 +1,12 @@
+{
+  "git": {
+    "commit": false,
+    "requireCleanWorkingDir": true,
+    "tagName": "v${version}"
+  },
+  "github": {
+    "draft": false,
+    "release": true,
+    "releaseName": "${version}"
+  }
+}

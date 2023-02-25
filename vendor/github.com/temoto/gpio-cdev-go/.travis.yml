@@ -1,0 +1,40 @@
+cache:
+  apt: true
+  go: true
+  directories:
+  - $HOME/.cache
+  - $HOME/bin
+  - $HOME/gopath/pkg/mod
+language: go
+go:
+- 1.13
+- 1.14
+- 1.15
+- 1.x
+env: GO111MODULE=on
+install: true
+script: go test -v -covermode=atomic -coverprofile=coverage.txt -race ./...
+before_cache: rm -f $HOME/.cache/go-build/log.txt
+after_success: if [[ -z "$task" ]] ; then bash <(curl -s https://codecov.io/bash) ; fi
+
+stages:
+- test
+# TODO - integration-build
+# TODO - release
+jobs:
+  include:
+  - stage: test
+    language: go
+    go: 1.x
+    env: task=lint GO111MODULE=on
+    install: curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b $HOME/bin v1.31.0
+    script:
+    - go mod tidy && git diff --exit-code
+    - $HOME/bin/golangci-lint run
+  - stage: test
+    env: task=integration-test
+    sudo: required
+    language: go
+    go: 1.x
+    install: sudo apt update -qq && sudo apt install -y qemu-system-x86
+    script: script/vm-run

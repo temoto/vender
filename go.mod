@@ -26,6 +26,6 @@ require (
 	github.com/temoto/inputevent-go v1.0.0
 	github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 	github.com/temoto/spq v0.10.0
-	golang.org/x/sys v0.0.0-20200929083018-4d22bbb62b3c
+	golang.org/x/sys v0.1.0
 	periph.io/x/periph v3.6.4+incompatible
 )
