@@ -11,9 +11,9 @@ main() {
 
 	if [[ "$build_go" != "0" ]] ; then
 		export GO111MODULE=on
-		GO111MODULE=off go get -v github.com/xlab/c-for-go
-		GO111MODULE=off go get -v golang.org/x/tools/cmd/stringer
-		go get -v github.com/golang/protobuf/protoc-gen-go
+		go install -v github.com/xlab/c-for-go@latest
+		go install -v golang.org/x/tools/cmd/stringer@latest
+		go get -v github.com/golang/protobuf/protoc-gen-go@v1.3.1
 		ensure_golangci_lint
 		go generate ./...
 		go build ./...
