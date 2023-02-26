@@ -1,4 +1,5 @@
-# github.com/256dpi/gomqtt v0.14.1
+# github.com/256dpi/gomqtt v0.14.3
+## explicit; go 1.14
 github.com/256dpi/gomqtt/broker
 github.com/256dpi/gomqtt/client
 github.com/256dpi/gomqtt/client/future
@@ -7,23 +8,32 @@ github.com/256dpi/gomqtt/session
 github.com/256dpi/gomqtt/topic
 github.com/256dpi/gomqtt/transport
 # github.com/256dpi/mercury v0.2.0
+## explicit; go 1.13
 github.com/256dpi/mercury
 # github.com/c-bata/go-prompt v0.2.3
+## explicit
 github.com/c-bata/go-prompt
 # github.com/coreos/go-systemd v0.0.0-20190212144455-93d5ec2c7f76
+## explicit
 github.com/coreos/go-systemd/daemon
 # github.com/davecgh/go-spew v1.1.1
+## explicit
 github.com/davecgh/go-spew/spew
 # github.com/eclipse/paho.mqtt.golang v1.2.0
+## explicit
 github.com/eclipse/paho.mqtt.golang
 github.com/eclipse/paho.mqtt.golang/packets
 # github.com/golang/protobuf v1.3.1
+## explicit
 github.com/golang/protobuf/proto
 # github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
+## explicit
 github.com/golang/snappy
 # github.com/gorilla/websocket v1.4.1
+## explicit; go 1.12
 github.com/gorilla/websocket
 # github.com/hashicorp/hcl v1.0.0
+## explicit
 github.com/hashicorp/hcl
 github.com/hashicorp/hcl/hcl/ast
 github.com/hashicorp/hcl/hcl/parser
@@ -34,35 +44,48 @@ github.com/hashicorp/hcl/json/parser
 github.com/hashicorp/hcl/json/scanner
 github.com/hashicorp/hcl/json/token
 # github.com/jpillora/backoff v0.0.0-20170918002102-8eab2debe79d
+## explicit
 github.com/jpillora/backoff
 # github.com/juju/errors v0.0.0-20190930114154-d42613fe1ab9
+## explicit
 github.com/juju/errors
 # github.com/mattn/go-colorable v0.1.1
+## explicit
 github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.7
+## explicit
 github.com/mattn/go-isatty
 # github.com/mattn/go-runewidth v0.0.4
+## explicit
 github.com/mattn/go-runewidth
 # github.com/mattn/go-tty v0.0.0-20181127064339-e4f871175a2f
+## explicit
 github.com/mattn/go-tty
 # github.com/paulrosania/go-charset v0.0.0-20151028000031-621bb39fcc83
+## explicit
 github.com/paulrosania/go-charset/charset
 github.com/paulrosania/go-charset/data
 # github.com/pkg/term v0.0.0-20190109203006-aa71e9d9e942
+## explicit
 github.com/pkg/term/termios
 # github.com/pmezard/go-difflib v1.0.0
+## explicit
 github.com/pmezard/go-difflib/difflib
 # github.com/skip2/go-qrcode v0.0.0-20191027152451-9434209cb086
+## explicit
 github.com/skip2/go-qrcode
 github.com/skip2/go-qrcode/bitset
 github.com/skip2/go-qrcode/reedsolomon
 # github.com/stretchr/objx v0.2.0
+## explicit; go 1.12
 github.com/stretchr/objx
 # github.com/stretchr/testify v1.5.1
+## explicit; go 1.13
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/mock
 github.com/stretchr/testify/require
 # github.com/syndtr/goleveldb v1.0.0
+## explicit
 github.com/syndtr/goleveldb/leveldb
 github.com/syndtr/goleveldb/leveldb/cache
 github.com/syndtr/goleveldb/leveldb/comparer
@@ -76,32 +99,44 @@ github.com/syndtr/goleveldb/leveldb/storage
 github.com/syndtr/goleveldb/leveldb/table
 github.com/syndtr/goleveldb/leveldb/util
 # github.com/temoto/alive/v2 v2.0.0
+## explicit; go 1.11
 github.com/temoto/alive/v2
 # github.com/temoto/atomic_clock v1.0.1
+## explicit; go 1.9
 github.com/temoto/atomic_clock
 # github.com/temoto/extremofile v0.5.0
+## explicit; go 1.11
 github.com/temoto/extremofile
 # github.com/temoto/gpio-cdev-go v1.1.0
+## explicit; go 1.11
 github.com/temoto/gpio-cdev-go
 github.com/temoto/gpio-cdev-go/mock
 # github.com/temoto/inputevent-go v1.0.0
+## explicit; go 1.11
 github.com/temoto/inputevent-go
 # github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
+## explicit
 github.com/temoto/iodin/client/go-iodin
 # github.com/temoto/spq v0.10.0
+## explicit; go 1.11
 github.com/temoto/spq
-# golang.org/x/net v0.0.0-20190620200207-3b0461eec859
+# golang.org/x/net v0.0.0-20200625001655-4c5254603344
+## explicit; go 1.11
 golang.org/x/net/context
 golang.org/x/net/internal/socks
 golang.org/x/net/proxy
 golang.org/x/net/websocket
 # golang.org/x/sys v0.1.0
+## explicit; go 1.17
 golang.org/x/sys/unix
 # gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
+## explicit
 gopkg.in/tomb.v2
 # gopkg.in/yaml.v2 v2.2.8
+## explicit
 gopkg.in/yaml.v2
 # periph.io/x/periph v3.6.4+incompatible
+## explicit
 periph.io/x/periph
 periph.io/x/periph/conn
 periph.io/x/periph/conn/gpio
