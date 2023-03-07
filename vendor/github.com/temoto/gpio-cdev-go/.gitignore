@@ -1,0 +1,14 @@
+*.cpio
+*.dll
+*.dylib
+*.exe
+*.exe~
+*.log
+*.out
+*.so
+*.tags*
+*.test
+app
+bzImage
+coverage.txt
+qemu-output
