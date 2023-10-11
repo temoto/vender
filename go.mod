@@ -21,7 +21,7 @@ require (
 	github.com/temoto/inputevent-go v1.0.0
 	github.com/temoto/iodin v0.0.0-20190211111721-99c87617ba86
 	github.com/temoto/spq v0.10.0
-	golang.org/x/sys v0.5.0
+	golang.org/x/sys v0.13.0
 	periph.io/x/periph v3.6.4+incompatible
 )
 
@@ -38,7 +38,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
-	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )

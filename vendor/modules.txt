@@ -120,13 +120,13 @@ github.com/temoto/iodin/client/go-iodin
 # github.com/temoto/spq v0.10.0
 ## explicit; go 1.11
 github.com/temoto/spq
-# golang.org/x/net v0.7.0
+# golang.org/x/net v0.17.0
 ## explicit; go 1.17
 golang.org/x/net/context
 golang.org/x/net/internal/socks
 golang.org/x/net/proxy
 golang.org/x/net/websocket
-# golang.org/x/sys v0.5.0
+# golang.org/x/sys v0.13.0
 ## explicit; go 1.17
 golang.org/x/sys/unix
 # gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
